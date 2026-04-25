@@ -88,29 +88,35 @@ npm run dev
 ```
 
 ### Environment Variables
-
-See `fastapi/.env.example` for required keys.
+See fastapi/.env.example for required keys.
 
 ---
 
 ## API
-POST /api/preflight
+POST `/api/preflight`
+```json
 {
-"youtube_url": "string",
-"user_id": "string",
-"is_premium": boolean,
-"clip_candidates": [{"start_sec": float, "end_sec": float, "score": float, "transcript": "string"}]
+  "youtube_url": "string",
+  "user_id": "string",
+  "is_premium": boolean,
+  "clip_candidates": [
+    {
+      "start_sec": float,
+      "end_sec": float,
+      "score": float,
+      "transcript": "string"
+    }
+  ]
 }
+```
 Returns full Pre-Flight result including persona votes, consensus score, refinement trace, and publish recommendation.
 
 ---
 
 ## License
-
 MIT — see [LICENSE](LICENSE)
 
 ---
 
 ## Hackathon
-
 Submitted to the **Google for Startups AI Agents Challenge 2026** — Track 1: Net-New Agents.
