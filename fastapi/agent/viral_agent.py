@@ -15,7 +15,7 @@ from pydantic import BaseModel
 logger = logging.getLogger(__name__)
 
 # Verified 2026-04-24 via models API — fastest model with JSON mode + 1M context
-MODEL_NAME = "gemini-2.5-flash"
+MODEL_NAME = "gemini-2.0-flash"
 
 class ViralAnalysis(BaseModel):
     score: int

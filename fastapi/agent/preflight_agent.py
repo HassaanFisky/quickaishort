@@ -268,7 +268,7 @@ def _build_pipeline() -> tuple[Any, Any]:
 
     threshold = int(os.environ.get("PREFLIGHT_THRESHOLD", THRESHOLD_DEFAULT))
     max_iterations = int(os.environ.get("PREFLIGHT_MAX_ITERATIONS", MAX_ITERATIONS_DEFAULT))
-    model = "gemini-2.5-flash"
+    model = "gemini-2.0-flash"
 
     # -- Step 1: ClipCandidateAgent ------------------------------------------
     clip_candidate_agent = Agent(
