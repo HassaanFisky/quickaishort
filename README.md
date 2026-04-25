@@ -1,136 +1,116 @@
-# Quick AI Shorts
+# QuickAIShort.online — Pre-Flight
 
-**Turn long videos into ready-to-post vertical Shorts. Fast. Clean. Yours.**
+> **"OpusClip shows you which clip. Pre-Flight shows you if it will work."**
 
-Lambi videos ko ready-to-post vertical Shorts mein convert karo. Fast. Clean. Tumhara.
+The only multi-agent AI system that simulates how a short-form video clip will perform — across audiences, languages, and platforms — **before** you publish.
+
+Every competitor produces clips blind. Pre-Flight answers the one question every creator has after hitting export: *Will this one actually hit?*
+
+Built for the **Google for Startups AI Agents Challenge 2026**.
 
 ---
 
 ## What It Does
 
-Quick AI Shorts is a web editor that finds high-impact 30–60 second moments in long videos, crops to 9:16, generates captions, and exports a share-ready file.
-
-Quick AI Shorts ek web editor hai jo lambi videos mein se best 30–60 second moments nikalta hai, 9:16 crop karta hai, captions banata hai, aur export karta hai.
-
----
-
-## The Problem
-
-Creators waste hours finding moments, captioning, and resizing for vertical platforms. The process is repetitive, tedious, and kills momentum.
-
-Creators bohot time waste karte hain highlights dhundne, captions banane, aur vertical resize karne mein. Yeh process boring hai aur momentum tod deta hai.
-
-## The Solution
-
-Automation handles fetch, transcribe, and crop. You make final creative choices. Fast outputs, full control.
-
-Automation download, transcribe, aur crop handle karta hai. Final creative choices tumhari. Fast output, full control.
+1. Paste a YouTube URL
+2. System generates top clip candidates using audio energy + speech density analysis
+3. **Pre-Flight runs a simulated audience panel** — 6 Gemini 2.5 Flash persona agents vote simultaneously on retention, drop-off, and share likelihood
+4. A LoopAgent iteratively refines the clip until consensus score exceeds 65%
+5. BigQuery MCP grounds predictions in the creator's own channel history
+6. Result: **PUBLISH** or **REFINE FIRST** — with full reasoning traces
 
 ---
 
-## How It Works
-
-```
-1) Paste YouTube URL.
-2) System downloads source.
-3) Audio transcribes.
-4) Best 30–60s segments suggested.
-5) You preview, trim, approve.
-6) Export 9:16 with captions + thumbnail.
-```
-
-```
-1) YouTube URL paste karo.
-2) System source download karega.
-3) Audio transcribe hoga.
-4) Best 30–60s segments suggest honge.
-5) Preview, trim, approve karo.
-6) 9:16 export, captions aur thumbnail ke sath.
-```
+## Architecture
+RootAgent (SequentialAgent)
+├── ClipCandidateAgent      — yt-dlp + Whisper + audio scoring
+├── TrendGroundingAgent     — Google Trends API + SerpApi
+├── AnalyticsGroundingAgent — YouTube Analytics API + BigQuery MCP
+└── AudiencePanelLoop (LoopAgent, max 3 iterations)
+├── ParallelPersonaAgents (6x Gemini 2.5 Flash)
+│   ├── GenZ Creator
+│   ├── Millennial Professional
+│   ├── Sports Fan
+│   ├── Tech Enthusiast
+│   ├── Arabic Speaker
+│   └── Spanish Speaker
+├── VoteAggregatorAgent  — Gemini 2.5 Pro consensus synthesis
+├── QualityGateAgent     — escalate if score >= 65
+└── ClipRefinementAgent  — re-cut based on drop-off points
+ADK primitives used: `SequentialAgent`, `ParallelAgent`, `LoopAgent`, `FunctionTool`, `A2A`
 
 ---
 
 ## Tech Stack
 
-| Layer         | Technology                                       |
-| ------------- | ------------------------------------------------ |
-| Frontend      | Next.js 15, React, Tailwind CSS v4, Motion       |
-| Backend       | Serverless API routes, job queue, FFmpeg workers |
-| Transcription | Whisper / Google Speech-to-Text                  |
-| Storage       | S3-compatible object store                       |
-| Queue         | Redis / managed job queue                        |
-| CDN           | Edge CDN for delivery                            |
+| Layer | Technology |
+|---|---|
+| Frontend | Next.js 16, Tailwind v4, Framer Motion, Zustand |
+| Backend | FastAPI, Python 3.12, yt-dlp |
+| AI Agents | Google ADK 1.31, Gemini 2.5 Flash / Pro |
+| In-Browser | Whisper (transformers.js), FFmpeg.wasm |
+| Data | BigQuery MCP, YouTube Analytics API v2 |
+| Trends | Google Trends API Alpha, SerpApi |
+| Deploy | Vercel (frontend), Railway (backend) |
 
 ---
 
-## Design Language: Hydro-Glass
+## Business Model
 
-Translucent panels. Soft blur. Subtle highlights. Animated liquid background.
+| Tier | Features | Price |
+|---|---|---|
+| Free | Manual editing, 3 exports, watermark | $0 |
+| Pro | Pre-Flight (6 personas), BigQuery grounding, no watermark | $29–99/mo |
 
-**Five Themes:** Deep Ocean, Crystal, Neon, Magma, Aurora.
-
-**Spacing:** 24px base grid. Consistent edge padding. No dead space.
-
-**Motion:** Subtle micro-transitions. Single-direction flows.
-
-Translucent panels. Soft blur. Animated liquid background. Themes: Deep Ocean, Crystal, Neon, Magma, Aurora.
+**Market:** $117B creator economy, $59B short-form video market (2026)
 
 ---
 
-## Quickstart
+## Local Setup
 
-See [QUICKSTART.md](./QUICKSTART.md) for local development setup.
+### Backend
 
----
+```bash
+cd fastapi
+python -m venv venv
+venv\Scripts\activate        # Windows
+pip install -r requirements.txt
+cp .env.example .env         # Fill in your keys
+uvicorn main:app --reload
+```
 
-## Documentation
+### Frontend
 
-- [QUICKSTART.md](./QUICKSTART.md) — Local dev setup
-- [ARCHITECTURE.md](./ARCHITECTURE.md) — System design & deployment
-- [SECURITY.md](./SECURITY.md) — Privacy & security checklist
-- [VISION.md](./VISION.md) — Roadmap & founder notes
-- [ffmpeg.sh](./ffmpeg.sh) — Production-ready FFmpeg pipeline
+```bash
+npm install
+cp .env.local.example .env.local   # Set NEXT_PUBLIC_API_URL
+npm run dev
+```
 
----
+### Environment Variables
 
-## Tagline
-
-> **Your content, unlocked. Minutes, not hours.**
-
----
-
-## CTAs
-
-1. **Paste a link. Get a Short.** — Zero learning curve.
-2. **Stop editing. Start creating.** — Let automation handle the grind.
-3. **Export-ready in 5 minutes.** — Not 5 hours.
+See `fastapi/.env.example` for required keys.
 
 ---
 
-## Differentiation
-
-- **Speed-first editor:** Minutes, not hours.
-- **Automation + Control:** AI does heavy lifting. You decide final cut.
-- **Design-first output:** Consistent themes, motion polish, premium feel.
-
-Speed-first editor. Automation heavy lifting karti hai. Tum final cut decide karo. Design-first output with themes aur motion.
+## API
+POST /api/preflight
+{
+"youtube_url": "string",
+"user_id": "string",
+"is_premium": boolean,
+"clip_candidates": [{"start_sec": float, "end_sec": float, "score": float, "transcript": "string"}]
+}
+Returns full Pre-Flight result including persona votes, consensus score, refinement trace, and publish recommendation.
 
 ---
 
 ## License
 
-MIT — See [LICENSE](./LICENSE)
+MIT — see [LICENSE](LICENSE)
 
 ---
 
-## Contributing
+## Hackathon
 
-Open PRs. Small focused changes. Run tests locally before submit.
-
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
-
----
-
-**Built by creators, for creators.**
-
-Creators ke liye, creators ne banaya.
+Submitted to the **Google for Startups AI Agents Challenge 2026** — Track 1: Net-New Agents.
