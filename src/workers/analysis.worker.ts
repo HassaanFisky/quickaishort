@@ -15,6 +15,9 @@ interface ClipSuggestion {
     speechDensity: number;
   };
   reason: string;
+  viralReasoning?: string;
+  suggestedCaptions?: string[];
+  automation_status?: "Ready" | "Pending";
 }
 
 function analyzeAudioPeaks(
@@ -127,6 +130,7 @@ function generateSuggestions(
     );
 
     if (!overlaps) {
+      const reasoning = generateViralReasoning(clip.scores);
       suggestions.push({
         id: `clip-${suggestions.length + 1}`,
         start: clip.start,
@@ -134,6 +138,9 @@ function generateSuggestions(
         confidence: Math.round(clip.score * 100),
         scores: clip.scores,
         reason: generateReason(clip.scores),
+        viralReasoning: reasoning.explanation,
+        suggestedCaptions: reasoning.captions,
+        automation_status: clip.score > 0.7 ? "Ready" : "Pending",
       });
     }
   }
@@ -153,6 +160,40 @@ function generateReason(scores: {
   return reasons.length > 0
     ? `Contains ${reasons.join(", ")}`
     : "Balanced engagement";
+}
+
+function generateViralReasoning(scores: {
+  audioPeak: number;
+  motion: number;
+  speechDensity: number;
+}): { explanation: string; captions: string[] } {
+  const hooks = [
+    "You won't believe what happens next!",
+    "The truth about this will shock you.",
+    "Why everyone is talking about this moment.",
+    "This is exactly why he's the best.",
+    "Wait for the ending, it's worth it."
+  ];
+
+  let explanation = "This segment shows high retention potential due to ";
+  if (scores.audioPeak > 0.8) {
+    explanation += "a significant emotional peak in the audio, signaling a viral 'hook'.";
+  } else if (scores.speechDensity > 0.8) {
+    explanation += "an information-dense delivery that is perfect for rapid-fire shorts.";
+  } else if (scores.motion > 0.6) {
+    explanation += "dynamic visual motion which captures viewer attention immediately.";
+  } else {
+    explanation += "a balanced mix of engagement factors optimized for the algorithm.";
+  }
+
+  const selectedHooks = hooks
+    .sort(() => 0.5 - Math.random())
+    .slice(0, 2);
+
+  return {
+    explanation,
+    captions: selectedHooks
+  };
 }
 
 interface CutSegment {

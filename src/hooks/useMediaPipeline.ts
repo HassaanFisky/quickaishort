@@ -22,8 +22,11 @@ export function useMediaPipeline() {
   const analysis = useAnalysis();
 
   const runPipeline = useCallback(async () => {
-    if (!sourceFile) {
-      toast.error("No video file selected");
+    const { sourceFile, sourceUrl } = useEditorStore.getState();
+    const source = sourceFile || sourceUrl;
+
+    if (!source) {
+      toast.error("No video source found");
       return;
     }
 
@@ -34,7 +37,7 @@ export function useMediaPipeline() {
       // 1. Extract Audio
       toast.info("Extracting audio for analysis...");
       const { audioData, sampleRate, duration } =
-        await extractAudioData(sourceFile);
+        await extractAudioData(source);
       setProgress(20);
 
       // 2. Transcription
@@ -46,7 +49,7 @@ export function useMediaPipeline() {
       toast.error("Failed to process video");
       setProcessing(false, "idle");
     }
-  }, [sourceFile, setProcessing, setProgress, transcription]);
+  }, [setProcessing, setProgress, transcription]);
 
   // Handle Transcription Complete
   useEffect(() => {
@@ -58,31 +61,41 @@ export function useMediaPipeline() {
       if (!transcript) return; // Guard against undefined transcript
       setTranscript(transcript);
 
-      // 3. Analyze
+      // 3. Analyze with Backend (Gemini)
       setProcessing(true, "analyzing");
-      toast.info("Analysis in progress...");
+      toast.info("AI Analysis in progress...");
 
-      // We need audio data again or we could have kept it in a ref.
-      // For now, let's assume we extract it again or pass it through.
-      // Optimization: Extract once and store in store or ref.
-
-      // Let's re-extract briefly for simplicity in this step, but in production we store it.
-      extractAudioData(sourceFile!).then(
-        ({ audioData, sampleRate, duration }) => {
-          analysis.analyze({
-            audioData,
-            transcript: { chunks: transcript.chunks || transcript },
-            duration,
-            sampleRate,
-          });
-        },
-      );
+      const { sourceUrl } = useEditorStore.getState();
+      
+      analysis.analyzeWithBackend({
+        videoId: sourceUrl || "local-video",
+        transcript: transcript.chunks || transcript,
+        duration: useEditorStore.getState().duration || 0,
+      }).then((response: any) => {
+        if (response.suggestedClips) {
+          setSuggestions(
+            response.suggestedClips.map((s: any) => ({
+              ...s,
+              aspectRatio: "9:16",
+              captionsEnabled: true,
+              status: "ready",
+            })),
+          );
+          setProcessing(false, "ready");
+          setProgress(100);
+          toast.success("AI Analysis complete! Suggestions ready.");
+        }
+      }).catch((err: any) => {
+        console.error("Analysis error:", err);
+        setProcessing(false, "idle");
+      });
     }
   }, [
     transcription.lastMessage,
-    sourceFile,
     setTranscript,
     setProcessing,
+    setSuggestions,
+    setProgress,
     analysis,
   ]);
 
@@ -96,7 +109,7 @@ export function useMediaPipeline() {
       if (!suggestions) return;
 
       setSuggestions(
-        suggestions.map((s) => ({
+        suggestions.map((s: any) => ({
           ...s,
           aspectRatio: "9:16",
           captionsEnabled: true,

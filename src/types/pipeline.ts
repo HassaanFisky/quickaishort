@@ -11,15 +11,50 @@ export interface Transcript {
   segments?: TranscriptChunk[];
 }
 
+/**
+ * Viral Score ranges (Locked per CLAUDE.md)
+ * 0–40: weak (#6b7280)
+ * 41–70: moderate (#f59e0b)
+ * 71–89: strong (#a855f7)
+ * 90–100: viral (gradient #ec4899→#a855f7 + glow)
+ */
+export type ViralScore = number;
+
+export interface ViralAnalysis {
+  score: ViralScore;
+  hookStrength: number;
+  retentionPotential: number;
+  emotionalTriggers: string[];
+  reasoning: string;
+}
+
+export interface FaceBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface ReframingData {
+  center: { x: number; y: number };
+  scale: number;
+  faceDetected: boolean;
+  boundingBox?: FaceBox;
+}
+
 export interface Clip {
   id: string;
   start: number;
   end: number;
   confidence: number;
   reason: string;
+  viralAnalysis?: ViralAnalysis;
+  suggestedCaptions?: string[];
   aspectRatio: "9:16" | "1:1";
   captionsEnabled: boolean;
   status: "pending" | "ready" | "exporting" | "exported";
+  automation_status?: "Ready" | "Pending";
+  reframing?: ReframingData;
 }
 
 export type WorkerStatus =
@@ -29,7 +64,8 @@ export type WorkerStatus =
   | "running"
   | "error"
   | "transcribing"
-  | "analyzing";
+  | "analyzing"
+  | "exporting";
 
 export interface WorkerMessagePayload {
   message?: string;
@@ -42,13 +78,12 @@ export interface WorkerMessagePayload {
   etaMs?: number;
   artifact?: Blob | ArrayBuffer;
   transcript?: Transcript;
-  suggestions?: Clip[]; // Raw suggestions might match Clip or need mapping
+  suggestions?: Clip[];
   face?: {
-    box: { x: number; y: number; width: number; height: number };
+    box: FaceBox;
     confidence: number;
   };
   segments?: CutSegment[];
-  // Add other specific payload fields here
   [key: string]: unknown;
 }
 
@@ -81,4 +116,22 @@ export interface CutSegment {
   start: number;
   end: number;
   type: "keep" | "silence";
+}
+
+export interface PipelineConfig {
+  youtubeUrl: string;
+  targetAspectRatio: "9:16" | "1:1";
+  enableCaptions: boolean;
+  autoReframing: boolean;
+}
+
+export interface PipelineResponse {
+  videoId: string;
+  transcript: Transcript;
+  suggestedClips: Clip[];
+  metadata: {
+    duration: number;
+    title: string;
+    author: string;
+  };
 }

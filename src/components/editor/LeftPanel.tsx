@@ -28,6 +28,8 @@ function DraggableClip({
     title?: string;
     description?: string;
     hook?: string;
+    viralReasoning?: string;
+    suggestedCaptions?: string[];
   };
   isSelected: boolean;
   onClick: () => void;
@@ -72,11 +74,38 @@ function DraggableClip({
       </div>
 
       <h4 className="font-semibold text-sm text-foreground mb-1 group-hover:text-primary interactive">
-        {clip.title}
+        {clip.title || `Clip ${clip.id.split("-")[1]}`}
       </h4>
-      <p className="text-xs text-muted-foreground line-clamp-1">
+      <p className="text-xs text-muted-foreground line-clamp-1 mb-2">
         {clip.hook ?? clip.reason}
       </p>
+
+      {/* Viral Insight Section */}
+      {clip.viralReasoning && (
+        <div className="p-3 rounded-xl bg-primary/5 border border-primary/10 space-y-2 mt-2">
+          <div className="flex items-center gap-2 text-primary">
+            <Sparkles className="w-3 h-3" />
+            <span className="text-[9px] font-black uppercase tracking-tighter">
+              Viral Insight
+            </span>
+          </div>
+          <p className="text-[10px] leading-relaxed text-foreground/70 font-medium italic">
+            "{clip.viralReasoning}"
+          </p>
+          {clip.suggestedCaptions && clip.suggestedCaptions.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {clip.suggestedCaptions.map((cap, i) => (
+                <span
+                  key={i}
+                  className="px-1.5 py-0.5 rounded-md bg-primary/20 text-primary text-[8px] font-bold"
+                >
+                  {cap}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {isSelected && (
         <div className="absolute -right-1 top-1/2 -translate-y-1/2">

@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import { History } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -98,6 +100,3 @@ export default function HistoryPage() {
     </div>
   );
 }
-
-import Link from "next/link";
-import { History } from "lucide-react";

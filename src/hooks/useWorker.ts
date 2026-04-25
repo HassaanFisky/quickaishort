@@ -1,19 +1,20 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useRef } from "react";
 
 import { WorkerMessage, WorkerStatus } from "@/types/pipeline";
 
 export { type WorkerMessage, type WorkerStatus };
 
 export function useWorker(workerFactory: () => Worker) {
-  const [worker, setWorker] = useState<Worker | null>(null);
+  const workerRef = useRef<Worker | null>(null);
   const [status, setStatus] = useState<WorkerStatus>("idle");
   const [progress, setProgress] = useState(0);
   const [lastMessage, setLastMessage] = useState<WorkerMessage | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const initWorker = useCallback(() => {
+    if (workerRef.current) return workerRef.current;
     try {
       setStatus("loading");
       const w = workerFactory();
@@ -42,7 +43,7 @@ export function useWorker(workerFactory: () => Worker) {
         setError("Worker crashed or failed to load");
       };
 
-      setWorker(w);
+      workerRef.current = w;
       return w;
     } catch (err) {
       console.error("Failed to initialize worker:", err);
@@ -53,26 +54,27 @@ export function useWorker(workerFactory: () => Worker) {
   }, [workerFactory]);
 
   const terminateWorker = useCallback(() => {
-    if (worker) {
-      worker.terminate();
-      setWorker(null);
+    if (workerRef.current) {
+      workerRef.current.terminate();
+      workerRef.current = null;
       setStatus("idle");
     }
-  }, [worker]);
+  }, []);
 
   const postMessage = useCallback(
     (type: string, payload: unknown) => {
-      if (!worker) {
-        console.error("Worker not initialized");
+      const w = workerRef.current;
+      if (!w) {
+        console.error("Worker not initialized — call initWorker() first");
         return;
       }
-      worker.postMessage({ type, payload });
+      w.postMessage({ type, payload });
     },
-    [worker],
+    [],
   );
 
   return {
-    worker,
+    worker: workerRef.current,
     status,
     progress,
     lastMessage,

@@ -9,6 +9,10 @@ interface ExportOptions {
   endTime: number;
   aspectRatio: "9:16" | "1:1";
   quality?: "low" | "medium" | "high";
+  reframing?: {
+    center: { x: number; y: number };
+    scale: number;
+  };
   captions?: {
     enabled: boolean;
     srtContent: string;
@@ -72,26 +76,30 @@ async function exportVideo(options: ExportOptions): Promise<Blob> {
 
   // Build FFmpeg Filter Complex
   const filterComplex: string[] = [];
-  let currentStream = "0:v"; // Start with input video stream
+  let currentStream = "0:v"; 
 
-  // 1. Aspect Ratio (Crop/Scale)
-  // We used to do simple scale/pad, but for "Smart Crop" we ideally want crop filter.
-  // For now, let's keep the user's aspect ratio selection logic
-  // '9:16' -> scale to fit height 1920, then crop width 1080? Or pad?
-  // User requested "Scale + Pad" in previous logic, let's stick to Pad to be safe unless we have crop coordinates.
-  // Actually, if we want to fill the screen (9:16) from a 16:9 source, we should CROP, not pad (which adds black bars).
-  // But without smart crop coordinates passed here, naive crop is centered.
-  // Let's stick to the previous safe "force_original_aspect_ratio=decrease,pad" logic for now to avoid losing content,
-  // OR switch to "increase" and crop to fill if the user wants "Cover" behavior.
-  // Given "QuickAI Shorts" usually implies full screen content, let's try "increase" + "crop" for 9:16 ?
-  // No, let's stick to the robust one from before but chain it properly.
-
-  const scaleFilter =
-    options.aspectRatio === "9:16"
-      ? "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2"
-      : options.aspectRatio === "1:1"
-        ? "scale=1080:1080:force_original_aspect_ratio=decrease,pad=1080:1080:(ow-iw)/2:(oh-ih)/2"
-        : "null"; // 16:9 or default
+  // 1. Aspect Ratio (Smart Crop or Scale+Pad)
+  let scaleFilter = "null";
+  
+  if (options.aspectRatio === "9:16") {
+    if (options.reframing) {
+      // SMART CROP: Use the face center to crop 9:16 from source
+      // Target is 1080:1920. If source is 16:9 (e.g. 1920:1080), we crop width.
+      // Crop logic: crop=w:h:x:y
+      // w = ih * (9/16), h = ih
+      // x = (center.x * iw) - (w/2), y = 0
+      const w = "ih*(9/16)";
+      const h = "ih";
+      const centerX = options.reframing.center.x; // normalized 0-1
+      // We clamp x between 0 and iw-w
+      scaleFilter = `crop=${w}:${h}:min(max(0\,iw*${centerX}-${w}/2)\,iw-${w}):0,scale=1080:1920`;
+    } else {
+      // Fallback to centered crop or pad
+      scaleFilter = "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920";
+    }
+  } else if (options.aspectRatio === "1:1") {
+    scaleFilter = "scale=1080:1080:force_original_aspect_ratio=increase,crop=1080:1080";
+  }
 
   if (scaleFilter !== "null") {
     filterComplex.push(`[${currentStream}]${scaleFilter}[scaled]`);

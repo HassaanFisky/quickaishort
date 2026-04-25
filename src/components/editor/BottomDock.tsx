@@ -1,150 +1,233 @@
 "use client";
 
 import { useEditorStore } from "@/stores/editorStore";
-import { useMediaEngine } from "@/hooks/useMediaEngine";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Loader2 } from "lucide-react";
-import { useEffect, useState } from "react";
-import { toast } from "sonner";
+import {
+  Play,
+  Pause,
+  Square,
+  Scissors,
+  Type,
+  Wand2,
+  Mic,
+  Layout,
+  SquareSplitHorizontal,
+} from "lucide-react";
+import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { generateSRT } from "@/lib/utils/srtGenerator";
 
 export default function BottomDock() {
-  const { transcript, sourceFile, selectedClipId, suggestions } =
-    useEditorStore();
-  const { exportVideo, isProcessing, status, lastMessage } = useMediaEngine();
+  const {
+    transcript,
+    suggestions,
+    duration,
+    currentTime,
+    isPlaying,
+    setIsPlaying,
+    setCurrentTime,
+    selectedClipId,
+    selectClip,
+  } = useEditorStore();
 
-  const selectedClip = suggestions.find((c) => c.id === selectedClipId);
-
-  const handleExport = async () => {
-    if (!sourceFile || !selectedClip) {
-      toast.error("Please select a clip to export");
-      return;
-    }
-
-    try {
-      toast.info("Starting render...");
-      const srt = transcript
-        ? generateSRT(transcript.chunks, selectedClip.start, selectedClip.end)
-        : "";
-
-      exportVideo({
-        inputBlob: sourceFile,
-        startTime: selectedClip.start,
-        endTime: selectedClip.end,
-        aspectRatio: "9:16",
-        captions: {
-          enabled: !!srt,
-          srtContent: srt,
-          style:
-            "Alignment=10,FontSize=24,PrimaryColour=&H00FFFFFF,Outline=1,Shadow=0",
-        },
-      });
-    } catch (err) {
-      console.error(err);
-      toast.error("Export failed");
-    }
-  };
-
-  useEffect(() => {
-    if (
-      status === "ready" &&
-      lastMessage?.type === "artifact" &&
-      lastMessage.payload.artifact
-    ) {
-      const blob = lastMessage.payload.artifact as Blob;
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `quickai_short_${Date.now()}.mp4`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      toast.success("Download started!");
-    }
-  }, [status, lastMessage]);
-
-  const words = transcript?.chunks || [];
-
-  const [visualizerHeights, setVisualizerHeights] = useState<number[]>(
-    new Array(100).fill(42.5), // Start with average height
+  const [visualizerHeights] = useState<number[]>(() =>
+    Array.from({ length: 60 }, () => 10 + Math.random() * 60),
   );
 
-  useEffect(() => {
-    // eslint-disable-next-line
-    setVisualizerHeights(
-      Array.from({ length: 100 }).map(() => 15 + Math.random() * 55),
-    );
-  }, []);
+  const stopPlayback = () => {
+    setIsPlaying(false);
+    setCurrentTime(0);
+  };
+
+  // Compute playhead position as a percentage of total duration
+  const playheadPct = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return (
-    <div className="flex items-end gap-5 animate-in slide-in-from-bottom-4 duration-500 delay-200">
-      {/* Timeline Dock */}
-      <div className="flex-1 liquid-panel rounded-2xl overflow-hidden">
-        {/* Waveform */}
-        <div className="h-16 relative ghost-border-visible border-b group overflow-hidden">
-          <div className="absolute inset-0 flex items-center px-4 gap-0.5 pointer-events-none opacity-40">
-            {visualizerHeights.map((height, i) => (
-              <div
-                key={i}
-                className="w-0.5 bg-primary/60 rounded-full interactive"
-                style={{ height: `${height}%` }}
-              />
-            ))}
-          </div>
-
-          {/* Playhead */}
-          <div className="absolute top-0 bottom-0 left-1/2 w-px bg-foreground/80 z-20" />
+    <div className="w-full h-full flex flex-col gap-4 animate-in slide-in-from-bottom-4 duration-500">
+      {/* Controls Row */}
+      <div className="flex items-center justify-between px-2">
+        <div className="flex items-center gap-3">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="w-8 h-8 text-foreground/60 hover:text-primary transition-colors"
+            onClick={() => setIsPlaying(!isPlaying)}
+          >
+            {isPlaying ? (
+              <Pause className="w-4 h-4 fill-current" />
+            ) : (
+              <Play className="w-4 h-4 fill-current" />
+            )}
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="w-8 h-8 text-foreground/60 hover:text-primary transition-colors"
+            onClick={stopPlayback}
+          >
+            <Square className="w-3.5 h-3.5 fill-current" />
+          </Button>
+          {/* Current time readout */}
+          <span className="text-[10px] font-mono text-muted-foreground/60 tabular-nums">
+            {formatTime(currentTime)} / {formatTime(duration)}
+          </span>
         </div>
 
-        {/* Caption Stream */}
-        <div className="h-9 px-4 flex items-center gap-2 overflow-x-auto no-scrollbar text-xs font-medium text-muted-foreground whitespace-nowrap">
-          {words.length > 0 ? (
-            words.map(
-              (
-                chunk: { text: string; start: number; end: number },
-                i: number,
-              ) => (
-                <span
-                  key={i}
-                  className="text-foreground/80 hover:text-primary cursor-pointer hover:bg-white/4 px-1.5 py-0.5 rounded interactive"
-                >
-                  {chunk.text}
-                </span>
-              ),
-            )
-          ) : (
-            <span className="text-muted-foreground/40 italic text-[11px]">
-              Waiting for transcription...
-            </span>
-          )}
+        <div className="flex items-center gap-6">
+          {[
+            { icon: SquareSplitHorizontal, label: "Split" },
+            { icon: Scissors, label: "Trim" },
+            { icon: Type, label: "Text" },
+            { icon: Wand2, label: "FX" },
+            { icon: Layout, label: "Transitions" },
+            { icon: Mic, label: "Voiceover" },
+          ].map(({ icon: Icon, label }) => (
+            <div key={label} className="flex items-center gap-2 group cursor-pointer">
+              <Icon className="w-4 h-4 text-foreground/40 group-hover:text-primary transition-colors" />
+              <span className="text-[10px] font-black text-foreground/40 uppercase tracking-widest group-hover:text-primary transition-colors">
+                {label}
+              </span>
+            </div>
+          ))}
         </div>
       </div>
 
-      {/* Export Button */}
-      <div className="pb-1">
-        <Button
-          size="lg"
-          className={cn(
-            "h-12 px-7 rounded-2xl bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-sm btn-premium group",
-            isProcessing && "opacity-80 cursor-not-allowed",
-          )}
-          onClick={handleExport}
-          disabled={isProcessing || !selectedClipId}
-        >
-          {isProcessing ? (
-            <>
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              Creating...
-            </>
-          ) : (
-            <>
-              Export Short
-              <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-0.5 interactive" />
-            </>
-          )}
-        </Button>
+      {/* Multi-Track Timeline */}
+      <div className="flex-1 flex flex-col gap-1.5 overflow-hidden">
+        {/* Time Scale */}
+        <TimeScale duration={duration} />
+
+        {/* Video Track */}
+        <div className="flex gap-4 items-center group">
+          <span className="w-16 text-[9px] font-black text-muted-foreground/40 uppercase tracking-widest text-right">
+            Video
+          </span>
+          <div className="flex-1 h-7 rounded-lg bg-white/5 border border-white/5 relative overflow-hidden">
+            {duration > 0 && suggestions.length > 0 ? (
+              suggestions.map((clip) => {
+                const left = ((clip.start / duration) * 100).toFixed(2);
+                const width = (((clip.end - clip.start) / duration) * 100).toFixed(2);
+                const isSelected = clip.id === selectedClipId;
+                return (
+                  <button
+                    key={clip.id}
+                    onClick={() => selectClip(clip.id)}
+                    className={cn(
+                      "absolute top-0.5 bottom-0.5 rounded-md flex items-center px-2 transition-all",
+                      isSelected
+                        ? "bg-gradient-to-r from-blue-500/40 to-blue-400/40 border border-blue-500/60"
+                        : "bg-gradient-to-r from-blue-500/20 to-blue-400/20 border border-blue-500/30 hover:from-blue-500/30",
+                    )}
+                    style={{ left: `${left}%`, width: `${width}%` }}
+                    title={`Clip ${clip.start.toFixed(1)}s – ${clip.end.toFixed(1)}s`}
+                  >
+                    <span className="text-[8px] font-bold text-blue-400 truncate uppercase">
+                      {clip.start.toFixed(0)}s
+                    </span>
+                  </button>
+                );
+              })
+            ) : (
+              <div className="flex items-center justify-center h-full">
+                <span className="text-[8px] text-muted-foreground/30 uppercase tracking-widest">
+                  {duration === 0 ? "No video loaded" : "No clips yet"}
+                </span>
+              </div>
+            )}
+
+            {/* Playhead */}
+            {duration > 0 && (
+              <div
+                className="absolute top-[-30px] bottom-[-8px] w-0.5 bg-white z-20 pointer-events-none"
+                style={{ left: `${playheadPct}%` }}
+              >
+                <div className="absolute -top-1 -left-[3px] w-2 h-2 bg-white rotate-45" />
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Audio Track */}
+        <div className="flex gap-4 items-center group">
+          <span className="w-16 text-[9px] font-black text-muted-foreground/40 uppercase tracking-widest text-right">
+            Audio
+          </span>
+          <div className="flex-1 h-7 rounded-lg bg-white/5 border border-white/5 relative flex gap-1 p-0.5">
+            {transcript ? (
+              <div className="flex-1 h-full bg-gradient-to-r from-emerald-500/20 to-emerald-400/20 border border-emerald-500/30 rounded-md flex items-center px-2 gap-1 overflow-hidden">
+                <span className="text-[8px] font-bold text-emerald-400 truncate uppercase">
+                  Transcript
+                </span>
+                <div className="flex items-center gap-0.5 h-3 flex-1 overflow-hidden">
+                  {visualizerHeights.slice(0, 20).map((h, i) => (
+                    <div
+                      key={i}
+                      className="w-0.5 bg-emerald-400/40 rounded-full flex-shrink-0"
+                      style={{ height: `${h}%` }}
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center flex-1 h-full">
+                <span className="text-[8px] text-muted-foreground/30 uppercase tracking-widest">
+                  No audio
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Text / Captions Track */}
+        <div className="flex gap-4 items-center group">
+          <span className="w-16 text-[9px] font-black text-muted-foreground/40 uppercase tracking-widest text-right">
+            Text
+          </span>
+          <div className="flex-1 h-7 rounded-lg bg-white/5 border border-white/5 relative flex gap-1 p-0.5">
+            {transcript?.chunks && transcript.chunks.length > 0 ? (
+              <div className="w-32 h-full bg-gradient-to-r from-purple-500/20 to-purple-400/20 border border-purple-500/30 rounded-md flex items-center px-2">
+                <span className="text-[8px] font-bold text-purple-400 truncate uppercase">
+                  {transcript.chunks.length} captions
+                </span>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center flex-1 h-full">
+                <span className="text-[8px] text-muted-foreground/30 uppercase tracking-widest">
+                  No captions
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
+}
+
+function TimeScale({ duration }: { duration: number }) {
+  if (duration === 0) {
+    return (
+      <div className="flex items-center h-4 px-[100px] gap-[100px] text-[8px] font-black text-muted-foreground/30 uppercase tracking-[0.3em]">
+        <span>0:00</span>
+        <span>0:10</span>
+        <span>0:20</span>
+        <span>0:30</span>
+      </div>
+    );
+  }
+
+  // Generate 4 evenly spaced time markers
+  const markers = [0, 0.25, 0.5, 0.75].map((frac) => frac * duration);
+  return (
+    <div className="flex items-center h-4 pl-[100px] pr-4 justify-between text-[8px] font-black text-muted-foreground/30 uppercase tracking-[0.3em]">
+      {markers.map((t) => (
+        <span key={t}>{formatTime(t)}</span>
+      ))}
+    </div>
+  );
+}
+
+function formatTime(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${s.toString().padStart(2, "0")}`;
 }

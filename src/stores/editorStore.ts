@@ -15,6 +15,10 @@ interface EditorState {
   currentStage: "idle" | "loading" | "transcribing" | "analyzing" | "ready";
   progress: number;
 
+  // Playback
+  currentTime: number;
+  isPlaying: boolean;
+
   // Data
   transcript: Transcript | null;
   suggestions: Clip[];
@@ -24,6 +28,8 @@ interface EditorState {
   selectedClipId: string | null;
 
   // Actions
+  setCurrentTime: (time: number) => void;
+  setIsPlaying: (playing: boolean) => void;
   setSourceFile: (file: File, url?: string) => void;
   setSourceUrl: (url: string) => void;
   setProcessing: (
@@ -52,12 +58,17 @@ export const useEditorStore = create<EditorState>()(
       isProcessing: false,
       currentStage: "idle",
       progress: 0,
+      currentTime: 0,
+      isPlaying: false,
       transcript: null,
       suggestions: [],
       silenceSegments: [],
       audioData: null,
       captionsEnabled: true,
       selectedClipId: null,
+
+      setCurrentTime: (time) => set({ currentTime: time }),
+      setIsPlaying: (playing) => set({ isPlaying: playing }),
 
       setSourceFile: (file, url) =>
         set({
@@ -105,6 +116,8 @@ export const useEditorStore = create<EditorState>()(
           isProcessing: false,
           currentStage: "idle",
           progress: 0,
+          currentTime: 0,
+          isPlaying: false,
           transcript: null,
           suggestions: [],
           silenceSegments: [],

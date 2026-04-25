@@ -1,9 +1,16 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { useWorker } from "./useWorker";
+import axios from "axios";
+import { TranscriptChunk, Clip } from "@/types/pipeline";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export function useAnalysis() {
+  const [isBackendAnalyzing, setIsBackendAnalyzing] = useState(false);
+  const [backendError, setBackendError] = useState<string | null>(null);
+
   const workerFactory = useCallback(() => {
     return new Worker(
       new URL("../workers/analysis.worker.ts", import.meta.url),
@@ -14,7 +21,7 @@ export function useAnalysis() {
     status,
     progress,
     lastMessage,
-    error,
+    error: workerError,
     initWorker,
     postMessage,
     terminateWorker,
@@ -23,7 +30,7 @@ export function useAnalysis() {
   const analyze = useCallback(
     (payload: {
       audioData: Float32Array;
-      transcript: { chunks: { start: number; end: number; text: string }[] };
+      transcript: { chunks: TranscriptChunk[] };
       duration: number;
       sampleRate: number;
     }) => {
@@ -32,13 +39,36 @@ export function useAnalysis() {
     [postMessage],
   );
 
+  const analyzeWithBackend = useCallback(
+    async (payload: {
+      videoId: string;
+      transcript: TranscriptChunk[];
+      duration: number;
+    }) => {
+      setIsBackendAnalyzing(true);
+      setBackendError(null);
+      try {
+        const response = await axios.post(`${API_URL}/api/analyze`, payload);
+        setIsBackendAnalyzing(false);
+        return response.data;
+      } catch (err: any) {
+        const msg = err.response?.data?.detail || err.message || "Backend analysis failed";
+        setBackendError(msg);
+        setIsBackendAnalyzing(false);
+        throw new Error(msg);
+      }
+    },
+    [],
+  );
+
   return {
     isReady: status === "ready" || status === "idle",
-    isAnalyzing: status === "running",
+    isAnalyzing: status === "running" || isBackendAnalyzing,
     progress,
     lastMessage,
-    error,
+    error: workerError || backendError,
     analyze,
+    analyzeWithBackend,
     detectSilence: (payload: {
       audioData: Float32Array;
       sampleRate: number;

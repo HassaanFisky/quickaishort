@@ -143,6 +143,50 @@
     --input: 160 30% 20%;
     --ring: 150 100% 45%;
   }
+
+  /* Theme: Nano Black (Sleek, Minimal, High Contrast) */
+  [data-theme="nano"] {
+    --background: 0 0% 1%; /* #030303 */
+    --foreground: 0 0% 100%;
+    --card: 0 0% 3%; /* #080808 */
+    --card-foreground: 0 0% 100%;
+    --popover: 0 0% 3%;
+    --popover-foreground: 0 0% 100%;
+    --primary: 210 100% 50%; /* Vibrant Blue */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 7%;
+    --secondary-foreground: 0 0% 90%;
+    --muted: 0 0% 5%;
+    --muted-foreground: 0 0% 60%;
+    --accent: 210 100% 50%;
+    --accent-foreground: 0 0% 100%;
+    --border: 0 0% 10%;
+    --input: 0 0% 10%;
+    --ring: 210 100% 50%;
+    --radius: 1rem;
+  }
+}
+
+@layer utilities {
+  .nano-glass {
+    background: rgba(10, 10, 10, 0.7);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.8);
+  }
+
+  .nano-glow {
+    box-shadow: 0 0 20px rgba(33, 150, 243, 0.3);
+  }
+
+  .premium-gradient-text {
+    @apply bg-clip-text text-transparent bg-linear-to-b from-white to-white/60;
+  }
+
+  .interactive-hover {
+    @apply transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] hover:brightness-110;
+  }
 }
 
 @keyframes liquid-spill {

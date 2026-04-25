@@ -8,12 +8,19 @@ declare global {
 }
 
 export async function extractAudioData(
-  file: File,
+  source: File | string,
 ): Promise<{ audioData: Float32Array; sampleRate: number; duration: number }> {
   const audioContext = new (window.AudioContext || window.webkitAudioContext)({
     sampleRate: 16000,
   });
-  const arrayBuffer = await file.arrayBuffer();
+
+  let arrayBuffer: ArrayBuffer;
+  if (typeof source === "string") {
+    const response = await fetch(source);
+    arrayBuffer = await response.arrayBuffer();
+  } else {
+    arrayBuffer = await source.arrayBuffer();
+  }
 
   // Note: decodeAudioData accepts an ArrayBuffer
   const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);

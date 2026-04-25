@@ -5,7 +5,7 @@ import { Activity, Cpu, ScanFace } from "lucide-react";
 import { useEffect, useState } from "react";
 
 export function TelemetryDock() {
-  const { isReady, faceBox } = useFaceTracker();
+  const { isReady, reframingData } = useFaceTracker();
   const [fps, setFps] = useState(0);
 
   // Mock CPU usage based on frame delta
@@ -42,9 +42,9 @@ export function TelemetryDock() {
           className={`w-3 h-3 ${isReady ? "text-green-400" : "text-yellow-400"}`}
         />
         <span>VISION: {isReady ? "ONLINE" : "INIT"}</span>
-        {faceBox && (
+        {reframingData?.faceDetected && (
           <span className="text-white ml-1">
-            CONF: {Math.floor(Math.random() * 20 + 80)}%
+            CONF: {reframingData.boundingBox ? "HIGH" : "OK"}
           </span>
         )}
       </div>

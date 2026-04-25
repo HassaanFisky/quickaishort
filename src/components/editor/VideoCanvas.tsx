@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useCallback } from "react";
 import {
   Play,
   Pause,
@@ -17,73 +17,73 @@ import { cn } from "@/lib/utils";
 
 export default function VideoCanvas() {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const { sourceUrl, selectedClipId, suggestions, transcript } =
-    useEditorStore();
-  const [isPlaying, setIsPlaying] = useState(false);
-  const { isReady, faceBox, detect } = useFaceTracker();
-  const [videoDimensions, setVideoDimensions] = useState({
-    width: 1920,
-    height: 1080,
-  });
+  const {
+    sourceUrl,
+    selectedClipId,
+    suggestions,
+    transcript,
+    duration,
+    currentTime,
+    isPlaying,
+    setCurrentTime,
+    setIsPlaying,
+  } = useEditorStore();
 
+  const { isReady, reframingData, detect } = useFaceTracker();
+
+  // Seek to clip start when selection changes
   useEffect(() => {
     if (selectedClipId && videoRef.current) {
       const clip = suggestions.find((c) => c.id === selectedClipId);
       if (clip) {
         videoRef.current.currentTime = clip.start;
-        videoRef.current.play();
+        setCurrentTime(clip.start);
       }
     }
-  }, [selectedClipId, suggestions]);
+  }, [selectedClipId, suggestions, setCurrentTime]);
 
-  const togglePlay = () => {
-    if (videoRef.current) {
-      if (isPlaying) {
-        videoRef.current.pause();
-      } else {
-        videoRef.current.play();
-      }
-      setIsPlaying(!isPlaying);
-    }
-  };
-
-  // Use ref for detect to avoid dependency cycles in animation loop
-  const detectRef = useRef(detect);
+  // Drive the video element from store isPlaying (BottomDock can also control this)
   useEffect(() => {
-    detectRef.current = detect;
-  }, [detect]);
+    if (!videoRef.current) return;
+    if (isPlaying) {
+      videoRef.current.play().catch(() => {});
+    } else {
+      videoRef.current.pause();
+    }
+  }, [isPlaying]);
+
+  const togglePlay = useCallback(() => {
+    setIsPlaying(!isPlaying);
+  }, [isPlaying, setIsPlaying]);
+
+  const skip = useCallback((delta: number) => {
+    if (!videoRef.current) return;
+    const next = Math.max(0, Math.min(duration || videoRef.current.duration || 0, currentTime + delta));
+    videoRef.current.currentTime = next;
+    setCurrentTime(next);
+  }, [currentTime, duration, setCurrentTime]);
+
+  // Face detection loop
+  const detectRef = useRef(detect);
+  useEffect(() => { detectRef.current = detect; }, [detect]);
 
   useEffect(() => {
     if (!isPlaying) return;
-
-    let animationFrameId: number;
-
+    let id: number;
     const animate = () => {
-      if (
-        videoRef.current &&
-        !videoRef.current.paused &&
-        !videoRef.current.ended
-      ) {
+      if (videoRef.current && !videoRef.current.paused && !videoRef.current.ended) {
         detectRef.current(videoRef.current);
       }
-      animationFrameId = requestAnimationFrame(animate);
+      id = requestAnimationFrame(animate);
     };
-
     animate();
-
-    return () => {
-      cancelAnimationFrame(animationFrameId);
-    };
+    return () => cancelAnimationFrame(id);
   }, [isPlaying]);
 
   const getObjectPosition = () => {
-    if (!faceBox) return "50% 50%";
-
-    const videoWidth = videoDimensions.width || 1920;
-    const faceCX = faceBox.x + faceBox.width / 2;
-    const percentX = (faceCX / videoWidth) * 100;
-
-    return `${percentX}% 50%`;
+    if (!reframingData?.faceDetected) return "50% 50%";
+    const { x, y } = reframingData.center;
+    return `${(x * 100).toFixed(1)}% ${(y * 100).toFixed(1)}%`;
   };
 
   return (
@@ -102,22 +102,14 @@ export default function VideoCanvas() {
           <video
             ref={videoRef}
             src={sourceUrl}
-            className={cn(
-              "w-full h-full object-cover interactive will-change-[object-position]",
-            )}
-            style={{
-              objectPosition: getObjectPosition(),
-            }}
+            className={cn("w-full h-full object-cover interactive will-change-[object-position]")}
+            style={{ objectPosition: getObjectPosition() }}
             controls={false}
             loop
             onPlay={() => setIsPlaying(true)}
             onPause={() => setIsPlaying(false)}
-            onLoadedMetadata={(e) => {
-              const target = e.target as HTMLVideoElement;
-              setVideoDimensions({
-                width: target.videoWidth,
-                height: target.videoHeight,
-              });
+            onTimeUpdate={() => {
+              if (videoRef.current) setCurrentTime(videoRef.current.currentTime);
             }}
           />
         ) : (
@@ -131,10 +123,7 @@ export default function VideoCanvas() {
           </div>
         )}
 
-        <CaptionOverlay
-          videoRef={videoRef}
-          transcript={transcript || undefined}
-        />
+        <CaptionOverlay videoRef={videoRef} transcript={transcript || undefined} />
 
         {sourceUrl && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 interactive">
@@ -160,6 +149,8 @@ export default function VideoCanvas() {
             variant="ghost"
             size="icon"
             className="hover:text-primary hover:bg-white/4 rounded-full w-9 h-9 interactive"
+            onClick={() => skip(-10)}
+            title="Back 10s"
           >
             <SkipBack className="w-4 h-4" strokeWidth={1.5} />
           </Button>
@@ -179,6 +170,8 @@ export default function VideoCanvas() {
             variant="ghost"
             size="icon"
             className="hover:text-primary hover:bg-white/4 rounded-full w-9 h-9 interactive"
+            onClick={() => skip(10)}
+            title="Forward 10s"
           >
             <SkipForward className="w-4 h-4" strokeWidth={1.5} />
           </Button>
