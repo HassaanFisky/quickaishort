@@ -1,0 +1,23 @@
+Reading config file 'e:\quickaishort\backend\drizzle.config.ts'
+Using '@neondatabase/serverless' driver for database querying
+ Warning  '@neondatabase/serverless' can only connect to remote Neon/Vercel Postgres/Supabase instances through a websocket
+Error: Cannot find module './user.model.js'
+Require stack:
+- e:\quickaishort\backend\src\models\schema.ts
+- e:\quickaishort\backend\node_modules\drizzle-kit\bin.cjs
+    at Module.<anonymous> (node:internal/modules/cjs/loader:1448:15)
+    at Module._resolveFilename (e:\quickaishort\backend\node_modules\drizzle-kit\bin.cjs:17536:40)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1059:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1064:22)
+    at Module._load (node:internal/modules/cjs/loader:1234:25)
+    at TracingChannel.traceSync (node:diagnostics_channel:328:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:245:24)
+    at Module.require (node:internal/modules/cjs/loader:1548:12)
+    at require (node:internal/modules/helpers:152:16)
+    at Object.<anonymous> (e:\quickaishort\backend\src\models\schema.ts:1:45) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [
+    'e:\\quickaishort\\backend\\src\\models\\schema.ts',
+    'e:\\quickaishort\\backend\\node_modules\\drizzle-kit\\bin.cjs'
+  ]
+}

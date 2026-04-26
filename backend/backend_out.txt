@@ -1,0 +1,25 @@
+(node:19832) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+❌ Failed to start server: NeonDbError: password authentication failed for user 'user'
+    at execute (e:\quickaishort\backend\node_modules\@neondatabase\serverless\index.js:1558:55)
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async connectDatabase (e:\quickaishort\backend\src\config\neon.ts:27:3)
+    at async startServer (e:\quickaishort\backend\src\server.ts:11:5) {
+  severity: '',
+  code: '',
+  detail: undefined,
+  hint: undefined,
+  position: undefined,
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: undefined,
+  line: undefined,
+  routine: undefined,
+  sourceError: undefined
+}

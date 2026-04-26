@@ -1,0 +1,8 @@
+(node:24548) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+✅ Connected to Neon Postgres
+🚀 QuickAI Shorts API running on port 5000
+📂 Environment: development
+🔗 Health: http://localhost:5000/health
+[32minfo[39m: GET /health {"ip":"::1","timestamp":"2026-03-06T11:53:09.985Z","userAgent":"Mozilla/5.0 (Windows NT; Windows NT 10.0; en-US) WindowsPowerShell/5.1.27943.1"}
+[32minfo[39m: GET /health {"ip":"::1","timestamp":"2026-03-06T11:54:09.068Z","userAgent":"Mozilla/5.0 (Windows NT; Windows NT 10.0; en-US) WindowsPowerShell/5.1.27943.1"}

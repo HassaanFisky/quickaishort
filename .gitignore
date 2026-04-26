@@ -53,7 +53,6 @@ fastapi/venv/
 fastapi/__pycache__/
 
 # logs
-*.txt
 *.log
 build_log*.txt
 lint*.txt
