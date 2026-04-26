@@ -28,13 +28,17 @@ except ImportError:
 
 app = FastAPI()
 
-# ... (origins and middleware remain same)
+# CORS Configuration
+allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "")
 origins = [
     "http://localhost:3000",
     "https://quickaishort.online",
     "http://localhost:8000",
-    "*" 
 ]
+
+if allowed_origins_env:
+    # Allows comma-separated origins in .env
+    origins.extend([o.strip() for o in allowed_origins_env.split(",") if o.strip()])
 
 app.add_middleware(
     CORSMiddleware,
