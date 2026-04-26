@@ -37,14 +37,15 @@ export default function EditorLayout() {
         toast.info("Connecting to Viral Intelligence Engine...");
         
         // 1. Get info
-        const infoRes = await fetch(`http://localhost:8000/api/info?url=${encodeURIComponent(urlInput)}`);
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+        const infoRes = await fetch(`${API_URL}/api/info?url=${encodeURIComponent(urlInput)}`);
         if (!infoRes.ok) throw new Error("Could not retrieve video info");
         const info = await infoRes.json();
         
         toast.success(`Found: ${info.title}`);
         
         // 2. Set source to proxy URL
-        const proxyUrl = `http://localhost:8000/api/proxy?url=${encodeURIComponent(urlInput)}`;
+        const proxyUrl = `${API_URL}/api/proxy?url=${encodeURIComponent(urlInput)}`;
         
         // We use a custom action to set URL since sourceFile is null
         useEditorStore.setState({ 
