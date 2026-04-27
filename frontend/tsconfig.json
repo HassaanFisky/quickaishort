@@ -37,10 +37,6 @@
     "**/*.mts"
   ],
   "exclude": [
-    "node_modules",
-    "frontend",
-    "backend",
-    "extension",
-    "fastapi"
+    "node_modules"
   ]
 }
