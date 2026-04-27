@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Montserrat } from "next/font/google";
+import { Inter as Geist, Roboto_Mono as Geist_Mono, Montserrat } from "next/font/google";
 import "./globals.css";
 
 import { AppProviders } from "@/components/shared/AppProviders";

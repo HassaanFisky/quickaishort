@@ -3,6 +3,16 @@ import { devtools } from "zustand/middleware";
 
 import { Clip, Transcript, CutSegment } from "@/types/pipeline";
 
+export type AgentStatus = "idle" | "working" | "done" | "error";
+
+export interface AgentState {
+  status: AgentStatus;
+  label: string;
+  progress: number;
+  message?: string;
+  reasoningLogs?: string[];
+}
+
 interface EditorState {
   // Source Video
   sourceFile: File | null;
@@ -14,6 +24,14 @@ interface EditorState {
   isProcessing: boolean;
   currentStage: "idle" | "loading" | "transcribing" | "analyzing" | "ready";
   progress: number;
+
+  // ADK Agent Workforce State
+  agentStates: {
+    ingestion: AgentState;
+    transcription: AgentState;
+    viralAnalysis: AgentState;
+    reframing: AgentState;
+  };
 
   // Playback
   currentTime: number;
@@ -35,6 +53,10 @@ interface EditorState {
   setProcessing: (
     isProcessing: boolean,
     stage?: EditorState["currentStage"],
+  ) => void;
+  setAgentState: (
+    agent: keyof EditorState["agentStates"],
+    update: Partial<AgentState>,
   ) => void;
   setProgress: (progress: number) => void;
   setTranscript: (transcript: Transcript) => void;
@@ -58,6 +80,14 @@ export const useEditorStore = create<EditorState>()(
       isProcessing: false,
       currentStage: "idle",
       progress: 0,
+
+      agentStates: {
+        ingestion: { status: "idle", label: "Downloading Video", progress: 0 },
+        transcription: { status: "idle", label: "Creating Subtitles", progress: 0 },
+        viralAnalysis: { status: "idle", label: "Analyzing Viral Potential", progress: 0 },
+        reframing: { status: "idle", label: "Optimizing Format", progress: 0 },
+      },
+
       currentTime: 0,
       isPlaying: false,
       transcript: null,
@@ -89,6 +119,14 @@ export const useEditorStore = create<EditorState>()(
           currentStage: stage || state.currentStage,
         })),
 
+      setAgentState: (agent, update) =>
+        set((state) => ({
+          agentStates: {
+            ...state.agentStates,
+            [agent]: { ...state.agentStates[agent], ...update },
+          },
+        })),
+
       setProgress: (progress) => set({ progress }),
 
       setTranscript: (transcript) => set({ transcript }),
@@ -116,6 +154,12 @@ export const useEditorStore = create<EditorState>()(
           isProcessing: false,
           currentStage: "idle",
           progress: 0,
+          agentStates: {
+            ingestion: { status: "idle", label: "Downloading Video", progress: 0 },
+            transcription: { status: "idle", label: "Reading Content", progress: 0 },
+            viralAnalysis: { status: "idle", label: "Predicting Success", progress: 0 },
+            reframing: { status: "idle", label: "Optimizing Format", progress: 0 },
+          },
           currentTime: 0,
           isPlaying: false,
           transcript: null,

@@ -24,6 +24,8 @@ export interface ViralAnalysis {
   score: ViralScore;
   hookStrength: number;
   retentionPotential: number;
+  visualEnergy?: number;
+  cameraMovement?: number;
   emotionalTriggers: string[];
   reasoning: string;
 }

@@ -1,0 +1,26 @@
+"""Pydantic v2 model for the UserStats collection."""
+
+from datetime import datetime
+
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class UserStats(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    user_id: str
+    total_projects: int = 0
+    total_duration_processed: float = 0.0
+    export_count: int = 0
+    ai_runs: int = 0
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class StatsIncrement(BaseModel):
+    """Inbound payload for the stats increment pubsub channel."""
+
+    user_id: str
+    duration_delta: float = 0.0
+    export_delta: int = 0
+    ai_run_delta: int = 0
+    project_delta: int = 0

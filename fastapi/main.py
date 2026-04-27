@@ -1,43 +1,169 @@
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response, StreamingResponse
-from pydantic import BaseModel
-from typing import List, Optional
-import yt_dlp
-import uvicorn
-import requests
+from __future__ import annotations
+
 import asyncio
+import json
 import logging
 import os
+import uuid
+from contextlib import asynccontextmanager
+from typing import List, Literal, Optional
+
+import requests
+import uvicorn
+import yt_dlp
 from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv()
-
-logger = logging.getLogger(__name__)
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
 
 from agent.viral_agent import get_viral_agent
+from models.user_stats import StatsIncrement
+from services.db import (
+    EXPORTS_BUCKET,
+    close_db,
+    get_db,
+    get_exports_bucket,
+    init_db,
+    is_ready as db_is_ready,
+)
+from services.events import (
+    CHANNEL_EXPORT_COMPLETE,
+    CHANNEL_EXPORT_FAILED,
+    CHANNEL_EXPORT_PROGRESS,
+    CHANNEL_STATS_INCREMENT,
+)
+from services.queue_service import (
+    JOB_FAILURE_TTL_SECONDS,
+    JOB_RESULT_TTL_SECONDS,
+    JOB_TIMEOUT_SECONDS,
+    redis_conn,
+    render_queue,
+)
+from services.realtime import emit_export_event, ws_manager
+from services.signing import sign, verify
+from services.stats_service import get_user_stats, increment_stats
 
-# Lazy import — server still starts if google-adk is not installed
+load_dotenv()
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 try:
-    from agent import run_preflight_pipeline, PreflightResult, ClipCandidate as PreflightClipCandidate
+    from agent import (
+        ClipCandidate as PreflightClipCandidate,
+        run_preflight_pipeline,
+    )
+
     _ADK_AVAILABLE = True
 except ImportError:
     _ADK_AVAILABLE = False
+    PreflightClipCandidate = None  # type: ignore[assignment]
     logger.warning("google-adk not installed — POST /api/preflight will return 503")
 
-app = FastAPI()
 
-# CORS Configuration
+PUBSUB_CHANNELS = (
+    CHANNEL_STATS_INCREMENT,
+    CHANNEL_EXPORT_PROGRESS,
+    CHANNEL_EXPORT_COMPLETE,
+    CHANNEL_EXPORT_FAILED,
+)
+
+
+async def _pubsub_listener(stop: asyncio.Event) -> None:
+    """Bridges Redis pubsub events from the worker process into async fan-out."""
+    pubsub = redis_conn.pubsub(ignore_subscribe_messages=True)
+    try:
+        pubsub.subscribe(*PUBSUB_CHANNELS)
+    except Exception as exc:
+        logger.error("Pubsub subscribe failed: %s — listener disabled.", exc)
+        return
+    logger.info("Pubsub listener active on %s", ",".join(PUBSUB_CHANNELS))
+
+    try:
+        while not stop.is_set():
+            msg = await asyncio.to_thread(pubsub.get_message, True, 1.0)
+            if msg is None:
+                continue
+            channel = msg.get("channel")
+            if isinstance(channel, bytes):
+                channel = channel.decode("utf-8")
+            data = msg.get("data")
+            if isinstance(data, bytes):
+                data = data.decode("utf-8")
+            try:
+                payload = json.loads(data) if isinstance(data, str) else data
+            except json.JSONDecodeError:
+                logger.warning("Invalid JSON on %s: %r", channel, data)
+                continue
+            try:
+                await _route_pubsub(channel, payload)
+            except Exception as exc:
+                logger.exception("Pubsub handler %s failed: %s", channel, exc)
+    finally:
+        try:
+            pubsub.close()
+        except Exception:
+            pass
+
+
+async def _route_pubsub(channel: str, payload: dict) -> None:
+    if channel == CHANNEL_STATS_INCREMENT:
+        delta = StatsIncrement.model_validate(payload)
+        await increment_stats(
+            delta.user_id,
+            duration_delta=delta.duration_delta,
+            export_delta=delta.export_delta,
+            ai_run_delta=delta.ai_run_delta,
+            project_delta=delta.project_delta,
+        )
+        return
+
+    if channel in (CHANNEL_EXPORT_PROGRESS, CHANNEL_EXPORT_COMPLETE, CHANNEL_EXPORT_FAILED):
+        user_id = payload.get("user_id", "")
+        job_id = payload.get("job_id", "")
+        event = {
+            CHANNEL_EXPORT_PROGRESS: "progress",
+            CHANNEL_EXPORT_COMPLETE: "complete",
+            CHANNEL_EXPORT_FAILED: "error",
+        }[channel]
+        if event == "complete":
+            payload = {**payload, "download_url": _build_download_url(job_id, user_id)}
+        await emit_export_event(user_id, job_id, event, payload)
+
+
+def _build_download_url(job_id: str, user_id: str) -> str:
+    token, expires = sign(job_id, user_id)
+    base = os.getenv("PUBLIC_API_URL", "").rstrip("/")
+    path = f"/api/export/download/{job_id}?token={token}&user_id={user_id}&expires={expires}"
+    return f"{base}{path}" if base else path
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    await init_db()
+    stop_event = asyncio.Event()
+    listener_task = asyncio.create_task(_pubsub_listener(stop_event))
+    try:
+        yield
+    finally:
+        stop_event.set()
+        listener_task.cancel()
+        try:
+            await listener_task
+        except (asyncio.CancelledError, Exception):
+            pass
+        await close_db()
+
+
+app = FastAPI(lifespan=lifespan)
+
 allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "")
 origins = [
     "http://localhost:3000",
     "https://quickaishort.online",
     "http://localhost:8000",
 ]
-
 if allowed_origins_env:
-    # Allows comma-separated origins in .env
     origins.extend([o.strip() for o in allowed_origins_env.split(",") if o.strip()])
 
 app.add_middleware(
@@ -48,15 +174,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# ---- Pydantic request/response models ----------------------------------------
+
+
 class TranscriptChunk(BaseModel):
     text: str
     start: float
     end: float
 
+
 class AnalyzeRequest(BaseModel):
     videoId: str
     transcript: List[TranscriptChunk]
     duration: float
+    userId: Optional[str] = "anonymous"
+    isFirstProject: bool = False
+
 
 class ClipCandidateRequest(BaseModel):
     start_sec: float
@@ -64,81 +198,262 @@ class ClipCandidateRequest(BaseModel):
     score: float
     transcript: str
 
+
 class PreflightRequest(BaseModel):
     youtube_url: str
     user_id: str
     is_premium: bool
     clip_candidates: List[ClipCandidateRequest]
 
+
+class ReframingPayload(BaseModel):
+    center: dict[str, float]
+    scale: float = 1.0
+
+
+class CaptionsPayload(BaseModel):
+    enabled: bool = False
+    srt_content: str = ""
+    style: Optional[str] = None
+
+
+class ExportRequest(BaseModel):
+    videoId: str
+    start_sec: float
+    end_sec: float
+    user_id: str
+    aspect_ratio: Literal["9:16", "1:1"] = "9:16"
+    quality: Literal["low", "medium", "high"] = "medium"
+    captions: CaptionsPayload = Field(default_factory=CaptionsPayload)
+    watermark_enabled: bool = False
+    reframing: Optional[ReframingPayload] = None
+
+
+# ---- Health + meta -----------------------------------------------------------
+
+
 @app.get("/")
 def read_root():
     return {"status": "active", "service": "QuickAI Shorts Engine (Python)"}
 
+
 @app.get("/health")
 def health_check():
-    return {"status": "ok"}
+    return {
+        "status": "ok",
+        "mongo": db_is_ready(),
+        "adk": _ADK_AVAILABLE,
+    }
+
+
+# ---- Analyze ------------------------------------------------------------------
+
 
 @app.post("/api/analyze")
 async def analyze_video(request: AnalyzeRequest):
-    """
-    Analyzes the video transcript using Gemini ADK to find viral clips.
-    """
     try:
         agent = get_viral_agent()
-        transcript_text = " ".join([c.text for c in request.transcript])
-        
-        suggestions = await agent.analyze_transcript(transcript_text, request.duration)
-        
+        transcript_text = " ".join(c.text for c in request.transcript)
+        suggestions = await agent.analyze_transcript(
+            transcript_text, request.duration, video_id=request.videoId
+        )
+
+        await increment_stats(
+            request.userId or "anonymous",
+            duration_delta=request.duration,
+            ai_run_delta=1,
+            project_delta=1 if request.isFirstProject else 0,
+        )
+
         return {
             "videoId": request.videoId,
             "suggestedClips": suggestions,
-            "status": "success"
+            "status": "success",
         }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as exc:
+        logger.exception("/api/analyze failed: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+# ---- Export -------------------------------------------------------------------
+
+
+@app.post("/api/export")
+async def export_video(request: ExportRequest):
+    job_id = uuid.uuid4().hex
+    options = {
+        "aspect_ratio": request.aspect_ratio,
+        "quality": request.quality,
+        "captions_enabled": request.captions.enabled,
+        "captions_srt": request.captions.srt_content,
+        "captions_style": request.captions.style,
+        "watermark_enabled": request.watermark_enabled,
+        "reframing": request.reframing.model_dump() if request.reframing else None,
+    }
+
+    try:
+        from render_worker import process_render_task
+
+        render_queue.enqueue(
+            process_render_task,
+            job_id,
+            request.videoId,
+            request.start_sec,
+            request.end_sec,
+            request.user_id,
+            options,
+            job_id=job_id,
+            job_timeout=JOB_TIMEOUT_SECONDS,
+            result_ttl=JOB_RESULT_TTL_SECONDS,
+            failure_ttl=JOB_FAILURE_TTL_SECONDS,
+            retry=None,
+        )
+    except Exception as exc:
+        logger.exception("Failed to enqueue export %s: %s", job_id, exc)
+        raise HTTPException(status_code=503, detail=f"Queue error: {exc}")
+
+    return {
+        "status": "queued",
+        "job_id": job_id,
+        "subscribe_channel": f"export-{job_id}",
+    }
+
+
+@app.get("/api/export/status/{job_id}")
+async def export_status(job_id: str, user_id: str):
+    try:
+        from rq.job import Job
+
+        job = Job.fetch(job_id, connection=redis_conn)
+    except Exception:
+        return {"status": "unknown", "job_id": job_id}
+
+    status = job.get_status(refresh=True) or "unknown"
+    response: dict = {"status": status, "job_id": job_id}
+
+    if status == "finished":
+        response["download_url"] = _build_download_url(job_id, user_id)
+        if isinstance(job.result, dict):
+            response["meta"] = {
+                k: job.result.get(k)
+                for k in ("duration_sec", "file_size_bytes", "elapsed_sec")
+            }
+    elif status == "failed":
+        response["error"] = (job.exc_info or "").splitlines()[-1] if job.exc_info else "failed"
+
+    return response
+
+
+@app.get("/api/export/download/{job_id}")
+async def export_download(job_id: str, user_id: str, token: str, expires: int):
+    if not verify(job_id, user_id, expires, token):
+        raise HTTPException(status_code=403, detail="Invalid or expired token")
+    if not db_is_ready():
+        raise HTTPException(status_code=503, detail="Storage unavailable")
+
+    db = get_db()
+    file_doc = await db[f"{EXPORTS_BUCKET}.files"].find_one(
+        {"metadata.job_id": job_id, "metadata.user_id": user_id}
+    )
+    if not file_doc:
+        raise HTTPException(status_code=404, detail="Export not found or expired")
+
+    bucket = get_exports_bucket()
+    stream = await bucket.open_download_stream(file_doc["_id"])
+
+    async def iterator():
+        try:
+            while True:
+                chunk = await stream.readchunk()
+                if not chunk:
+                    break
+                yield chunk
+        finally:
+            try:
+                await stream.close()
+            except Exception:
+                pass
+
+    filename = file_doc.get("filename", f"{job_id}.mp4")
+    return StreamingResponse(
+        iterator(),
+        media_type="video/mp4",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Content-Length": str(file_doc.get("length", "")),
+        },
+    )
+
+
+# ---- Stats --------------------------------------------------------------------
+
+
+@app.get("/api/stats")
+async def stats_endpoint(user_id: str):
+    return await get_user_stats(user_id)
+
+
+@app.websocket("/ws/stats/{user_id}")
+async def stats_ws(websocket: WebSocket, user_id: str):
+    await ws_manager.connect(user_id, websocket)
+    try:
+        initial = await get_user_stats(user_id)
+        await websocket.send_text(
+            json.dumps({"event": "stats-updated", "payload": initial}, default=str)
+        )
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        pass
+    except Exception as exc:
+        logger.warning("/ws/stats/%s closed: %s", user_id, exc)
+    finally:
+        await ws_manager.disconnect(user_id, websocket)
+
+
+# ---- yt-dlp passthroughs (unchanged behaviour) -------------------------------
+
 
 @app.get("/api/info")
-# ... (existing get_video_info)
 def get_video_info(url: str):
     if not url:
         raise HTTPException(status_code=400, detail="URL is required")
-    
+
     ydl_opts = {
-        'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
-        'quiet': True,
-        'no_warnings': True,
+        "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+        "quiet": True,
+        "no_warnings": True,
     }
-    
+
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
             return {
-                "id": info.get('id'),
-                "title": info.get('title'),
-                "duration": info.get('duration'),
-                "thumbnail": info.get('thumbnail'),
-                "formats": info.get('formats'),
-                "url": info.get('url')
+                "id": info.get("id"),
+                "title": info.get("title"),
+                "duration": info.get("duration"),
+                "thumbnail": info.get("thumbnail"),
+                "formats": info.get("formats"),
+                "url": info.get("url"),
             }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
 
 @app.get("/api/proxy")
-# ... (existing proxy_video)
 def proxy_video(url: str):
     if not url:
         raise HTTPException(status_code=400, detail="URL is required")
 
-    ydl_opts = {'format': 'best[ext=mp4]', 'quiet': True}
+    ydl_opts = {"format": "best[ext=mp4]", "quiet": True}
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
-            stream_url = info.get('url')
-            
+            stream_url = info.get("url")
             if not stream_url:
                 raise HTTPException(status_code=404, detail="Could not retrieve stream URL")
-                
-            def iterfile():  
+
+            def iterfile():
                 with requests.get(stream_url, stream=True, timeout=30) as r:
                     r.raise_for_status()
                     for chunk in r.iter_content(chunk_size=16384):
@@ -152,17 +467,15 @@ def proxy_video(url: str):
                     "Cross-Origin-Resource-Policy": "cross-origin",
                 },
             )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
 
-    except Exception as e:
-         raise HTTPException(status_code=500, detail=str(e))
+
+# ---- Pre-Flight ---------------------------------------------------------------
+
 
 @app.post("/api/preflight")
 async def run_preflight(request: PreflightRequest):
-    """
-    Pre-Flight: Run simulated audience panel on a clip candidate.
-    Free users: 2 personas (genz + millennial), no refinement loop.
-    Premium users: full 6-persona panel + loop + BigQuery grounding.
-    """
     if not _ADK_AVAILABLE:
         raise HTTPException(
             status_code=503,
@@ -172,7 +485,6 @@ async def run_preflight(request: PreflightRequest):
     if not request.clip_candidates:
         raise HTTPException(status_code=422, detail="clip_candidates must contain at least one clip")
 
-    # Free users: gate full panel behind premium
     if not request.is_premium and len(request.clip_candidates) > 1:
         raise HTTPException(
             status_code=402,
@@ -203,6 +515,7 @@ async def run_preflight(request: PreflightRequest):
             ),
             timeout=120.0,
         )
+        await increment_stats(request.user_id, ai_run_delta=1)
         return {"preflight_result": result.model_dump()}
     except asyncio.TimeoutError:
         raise HTTPException(

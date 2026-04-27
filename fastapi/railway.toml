@@ -1,7 +1,12 @@
 [build]
 builder = "NIXPACKS"
+nixpacksPlan = { phases = { setup = { nixPkgs = ["python312", "ffmpeg-full"] } } }
 
 [deploy]
 startCommand = "uvicorn main:app --host 0.0.0.0 --port $PORT"
 healthcheckPath = "/health"
 restartPolicyType = "ON_FAILURE"
+
+# Render worker runs as a separate Railway service that shares this repo.
+# In Railway dashboard, create a second service pointing at the same repo and
+# override its startCommand to: `python render_worker.py`

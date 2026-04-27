@@ -1,25 +1,38 @@
-"""
-Pre-Flight ADK Multi-Agent Pipeline for QuickAIShort.online
-Author: QuickAIShort Team
-Last Modified: 2026-04-25
+"""Pre-Flight ADK Multi-Agent Pipeline for QuickAIShort.online
 
-Architecture: SequentialAgent(ClipCandidate → TrendGrounding → AnalyticsGrounding
-              → LoopAgent(ParallelAgent(6 personas) → VoteAggregator → QualityGate
-              → ClipRefinement))
+Pillar 3 refactor (2026-04-27):
+  - Grounding (`fetch_trend_context` + `fetch_youtube_analytics`) is now
+    pre-computed in parallel via `asyncio.gather` *before* the ADK
+    orchestrator runs. Bypasses ADK's per-tool LLM round-trip for I/O that
+    has nothing to do with reasoning.
+  - `VoteAggregatorAgent` (LLM call doing pure arithmetic) is replaced with
+    a deterministic `BaseAgent` that does the math in Python — saves one
+    LLM round trip per loop iteration.
+  - QualityGate honours an `early_exit_on_pass` flag: when consensus passes
+    on iteration 1, refinement is skipped.
+  - Model string is centralised via `services.gemini_client.DEFAULT_MODEL`.
 """
 
-import os
+from __future__ import annotations
+
+import asyncio
 import json
 import logging
+import os
 import uuid
-from typing import Any, Literal, Optional
+from typing import Any, AsyncIterator, Literal, Optional
+
 from pydantic import BaseModel
 
+from services.gemini_client import DEFAULT_MODEL
+
 logger = logging.getLogger(__name__)
+
 
 # ---------------------------------------------------------------------------
 # Pydantic models — shared with main.py via __init__.py
 # ---------------------------------------------------------------------------
+
 
 class PersonaVote(BaseModel):
     persona_id: str
@@ -28,7 +41,7 @@ class PersonaVote(BaseModel):
     drop_off_second: Optional[int]
     drop_off_reason: Optional[str]
     hook_verdict: Literal["strong", "weak", "neutral"]
-    share_likelihood: float  # 0.0 – 1.0
+    share_likelihood: float
     reasoning: str
 
 
@@ -53,8 +66,9 @@ class PreflightResult(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Persona weight table (must sum to 1.0)
+# Persona configuration
 # ---------------------------------------------------------------------------
+
 
 PERSONA_WEIGHTS: dict[str, float] = {
     "genz": 0.25,
@@ -105,26 +119,37 @@ PERSONA_IDENTITIES: dict[str, str] = {
 THRESHOLD_DEFAULT = 65
 MAX_ITERATIONS_DEFAULT = 3
 
+
 # ---------------------------------------------------------------------------
-# ADK import — wrapped so FastAPI still boots if google-adk is not installed
+# ADK import
 # ---------------------------------------------------------------------------
 
 try:
-    from google.adk.agents import Agent, SequentialAgent, LoopAgent, ParallelAgent
+    from google.adk.agents import (
+        Agent,
+        BaseAgent,
+        LoopAgent,
+        ParallelAgent,
+        SequentialAgent,
+    )
+    from google.adk.events import Event, EventActions
     from google.adk.runners import Runner
     from google.adk.sessions import InMemorySessionService
-    from google.adk.tools import FunctionTool
     import google.genai.types as genai_types
 
     _ADK_OK = True
 except ImportError as _adk_err:
     logger.warning("google-adk not installed (%s) — preflight pipeline unavailable", _adk_err)
     _ADK_OK = False
+    Agent = BaseAgent = LoopAgent = ParallelAgent = SequentialAgent = None  # type: ignore[assignment]
+    Event = EventActions = Runner = InMemorySessionService = None  # type: ignore[assignment]
+    genai_types = None  # type: ignore[assignment]
 
 
 # ---------------------------------------------------------------------------
-# External tool functions (registered as FunctionTool on their agents)
+# Async grounding (runs OUTSIDE ADK so we can true-parallel both calls)
 # ---------------------------------------------------------------------------
+
 
 async def fetch_trend_context(query: str) -> dict[str, Any]:
     """Call SerpAPI Google Trends. Falls back gracefully if key is absent."""
@@ -133,6 +158,7 @@ async def fetch_trend_context(query: str) -> dict[str, Any]:
         return {"source": "fallback", "trends": [], "reason": "SERPAPI_KEY not set"}
     try:
         import httpx
+
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.get(
                 "https://serpapi.com/search",
@@ -162,11 +188,10 @@ async def fetch_youtube_analytics(youtube_url: str) -> dict[str, Any]:
             "reason": "No YouTube OAuth credentials — connect YouTube account for personalized grounding",
         }
     try:
-        import json as _json
         from google.oauth2.credentials import Credentials
         from googleapiclient.discovery import build
 
-        creds_data = _json.loads(creds_json)
+        creds_data = json.loads(creds_json)
         creds = Credentials(**creds_data)
         yt = build("youtubeAnalytics", "v2", credentials=creds)
         response = (
@@ -192,11 +217,27 @@ async def fetch_youtube_analytics(youtube_url: str) -> dict[str, Any]:
         }
 
 
+async def _gather_grounding(
+    youtube_url: str, transcript: str
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Run both grounding calls truly in parallel."""
+    keywords = " ".join(transcript.split()[:5]) or "viral shorts"
+    trend, analytics = await asyncio.gather(
+        fetch_trend_context(keywords),
+        fetch_youtube_analytics(youtube_url),
+        return_exceptions=False,
+    )
+    return trend, analytics
+
+
 # ---------------------------------------------------------------------------
-# Weighted consensus calculation (pure Python — no LLM needed)
+# Deterministic helpers
 # ---------------------------------------------------------------------------
 
-def _weighted_consensus(votes: list[PersonaVote], persona_weights: dict[str, float]) -> float:
+
+def _weighted_consensus(
+    votes: list[PersonaVote], persona_weights: dict[str, float]
+) -> float:
     total_weight = 0.0
     weighted_sum = 0.0
     for vote in votes:
@@ -209,20 +250,22 @@ def _weighted_consensus(votes: list[PersonaVote], persona_weights: dict[str, flo
     return round(weighted_sum / total_weight, 1)
 
 
-def _parse_persona_vote(raw: str, persona_id: str) -> Optional[PersonaVote]:
-    """Parse a persona's JSON response. Returns None on any parse failure."""
+def _parse_persona_vote(raw: Any, persona_id: str) -> Optional[PersonaVote]:
+    if raw is None:
+        return None
     try:
-        # Strip markdown fences if present
-        text = raw.strip()
-        if text.startswith("```"):
-            lines = text.split("\n")
-            text = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
-        data = json.loads(text)
-        # Ensure persona_id matches
+        if isinstance(raw, dict):
+            data = raw
+        else:
+            text = str(raw).strip()
+            if text.startswith("```"):
+                lines = text.split("\n")
+                text = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
+            data = json.loads(text)
         data["persona_id"] = persona_id
         return PersonaVote(**data)
     except Exception as exc:
-        logger.error("_parse_persona_vote(%s) failed: %s | raw=%r", persona_id, exc, raw[:200])
+        logger.warning("_parse_persona_vote(%s) failed: %s", persona_id, exc)
         return None
 
 
@@ -230,101 +273,174 @@ def _build_persona_instruction(persona_id: str) -> str:
     identity = PERSONA_IDENTITIES[persona_id]
     return f"""{identity}
 
-You are evaluating a short-form video clip for virality. You will receive:
-- The clip transcript (from session state key "current_clip_transcript")
-- The clip duration in seconds (from session state key "current_clip_duration")
-- Optional trending keywords (from session state key "trend_keywords")
+You are evaluating a short-form video clip for virality. Read from session state:
+- "current_clip_transcript" — the clip transcript
+- "current_clip_duration" — clip duration in seconds
+- "trend_keywords" — optional list of trending keywords
+- "analytics_baseline" — channel baseline metrics
 
-Evaluate whether you would watch the clip to completion and whether you would share it.
+Decide whether you would watch the clip to completion and whether you would share it.
 
-You MUST respond with ONLY a valid JSON object matching this exact schema:
+Respond with ONLY a valid JSON object matching this exact schema:
 {{
   "persona_id": "{persona_id}",
   "would_watch_full": <true or false>,
   "predicted_retention_pct": <number 0-100>,
-  "drop_off_second": <integer or null — the second at which you would stop watching, null if you watch to end>,
-  "drop_off_reason": <string or null — one sentence explaining why you dropped off>,
+  "drop_off_second": <integer or null>,
+  "drop_off_reason": <string or null>,
   "hook_verdict": <"strong" | "weak" | "neutral">,
   "share_likelihood": <number 0.0-1.0>,
   "reasoning": <one sentence explaining your overall verdict>
 }}
 
-Do not include any text outside the JSON object.
+No text outside the JSON object.
 """
 
 
 # ---------------------------------------------------------------------------
-# Build ADK agent graph (only if ADK is available)
+# Build ADK agent graph
 # ---------------------------------------------------------------------------
+
 
 preflight_root_agent = None
 preflight_runner = None
 
 
+class _DeterministicAggregator(BaseAgent if _ADK_OK else object):  # type: ignore[misc]
+    """Pure-Python aggregator. No LLM call — saves one round trip per iter."""
+
+    def __init__(self, name: str = "VoteAggregatorAgent") -> None:
+        if _ADK_OK:
+            super().__init__(
+                name=name,
+                description="Computes weighted consensus from persona votes (deterministic).",
+            )
+
+    async def _run_async_impl(self, ctx) -> AsyncIterator["Event"]:  # type: ignore[name-defined]
+        state = ctx.session.state if hasattr(ctx, "session") else {}
+        votes: list[PersonaVote] = []
+        for pid in PERSONA_WEIGHTS:
+            raw = state.get(f"persona_vote_{pid}")
+            vote = _parse_persona_vote(raw, pid)
+            if vote is not None:
+                votes.append(vote)
+
+        consensus = _weighted_consensus(votes, PERSONA_WEIGHTS)
+        votes_json = json.dumps([v.model_dump() for v in votes])
+
+        actions = EventActions(
+            state_delta={
+                "consensus_score": consensus,
+                "persona_votes_json": votes_json,
+            }
+        )
+        yield Event(
+            author=self.name,
+            actions=actions,
+            content=genai_types.Content(
+                role="model",
+                parts=[
+                    genai_types.Part(
+                        text=f"AGGREGATE: votes={len(votes)} consensus={consensus}"
+                    )
+                ],
+            ),
+        )
+
+
+class _EarlyExitGate(BaseAgent if _ADK_OK else object):  # type: ignore[misc]
+    """Pure-Python quality gate. Sets recommendation + escalates loop exit."""
+
+    def __init__(
+        self,
+        name: str = "QualityGateAgent",
+        threshold: int = THRESHOLD_DEFAULT,
+        max_iterations: int = MAX_ITERATIONS_DEFAULT,
+    ) -> None:
+        if _ADK_OK:
+            super().__init__(
+                name=name,
+                description="Decides PUBLISH / REFINE_FIRST / DISCARD and triggers loop exit.",
+            )
+        self._threshold = threshold
+        self._max_iterations = max_iterations
+
+    async def _run_async_impl(self, ctx) -> AsyncIterator["Event"]:  # type: ignore[name-defined]
+        state = ctx.session.state if hasattr(ctx, "session") else {}
+        try:
+            consensus = float(state.get("consensus_score", 0))
+        except (TypeError, ValueError):
+            consensus = 0.0
+        try:
+            iteration = int(state.get("loop_iteration", 0))
+        except (TypeError, ValueError):
+            iteration = 0
+
+        passed = consensus >= self._threshold
+        last_iter = iteration >= (self._max_iterations - 1)
+        done = passed or last_iter
+
+        if passed:
+            recommendation = "PUBLISH"
+        elif consensus >= 40:
+            recommendation = "REFINE_FIRST"
+        else:
+            recommendation = "DISCARD"
+
+        actions = EventActions(
+            state_delta={
+                "preflight_done": "true" if done else "false",
+                "recommendation": recommendation,
+                "loop_iteration": iteration + 1,
+                "skip_refinement": "true" if passed else "false",
+            },
+            escalate=done,
+        )
+        yield Event(
+            author=self.name,
+            actions=actions,
+            content=genai_types.Content(
+                role="model",
+                parts=[
+                    genai_types.Part(
+                        text=(
+                            f"GATE: {'PASS' if passed else 'CONTINUE'} | "
+                            f"score={consensus} | rec={recommendation}"
+                        )
+                    )
+                ],
+            ),
+        )
+
+
 def _build_pipeline() -> tuple[Any, Any]:
-    """Construct the full ADK agent graph. Called once at module load."""
     if not _ADK_OK:
         return None, None
 
     threshold = int(os.environ.get("PREFLIGHT_THRESHOLD", THRESHOLD_DEFAULT))
     max_iterations = int(os.environ.get("PREFLIGHT_MAX_ITERATIONS", MAX_ITERATIONS_DEFAULT))
-    model = "gemini-2.0-flash"
+    model = DEFAULT_MODEL
 
-    # -- Step 1: ClipCandidateAgent ------------------------------------------
     clip_candidate_agent = Agent(
         name="ClipCandidateAgent",
         model=model,
         description="Validates clip metadata and prepares transcript for persona evaluation.",
         instruction=(
             "Read the clip candidate from session state key 'clip_candidates' (index 0). "
-            "Set session state 'current_clip_transcript' to the clip's transcript text. "
-            "Set session state 'current_clip_duration' to the clip duration in seconds (end_sec - start_sec). "
             "Confirm the clip is between 5 and 120 seconds. "
-            "If valid, set session state 'clip_validated' = true. "
-            "Reply with a brief one-line confirmation."
+            "Reply with a brief one-line confirmation. "
+            "(Note: 'current_clip_transcript' and 'current_clip_duration' have already "
+            "been pre-populated by the calling code.)"
         ),
     )
 
-    # -- Step 2: TrendGroundingAgent -----------------------------------------
-    trend_tool = FunctionTool(fetch_trend_context)
-    trend_grounding_agent = Agent(
-        name="TrendGroundingAgent",
-        model=model,
-        description="Fetches current trending keywords relevant to the clip topic.",
-        instruction=(
-            "Read 'current_clip_transcript' from session state. "
-            "Extract the main topic or keywords (3-5 words). "
-            "Call fetch_trend_context with those keywords as the query. "
-            "Store the result in session state key 'trend_context'. "
-            "Extract any trending keyword strings and store them as a list in 'trend_keywords'. "
-            "Reply with a one-line summary of the trend alignment."
-        ),
-        tools=[trend_tool],
-    )
-
-    # -- Step 3: AnalyticsGroundingAgent -------------------------------------
-    analytics_tool = FunctionTool(fetch_youtube_analytics)
-    analytics_grounding_agent = Agent(
-        name="AnalyticsGroundingAgent",
-        model=model,
-        description="Fetches the creator's YouTube channel analytics as a grounding baseline.",
-        instruction=(
-            "Read 'youtube_url' from session state. "
-            "Call fetch_youtube_analytics with that URL. "
-            "Store the result in session state key 'analytics_baseline'. "
-            "If the source is 'baseline', note that in your reply. "
-            "Reply with a one-line summary of the analytics baseline."
-        ),
-        tools=[analytics_tool],
-    )
-
-    # -- 6 Persona Agents (run in parallel) ----------------------------------
     persona_agents = [
         Agent(
             name=f"Persona_{pid}",
             model=model,
             description=f"Simulates audience persona: {pid}",
             instruction=_build_persona_instruction(pid),
+            output_key=f"persona_vote_{pid}",
         )
         for pid in PERSONA_WEIGHTS
     ]
@@ -334,88 +450,38 @@ def _build_pipeline() -> tuple[Any, Any]:
         sub_agents=persona_agents,
     )
 
-    # -- VoteAggregatorAgent -------------------------------------------------
-    vote_aggregator_agent = Agent(
-        name="VoteAggregatorAgent",
-        model=model,
-        description="Reads all persona votes from session state and computes weighted consensus.",
-        instruction=(
-            "Read session state keys 'persona_vote_genz', 'persona_vote_millennial', "
-            "'persona_vote_sports', 'persona_vote_tech', 'persona_vote_arabic', 'persona_vote_spanish'. "
-            "Each key contains a JSON string representing a persona vote. "
-            "Parse all available votes and compute the weighted consensus score using these weights: "
-            "genz=0.25, millennial=0.20, sports=0.15, tech=0.15, arabic=0.125, spanish=0.125. "
-            "Formula per persona: weight * (predicted_retention_pct * 0.6 + share_likelihood * 100 * 0.4). "
-            "Store the consensus score (0-100 float) in session state key 'consensus_score'. "
-            "Store the aggregated votes list as JSON in session state key 'persona_votes_json'. "
-            "Reply with the consensus score only."
-        ),
-    )
+    vote_aggregator = _DeterministicAggregator()
+    quality_gate = _EarlyExitGate(threshold=threshold, max_iterations=max_iterations)
 
-    # -- QualityGateAgent ----------------------------------------------------
-    quality_gate_agent = Agent(
-        name="QualityGateAgent",
-        model=model,
-        description="Checks if the consensus score meets the quality threshold.",
-        instruction=(
-            f"Read 'consensus_score' from session state. "
-            f"Read 'loop_iteration' from session state (default 0). "
-            f"If consensus_score >= {threshold} OR loop_iteration >= {max_iterations - 1}: "
-            f"  set session state 'preflight_done' = 'true' (as a string). "
-            f"  if consensus_score >= {threshold}: set 'recommendation' = 'PUBLISH'. "
-            f"  else if consensus_score >= 40: set 'recommendation' = 'REFINE_FIRST'. "
-            f"  else: set 'recommendation' = 'DISCARD'. "
-            f"Else: set 'preflight_done' = 'false', set 'recommendation' = 'REFINE_FIRST'. "
-            f"Increment 'loop_iteration' by 1. "
-            f"Reply with: GATE: <PASS|CONTINUE> | Score: <score> | Recommendation: <recommendation>"
-        ),
-    )
-
-    # -- ClipRefinementAgent -------------------------------------------------
     clip_refinement_agent = Agent(
         name="ClipRefinementAgent",
         model=model,
         description="Refines the clip based on persona drop-off patterns (premium only).",
         instruction=(
             "Read 'persona_votes_json' and 'current_clip_transcript' from session state. "
-            "Read 'free_tier_mode' from session state. "
-            "If free_tier_mode == 'true': store null in 'refined_clip' and exit. "
-            "Parse persona votes. Identify the most common drop-off second across all personas. "
-            "Apply refinement rules: "
-            "  - If majority drop-off <= 8s: find the next sentence boundary after the drop-off, "
-            "    set new start_sec there. "
-            "  - If majority drop-off >= (clip_duration - 10): trim end_sec to the drop-off point. "
-            "  - If majority hook_verdict == 'weak': find the sentence with strongest action words "
-            "    in the first 30 seconds and move start_sec to that sentence. "
-            "Read original clip from session state 'clip_candidates' (index 0). "
-            "Store refined clip as JSON in session state key 'refined_clip'. "
+            "Read 'free_tier_mode' and 'skip_refinement' from session state. "
+            "If free_tier_mode == 'true' OR skip_refinement == 'true': "
+            "  store null in 'refined_clip' and exit. "
+            "Otherwise parse persona votes, find majority drop-off second, and apply: "
+            "  - drop-off <= 8s: move start_sec to next sentence boundary. "
+            "  - drop-off >= (clip_duration - 10): trim end_sec to drop-off point. "
+            "  - majority hook_verdict == 'weak': move start_sec to strongest action sentence in first 30s. "
+            "Read original clip from 'clip_candidates' (index 0) and store the refined "
+            "ClipCandidate JSON in session state key 'refined_clip'. "
             "Reply with a one-line refinement summary."
         ),
     )
 
-    # -- LoopAgent wrapping the panel ----------------------------------------
-    try:
-        audience_panel_loop = LoopAgent(
-            name="AudiencePanelLoop",
-            sub_agents=[persona_parallel, vote_aggregator_agent, quality_gate_agent, clip_refinement_agent],
-            max_iterations=max_iterations,
-        )
-    except TypeError:
-        # Fallback: some ADK versions may not support should_continue_fn
-        logger.warning("LoopAgent: should_continue_fn not supported — using max_iterations=%d only", max_iterations)
-        audience_panel_loop = LoopAgent(
-            name="AudiencePanelLoop",
-            sub_agents=[persona_parallel, vote_aggregator_agent, quality_gate_agent, clip_refinement_agent],
-            max_iterations=max_iterations,
-        )
+    audience_panel_loop = LoopAgent(
+        name="AudiencePanelLoop",
+        sub_agents=[persona_parallel, vote_aggregator, quality_gate, clip_refinement_agent],
+        max_iterations=max_iterations,
+    )
 
-    # -- Root SequentialAgent ------------------------------------------------
     root_agent = SequentialAgent(
         name="PreFlight_Orchestrator",
         sub_agents=[
             clip_candidate_agent,
-            trend_grounding_agent,
-            analytics_grounding_agent,
             audience_panel_loop,
         ],
     )
@@ -427,7 +493,10 @@ def _build_pipeline() -> tuple[Any, Any]:
         app_name="QuickAIShort_PreFlight",
     )
 
-    logger.info("Pre-Flight ADK pipeline initialised (threshold=%d, max_iter=%d)", threshold, max_iterations)
+    logger.info(
+        "Pre-Flight ADK pipeline initialised (model=%s, threshold=%d, max_iter=%d)",
+        model, threshold, max_iterations,
+    )
     return root_agent, runner
 
 
@@ -435,8 +504,9 @@ preflight_root_agent, preflight_runner = _build_pipeline()
 
 
 # ---------------------------------------------------------------------------
-# High-level async entry point called by main.py
+# High-level async entry point
 # ---------------------------------------------------------------------------
+
 
 async def run_preflight_pipeline(
     youtube_url: str,
@@ -444,34 +514,43 @@ async def run_preflight_pipeline(
     is_premium: bool,
     user_id: str,
 ) -> PreflightResult:
-    """
-    Execute the Pre-Flight pipeline for a list of clip candidates.
-    Returns the PreflightResult for the top-scoring candidate.
-    """
     if not _ADK_OK or preflight_runner is None:
         raise RuntimeError("google-adk not installed — cannot run Pre-Flight pipeline")
 
-    # Use only the first clip candidate for the panel
     clip = clip_candidates[0]
     session_id = str(uuid.uuid4())
 
-    initial_state = {
+    # PRE-COMPUTE grounding outside ADK, fully in parallel.
+    trend_context, analytics_baseline = await _gather_grounding(youtube_url, clip.transcript)
+    trend_keywords: list[str] = []
+    try:
+        trend_data = trend_context.get("data", {}) if isinstance(trend_context, dict) else {}
+        if isinstance(trend_data, dict):
+            for entry in trend_data.get("interest_over_time", {}).get("timeline_data", [])[:5]:
+                if isinstance(entry, dict) and "query" in entry:
+                    trend_keywords.append(str(entry["query"]))
+    except Exception:
+        pass
+
+    initial_state: dict[str, Any] = {
         "youtube_url": youtube_url,
         "clip_candidates": [clip.model_dump()],
         "is_premium": str(is_premium).lower(),
         "free_tier_mode": str(not is_premium).lower(),
         "preflight_done": "false",
-        "loop_iteration": "0",
+        "loop_iteration": 0,
         "current_clip_transcript": clip.transcript,
         "current_clip_duration": str(clip.end_sec - clip.start_sec),
-        "trend_keywords": "[]",
-        "consensus_score": "0",
+        "trend_context": trend_context,
+        "trend_keywords": trend_keywords,
+        "analytics_baseline": analytics_baseline,
+        "consensus_score": 0,
         "persona_votes_json": "[]",
         "recommendation": "REFINE_FIRST",
         "refined_clip": "null",
+        "skip_refinement": "false",
     }
 
-    # Create session with initial state
     await preflight_runner.session_service.create_session(
         app_name="QuickAIShort_PreFlight",
         user_id=user_id,
@@ -479,21 +558,23 @@ async def run_preflight_pipeline(
         state=initial_state,
     )
 
-    # Run the pipeline
-    message_content = genai_types.Content(
+    message = genai_types.Content(
         role="user",
-        parts=[genai_types.Part(text=f"Run Pre-Flight analysis for clip: {clip.transcript[:200]}")],
+        parts=[
+            genai_types.Part(
+                text=f"Run Pre-Flight analysis for clip: {clip.transcript[:200]}"
+            )
+        ],
     )
 
     async for event in preflight_runner.run_async(
         user_id=user_id,
         session_id=session_id,
-        new_message=message_content,
+        new_message=message,
     ):
         if event.is_final_response():
             break
 
-    # Retrieve final session state
     session = await preflight_runner.session_service.get_session(
         app_name="QuickAIShort_PreFlight",
         user_id=user_id,
@@ -501,10 +582,10 @@ async def run_preflight_pipeline(
     )
     state = session.state
 
-    # Parse persona votes
+    # Parse persona votes (aggregator already wrote JSON).
     votes: list[PersonaVote] = []
+    raw_votes = state.get("persona_votes_json", "[]")
     try:
-        raw_votes = state.get("persona_votes_json", "[]")
         parsed = json.loads(raw_votes) if isinstance(raw_votes, str) else raw_votes
         for v in parsed if isinstance(parsed, list) else []:
             try:
@@ -514,18 +595,14 @@ async def run_preflight_pipeline(
     except Exception as exc:
         logger.error("Failed to parse persona_votes_json: %s", exc)
 
-    # If votes are still empty, try individual state keys
     if not votes:
         for pid in PERSONA_WEIGHTS:
-            raw = state.get(f"persona_vote_{pid}", "")
-            if raw:
-                vote = _parse_persona_vote(raw, pid)
-                if vote:
-                    votes.append(vote)
+            vote = _parse_persona_vote(state.get(f"persona_vote_{pid}"), pid)
+            if vote:
+                votes.append(vote)
 
     consensus = _weighted_consensus(votes, PERSONA_WEIGHTS)
 
-    # Parse recommendation
     raw_rec = state.get("recommendation", "REFINE_FIRST")
     recommendation: Literal["PUBLISH", "REFINE_FIRST", "DISCARD"] = (
         "PUBLISH" if raw_rec == "PUBLISH"
@@ -533,37 +610,28 @@ async def run_preflight_pipeline(
         else "REFINE_FIRST"
     )
 
-    # Parse refined clip
     refined_clip: Optional[ClipCandidate] = None
     raw_refined = state.get("refined_clip", "null")
     if raw_refined and raw_refined != "null":
         try:
-            refined_data = json.loads(raw_refined) if isinstance(raw_refined, str) else raw_refined
+            refined_data = (
+                json.loads(raw_refined) if isinstance(raw_refined, str) else raw_refined
+            )
             if refined_data:
                 refined_clip = ClipCandidate(**refined_data)
         except Exception as exc:
             logger.warning("Could not parse refined_clip: %s", exc)
 
-    # Parse analytics baseline
-    analytics_baseline = state.get("analytics_baseline")
-    if isinstance(analytics_baseline, str):
-        try:
-            analytics_baseline = json.loads(analytics_baseline)
-        except Exception:
-            analytics_baseline = None
-
-    # Build BigQuery insight string
     bigquery_insight: Optional[str] = None
-    if analytics_baseline and analytics_baseline.get("source") == "youtube_analytics":
+    if isinstance(analytics_baseline, dict) and analytics_baseline.get("source") == "youtube_analytics":
         bigquery_insight = (
             "Based on your channel's history: "
             f"avg retention {analytics_baseline.get('avg_retention_pct', 55):.0f}% · "
             "clips with retention >65% average 3.8x more views."
         )
 
-    loop_iter_raw = state.get("loop_iteration", "1")
     try:
-        loop_iterations = int(loop_iter_raw)
+        loop_iterations = int(state.get("loop_iteration", 1))
     except (ValueError, TypeError):
         loop_iterations = 1
 
@@ -572,7 +640,7 @@ async def run_preflight_pipeline(
         persona_votes=votes,
         weighted_consensus_score=consensus,
         recommendation=recommendation,
-        trend_context=state.get("trend_context"),
+        trend_context=trend_context,
         analytics_baseline=analytics_baseline,
         bigquery_insight=bigquery_insight,
         refined_clip=refined_clip,

@@ -60,7 +60,7 @@ export default function LandingPage() {
                   className="mb-8 px-4 py-1.5 text-xs font-bold border-white/10 bg-white/5 text-primary nano-glow backdrop-blur-md rounded-full"
                 >
                   <Sparkles className="w-3 h-3 mr-2" />
-                  NANO REDESIGN IS LIVE
+                  ELITE STUDIO IS LIVE
                 </Badge>
               </motion.div>
 
@@ -81,7 +81,7 @@ export default function LandingPage() {
                 className="text-sm md:text-base font-semibold text-muted-foreground tracking-wide mb-4"
               >
                 Know before you post.{" "}
-                <span className="text-primary">Pre-Flight AI</span> validates every clip before it goes live.
+                <span className="text-primary">Audience Simulation AI</span> validates every clip before it goes live.
               </motion.p>
 
               <motion.p
@@ -90,9 +90,9 @@ export default function LandingPage() {
                 transition={{ duration: 0.6, delay: 0.2 }}
                 className="text-lg md:text-2xl text-muted-foreground max-w-3xl mx-auto mb-12 leading-relaxed"
               >
-                The world&apos;s fastest client-side AI video engine. Zero
-                server delay, total privacy, and unmatched performance—processed
-                entirely in your browser.
+                The world&apos;s most reliable hybrid AI video engine. Instant
+                browser-side clipping with production-grade cloud rendering for 100%
+                delivery, even on 1GB+ files.
               </motion.p>
 
               <motion.div
@@ -159,12 +159,12 @@ export default function LandingPage() {
                     <Cpu className="w-7 h-7 text-primary" />
                   </div>
                   <h3 className="text-3xl font-bold mb-4 tracking-tight">
-                    Wasm Performance
+                    Production Rendering
                   </h3>
                   <p className="text-muted-foreground text-lg max-w-lg leading-relaxed">
-                    Harness the power of native WebAssembly to process 4K video
-                    directly in your browser. No uploads, no lag, just pure
-                    performance.
+                    Harness our high-speed cloud infrastructure to process 4K video.
+                    Big files render on our infra so your machine stays cool —
+                    zero browser crashes, even on mobile.
                   </p>
                 </div>
                 <div className="mt-8 flex items-center gap-2 text-primary font-bold text-sm">
@@ -433,7 +433,7 @@ export default function LandingPage() {
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[400px] bg-primary/5 blur-[120px] rounded-full -z-10" />
           <div className="container mx-auto px-6">
             <h2 className="text-5xl md:text-7xl font-bold mb-10 tracking-tighter">
-              READY TO GO <span className="text-primary">NANO?</span>
+              READY TO GO <span className="text-primary">ELITE?</span>
             </h2>
             <GlowButton
               variant="premium"

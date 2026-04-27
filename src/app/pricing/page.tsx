@@ -14,8 +14,8 @@ const PLANS = [
     period: "forever",
     description: "Full browser-side AI engine. No credit card required.",
     features: [
-      "Unlimited local video processing",
-      "Whisper transcription (Tiny model)",
+      "Professional local processing",
+      "Content transcription (Standard)",
       "AI clip detection (5 clips/video)",
       "9:16 auto-reframe",
       "FFmpeg.wasm export",
@@ -29,10 +29,10 @@ const PLANS = [
     name: "Pro",
     price: "$12",
     period: "per month",
-    description: "Powered by Gemini 2.5 Flash. Unlimited AI analysis.",
+    description: "Powered by Gemini 2.0 Flash. Elite viral intelligence.",
     features: [
       "Everything in Free",
-      "Gemini AI viral scoring",
+      "Elite Viral Intelligence scoring",
       "Unlimited clip suggestions",
       "Whisper Large model",
       "Export history & cloud sync",

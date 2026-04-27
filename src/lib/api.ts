@@ -1,7 +1,14 @@
 import axios from "axios";
 import type { ClipCandidatePayload, PreflightResult } from "@/types/preflight";
+import type {
+  ExportEnqueueResponse,
+  ExportRequestPayload,
+  ExportStatusResponse,
+} from "@/types/export";
+import type { UserStats } from "@/types/stats";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+export const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 export async function runPreflight(
   youtubeUrl: string,
@@ -19,4 +26,40 @@ export async function runPreflight(
     },
   );
   return response.data.preflight_result;
+}
+
+export async function requestExport(
+  payload: ExportRequestPayload,
+): Promise<ExportEnqueueResponse> {
+  const { data } = await axios.post<ExportEnqueueResponse>(
+    `${API_URL}/api/export`,
+    payload,
+  );
+  return data;
+}
+
+export async function getExportStatus(
+  jobId: string,
+  userId: string,
+): Promise<ExportStatusResponse> {
+  const { data } = await axios.get<ExportStatusResponse>(
+    `${API_URL}/api/export/status/${jobId}`,
+    { params: { user_id: userId } },
+  );
+  return data;
+}
+
+export async function getStats(userId: string): Promise<UserStats> {
+  const { data } = await axios.get<UserStats>(`${API_URL}/api/stats`, {
+    params: { user_id: userId },
+  });
+  return data;
+}
+
+export function buildExportDownloadUrl(relative: string): string {
+  if (!relative) return "";
+  if (relative.startsWith("http://") || relative.startsWith("https://")) {
+    return relative;
+  }
+  return `${API_URL}${relative}`;
 }

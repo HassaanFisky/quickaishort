@@ -1,7 +1,6 @@
 "use client";
 
 import EditorLayout from "@/components/editor/EditorLayout";
-import { useMediaEngine } from "@/hooks/useMediaEngine";
 import { useTranscription } from "@/hooks/useTranscription";
 import { useAnalysis } from "@/hooks/useAnalysis";
 import { useEffect } from "react";
@@ -11,7 +10,6 @@ import { TelemetryDock } from "@/components/editor/TelemetryDock";
 import { extractAudioData } from "@/lib/utils/audioExtractor";
 
 export default function EditorPage() {
-  const mediaEngine = useMediaEngine();
   const transcription = useTranscription();
   const analysis = useAnalysis();
 
@@ -58,13 +56,10 @@ export default function EditorPage() {
   }, [analysis.lastMessage, setSilenceSegments]);
 
   useEffect(() => {
-    // Initialize workers on mount
-    mediaEngine.init();
     transcription.init();
     analysis.init();
 
     return () => {
-      mediaEngine.terminate();
       transcription.terminate();
       analysis.terminate();
     };

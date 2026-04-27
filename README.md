@@ -13,9 +13,9 @@ Built for the **Google for Startups AI Agents Challenge 2026**.
 ## What It Does
 
 1. Paste a YouTube URL
-2. System generates top clip candidates using audio energy + speech density analysis
-3. **Pre-Flight runs a simulated audience panel** — 6 Gemini 2.5 Flash persona agents vote simultaneously on retention, drop-off, and share likelihood
-4. A LoopAgent iteratively refines the clip until consensus score exceeds 65%
+2. System generates top clip candidates using **multimodal vision (Gemini 2.0 Flash)** + audio energy + speech density analysis
+3. **Pre-Flight runs a simulated audience panel** — 6 Gemini 2.0 Flash persona agents vote simultaneously on retention, drop-off, and share likelihood
+4. A **Parallel-Async LoopAgent** iteratively refines the clip until consensus score exceeds 65%
 5. BigQuery MCP grounds predictions in the creator's own channel history
 6. Result: **PUBLISH** or **REFINE FIRST** — with full reasoning traces
 
@@ -45,13 +45,13 @@ ADK primitives used: `SequentialAgent`, `ParallelAgent`, `LoopAgent`, `FunctionT
 
 | Layer | Technology |
 |---|---|
-| Frontend | Next.js 16, Tailwind v4, Framer Motion, Zustand |
-| Backend | FastAPI, Python 3.12, yt-dlp |
-| AI Agents | Google ADK 1.31, Gemini 2.5 Flash / Pro |
-| In-Browser | Whisper (transformers.js), FFmpeg.wasm |
+| Frontend | Next.js 14, Tailwind v4, Framer Motion, Zustand |
+| Backend | FastAPI, Python 3.12, yt-dlp, FFmpeg |
+| AI Agents | Google ADK 1.31, Gemini 2.0 Flash / Pro |
+| Infrastructure | Redis (RQ), Pusher (WebSockets), MongoDB |
 | Data | BigQuery MCP, YouTube Analytics API v2 |
 | Trends | Google Trends API Alpha, SerpApi |
-| Deploy | Vercel (frontend), Railway (backend) |
+| Deploy | Vercel (frontend), Railway (backend), Cloud Run |
 
 ---
 

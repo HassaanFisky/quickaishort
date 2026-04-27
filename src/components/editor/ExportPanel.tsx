@@ -1,7 +1,8 @@
 "use client";
 
 import { useEditorStore } from "@/stores/editorStore";
-import { useMediaEngine } from "@/hooks/useMediaEngine";
+import { useServerExport } from "@/hooks/useServerExport";
+import { useSession } from "next-auth/react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import {
@@ -17,8 +18,6 @@ import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { useState, useEffect } from "react";
 
-import { generateSRT } from "@/lib/utils/srtGenerator";
-
 export default function ExportPanel() {
   const {
     suggestions,
@@ -27,65 +26,27 @@ export default function ExportPanel() {
     transcript,
     captionsEnabled,
   } = useEditorStore();
-  const mediaEngine = useMediaEngine();
+  const { data: session } = useSession();
+  const userId = session?.user?.id ?? session?.user?.email ?? "anonymous";
+  const { exportClip, isExporting, exportProgress } = useServerExport({ userId });
   const [exportComplete, setExportComplete] = useState(false);
-  const [exportUrl, setExportUrl] = useState<string | null>(null);
 
   const selectedClip = suggestions.find((s) => s.id === selectedClipId);
 
   const handleExport = async () => {
-    if (!sourceFile || !selectedClip) {
+    if (!selectedClip) {
       toast.error("Please select a clip to export");
       return;
     }
-
     setExportComplete(false);
-    toast.info("Exporting video... This may take a minute.");
-
-    // Generate SRT if transcript exists
-    let srtContent = "";
-    if (transcript && transcript.chunks) {
-      srtContent = generateSRT(
-        transcript.chunks,
-        selectedClip.start,
-        selectedClip.end,
-      );
-    }
-
-    mediaEngine.exportVideo({
-      inputBlob: sourceFile,
-      startTime: selectedClip.start,
-      endTime: selectedClip.end,
-      aspectRatio: selectedClip.aspectRatio || "9:16",
-      quality: "medium",
-      watermark: { enabled: true, url: "/qs-logo.png" }, // Explicitly pass logo URL
-      captions: {
-        enabled: captionsEnabled,
-        srtContent: srtContent,
-        style:
-          "Fontname=Montserrat,FontSize=16,PrimaryColour=&H00FFFF00,OutlineColour=&H00000000,BorderStyle=1,Outline=1,Shadow=0,Alignment=2,MarginV=20",
-      },
-    });
+    await exportClip({ quality: "medium", captionsEnabled });
   };
 
   useEffect(() => {
-    if (mediaEngine.lastMessage?.type === "artifact") {
-      const blob = mediaEngine.lastMessage.payload.artifact as Blob;
-      const url = URL.createObjectURL(blob);
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setExportUrl(url);
+    if (!isExporting && exportProgress === 100) {
       setExportComplete(true);
-      toast.success("Video exported successfully!");
     }
-  }, [mediaEngine.lastMessage]);
-
-  const downloadVideo = () => {
-    if (!exportUrl) return;
-    const a = document.createElement("a");
-    a.href = exportUrl;
-    a.download = `quickai-short-${Date.now()}.mp4`;
-    a.click();
-  };
+  }, [isExporting, exportProgress]);
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-right-2 duration-500">
@@ -97,8 +58,8 @@ export default function ExportPanel() {
               Export Configuration
             </span>
           </div>
-          {mediaEngine.progress > 0 && (
-            <span className="text-xs font-mono">{mediaEngine.progress}%</span>
+          {exportProgress > 0 && (
+            <span className="text-xs font-mono">{exportProgress}%</span>
           )}
         </div>
         <CardContent className="p-6 space-y-4">
@@ -136,23 +97,13 @@ export default function ExportPanel() {
           </div>
 
           <div className="pt-4 space-y-4">
-            {mediaEngine.isLoading && (
+            {isExporting && (
               <div className="space-y-2">
                 <div className="flex justify-between text-[10px] font-bold uppercase text-muted-foreground">
-                  <span>Loading Engine</span>
-                  <span>{mediaEngine.progress}%</span>
+                  <span>Rendering on Server</span>
+                  <span>{exportProgress}%</span>
                 </div>
-                <Progress value={mediaEngine.progress} className="h-1.5" />
-              </div>
-            )}
-
-            {mediaEngine.isProcessing && (
-              <div className="space-y-2">
-                <div className="flex justify-between text-[10px] font-bold uppercase text-muted-foreground">
-                  <span>Rendering Clip</span>
-                  <span>{mediaEngine.progress}%</span>
-                </div>
-                <Progress value={mediaEngine.progress} className="h-1.5" />
+                <Progress value={exportProgress} className="h-1.5" />
               </div>
             )}
 
@@ -160,7 +111,7 @@ export default function ExportPanel() {
               <Button
                 className="w-full h-12 rounded-xl text-lg font-black shadow-xl shadow-primary/20 group"
                 onClick={handleExport}
-                disabled={!selectedClipId || mediaEngine.isProcessing}
+                disabled={!selectedClipId || isExporting}
               >
                 <Rocket className="mr-2 w-5 h-5 group-hover:-translate-y-1 group-hover:translate-x-1 transition-transform" />
                 Render Selection
@@ -168,10 +119,10 @@ export default function ExportPanel() {
             ) : (
               <Button
                 className="w-full h-12 rounded-xl text-lg font-black bg-green-500 hover:bg-green-600 shadow-xl shadow-green-500/20 group animate-in zoom-in-95 duration-300"
-                onClick={downloadVideo}
+                onClick={handleExport}
               >
                 <Download className="mr-2 w-5 h-5 group-hover:bounce transition-transform" />
-                Download MP4
+                Export Again
               </Button>
             )}
           </div>
