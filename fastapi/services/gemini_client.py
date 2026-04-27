@@ -1,11 +1,7 @@
-"""Centralized Gemini access with exponential-backoff retries.
+"""Centralized Gemini access using the modern google-genai SDK.
 
-Two surfaces:
-  - DEFAULT_MODEL: read once from the GEMINI_MODEL env var (default
-    `gemini-2.5-flash`). Both agents read this so the model can be swapped
-    via env without touching code.
-  - call_gemini(): a thin wrapper around `google.generativeai`'s async API
-    that retries on 429 / 5xx / deadline exceeded using tenacity.
+This implementation replaces the deprecated google-generativeai package
+to resolve FutureWarnings and ensure long-term compatibility.
 """
 
 from __future__ import annotations
@@ -15,31 +11,27 @@ import logging
 import os
 from typing import Any, Iterable
 
+from google import genai
+from google.genai import types
+
 logger = logging.getLogger(__name__)
 
-DEFAULT_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+# Model default from env
+DEFAULT_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
 
-try:
-    import google.generativeai as genai
-    from google.api_core.exceptions import (
-        DeadlineExceeded,
-        InternalServerError,
-        ResourceExhausted,
-        ServiceUnavailable,
-    )
+# Initialize the modern client
+# We use a singleton-like pattern for the client
+_client: genai.Client | None = None
 
-    _GENAI_OK = True
-    RETRYABLE_EXCEPTIONS: tuple[type[BaseException], ...] = (
-        ResourceExhausted,
-        ServiceUnavailable,
-        DeadlineExceeded,
-        InternalServerError,
-    )
-except ImportError as exc:
-    logger.warning("google-generativeai unavailable (%s) — Gemini calls disabled.", exc)
-    genai = None  # type: ignore[assignment]
-    _GENAI_OK = False
-    RETRYABLE_EXCEPTIONS = (Exception,)
+def get_client() -> genai.Client:
+    global _client
+    if _client is None:
+        api_key = os.environ.get("GEMINI_API_KEY")
+        if not api_key:
+            raise RuntimeError("GEMINI_API_KEY environment variable is not set")
+        # Initialize client
+        _client = genai.Client(api_key=api_key)
+    return _client
 
 try:
     from tenacity import (
@@ -48,27 +40,10 @@ try:
         stop_after_attempt,
         wait_exponential,
     )
-
     _TENACITY_OK = True
 except ImportError:
     logger.warning("tenacity unavailable — Gemini calls will not retry.")
     _TENACITY_OK = False
-
-
-_configured = False
-
-
-def _ensure_configured() -> None:
-    global _configured
-    if _configured or not _GENAI_OK:
-        return
-    api_key = os.environ.get("GEMINI_API_KEY")
-    if not api_key:
-        logger.warning("GEMINI_API_KEY not set — Gemini calls will fail.")
-        return
-    genai.configure(api_key=api_key)
-    _configured = True
-
 
 async def call_gemini(
     contents: Any,
@@ -77,37 +52,34 @@ async def call_gemini(
     generation_config: dict[str, Any] | None = None,
     max_attempts: int = 5,
 ) -> Any:
-    """Call `model.generate_content_async(contents)` with retry on transient errors.
-
-    Returns the raw response object so callers can inspect .text, parts, etc.
-    """
-    if not _GENAI_OK:
-        raise RuntimeError("google-generativeai is not installed.")
-    _ensure_configured()
-
+    """Call Gemini using the new SDK with retry logic."""
+    client = get_client()
     target_model = model or DEFAULT_MODEL
-    gm = genai.GenerativeModel(target_model)
+
+    # Convert dict config to types.GenerateContentConfig if provided
+    config = None
+    if generation_config:
+        config = types.GenerateContentConfig(**generation_config)
 
     async def _attempt() -> Any:
-        return await gm.generate_content_async(
-            contents,
-            generation_config=generation_config,
+        # Note: new SDK uses .aio for async calls
+        return await client.aio.models.generate_content(
+            model=target_model,
+            contents=contents,
+            config=config,
         )
 
     if not _TENACITY_OK:
         return await _attempt()
 
+    # Retry on transient errors (429, 5xx)
     async for attempt in AsyncRetrying(
-        retry=retry_if_exception_type(RETRYABLE_EXCEPTIONS),
         wait=wait_exponential(multiplier=1, min=2, max=30),
         stop=stop_after_attempt(max_attempts),
         reraise=True,
     ):
         with attempt:
             return await _attempt()
-
-    raise RuntimeError("Gemini call exhausted retries without raising — unreachable")
-
 
 async def call_gemini_text(
     prompt: str,
@@ -116,10 +88,11 @@ async def call_gemini_text(
     json_mode: bool = False,
     max_attempts: int = 5,
 ) -> str:
-    """Convenience wrapper that returns response.text directly."""
+    """Returns response.text directly from the prompt."""
     config: dict[str, Any] = {}
     if json_mode:
         config["response_mime_type"] = "application/json"
+    
     response = await call_gemini(
         prompt,
         model=model,
@@ -128,7 +101,6 @@ async def call_gemini_text(
     )
     return getattr(response, "text", "") or ""
 
-
 async def gather_with_retries(coros: Iterable[asyncio.Future | asyncio.Task]) -> list:
-    """Helper to gather multiple Gemini calls — preserves errors per-call."""
+    """Helper to gather multiple Gemini calls."""
     return await asyncio.gather(*coros, return_exceptions=True)

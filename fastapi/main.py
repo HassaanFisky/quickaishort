@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+import warnings
+# Silence deprecation and future warnings from Google SDKs
+warnings.filterwarnings("ignore", category=FutureWarning, module="google.generativeai")
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="authlib")
+
 import asyncio
 import json
 import logging
