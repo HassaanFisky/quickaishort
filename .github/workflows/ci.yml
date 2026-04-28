@@ -28,19 +28,24 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
+          cache-dependency-path: 'frontend/pnpm-lock.yaml'
 
       - name: Install dependencies
+        working-directory: ./frontend
         run: pnpm install --no-frozen-lockfile
 
       - name: Lint
+        working-directory: ./frontend
         run: pnpm lint
         continue-on-error: true
 
       - name: Type check
+        working-directory: ./frontend
         run: pnpm tsc --noEmit
         continue-on-error: true
 
       - name: Build
+        working-directory: ./frontend
         run: pnpm build
         env:
           NEXT_TELEMETRY_DISABLED: 1
@@ -49,10 +54,10 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            .next/cache
-          key: ${{ runner.os }}-nextjs-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ hashFiles('**/*.js', '**/*.jsx', '**/*.ts', '**/*.tsx') }}
+            frontend/.next/cache
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('frontend/pnpm-lock.yaml') }}-${{ hashFiles('frontend/**/*.js', 'frontend/**/*.jsx', 'frontend/**/*.ts', 'frontend/**/*.tsx') }}
           restore-keys: |
-            ${{ runner.os }}-nextjs-${{ hashFiles('**/pnpm-lock.yaml') }}-
+            ${{ runner.os }}-nextjs-${{ hashFiles('frontend/pnpm-lock.yaml') }}-
 
   ffmpeg-smoke:
     name: FFmpeg Pipeline Smoke Test
