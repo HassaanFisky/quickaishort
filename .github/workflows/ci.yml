@@ -23,13 +23,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 18
-          cache: 'npm'
 
       - name: Install dependencies
         working-directory: ./frontend
         run: |
           rm -rf node_modules package-lock.json
-          npm install
+          npm install --legacy-peer-deps
 
       - name: Lint
         working-directory: ./frontend
