@@ -12,6 +12,8 @@ import {
   PlayCircle,
   ArrowRight,
   History,
+  TrendingUp,
+  ChevronRight,
 } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -28,8 +30,11 @@ function getGreeting() {
 }
 
 const containerVariants = {
-  hidden: {},
-  visible: { transition: { staggerChildren: 0.08 } },
+  hidden: { opacity: 0 },
+  visible: { 
+    opacity: 1,
+    transition: { staggerChildren: 0.1, delayChildren: 0.2 } 
+  },
 };
 
 const itemVariants = {
@@ -37,7 +42,7 @@ const itemVariants = {
   visible: {
     opacity: 1,
     y: 0,
-    transition: { type: "spring" as const, damping: 22, stiffness: 110 },
+    transition: { type: "spring", damping: 25, stiffness: 120 },
   },
 };
 
@@ -55,24 +60,28 @@ export default function DashboardPage() {
       label: "Videos Created",
       value: String(stats.total_projects),
       color: "text-primary",
+      glow: "bg-primary/20",
     },
     {
       icon: Sparkles,
-      label: "Audience Predictions",
+      label: "AI Generations",
       value: String(stats.ai_runs),
       color: "text-purple-400",
+      glow: "bg-purple-400/20",
     },
     {
       icon: Layers,
       label: "Clips Exported",
       value: String(stats.export_count),
       color: "text-sky-400",
+      glow: "bg-sky-400/20",
     },
     {
       icon: Clock,
-      label: "Minutes Analyzed",
+      label: "Minutes Saved",
       value: `${minutes}m`,
       color: "text-emerald-400",
+      glow: "bg-emerald-400/20",
     },
   ];
 
@@ -85,196 +94,190 @@ export default function DashboardPage() {
 
   return (
     <motion.div
-      className="container mx-auto px-6 py-12 space-y-10"
+      className="container mx-auto px-6 py-12 max-w-7xl space-y-12"
       variants={containerVariants}
       initial="hidden"
       animate="visible"
     >
+      {/* Header Section */}
       <motion.div
         variants={itemVariants}
-        className="depth-card glass-surface rounded-[2rem] p-8 relative overflow-hidden"
+        className="relative group"
       >
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_30%_50%,rgba(168,85,247,0.08),transparent_60%)] pointer-events-none" />
-        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-8">
-          <div className="space-y-3">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-primary/20 bg-primary/10 text-primary text-[10px] font-black tracking-[0.2em] uppercase">
-              <Sparkles className="w-3 h-3" />
-              Studio
-              {transport === "websocket" && (
-                <span className="text-[8px] font-bold opacity-60 ml-1">
-                  · ws
-                </span>
-              )}
-              {transport === "rest" && (
-                <span className="text-[8px] font-bold opacity-60 ml-1">
-                  · rest
+        <div className="absolute -inset-1 bg-linear-to-r from-primary/20 via-purple-500/20 to-accent/20 rounded-[2.5rem] blur-xl opacity-50 group-hover:opacity-100 transition-opacity duration-1000" />
+        <div className="depth-card glass-surface rounded-[2rem] p-8 md:p-12 relative overflow-hidden flex flex-col lg:flex-row lg:items-center justify-between gap-10">
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_30%_50%,hsl(var(--primary)/0.08),transparent_60%)] pointer-events-none" />
+          
+          <div className="relative z-10 space-y-4">
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-primary/20 bg-primary/10 text-primary text-[10px] font-black tracking-[0.2em] uppercase">
+              <TrendingUp className="w-3.5 h-3.5" />
+              Creator Studio
+              {transport && (
+                <span className="text-[9px] font-bold opacity-60 ml-2 px-1.5 py-0.5 rounded-md bg-foreground/5">
+                  {transport}
                 </span>
               )}
             </div>
-            <h1 className="text-4xl md:text-5xl font-extrabold tracking-tighter premium-gradient-text">
-              {getGreeting()}, {firstName}.
+            
+            <h1 className="text-5xl md:text-6xl font-extrabold tracking-tighter premium-gradient-text leading-[1.1]">
+              {getGreeting()}, <br className="md:hidden" />
+              {firstName}.
             </h1>
-            <p className="text-muted-foreground text-lg font-medium">
-              Your studio is ready. What are we building today?
+            
+            <p className="text-muted-foreground text-lg md:text-xl font-medium max-w-xl">
+              Your AI-powered studio is ready. Let&apos;s turn your videos into viral shorts.
             </p>
           </div>
-          <GlowButton
-            variant="premium"
-            size="lg"
-            className="h-14 px-10 rounded-2xl text-base group w-full lg:w-auto shrink-0"
-            asChild
-          >
-            <Link href="/editor">
-              <Plus className="mr-2 w-5 h-5 group-hover:rotate-90 transition-transform duration-500" />
-              Create New Short
-            </Link>
-          </GlowButton>
+
+          <div className="relative z-10 shrink-0">
+            <GlowButton
+              variant="premium"
+              size="lg"
+              className="h-16 px-12 rounded-2xl text-lg group w-full lg:w-auto shadow-2xl shadow-primary/20 hover:shadow-primary/40 transition-all duration-500"
+              asChild
+            >
+              <Link href="/editor">
+                <Plus className="mr-3 w-6 h-6 group-hover:rotate-90 transition-transform duration-500" />
+                New Project
+              </Link>
+            </GlowButton>
+          </div>
         </div>
       </motion.div>
 
-      {hasActivity ? (
-        <motion.div
-          variants={containerVariants}
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5"
-        >
-          {metrics.map((stat, i) => (
-            <motion.div
-              key={i}
-              variants={itemVariants}
-              className="depth-card spring-hover rounded-[1.75rem] p-7 group cursor-default focus-ring"
-              tabIndex={0}
-            >
-              <div className="flex items-center justify-between mb-6">
-                <div
-                  className={cn(
-                    "w-11 h-11 rounded-xl flex items-center justify-center border border-white/5 bg-white/5 group-hover:bg-white/10 transition-colors",
-                    stat.color,
-                  )}
-                >
-                  <stat.icon className="w-5 h-5" />
+      {/* Stats Grid */}
+      <motion.div
+        variants={containerVariants}
+        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6"
+      >
+        {metrics.map((stat, i) => (
+          <motion.div
+            key={i}
+            variants={itemVariants}
+            className="depth-card spring-hover rounded-[2rem] p-8 group cursor-default relative overflow-hidden"
+          >
+            <div className={cn("absolute top-0 right-0 w-24 h-24 blur-3xl opacity-0 group-hover:opacity-40 transition-opacity duration-700 rounded-full", stat.glow)} />
+            
+            <div className="relative z-10 flex flex-col h-full">
+              <div className="flex items-center justify-between mb-8">
+                <div className={cn(
+                  "w-14 h-14 rounded-2xl flex items-center justify-center border border-foreground/5 bg-foreground/5 group-hover:bg-foreground/10 transition-all duration-500 group-hover:scale-110",
+                  stat.color
+                )}>
+                  <stat.icon className="w-7 h-7" />
+                </div>
+                <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-500">
+                  <TrendingUp className={cn("w-5 h-5", stat.color)} />
                 </div>
               </div>
-              <div className="text-4xl font-bold tracking-tight mb-1">
-                {isReady ? stat.value : "—"}
+              
+              <div className="mt-auto">
+                <div className="text-5xl font-bold tracking-tight mb-2 flex items-baseline gap-1">
+                  {isReady ? stat.value : (
+                    <div className="w-12 h-10 bg-foreground/10 rounded-lg animate-pulse" />
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground font-black uppercase tracking-[0.2em] opacity-70 group-hover:opacity-100 transition-opacity">
+                  {stat.label}
+                </p>
               </div>
-              <p className="text-xs text-muted-foreground font-bold uppercase tracking-widest">
-                {stat.label}
-              </p>
-            </motion.div>
-          ))}
-        </motion.div>
-      ) : (
-        <motion.div
-          variants={itemVariants}
-          className="depth-card rounded-[2rem] p-10 flex flex-col md:flex-row items-center justify-between gap-6"
-        >
-          <div className="flex items-center gap-5">
-            <div className="w-14 h-14 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center">
-              <Sparkles className="w-6 h-6 text-primary" />
             </div>
-            <div>
-              <h3 className="text-lg font-bold tracking-tight">
-                Welcome to the Studio
-              </h3>
-              <p className="text-sm text-muted-foreground font-medium mt-1">
-                Upload your first video and your stats will appear here.
-              </p>
-            </div>
-          </div>
-          <GlowButton
-            variant="premium"
-            className="h-11 px-6 rounded-xl focus-ring"
-            asChild
-          >
-            <Link href="/editor">
-              <Plus className="mr-2 w-4 h-4" />
-              Start Your First Project
-            </Link>
-          </GlowButton>
-        </motion.div>
-      )}
+          </motion.div>
+        ))}
+      </motion.div>
 
+      {/* Bottom Section: Recent Work & Tips */}
       <motion.div
         variants={itemVariants}
-        className="grid grid-cols-1 lg:grid-cols-12 gap-8"
+        className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start"
       >
-        <div className="lg:col-span-8 space-y-5">
-          <div className="flex items-center justify-between px-1">
-            <h2 className="text-xl font-bold tracking-tight flex items-center gap-2.5">
-              <History className="w-5 h-5 text-primary" />
-              Recent Work
+        {/* Recent Work / Empty State */}
+        <div className="lg:col-span-8 space-y-6">
+          <div className="flex items-center justify-between px-2">
+            <h2 className="text-2xl font-bold tracking-tight flex items-center gap-3">
+              <History className="w-6 h-6 text-primary" />
+              Recent Productions
             </h2>
             <Link
               href="/history"
-              className="text-sm font-bold text-primary hover:underline underline-offset-4 transition-all flex items-center gap-1"
+              className="text-sm font-bold text-primary hover:text-primary/80 transition-all flex items-center gap-2 group"
             >
-              View All
-              <ArrowRight className="w-3.5 h-3.5" />
+              Library
+              <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
             </Link>
           </div>
 
-          <div className="depth-card border-dashed border-2 border-white/10 min-h-[380px] flex flex-col items-center justify-center text-center p-12 rounded-[2rem] group hover:border-primary/30 transition-all duration-700">
+          <div className="depth-card border-dashed border-2 border-foreground/10 min-h-[440px] flex flex-col items-center justify-center text-center p-12 rounded-[2.5rem] group hover:border-primary/40 transition-all duration-700 bg-linear-to-b from-foreground/[0.02] to-transparent">
             <Link href="/editor" className="flex flex-col items-center">
-              <div className="nano-glass w-20 h-20 rounded-2xl flex items-center justify-center mb-8 group-hover:scale-110 group-hover:nano-glow transition-all duration-500">
-                <Plus className="w-9 h-9 text-muted-foreground group-hover:text-primary transition-colors" />
+              <div className="relative mb-10">
+                <div className="absolute inset-0 bg-primary/20 rounded-3xl blur-2xl group-hover:blur-3xl transition-all duration-700" />
+                <div className="nano-glass w-24 h-24 rounded-3xl flex items-center justify-center relative z-10 group-hover:scale-110 group-hover:rotate-6 transition-all duration-700">
+                  <Plus className="w-10 h-10 text-muted-foreground group-hover:text-primary transition-colors" />
+                </div>
               </div>
-              <h3 className="text-2xl font-bold mb-3">
-                Your studio is ready for its first project.
+              
+              <h3 className="text-3xl font-bold mb-4 tracking-tight">
+                No active projects
               </h3>
-              <p className="text-muted-foreground max-w-md mb-8 text-base leading-relaxed font-medium">
-                Import a video or paste a link to find your best clips automatically.
+              <p className="text-muted-foreground max-w-md mb-10 text-lg leading-relaxed font-medium opacity-80">
+                Upload a video or paste a YouTube link to let our AI find the most viral moments for you.
               </p>
-              <GlowButton variant="premium" className="px-8 h-11 rounded-xl">
-                Create New Short
+              
+              <GlowButton variant="premium" className="px-10 h-14 rounded-2xl text-base shadow-xl shadow-primary/10">
+                Create Your First Short
               </GlowButton>
             </Link>
           </div>
         </div>
 
-        <div className="lg:col-span-4 space-y-5">
-          <h2 className="text-xl font-bold tracking-tight flex items-center gap-2.5 px-1">
-            <Zap className="w-5 h-5 text-yellow-400" />
-            Pro Tips
+        {/* Sidebar / Pro Tips */}
+        <div className="lg:col-span-4 space-y-6">
+          <h2 className="text-2xl font-bold tracking-tight flex items-center gap-3 px-2">
+            <Zap className="w-6 h-6 text-yellow-400" />
+            Studio Insights
           </h2>
-          <div className="depth-card rounded-[2rem] p-8 space-y-8 bg-linear-to-br from-white/[0.03] to-transparent">
-            <h3 className="text-lg font-bold flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-primary" />
-              How It Works
-            </h3>
-
-            <div className="space-y-8">
+          
+          <div className="depth-card rounded-[2.5rem] p-8 md:p-10 space-y-10 relative overflow-hidden bg-linear-to-br from-primary/[0.05] to-transparent border-primary/10">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 blur-3xl rounded-full -mr-16 -mt-16" />
+            
+            <div className="space-y-10">
               {[
                 {
-                  title: "Server-side Render",
-                  desc: "Big files render on our infra so your browser never stalls — even on 1GB+ source videos.",
+                  title: "Cloud Processing",
+                  desc: "We handle the heavy lifting. Large 4K files process in the background without slowing your device.",
+                  icon: Sparkles,
                 },
                 {
-                  title: "Vertical Format",
-                  desc: "Smart crop finds the best frame for TikTok and Reels automatically.",
+                  title: "Smart Framing",
+                  desc: "Our AI automatically tracks subjects and centers them for the perfect vertical viewing experience.",
+                  icon: Zap,
                 },
                 {
-                  title: "Auto Subtitles",
-                  desc: "Burned-in captions boost watch-time. Transcription runs privately on your device.",
+                  title: "Viral Hook Detection",
+                  desc: "Advanced NLP identifies the most engaging hooks to boost your retention rates instantly.",
+                  icon: TrendingUp,
                 },
               ].map((tip, idx) => (
-                <div key={idx} className="relative pl-9">
-                  <div className="absolute left-0 top-0.5 text-primary font-black text-base opacity-40">
-                    0{idx + 1}
+                <div key={idx} className="flex gap-5 group">
+                  <div className="shrink-0 w-12 h-12 rounded-xl bg-foreground/5 flex items-center justify-center text-primary font-black group-hover:scale-110 group-hover:bg-primary/10 transition-all duration-500">
+                    <tip.icon className="w-6 h-6" />
                   </div>
-                  <h4 className="text-sm font-bold mb-1.5">{tip.title}</h4>
-                  <p className="text-sm text-muted-foreground leading-relaxed font-medium">
-                    {tip.desc}
-                  </p>
+                  <div className="space-y-1.5">
+                    <h4 className="text-base font-bold tracking-tight">{tip.title}</h4>
+                    <p className="text-sm text-muted-foreground leading-relaxed font-medium opacity-80 group-hover:opacity-100 transition-opacity">
+                      {tip.desc}
+                    </p>
+                  </div>
                 </div>
               ))}
             </div>
 
             <GlowButton
               variant="outline"
-              className="w-full mt-4 h-11 rounded-2xl border-white/5 hover:border-primary/20 bg-white/5"
+              className="w-full h-14 rounded-2xl border-foreground/10 hover:border-primary/30 hover:bg-primary/5 bg-foreground/5 transition-all duration-500"
             >
-              <PlayCircle className="w-4 h-4 mr-2" />
-              Watch Quickstart Guide
+              <PlayCircle className="w-5 h-5 mr-3" />
+              Quickstart Tutorial
             </GlowButton>
           </div>
         </div>

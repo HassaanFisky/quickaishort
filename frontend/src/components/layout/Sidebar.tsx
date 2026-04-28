@@ -27,6 +27,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { motion } from "framer-motion";
+import { LiquidThemeToggle } from "@/components/shared/LiquidThemeToggle";
 
 interface SidebarItemProps {
   icon: any;
@@ -178,6 +179,10 @@ export default function Sidebar() {
           href="/settings"
           active={pathname === "/settings"}
         />
+
+        <div className="my-2">
+          <LiquidThemeToggle />
+        </div>
 
         {session?.user && (
           <TooltipProvider delayDuration={0}>

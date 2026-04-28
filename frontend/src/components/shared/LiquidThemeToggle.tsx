@@ -37,6 +37,13 @@ const THEMES = [
     icon: Flame,
     description: "Volcanic Intensity",
   },
+  {
+    id: "nano",
+    name: "Nano Black",
+    color: "#ffffff", // White/High Contrast
+    icon: Palette,
+    description: "Sleek Minimalism",
+  },
 ];
 
 export function LiquidThemeToggle() {

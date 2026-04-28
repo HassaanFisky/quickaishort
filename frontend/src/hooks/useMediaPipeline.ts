@@ -22,11 +22,17 @@ export function useMediaPipeline() {
 
   const runPipeline = useCallback(async () => {
     const { sourceFile, sourceUrl } = useEditorStore.getState();
-    const source = sourceFile || sourceUrl;
+    let source: File | string | null = sourceFile || sourceUrl;
 
     if (!source) {
       toast.error("No video source found");
       return;
+    }
+
+    // If it's a URL, ensure we use the proxy if it's YouTube to avoid CORS
+    if (typeof source === "string" && (source.includes("youtube.com") || source.includes("youtu.be"))) {
+      const { getProxyUrl } = await import("@/lib/api");
+      source = getProxyUrl(source);
     }
 
     try {
@@ -39,6 +45,11 @@ export function useMediaPipeline() {
       const { audioData, sampleRate, duration } =
         await extractAudioData(source);
       
+      // Update duration in store if it was 0
+      if (useEditorStore.getState().duration === 0) {
+        useEditorStore.setState({ duration });
+      }
+
       setAgentState("ingestion", { status: "done", progress: 100 });
       setProgress(20);
 

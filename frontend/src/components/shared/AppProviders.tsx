@@ -24,10 +24,10 @@ export function AppProviders({ children }: { children: ReactNode }) {
       <QueryClientProvider client={queryClient}>
         <ThemeProvider
           attribute="class"
-          defaultTheme="light"
+          defaultTheme="dark"
           enableSystem
           disableTransitionOnChange
-          themes={["light", "dark", "creative", "high-energy"]}
+          themes={["dark", "crystal", "neon", "magma", "nano"]}
         >
           {children}
           <Toaster position="top-center" richColors />

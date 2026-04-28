@@ -29,10 +29,10 @@ const AgentNode = ({ agent, icon: Icon, isActive, isNext }: AgentNodeProps) => {
     agent.status === "working"
       ? "text-primary"
       : agent.status === "done"
-        ? "text-emerald-400"
+        ? "text-emerald-500"
         : agent.status === "error"
-          ? "text-red-400"
-          : "text-slate-600";
+          ? "text-destructive"
+          : "text-muted-foreground/40";
 
   const displayMessage =
     agent.status === "working"
@@ -51,7 +51,7 @@ const AgentNode = ({ agent, icon: Icon, isActive, isNext }: AgentNodeProps) => {
       className={cn(
         "relative flex items-center gap-6 p-4 rounded-3xl transition-all duration-500",
         isActive
-          ? "bg-white/[0.03] border border-white/10 shadow-2xl"
+          ? "glass-surface border border-foreground/10 shadow-2xl"
           : "opacity-40",
       )}
     >
@@ -63,7 +63,7 @@ const AgentNode = ({ agent, icon: Icon, isActive, isNext }: AgentNodeProps) => {
             cx="32"
             cy="32"
             r="28"
-            className="stroke-white/5 fill-none"
+            className="stroke-foreground/5 fill-none"
             strokeWidth="4"
           />
           <motion.circle
@@ -109,7 +109,7 @@ const AgentNode = ({ agent, icon: Icon, isActive, isNext }: AgentNodeProps) => {
       {/* Info & Live Status */}
       <div className="flex-1 flex flex-col gap-1 min-w-[200px]">
         <div className="flex items-center justify-between">
-          <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white">
+          <span className="text-[10px] font-black uppercase tracking-[0.2em] text-foreground">
             {agent.label}
           </span>
           <span
@@ -129,7 +129,7 @@ const AgentNode = ({ agent, icon: Icon, isActive, isNext }: AgentNodeProps) => {
               initial={{ y: 12, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: -12, opacity: 0 }}
-              className="text-[9px] font-medium text-slate-500 italic flex items-center gap-2"
+              className="text-[9px] font-medium text-muted-foreground italic flex items-center gap-2"
             >
               {agent.status === "working" && (
                 <Zap className="w-3 h-3 text-primary animate-pulse" />
@@ -140,9 +140,9 @@ const AgentNode = ({ agent, icon: Icon, isActive, isNext }: AgentNodeProps) => {
         </div>
         
         {agent.reasoningLogs && agent.reasoningLogs.length > 0 && (
-          <div className="mt-2 p-2 bg-black/20 rounded-md max-h-24 overflow-y-auto custom-scrollbar">
+          <div className="mt-2 p-2 bg-foreground/5 rounded-md max-h-24 overflow-y-auto custom-scrollbar border border-foreground/5">
             {agent.reasoningLogs.map((log, idx) => (
-              <div key={idx} className="text-[10px] text-slate-400 font-mono tracking-tight leading-relaxed">
+              <div key={idx} className="text-[10px] text-muted-foreground/80 font-mono tracking-tight leading-relaxed">
                 <span className="text-primary mr-1">&gt;</span>{log}
               </div>
             ))}
@@ -150,7 +150,7 @@ const AgentNode = ({ agent, icon: Icon, isActive, isNext }: AgentNodeProps) => {
         )}
 
         {/* Mini Progress Bar */}
-        <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden mt-1">
+        <div className="w-full h-1 bg-foreground/5 rounded-full overflow-hidden mt-1">
           <motion.div
             className={cn("h-full", statusColor.replace("text-", "bg-"))}
             animate={{ width: `${agent.progress}%` }}
@@ -174,17 +174,17 @@ export default function AgentWorkforce() {
             Studio Active
           </span>
         </div>
-        <h2 className="text-2xl font-black text-white/90 tracking-tighter">
+        <h2 className="text-2xl font-black text-foreground tracking-tighter">
           Analyzing Your Video
         </h2>
-        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest max-w-sm">
+        <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest max-w-sm">
           We&apos;re working through your video to find the best moments.
         </p>
       </div>
 
       {/* Workforce Network */}
       <div className="relative w-full max-w-2xl flex flex-col gap-4">
-        <div className="absolute left-[32px] top-[48px] bottom-[48px] w-px bg-linear-to-b from-primary/50 via-primary/10 to-transparent" />
+        <div className="absolute left-[32px] top-[48px] bottom-[48px] w-px bg-gradient-to-b from-primary/50 via-primary/10 to-transparent" />
 
         <AgentNode
           agent={agentStates.ingestion}
@@ -225,9 +225,9 @@ export default function AgentWorkforce() {
       </div>
 
       {/* Footer */}
-      <div className="flex items-center gap-4 mt-4 px-6 py-3 nano-glass rounded-2xl border-white/5 opacity-60">
+      <div className="flex items-center gap-4 mt-4 px-6 py-3 glass-surface rounded-2xl border border-foreground/5 opacity-60">
         <Cpu className="w-4 h-4 text-primary" />
-        <span className="text-[10px] font-medium text-slate-400">
+        <span className="text-[10px] font-medium text-muted-foreground">
           Processing locally on your device
         </span>
       </div>

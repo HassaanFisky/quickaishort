@@ -139,7 +139,7 @@ async def _route_pubsub(channel: str, payload: dict) -> None:
 def _build_download_url(job_id: str, user_id: str) -> str:
     token, expires = sign(job_id, user_id)
     base = os.getenv("PUBLIC_API_URL", "").rstrip("/")
-    path = f"/api/export/download/{job_id}?token={token}&user_id={user_id}&expires={expires}"
+    path = f"/api/download/{job_id}?token={token}&user_id={user_id}&expires={expires}"
     return f"{base}{path}" if base else path
 
 
@@ -166,6 +166,7 @@ allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "")
 origins = [
     "http://localhost:3000",
     "https://quickaishort.online",
+    "https://www.quickaishort.online",
     "http://localhost:8000",
 ]
 if allowed_origins_env:
@@ -280,10 +281,10 @@ async def analyze_video(request: AnalyzeRequest):
         raise HTTPException(status_code=500, detail=str(exc))
 
 
-# ---- Export -------------------------------------------------------------------
+# ---- Export / Process ---------------------------------------------------------
 
 
-@app.post("/api/export")
+@app.post("/api/process-video")
 async def export_video(request: ExportRequest):
     job_id = uuid.uuid4().hex
     options = {
@@ -324,7 +325,7 @@ async def export_video(request: ExportRequest):
     }
 
 
-@app.get("/api/export/status/{job_id}")
+@app.get("/api/status/{job_id}")
 async def export_status(job_id: str, user_id: str):
     try:
         from rq.job import Job
@@ -349,7 +350,7 @@ async def export_status(job_id: str, user_id: str):
     return response
 
 
-@app.get("/api/export/download/{job_id}")
+@app.get("/api/download/{job_id}")
 async def export_download(job_id: str, user_id: str, token: str, expires: int):
     if not verify(job_id, user_id, expires, token):
         raise HTTPException(status_code=403, detail="Invalid or expired token")

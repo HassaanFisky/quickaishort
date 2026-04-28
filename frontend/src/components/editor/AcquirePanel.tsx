@@ -12,6 +12,8 @@ import { useMediaPipeline } from "@/hooks/useMediaPipeline";
 
 export default function AcquirePanel() {
   const [url, setUrl] = useState("");
+  const [isImporting, setIsImporting] = useState(false);
+  const setSourceUrl = useEditorStore((state) => state.setSourceUrl);
   const setSourceFile = useEditorStore((state) => state.setSourceFile);
   const sourceFile = useEditorStore((state) => state.sourceFile);
   const currentStage = useEditorStore((state) => state.currentStage);
@@ -36,10 +38,37 @@ export default function AcquirePanel() {
     multiple: false,
   });
 
-  const handleUrlSubmit = (e: React.FormEvent) => {
+  const handleUrlSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!url) return;
-    toast.info("URL processing coming soon. For now, please upload a file.");
+    
+    try {
+      setIsImporting(true);
+      toast.loading("Fetching video metadata...", { id: "import-video" });
+      
+      const { getVideoInfo, getProxyUrl } = await import("@/lib/api");
+      const info = await getVideoInfo(url);
+      
+      if (info) {
+        setSourceUrl(url); // Store original URL
+        // We use the proxy URL for the video element to avoid CORS issues
+        const proxyUrl = getProxyUrl(url);
+        
+        // Update store with metadata
+        useEditorStore.setState({ 
+          duration: info.duration,
+          // We can't set sourceFile for URLs, but the store handles sourceUrl
+        });
+
+        toast.success("Video imported successfully!", { id: "import-video" });
+        runPipeline();
+      }
+    } catch (err: any) {
+      console.error("Import error:", err);
+      toast.error(err.response?.data?.detail || "Failed to import video", { id: "import-video" });
+    } finally {
+      setIsImporting(false);
+    }
   };
 
   return (
@@ -105,9 +134,12 @@ export default function AcquirePanel() {
             className="pl-10"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
+            disabled={isImporting}
           />
         </div>
-        <Button type="submit">Import</Button>
+        <Button type="submit" disabled={isImporting || !url}>
+          {isImporting ? "Importing..." : "Import"}
+        </Button>
       </form>
 
       {sourceFile && (

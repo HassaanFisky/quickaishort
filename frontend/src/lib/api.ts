@@ -10,6 +10,15 @@ import type { UserStats } from "@/types/stats";
 export const API_URL =
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
+export async function getVideoInfo(url: string) {
+  const { data } = await axios.get(`${API_URL}/api/info`, { params: { url } });
+  return data;
+}
+
+export function getProxyUrl(url: string) {
+  return `${API_URL}/api/proxy?url=${encodeURIComponent(url)}`;
+}
+
 export async function runPreflight(
   youtubeUrl: string,
   clipCandidates: ClipCandidatePayload[],
@@ -32,7 +41,7 @@ export async function requestExport(
   payload: ExportRequestPayload,
 ): Promise<ExportEnqueueResponse> {
   const { data } = await axios.post<ExportEnqueueResponse>(
-    `${API_URL}/api/export`,
+    `${API_URL}/api/process-video`,
     payload,
   );
   return data;
@@ -43,7 +52,7 @@ export async function getExportStatus(
   userId: string,
 ): Promise<ExportStatusResponse> {
   const { data } = await axios.get<ExportStatusResponse>(
-    `${API_URL}/api/export/status/${jobId}`,
+    `${API_URL}/api/status/${jobId}`,
     { params: { user_id: userId } },
   );
   return data;

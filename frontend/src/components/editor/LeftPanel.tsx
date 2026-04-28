@@ -18,14 +18,14 @@ const scoreRamp = (score: number) => {
   if (score >= 90)
     return {
       wrapper:
-        "bg-gradient-to-r from-pink-500/20 to-purple-500/20 border-purple-500/40",
-      text: "text-transparent bg-clip-text bg-gradient-to-r from-pink-400 to-purple-400",
+        "bg-primary/10 border-primary/30",
+      text: "text-primary",
       glow: true,
     };
   if (score >= 71)
     return {
-      wrapper: "bg-purple-500/15 border-purple-500/30",
-      text: "text-purple-400",
+      wrapper: "bg-accent/15 border-accent/30",
+      text: "text-accent",
       glow: false,
     };
   if (score >= 41)
@@ -34,7 +34,7 @@ const scoreRamp = (score: number) => {
       text: "text-amber-400",
       glow: false,
     };
-  return { wrapper: "bg-white/5 border-white/10", text: "text-slate-500", glow: false };
+  return { wrapper: "bg-foreground/5 border-foreground/10", text: "text-muted-foreground", glow: false };
 };
 
 function DraggableClip({
@@ -84,15 +84,15 @@ function DraggableClip({
       className={cn(
         "group relative p-5 rounded-2xl cursor-grab active:cursor-grabbing transition-all duration-200 focus-ring",
         isSelected
-          ? "bg-white/[0.05] border border-primary/30 ring-1 ring-primary/20"
-          : "bg-white/[0.03] border border-white/[0.05] hover:bg-white/[0.05] hover:border-white/10",
+          ? "bg-foreground/[0.05] border border-primary/30 ring-1 ring-primary/20"
+          : "bg-foreground/[0.03] border border-foreground/5 hover:bg-foreground/[0.05] hover:border-foreground/10",
       )}
       tabIndex={0}
     >
       <div className="flex justify-between items-center mb-4">
         <div className="relative">
           {ramp.glow && (
-            <div className="absolute inset-0 bg-gradient-to-r from-pink-500/20 to-purple-500/20 blur-md rounded-full animate-pulse" />
+            <div className="absolute inset-0 bg-primary/20 blur-md rounded-full animate-pulse" />
           )}
           <Badge
             className={cn(
@@ -101,14 +101,14 @@ function DraggableClip({
             )}
           >
             {score >= 90 ? (
-              <Zap className="w-3 h-3 mr-1 fill-pink-400" />
+              <Zap className="w-3 h-3 mr-1 fill-current" />
             ) : (
               <Sparkles className="w-3 h-3 mr-1" />
             )}
             <span className={ramp.text}>Score: {score}</span>
           </Badge>
         </div>
-        <span className="text-[10px] font-bold text-muted-foreground/60 flex items-center gap-1.5 bg-white/5 px-2 py-1 rounded-md">
+        <span className="text-[10px] font-bold text-muted-foreground/60 flex items-center gap-1.5 bg-foreground/5 px-2 py-1 rounded-md">
           <Clock className="w-3 h-3" />
           {Math.round(clip.end - clip.start)}s
         </span>
@@ -117,18 +117,18 @@ function DraggableClip({
       <h4
         className={cn(
           "font-black text-sm tracking-tight mb-1.5 transition-colors duration-300",
-          isSelected ? "text-primary" : "text-slate-200 group-hover:text-white",
+          isSelected ? "text-primary" : "text-foreground/80 group-hover:text-foreground",
         )}
       >
         {clip.title || `Clip ${clip.id.split("-")[1]}`}
       </h4>
-      <p className="text-[11px] leading-relaxed text-slate-400 line-clamp-2 mb-4 font-medium italic opacity-80">
+      <p className="text-[11px] leading-relaxed text-muted-foreground line-clamp-2 mb-4 font-medium italic opacity-80">
         &ldquo;{clip.hook ?? clip.reason}&rdquo;
       </p>
 
       {/* Why This Works Section */}
       {clip.viralReasoning && (
-        <div className="relative overflow-hidden p-4 rounded-xl bg-linear-to-br from-white/[0.03] to-transparent border border-white/[0.08] group/insight">
+        <div className="relative overflow-hidden p-4 rounded-xl bg-gradient-to-br from-foreground/[0.03] to-transparent border border-foreground/10 group/insight">
           <div className="absolute -top-4 -right-4 w-12 h-12 bg-primary/10 blur-2xl group-hover/insight:bg-primary/20 transition-all duration-700" />
 
           <div className="flex items-center gap-2 text-primary mb-2">
@@ -137,33 +137,33 @@ function DraggableClip({
               Why This Works
             </span>
           </div>
-          <p className="text-[11px] leading-relaxed text-slate-300 font-medium">
+          <p className="text-[11px] leading-relaxed text-foreground/70 font-medium">
             {clip.viralReasoning}
           </p>
 
           {clip.viralAnalysis && (
-            <div className="flex gap-3 mt-3 pt-3 border-t border-white/5">
+            <div className="flex gap-3 mt-3 pt-3 border-t border-foreground/5">
               <div className="flex-1 text-center">
-                <p className="text-[8px] font-black uppercase tracking-widest text-slate-600 mb-0.5">
+                <p className="text-[8px] font-black uppercase tracking-widest text-muted-foreground/60 mb-0.5">
                   Opening Power
                 </p>
-                <p className="text-[11px] font-black text-white">
+                <p className="text-[11px] font-black text-foreground">
                   {Math.round(clip.viralAnalysis.hookStrength * 100)}%
                 </p>
               </div>
-              <div className="flex-1 text-center border-x border-white/5">
-                <p className="text-[8px] font-black uppercase tracking-widest text-slate-600 mb-0.5">
+              <div className="flex-1 text-center border-x border-foreground/5">
+                <p className="text-[8px] font-black uppercase tracking-widest text-muted-foreground/60 mb-0.5">
                   Watch-Through Rate
                 </p>
-                <p className="text-[11px] font-black text-white">
+                <p className="text-[11px] font-black text-foreground">
                   {Math.round(clip.viralAnalysis.retentionPotential * 100)}%
                 </p>
               </div>
               <div className="flex-1 text-center">
-                <p className="text-[8px] font-black uppercase tracking-widest text-slate-600 mb-0.5">
+                <p className="text-[8px] font-black uppercase tracking-widest text-muted-foreground/60 mb-0.5">
                   Audience Hooks
                 </p>
-                <p className="text-[11px] font-black text-white">
+                <p className="text-[11px] font-black text-foreground">
                   {clip.viralAnalysis.emotionalTriggers.length}
                 </p>
               </div>
@@ -175,7 +175,7 @@ function DraggableClip({
               {clip.suggestedCaptions.map((cap, i) => (
                 <span
                   key={i}
-                  className="px-2 py-0.5 rounded-md bg-white/5 text-slate-400 text-[9px] font-bold border border-white/5 hover:border-primary/30 hover:text-primary transition-all duration-300"
+                  className="px-2 py-0.5 rounded-md bg-foreground/5 text-muted-foreground text-[9px] font-bold border border-foreground/5 hover:border-primary/30 hover:text-primary transition-all duration-300"
                 >
                   #{cap}
                 </span>
@@ -187,7 +187,7 @@ function DraggableClip({
 
       {isSelected && (
         <div className="absolute -left-1 top-1/2 -translate-y-1/2">
-          <div className="w-1.5 h-10 bg-primary rounded-full shadow-[0_0_15px_rgba(139,92,246,0.8)]" />
+          <div className="w-1.5 h-10 bg-primary rounded-full shadow-[0_0_15px_hsl(var(--primary)/0.8)]" />
         </div>
       )}
     </div>
@@ -203,16 +203,16 @@ export default function LeftPanel() {
     <div className="w-full h-full flex flex-col gap-6 animate-in fade-in slide-in-from-left-6 duration-1000 ease-fluid">
       {/* Source Info */}
       {sourceFile && (
-        <div className="liquid-panel p-5 rounded-2xl flex gap-5 items-center group cursor-default">
+        <div className="depth-card p-5 rounded-2xl flex gap-5 items-center group cursor-default border border-foreground/5">
           <div className="w-14 h-10 bg-primary/10 rounded-xl overflow-hidden relative flex items-center justify-center border border-primary/20 group-hover:border-primary/40 transition-colors">
             <Film className="w-5 h-5 text-primary" strokeWidth={1.5} />
-            <div className="absolute inset-0 bg-linear-to-tr from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+            <div className="absolute inset-0 bg-gradient-to-tr from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
           </div>
           <div className="flex-1 min-w-0">
             <h3 className="text-[9px] font-black text-primary/60 truncate uppercase tracking-[0.2em] mb-1">
               Current Project
             </h3>
-            <p className="text-sm font-bold truncate text-white tracking-tight">
+            <p className="text-sm font-bold truncate text-foreground tracking-tight">
               {sourceFile.name}
             </p>
           </div>
@@ -222,14 +222,14 @@ export default function LeftPanel() {
       <div className="flex items-center justify-between px-2">
         <div className="flex items-center gap-2">
           <div className="w-1 h-4 bg-primary rounded-full" />
-          <span className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">
+          <span className="text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em]">
             Viral Suggestions
           </span>
         </div>
         {hasSuggestions && (
           <Badge
             variant="secondary"
-            className="bg-white/5 text-slate-300 hover:bg-white/10 transition-all text-[10px] px-3 py-1 font-black rounded-full border border-white/5"
+            className="bg-foreground/5 text-muted-foreground hover:bg-foreground/10 transition-all text-[10px] px-3 py-1 font-black rounded-full border border-foreground/5"
           >
             <Sparkles className="w-3 h-3 mr-1.5 text-primary" />
             {suggestions.length} CLIPS
@@ -268,7 +268,7 @@ export default function LeftPanel() {
             </SortableContext>
           </DndContext>
         ) : (
-          <div className="h-[400px] flex flex-col items-center justify-center text-center p-10 rounded-3xl bg-white/[0.02] border border-dashed border-white/10 group">
+          <div className="h-[400px] flex flex-col items-center justify-center text-center p-10 rounded-3xl bg-foreground/[0.02] border border-dashed border-foreground/10 group">
             {currentStage !== "idle" ? (
               <div className="space-y-6 flex flex-col items-center">
                 <div className="relative">
@@ -279,10 +279,10 @@ export default function LeftPanel() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <h3 className="text-lg font-black text-white tracking-tighter uppercase">
+                  <h3 className="text-lg font-black text-foreground tracking-tighter uppercase">
                     Analyzing...
                   </h3>
-                  <p className="text-xs text-slate-500 font-medium max-w-[200px]">
+                  <p className="text-xs text-muted-foreground font-medium max-w-[200px]">
                     {currentStage === "loading" && "Setting things up..."}
                     {currentStage === "analyzing" && "Analyzing viral potential..."}
                     {currentStage === "transcribing" && "Creating subtitles..."}
@@ -291,17 +291,17 @@ export default function LeftPanel() {
               </div>
             ) : (
               <div className="space-y-6 flex flex-col items-center opacity-60 group-hover:opacity-100 transition-opacity duration-700">
-                <div className="w-20 h-20 rounded-full bg-white/5 flex items-center justify-center border border-white/10 mb-2">
+                <div className="w-20 h-20 rounded-full bg-foreground/5 flex items-center justify-center border border-foreground/10 mb-2">
                   <Zap
-                    className="w-10 h-10 text-slate-600 group-hover:text-primary transition-colors duration-500"
+                    className="w-10 h-10 text-muted-foreground group-hover:text-primary transition-colors duration-500"
                     strokeWidth={1}
                   />
                 </div>
                 <div className="space-y-2">
-                  <p className="text-sm font-black text-white tracking-tight">
+                  <p className="text-sm font-black text-foreground tracking-tight">
                     Ready When You Are
                   </p>
-                  <p className="text-[11px] text-slate-500 font-medium max-w-[180px]">
+                  <p className="text-[11px] text-muted-foreground font-medium max-w-[180px]">
                     Paste a link above and we&apos;ll find your best clips automatically.
                   </p>
                 </div>

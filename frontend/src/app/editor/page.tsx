@@ -18,18 +18,26 @@ export default function EditorPage() {
   );
   const setAudioData = useEditorStore((state) => state.setAudioData);
   const sourceFile = useEditorStore((state) => state.sourceFile);
+  const sourceUrl = useEditorStore((state) => state.sourceUrl);
 
   useEffect(() => {
     const handleSilenceTrigger = async () => {
-      if (!sourceFile) {
-        console.warn("No source file to analyze");
+      let source: File | string | null = sourceFile || sourceUrl;
+      if (!source) {
+        console.warn("No source to analyze");
         return;
       }
 
       try {
         console.log("Starting silence detection...");
-        // TODO: Set analyzing state in store
-        const { audioData, sampleRate } = await extractAudioData(sourceFile);
+        
+        // If it's a YouTube URL, use proxy to bypass CORS for audio extraction
+        if (typeof source === "string" && (source.includes("youtube.com") || source.includes("youtu.be"))) {
+          const { getProxyUrl } = await import("@/lib/api");
+          source = getProxyUrl(source);
+        }
+
+        const { audioData, sampleRate } = await extractAudioData(source);
         setAudioData(audioData); // Store for visualization
         analysis.detectSilence({ audioData, sampleRate });
       } catch (err) {
@@ -43,7 +51,7 @@ export default function EditorPage() {
         "trigger-silence-detect",
         handleSilenceTrigger,
       );
-  }, [sourceFile, analysis, setAudioData]);
+  }, [sourceFile, sourceUrl, analysis, setAudioData]);
 
   useEffect(() => {
     if (analysis.lastMessage?.type === "silence_detected") {
