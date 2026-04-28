@@ -3,10 +3,10 @@ uvicorn[standard]==0.32.1
 python-multipart==0.0.18
 yt-dlp==2024.11.18
 requests==2.32.3
-# google-generativeai removed (deprecated)
 pydantic==2.10.3
 python-dotenv==1.0.1
 google-adk==1.0.0
+google-genai==1.0.0
 google-cloud-bigquery==3.27.0
 google-auth==2.36.0
 google-auth-oauthlib==1.2.1
@@ -16,8 +16,8 @@ httpx==0.28.1
 serpapi==0.1.5
 pymongo==4.10.1
 motor==3.6.0
-redis==5.0.8
-rq==2.0.0
-pusher==3.3.4
+redis==5.0.4
+rq==1.16.2
+pusher==3.3.2
 ffmpeg-python==0.2.0
-tenacity==9.0.0
+tenacity==8.2.3

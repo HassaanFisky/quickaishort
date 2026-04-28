@@ -13,21 +13,7 @@ import { Badge } from "@/components/ui/badge";
 
 import { ExportRecord } from "@/types/models";
 
-const container: Variants = {
-  hidden: { opacity: 0 },
-  show: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.1
-    }
-  }
-};
-
-const item: Variants = {
-  hidden: { y: 20, opacity: 0 },
-  show: { y: 0, opacity: 1 }
-};
-
+import { containerVariants, itemVariants, scaleUpVariants } from "@/lib/animations";
 
 export default function HistoryPage() {
   const { data: exports, isLoading } = useQuery<ExportRecord[]>({
@@ -79,13 +65,13 @@ export default function HistoryPage() {
       {/* Grid Section */}
       {exports && exports.length > 0 ? (
         <motion.div 
-          variants={container}
+          variants={containerVariants}
           initial="hidden"
-          animate="show"
+          animate="visible"
           className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8"
         >
           {exports.map((exp) => (
-            <motion.div key={exp._id} variants={item}>
+            <motion.div key={exp._id} variants={itemVariants}>
               <Card className="group depth-card glass-surface overflow-hidden border-foreground/5 hover:border-primary/30 transition-all duration-500 rounded-[2.5rem]">
                 <CardContent className="p-0">
                   {/* Preview Placeholder */}
@@ -137,8 +123,9 @@ export default function HistoryPage() {
         </motion.div>
       ) : (
         <motion.div 
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
+          variants={scaleUpVariants}
+          initial="hidden"
+          animate="visible"
           className="py-32 text-center max-w-lg mx-auto space-y-8 depth-card glass-surface rounded-[3rem] border-dashed border-2 border-foreground/10 bg-transparent"
         >
           <div className="bg-primary/10 w-24 h-24 rounded-full flex items-center justify-center mx-auto border border-primary/20">

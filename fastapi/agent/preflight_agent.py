@@ -20,6 +20,7 @@ import json
 import logging
 import os
 import uuid
+from datetime import datetime
 from typing import Any, AsyncIterator, Literal, Optional
 
 from pydantic import BaseModel
@@ -199,7 +200,7 @@ async def fetch_youtube_analytics(youtube_url: str) -> dict[str, Any]:
             .query(
                 ids="channel==MINE",
                 startDate="2024-01-01",
-                endDate="2026-04-25",
+                endDate=datetime.now().strftime("%Y-%m-%d"),
                 metrics="averageViewDuration,views,estimatedMinutesWatched",
                 dimensions="video",
                 maxResults=50,

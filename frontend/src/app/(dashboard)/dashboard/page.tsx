@@ -21,30 +21,9 @@ import { motion, Variants } from "framer-motion";
 
 import { useDashboardStats } from "@/hooks/useDashboardStats";
 
-function getGreeting() {
-  const hour = new Date().getHours();
-  if (hour >= 5 && hour < 12) return "Good morning";
-  if (hour >= 12 && hour < 18) return "Good afternoon";
-  if (hour >= 18 && hour < 22) return "Good evening";
-  return "Working late";
-}
+import { getGreeting } from "@/lib/utils/greeting";
 
-const containerVariants: Variants = {
-  hidden: { opacity: 0 },
-  visible: { 
-    opacity: 1,
-    transition: { staggerChildren: 0.1, delayChildren: 0.2 } 
-  },
-};
-
-const itemVariants: Variants = {
-  hidden: { opacity: 0, y: 20 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: { type: "spring", damping: 25, stiffness: 120 },
-  },
-};
+import { containerVariants, itemVariants } from "@/lib/animations";
 
 
 export default function DashboardPage() {

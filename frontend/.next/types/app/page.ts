@@ -1,4 +1,4 @@
-// File: E:\QuickAI Short orignal\src\app\page.tsx
+// File: E:\QuickAI Short orignal\frontend\src\app\page.tsx
 import * as entry from '../../../src/app/page.js'
 import type { ResolvingMetadata, ResolvingViewport } from 'next/dist/lib/metadata/types/metadata-interface.js'
 

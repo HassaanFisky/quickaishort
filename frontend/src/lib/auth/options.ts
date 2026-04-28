@@ -11,7 +11,7 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   callbacks: {
-    async signIn({ user, account, profile }) {
+    async signIn({ user, account }) {
       if (account?.provider === "google") {
         try {
           await connectDB();
@@ -26,7 +26,7 @@ export const authOptions: NextAuthOptions = {
             });
           } else {
             existingUser.lastLoginAt = new Date();
-            existingUser.googleId = account.providerAccountId; // Ensure ID is updated
+            existingUser.googleId = account.providerAccountId;
             await existingUser.save();
           }
           return true;
@@ -42,10 +42,8 @@ export const authOptions: NextAuthOptions = {
         await connectDB();
         const dbUser = await User.findOne({ email: session.user.email });
         if (dbUser) {
-          (session.user as { id: string; settings: unknown }).id =
-            dbUser._id.toString();
-          (session.user as { id: string; settings: unknown }).settings =
-            dbUser.settings;
+          session.user.id = dbUser._id.toString();
+          session.user.settings = dbUser.settings;
         }
       }
       return session;
@@ -57,4 +55,6 @@ export const authOptions: NextAuthOptions = {
   pages: {
     signIn: "/signin",
   },
+  debug: process.env.NODE_ENV === "development",
 };
+

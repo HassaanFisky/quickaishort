@@ -1,4 +1,4 @@
-// File: E:\QuickAI Short orignal\src\app\api\projects\route.ts
+// File: E:\QuickAI Short orignal\frontend\src\app\api\projects\route.ts
 import * as entry from '../../../../../src/app/api/projects/route.js'
 import type { NextRequest } from 'next/server.js'
 

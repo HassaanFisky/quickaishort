@@ -1,1 +1,1 @@
-self.__REACT_LOADABLE_MANIFEST="{}"
+self.__REACT_LOADABLE_MANIFEST='{"app\\\\editor\\\\page.tsx -> @/lib/api":{"id":71837,"files":[]},"components\\\\editor\\\\VideoCanvas.tsx -> @/lib/api":{"id":71837,"files":[]},"hooks\\\\useMediaPipeline.ts -> @/lib/api":{"id":71837,"files":[]}}';

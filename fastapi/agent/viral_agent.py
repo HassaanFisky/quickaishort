@@ -75,7 +75,7 @@ except ImportError:
 
 
 SCORING_INSTRUCTION = (
-    "Read the candidate segments from 'raw_segments' in session state. "
+    "Analyze the candidate segments provided in your input. "
     "For each segment, perform a deep viral analysis against current short-form trends. "
     "If frames have been provided to your prompt, score `visualEnergy` (0.0-1.0) and "
     "`cameraMovement` (0.0-1.0) from what you actually see. Otherwise estimate from "
@@ -87,7 +87,7 @@ SCORING_INSTRUCTION = (
     "viralAnalysis: {score: int, hookStrength: float, retentionPotential: float, "
     "visualEnergy: float, cameraMovement: float, emotionalTriggers: string[], reasoning: string}, "
     "suggestedCaptions: string[]} "
-    "Store the final JSON list in session state key 'final_suggestions'. "
+    "Return the final JSON list. "
     "Return ONLY the JSON array — no markdown."
 )
 
@@ -294,22 +294,17 @@ async def run_viral_pipeline(
     )
 
     try:
+        final_text = "[]"
         async for event in viral_runner.run_async(
             user_id=user_id,
             session_id=session_id,
             new_message=message,
         ):
             if event.is_final_response():
+                final_text = event.text or "[]"
                 break
 
-        session = await viral_runner.session_service.get_session(
-            app_name="QuickAIShort_ViralEngine",
-            user_id=user_id,
-            session_id=session_id,
-        )
-        final_json = session.state.get("final_suggestions", "[]")
-        text = final_json if isinstance(final_json, str) else json.dumps(final_json)
-        suggestions = _coerce_suggestions(text)
+        suggestions = _coerce_suggestions(final_text)
 
         # If the ADK pipeline didn't produce frames-aware scoring (current ADK
         # versions don't accept inline_data on session-state strings), and we
