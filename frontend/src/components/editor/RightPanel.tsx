@@ -24,6 +24,8 @@ import { useEditorStore } from "@/stores/editorStore";
 import { useServerExport } from "@/hooks/useServerExport";
 import { usePreflight } from "@/hooks/usePreflight";
 import { cn } from "@/lib/utils";
+import { formatTime } from "@/lib/utils/formatTime";
+
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import React, { useState, useEffect, useCallback } from "react";
@@ -449,11 +451,7 @@ export default function RightPanel() {
   );
 }
 
-function formatTime(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
-  return `${m}:${s.toString().padStart(2, "0")}`;
-}
+
 
 function viralScoreColor(score: number): { color?: string; background?: string } {
   if (score >= 90) return { background: "linear-gradient(to right, #ec4899, #a855f7)" };

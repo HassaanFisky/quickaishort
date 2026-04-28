@@ -4,6 +4,8 @@ import { useMemo } from "react";
 import { useEditorStore } from "@/stores/editorStore";
 import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
+import { formatTime } from "@/lib/utils/formatTime";
+
 
 export default function Timeline() {
   const { audioData, silenceSegments, duration } = useEditorStore();
@@ -111,8 +113,4 @@ export default function Timeline() {
   );
 }
 
-function formatTime(seconds: number) {
-  const min = Math.floor(seconds / 60);
-  const sec = Math.floor(seconds % 60);
-  return `${min.toString().padStart(2, "0")}:${sec.toString().padStart(2, "0")}`;
-}
+

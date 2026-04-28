@@ -15,6 +15,8 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { formatTime } from "@/lib/utils/formatTime";
+
 
 export default function BottomDock() {
   const {
@@ -223,8 +225,4 @@ function TimeScale({ duration }: { duration: number }) {
   );
 }
 
-function formatTime(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
-  return `${m}:${s.toString().padStart(2, "0")}`;
-}
+
