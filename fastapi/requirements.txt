@@ -15,7 +15,7 @@ google-api-python-client>=2.157.0
 httpx>=0.28.1
 serpapi==0.1.5
 pymongo==4.10.1
-motor==3.6.0
+motor==3.6.1
 redis==5.0.4
 rq==1.16.2
 pusher==3.3.2
