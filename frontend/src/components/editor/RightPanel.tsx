@@ -28,7 +28,8 @@ import { formatTime } from "@/lib/utils/formatTime";
 
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useEffect, useCallback } from "react";
+import { toast } from "sonner";
 import type { PreflightResult, PersonaVote, Recommendation } from "@/types/preflight";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -36,8 +37,17 @@ const QUALITY_OPTIONS = ["low", "medium", "high"] as const;
 const FILTER_OPTIONS = ["None", "Urban", "Retro", "Cinematic"] as const;
 
 export default function RightPanel() {
-  const { sourceFile, selectedClipId, suggestions, captionsEnabled, setCaptionsEnabled } =
-    useEditorStore();
+  const {
+    sourceFile,
+    selectedClipId,
+    suggestions,
+    captionsEnabled,
+    setCaptionsEnabled,
+    duration,
+    updateClip,
+    exportSettings,
+    setExportSetting,
+  } = useEditorStore();
 
   const { data: session } = useSession();
   const userId = session?.user?.id ?? session?.user?.email ?? "anonymous";
@@ -52,8 +62,9 @@ export default function RightPanel() {
     reset: resetPreflight,
   } = usePreflight();
 
-  const [quality, setQuality] = useState<"low" | "medium" | "high">("medium");
-  const [activeFilter, setActiveFilter] = useState("None");
+  // Mirror store values locally for UI responsiveness; keep store as source of truth
+  const quality = exportSettings.quality;
+  const activeFilter = exportSettings.filter;
 
   const selectedClip = selectedClipId
     ? suggestions.find((c) => c.id === selectedClipId) ?? suggestions[0]
@@ -64,7 +75,7 @@ export default function RightPanel() {
     : 0;
 
   const handleExport = () => {
-    exportClip({ quality, captionsEnabled });
+    exportClip({ quality: exportSettings.quality, captionsEnabled });
   };
 
   const handleRunPreflight = useCallback(async () => {
@@ -161,23 +172,32 @@ export default function RightPanel() {
 
             <div className="p-5 rounded-2xl bg-foreground/[0.02] border border-foreground/5 space-y-5 backdrop-blur-sm">
               <div className="flex justify-between items-center px-1">
-                <span className="text-[11px] font-bold text-foreground tracking-widest">
-                  {selectedClip ? `${formatTime(selectedClip.start)}s` : "0.0s"}
+                <span className="text-[11px] font-bold text-foreground tracking-widest tabular-nums">
+                  {selectedClip ? formatTime(selectedClip.start) : "0:00"}
                 </span>
-                <div className="h-px flex-1 bg-foreground/5 mx-4 relative">
-                  <div className="absolute inset-y-[-4px] left-0 right-0 bg-primary/20 rounded-full" />
+                <span className="text-[10px] text-muted-foreground/40 font-medium">
+                  {selectedClip ? `${Math.max(0, Math.round(selectedClip.end - selectedClip.start))}s` : "—"}
+                </span>
+                <span className="text-[11px] font-bold text-foreground tracking-widest tabular-nums">
+                  {selectedClip ? formatTime(selectedClip.end) : "0:00"}
+                </span>
+              </div>
+              {selectedClip ? (
+                <Slider
+                  value={[selectedClip.start, selectedClip.end]}
+                  min={0}
+                  max={duration > 0 ? duration : (selectedClip.end + 10)}
+                  step={0.1}
+                  onValueChange={([s, e]) =>
+                    updateClip(selectedClip.id, { start: s, end: e })
+                  }
+                  className="py-2"
+                />
+              ) : (
+                <div className="h-10 flex items-center px-2">
+                  <div className="w-full h-2 bg-foreground/5 rounded-full" />
                 </div>
-                <span className="text-[11px] font-bold text-foreground tracking-widest">
-                  {selectedClip ? `${formatTime(selectedClip.end)}s` : "0.0s"}
-                </span>
-              </div>
-              <div className="relative h-10 flex items-center px-2 cursor-pointer group/timeline">
-                <div className="absolute inset-x-0 h-2 bg-foreground/5 rounded-full" />
-                <div className="absolute inset-x-2 h-2 bg-primary/20 rounded-full" />
-                <div className="absolute left-2 w-1.5 h-6 bg-primary rounded-full shadow-[0_0_10px_hsl(var(--primary)/0.5)]" />
-                <div className="absolute right-2 w-1.5 h-6 bg-primary rounded-full shadow-[0_0_10px_hsl(var(--primary)/0.5)]" />
-                <div className="absolute left-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-foreground shadow-2xl border-[3px] border-primary group-hover/timeline:scale-125 transition-transform" />
-              </div>
+              )}
             </div>
           </div>
 
@@ -190,36 +210,65 @@ export default function RightPanel() {
               </span>
             </div>
             <div className="space-y-6 px-1">
-              {(["Audio Boost", "Playback Speed", "Background Noise"] as const).map(
-                (label) => (
-                  <div key={label} className="space-y-3">
-                    <div className="flex justify-between items-center">
-                      <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
-                        {label}
-                      </span>
-                      <span className="text-[10px] font-bold text-primary">
-                        {label === "Playback Speed"
-                          ? "1.0x"
-                          : label === "Background Noise"
-                            ? "20%"
-                            : "85%"}
-                      </span>
-                    </div>
-                    <Slider
-                      defaultValue={[
-                        label === "Playback Speed"
-                          ? 100
-                          : label === "Background Noise"
-                            ? 20
-                            : 85,
-                      ]}
-                      max={100}
-                      step={1}
-                      className="py-1"
-                    />
-                  </div>
-                ),
-              )}
+              {/* Audio Boost */}
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
+                    Audio Boost
+                  </span>
+                  <span className="text-[10px] font-bold text-primary tabular-nums">
+                    {exportSettings.audioBoost}%
+                  </span>
+                </div>
+                <Slider
+                  value={[exportSettings.audioBoost]}
+                  min={0}
+                  max={100}
+                  step={1}
+                  onValueChange={([v]) => setExportSetting("audioBoost", v)}
+                  className="py-1"
+                />
+              </div>
+
+              {/* Playback Speed */}
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
+                    Playback Speed
+                  </span>
+                  <span className="text-[10px] font-bold text-primary tabular-nums">
+                    {(exportSettings.playbackSpeed / 100).toFixed(1)}x
+                  </span>
+                </div>
+                <Slider
+                  value={[exportSettings.playbackSpeed]}
+                  min={50}
+                  max={200}
+                  step={5}
+                  onValueChange={([v]) => setExportSetting("playbackSpeed", v)}
+                  className="py-1"
+                />
+              </div>
+
+              {/* Background Noise */}
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
+                    Background Noise
+                  </span>
+                  <span className="text-[10px] font-bold text-primary tabular-nums">
+                    {exportSettings.noiseSuppression}%
+                  </span>
+                </div>
+                <Slider
+                  value={[exportSettings.noiseSuppression]}
+                  min={0}
+                  max={100}
+                  step={1}
+                  onValueChange={([v]) => setExportSetting("noiseSuppression", v)}
+                  className="py-1"
+                />
+              </div>
             </div>
           </div>
 
@@ -232,7 +281,7 @@ export default function RightPanel() {
               {QUALITY_OPTIONS.map((q) => (
                 <button
                   key={q}
-                  onClick={() => setQuality(q)}
+                  onClick={() => setExportSetting("quality", q)}
                   className={cn(
                     "flex-1 h-10 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300",
                     quality === q
@@ -295,7 +344,7 @@ export default function RightPanel() {
                       ? "bg-primary/20 border-primary/40 text-primary shadow-lg shadow-primary/5"
                       : "bg-foreground/[0.02] border-foreground/5 text-muted-foreground hover:bg-foreground/5 hover:text-foreground",
                   )}
-                  onClick={() => setActiveFilter(filter)}
+                  onClick={() => setExportSetting("filter", filter as typeof activeFilter)}
                 >
                   {filter}
                 </Button>
@@ -441,7 +490,12 @@ export default function RightPanel() {
 
               {/* Results State */}
               {preflightResult && !isPreflightRunning && (
-                <PreflightResultsPanel result={preflightResult} onReset={resetPreflight} />
+                <PreflightResultsPanel
+                  result={preflightResult}
+                  onReset={resetPreflight}
+                  selectedClipId={selectedClipId}
+                  updateClip={updateClip}
+                />
               )}
             </div>
           )}
@@ -541,9 +595,13 @@ function PersonaCard({ vote }: { vote: PersonaVote }) {
 function PreflightResultsPanel({
   result,
   onReset,
+  selectedClipId,
+  updateClip,
 }: {
   result: PreflightResult;
   onReset: () => void;
+  selectedClipId: string | null;
+  updateClip: (id: string, updates: { start?: number; end?: number }) => void;
 }) {
   const scoreStyle = viralScoreColor(result.weighted_consensus_score);
   const isViral = result.weighted_consensus_score >= 90;
@@ -597,7 +655,7 @@ function PreflightResultsPanel({
 
       {/* Smart Trim Suggestion */}
       {result.refined_clip && (
-        <div className="p-5 rounded-2xl bg-primary/5 border border-primary/20 space-y-2 relative overflow-hidden group">
+        <div className="p-5 rounded-2xl bg-primary/5 border border-primary/20 space-y-3 relative overflow-hidden group">
           <div className="absolute top-0 right-0 p-3 opacity-20">
             <Zap className="w-8 h-8 text-primary" />
           </div>
@@ -615,6 +673,20 @@ function PreflightResultsPanel({
               {result.refined_clip.end_sec.toFixed(1)}s
             </span>
           </div>
+          {selectedClipId && (
+            <button
+              onClick={() => {
+                updateClip(selectedClipId, {
+                  start: result.refined_clip!.start_sec,
+                  end: result.refined_clip!.end_sec,
+                });
+                toast.success("Smart trim applied to clip.");
+              }}
+              className="w-full h-9 rounded-xl bg-primary/10 border border-primary/20 text-[10px] font-black uppercase tracking-widest text-primary hover:bg-primary/20 transition-colors"
+            >
+              Apply Smart Trim
+            </button>
+          )}
         </div>
       )}
 

@@ -13,16 +13,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Download, Rocket, ShieldCheck, Clock, Settings2 } from "lucide-react";
+import { CheckCircle, Download, Rocket, ShieldCheck, Clock, Settings2 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { useState, useEffect } from "react";
+import type { ExportQuality } from "@/types/export";
 
 export default function ExportPanel() {
   const {
     suggestions,
     selectedClipId,
     captionsEnabled,
+    exportSettings,
+    setExportSetting,
   } = useEditorStore();
   const { data: session } = useSession();
   const userId = session?.user?.id ?? session?.user?.email ?? "anonymous";
@@ -37,7 +40,7 @@ export default function ExportPanel() {
       return;
     }
     setExportComplete(false);
-    await exportClip({ quality: "medium", captionsEnabled });
+    await exportClip({ quality: exportSettings.quality, captionsEnabled });
   };
 
   useEffect(() => {
@@ -67,7 +70,10 @@ export default function ExportPanel() {
             <Label className="text-[10px] font-black text-muted-foreground/60 uppercase tracking-widest pl-1">
               Output Format
             </Label>
-            <Select defaultValue="mp4">
+            <Select
+              value={exportSettings.format}
+              onValueChange={(v) => setExportSetting("format", v as "mp4" | "webm")}
+            >
               <SelectTrigger className="h-11 rounded-xl bg-foreground/5 border-foreground/5 focus:ring-primary/50 transition-all font-medium">
                 <SelectValue placeholder="Format" />
               </SelectTrigger>
@@ -82,7 +88,10 @@ export default function ExportPanel() {
             <Label className="text-[10px] font-black text-muted-foreground/60 uppercase tracking-widest pl-1">
               Quality Preset
             </Label>
-            <Select defaultValue="medium">
+            <Select
+              value={exportSettings.quality}
+              onValueChange={(v) => setExportSetting("quality", v as ExportQuality)}
+            >
               <SelectTrigger className="h-11 rounded-xl bg-foreground/5 border-foreground/5 focus:ring-primary/50 transition-all font-medium">
                 <SelectValue placeholder="Quality" />
               </SelectTrigger>
@@ -102,15 +111,31 @@ export default function ExportPanel() {
                 <div className="flex justify-between text-[9px] font-black uppercase tracking-widest text-muted-foreground/60">
                   <span className="flex items-center gap-2">
                     <span className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />
-                    Rendering on Server
+                    Rendering…
                   </span>
-                  <span>{exportProgress}%</span>
+                  <span className="tabular-nums">{exportProgress}%</span>
                 </div>
                 <Progress value={exportProgress} className="h-1.5 bg-foreground/5 overflow-hidden" />
               </div>
             )}
 
-            {!exportComplete ? (
+            {exportComplete ? (
+              <div className="p-5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-center space-y-3 animate-in zoom-in-95 duration-300">
+                <CheckCircle className="w-8 h-8 text-emerald-400 mx-auto" strokeWidth={1.5} />
+                <p className="text-[11px] font-black text-emerald-400 uppercase tracking-widest">
+                  Download Started
+                </p>
+                <p className="text-[10px] text-muted-foreground">
+                  Check your Downloads folder.
+                </p>
+                <button
+                  onClick={() => setExportComplete(false)}
+                  className="text-[9px] font-black text-muted-foreground/60 hover:text-foreground uppercase tracking-widest transition-colors"
+                >
+                  Export Again
+                </button>
+              </div>
+            ) : (
               <Button
                 className="w-full h-14 rounded-2xl text-[12px] font-black uppercase tracking-widest bg-primary text-white hover:bg-primary/90 shadow-[0_0_20px_hsl(var(--primary)/0.3)] group transition-all"
                 onClick={handleExport}
@@ -118,14 +143,6 @@ export default function ExportPanel() {
               >
                 <Rocket className="mr-3 w-5 h-5 group-hover:-translate-y-1 group-hover:translate-x-1 transition-transform" />
                 Render Selection
-              </Button>
-            ) : (
-              <Button
-                className="w-full h-14 rounded-2xl text-[12px] font-black uppercase tracking-widest bg-emerald-500 text-white hover:bg-emerald-600 shadow-[0_0_20px_rgba(16,185,129,0.3)] group animate-in zoom-in-95 duration-300"
-                onClick={handleExport}
-              >
-                <Download className="mr-3 w-5 h-5 group-hover:scale-110 transition-transform" />
-                Export Again
               </Button>
             )}
           </div>

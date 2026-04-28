@@ -13,6 +13,26 @@ export interface AgentState {
   reasoningLogs?: string[];
 }
 
+export interface ExportSettings {
+  quality: "low" | "medium" | "high";
+  aspectRatio: "9:16" | "16:9" | "1:1";
+  filter: "None" | "Urban" | "Retro" | "Cinematic";
+  audioBoost: number;
+  playbackSpeed: number;
+  noiseSuppression: number;
+  format: "mp4" | "webm";
+}
+
+const DEFAULT_EXPORT_SETTINGS: ExportSettings = {
+  quality: "medium",
+  aspectRatio: "9:16",
+  filter: "None",
+  audioBoost: 85,
+  playbackSpeed: 100,
+  noiseSuppression: 20,
+  format: "mp4",
+};
+
 interface EditorState {
   // Source Video
   sourceFile: File | null;
@@ -36,6 +56,7 @@ interface EditorState {
   // Playback
   currentTime: number;
   isPlaying: boolean;
+  pendingSeek: number | null;
 
   // Data
   transcript: Transcript | null;
@@ -45,9 +66,15 @@ interface EditorState {
   captionsEnabled: boolean;
   selectedClipId: string | null;
 
+  // Export settings (shared across RightPanel + ExportPanel)
+  exportSettings: ExportSettings;
+
   // Actions
   setCurrentTime: (time: number) => void;
   setIsPlaying: (playing: boolean) => void;
+  setDuration: (duration: number) => void;
+  setPendingSeek: (time: number) => void;
+  clearPendingSeek: () => void;
   setSourceFile: (file: File, url?: string) => void;
   setSourceUrl: (url: string) => void;
   setProcessing: (
@@ -67,6 +94,7 @@ interface EditorState {
   setSelectedClip: (id: string | null) => void;
   selectClip: (id: string | null) => void;
   updateClip: (id: string, updates: Partial<Clip>) => void;
+  setExportSetting: <K extends keyof ExportSettings>(key: K, value: ExportSettings[K]) => void;
   reset: () => void;
 }
 
@@ -90,15 +118,20 @@ export const useEditorStore = create<EditorState>()(
 
       currentTime: 0,
       isPlaying: false,
+      pendingSeek: null,
       transcript: null,
       suggestions: [],
       silenceSegments: [],
       audioData: null,
       captionsEnabled: true,
       selectedClipId: null,
+      exportSettings: { ...DEFAULT_EXPORT_SETTINGS },
 
       setCurrentTime: (time) => set({ currentTime: time }),
       setIsPlaying: (playing) => set({ isPlaying: playing }),
+      setDuration: (duration) => set({ duration }),
+      setPendingSeek: (time) => set({ pendingSeek: time }),
+      clearPendingSeek: () => set({ pendingSeek: null }),
 
       setSourceFile: (file, url) =>
         set({
@@ -145,6 +178,11 @@ export const useEditorStore = create<EditorState>()(
           ),
         })),
 
+      setExportSetting: (key, value) =>
+        set((state) => ({
+          exportSettings: { ...state.exportSettings, [key]: value },
+        })),
+
       reset: () =>
         set({
           sourceFile: null,
@@ -162,12 +200,14 @@ export const useEditorStore = create<EditorState>()(
           },
           currentTime: 0,
           isPlaying: false,
+          pendingSeek: null,
           transcript: null,
           suggestions: [],
           silenceSegments: [],
           audioData: null,
           captionsEnabled: true,
           selectedClipId: null,
+          exportSettings: { ...DEFAULT_EXPORT_SETTINGS },
         }),
     }),
     { name: "EditorStore" },

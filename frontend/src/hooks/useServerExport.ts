@@ -180,9 +180,35 @@ export function useServerExport({ userId }: UseServerExportArgs) {
 
       const videoId = inferVideoId(sourceUrl, sourceFile?.name);
       if (!videoId) {
-        toast.error(
-          "Server export currently requires a YouTube source URL. Local file export is coming.",
-        );
+        // Local file — use client-side MediaRecorder trim
+        if (!sourceFile) {
+          toast.error("No video source found. Please import a video first.");
+          return;
+        }
+        setIsExporting(true);
+        setExportProgress(0);
+        toast.info("Rendering locally in your browser…");
+        try {
+          const { exportLocalClip } = await import("@/lib/clientExport");
+          await exportLocalClip(
+            sourceFile,
+            clip.start,
+            clip.end,
+            `quickai-short-local.mp4`,
+            (pct) => setExportProgress(pct),
+          );
+          setExportProgress(100);
+          toast.success("Export ready — downloading.");
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : "Local export failed";
+          if (msg.includes("captureStream")) {
+            toast.error("Local export requires Chrome or Firefox. Try a YouTube URL for other browsers.");
+          } else {
+            toast.error(`Local export failed: ${msg}`);
+          }
+        } finally {
+          setIsExporting(false);
+        }
         return;
       }
 

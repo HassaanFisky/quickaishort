@@ -8,7 +8,7 @@ import { formatTime } from "@/lib/utils/formatTime";
 
 
 export default function Timeline() {
-  const { audioData, silenceSegments, duration } = useEditorStore();
+  const { audioData, silenceSegments, duration, currentTime, setPendingSeek } = useEditorStore();
   const numBars = 120; // Matches visually with the design
 
   // Generate waveform levels from actual audio data or fallback to random
@@ -45,8 +45,8 @@ export default function Timeline() {
     <div className="flex-1 p-4 flex flex-col gap-4 bg-muted/20">
       <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">
         <div className="flex gap-4">
-          <span>00:00:00</span>
-          <span className="text-primary/40">In: 00:00:00</span>
+          <span className="tabular-nums">{formatTime(currentTime)}</span>
+          <span className="text-primary/40">In: {formatTime(currentTime)}</span>
         </div>
         <div className="flex gap-2">
           <Badge
@@ -64,7 +64,7 @@ export default function Timeline() {
         </div>
         <div className="flex gap-4">
           <span className="text-primary/40">Out: {formatTime(duration)}</span>
-          <span>{formatTime(duration)}</span>
+          <span className="tabular-nums">{formatTime(duration)}</span>
         </div>
       </div>
 
@@ -99,13 +99,19 @@ export default function Timeline() {
           ))}
         </div>
 
-        {/* Playhead */}
-        <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-foreground shadow-[0_0_10px_currentColor] z-20 translate-x-0 transition-transform will-change-transform" />
+        {/* Playhead — position driven by currentTime/duration */}
+        <div
+          className="absolute top-0 bottom-0 w-0.5 bg-foreground shadow-[0_0_10px_currentColor] z-20 will-change-transform pointer-events-none"
+          style={{ left: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` }}
+        />
 
         <Slider
-          defaultValue={[0, 100]}
+          value={[duration > 0 ? (currentTime / duration) * 100 : 0]}
           max={100}
-          step={1}
+          step={0.1}
+          onValueChange={([pct]) => {
+            if (duration > 0) setPendingSeek((pct / 100) * duration);
+          }}
           className="relative z-30 opacity-50 hover:opacity-100 transition-opacity"
         />
       </div>

@@ -5,11 +5,12 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sparkles, Clock, Film, Zap, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { DndContext, closestCenter } from "@dnd-kit/core";
+import { DndContext, closestCenter, type DragEndEvent } from "@dnd-kit/core";
 import {
   SortableContext,
   verticalListSortingStrategy,
   useSortable,
+  arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { motion } from "framer-motion";
@@ -195,9 +196,19 @@ function DraggableClip({
 }
 
 export default function LeftPanel() {
-  const { suggestions, selectedClipId, selectClip, sourceFile, currentStage } =
+  const { suggestions, selectedClipId, selectClip, setSuggestions, sourceFile, currentStage } =
     useEditorStore();
   const hasSuggestions = suggestions.length > 0;
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = suggestions.findIndex((c) => c.id === active.id);
+    const newIndex = suggestions.findIndex((c) => c.id === over.id);
+    if (oldIndex !== -1 && newIndex !== -1) {
+      setSuggestions(arrayMove(suggestions, oldIndex, newIndex));
+    }
+  }
 
   return (
     <div className="w-full h-full flex flex-col gap-6 animate-in fade-in slide-in-from-left-6 duration-1000 ease-fluid">
@@ -239,7 +250,7 @@ export default function LeftPanel() {
 
       <ScrollArea className="flex-1 -mr-4 pr-4">
         {hasSuggestions ? (
-          <DndContext collisionDetection={closestCenter}>
+          <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
             <SortableContext
               items={suggestions}
               strategy={verticalListSortingStrategy}

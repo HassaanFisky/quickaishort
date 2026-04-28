@@ -26,8 +26,11 @@ export default function VideoCanvas() {
     duration,
     currentTime,
     isPlaying,
+    pendingSeek,
     setCurrentTime,
     setIsPlaying,
+    setDuration,
+    clearPendingSeek,
   } = useEditorStore();
 
   const { isReady, reframingData, detect } = useFaceTracker();
@@ -81,6 +84,14 @@ export default function VideoCanvas() {
     setCurrentTime(next);
   }, [currentTime, duration, setCurrentTime]);
 
+  // Respond to external seek requests (e.g. from Timeline slider)
+  useEffect(() => {
+    if (pendingSeek == null || !videoRef.current) return;
+    videoRef.current.currentTime = pendingSeek;
+    setCurrentTime(pendingSeek);
+    clearPendingSeek();
+  }, [pendingSeek, clearPendingSeek, setCurrentTime]);
+
   // Face detection loop
   const detectRef = useRef(detect);
   useEffect(() => { detectRef.current = detect; }, [detect]);
@@ -128,6 +139,9 @@ export default function VideoCanvas() {
               style={{ objectPosition: getObjectPosition() }}
               controls={false}
               loop
+              onLoadedMetadata={() => {
+                if (videoRef.current) setDuration(videoRef.current.duration);
+              }}
               onWaiting={() => setIsBuffering(true)}
               onCanPlay={() => setIsBuffering(false)}
               onPlay={() => setIsPlaying(true)}

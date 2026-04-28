@@ -122,9 +122,12 @@ export default function LandingPage() {
                   variant="outline"
                   size="lg"
                   className="h-16 px-12 rounded-2xl text-lg border-foreground/10 bg-foreground/5 hover:bg-foreground/10"
+                  asChild
                 >
-                  <PlayCircle className="mr-2 w-6 h-6" />
-                  Watch Demo
+                  <Link href="/editor">
+                    <PlayCircle className="mr-2 w-6 h-6" />
+                    Watch Demo
+                  </Link>
                 </GlowButton>
               </motion.div>
             </motion.div>
