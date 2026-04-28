@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, MutableRefObject } from "react";
 import Pusher, { type Channel } from "pusher-js";
 
 import { API_URL, getStats } from "@/lib/api";
@@ -106,7 +106,7 @@ export function useDashboardStats({
 function openWebSocket(
   userId: string,
   apply: (incoming: Partial<UserStats>) => void,
-  wsRef: React.MutableRefObject<WebSocket | null>,
+  wsRef: MutableRefObject<WebSocket | null>,
   setTransport: (t: UseDashboardStatsResult["transport"]) => void,
   alive: () => boolean,
 ): void {
