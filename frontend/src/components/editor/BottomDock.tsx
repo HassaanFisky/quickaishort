@@ -212,34 +212,6 @@ function TimeScale({ duration }: { duration: number }) {
     );
   }
 
-  const markers = [0, 0.25, 0.5, 0.75].map((frac) => frac * duration);
-  return (
-    <div className="flex items-center h-4 pl-[100px] pr-4 justify-between text-[8px] font-black text-muted-foreground/30 uppercase tracking-[0.3em]">
-      {markers.map((t) => (
-        <span key={t}>{formatTime(t)}</span>
-      ))}
-    </div>
-  );
-}
-
-function formatTime(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
-  return `${m}:${s.toString().padStart(2, "0")}`;
-}
-
-function TimeScale({ duration }: { duration: number }) {
-  if (duration === 0) {
-    return (
-      <div className="flex items-center h-4 px-[100px] gap-[100px] text-[8px] font-black text-muted-foreground/30 uppercase tracking-[0.3em]">
-        <span>0:00</span>
-        <span>0:10</span>
-        <span>0:20</span>
-        <span>0:30</span>
-      </div>
-    );
-  }
-
   // Generate 4 evenly spaced time markers
   const markers = [0, 0.25, 0.5, 0.75].map((frac) => frac * duration);
   return (
