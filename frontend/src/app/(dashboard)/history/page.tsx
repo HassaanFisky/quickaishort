@@ -8,12 +8,12 @@ import { Button } from "@/components/ui/button";
 import LoadingSpinner from "@/components/shared/LoadingSpinner";
 import axios from "axios";
 import { format } from "date-fns";
-import { motion } from "framer-motion";
+import { motion, Variants } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
 
 import { ExportRecord } from "@/types/models";
 
-const container = {
+const container: Variants = {
   hidden: { opacity: 0 },
   show: {
     opacity: 1,
@@ -23,10 +23,11 @@ const container = {
   }
 };
 
-const item = {
+const item: Variants = {
   hidden: { y: 20, opacity: 0 },
   show: { y: 0, opacity: 1 }
 };
+
 
 export default function HistoryPage() {
   const { data: exports, isLoading } = useQuery<ExportRecord[]>({
