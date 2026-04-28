@@ -7,7 +7,8 @@ on:
     branches: [main]
 
 env:
-  NODE_VERSION: '20'
+  NODE_VERSION: '18'
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: false
 
 jobs:
   build:
@@ -18,35 +19,31 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v2
-        with:
-          version: 8
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
-          cache-dependency-path: 'frontend/pnpm-lock.yaml'
+          node-version: 18
+          cache: 'npm'
 
       - name: Install dependencies
         working-directory: ./frontend
-        run: pnpm install --no-frozen-lockfile
+        run: |
+          rm -rf node_modules package-lock.json
+          npm install
 
       - name: Lint
         working-directory: ./frontend
-        run: pnpm lint
+        run: npm run lint
         continue-on-error: true
 
       - name: Type check
         working-directory: ./frontend
-        run: pnpm tsc --noEmit
+        run: npx tsc --noEmit
         continue-on-error: true
 
       - name: Build
         working-directory: ./frontend
-        run: pnpm build
+        run: npm run build
         env:
           NEXT_TELEMETRY_DISABLED: 1
 
@@ -55,9 +52,9 @@ jobs:
         with:
           path: |
             frontend/.next/cache
-          key: ${{ runner.os }}-nextjs-${{ hashFiles('frontend/pnpm-lock.yaml') }}-${{ hashFiles('frontend/**/*.js', 'frontend/**/*.jsx', 'frontend/**/*.ts', 'frontend/**/*.tsx') }}
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('frontend/package-lock.json') }}-${{ hashFiles('frontend/**/*.js', 'frontend/**/*.jsx', 'frontend/**/*.ts', 'frontend/**/*.tsx') }}
           restore-keys: |
-            ${{ runner.os }}-nextjs-${{ hashFiles('frontend/pnpm-lock.yaml') }}-
+            ${{ runner.os }}-nextjs-${{ hashFiles('frontend/package-lock.json') }}-
 
   ffmpeg-smoke:
     name: FFmpeg Pipeline Smoke Test
