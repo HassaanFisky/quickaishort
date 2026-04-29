@@ -14,6 +14,8 @@ google-auth-httplib2>=0.2.0
 google-api-python-client>=2.157.0
 httpx>=0.28.1
 serpapi==0.1.5
+deprecated
+pydantic-settings
 pymongo==4.9.2
 motor==3.6.1
 redis==5.0.4
