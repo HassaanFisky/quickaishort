@@ -83,10 +83,10 @@ function DraggableClip({
       {...listeners}
       onClick={onClick}
       className={cn(
-        "group relative p-5 rounded-2xl cursor-grab active:cursor-grabbing transition-all duration-200 focus-ring",
+        "group relative p-4 rounded-lg cursor-grab active:cursor-grabbing transition-all duration-150",
         isSelected
-          ? "bg-foreground/[0.05] border border-primary/30 ring-1 ring-primary/20"
-          : "bg-foreground/[0.03] border border-foreground/5 hover:bg-foreground/[0.05] hover:border-foreground/10",
+          ? "bg-secondary text-foreground border border-primary/40 border-l-[3px] border-l-primary"
+          : "bg-secondary/40 border border-border hover:bg-secondary hover:border-border",
       )}
       tabIndex={0}
     >
@@ -129,7 +129,7 @@ function DraggableClip({
 
       {/* Why This Works Section */}
       {clip.viralReasoning && (
-        <div className="relative overflow-hidden p-4 rounded-xl bg-gradient-to-br from-foreground/[0.03] to-transparent border border-foreground/10 group/insight">
+        <div className="relative overflow-hidden p-4 rounded-lg bg-secondary/40 border border-border group/insight">
           <div className="absolute -top-4 -right-4 w-12 h-12 bg-primary/10 blur-2xl group-hover/insight:bg-primary/20 transition-all duration-700" />
 
           <div className="flex items-center gap-2 text-primary mb-2">
@@ -186,11 +186,7 @@ function DraggableClip({
         </div>
       )}
 
-      {isSelected && (
-        <div className="absolute -left-1 top-1/2 -translate-y-1/2">
-          <div className="w-1.5 h-10 bg-primary rounded-full shadow-[0_0_15px_hsl(var(--primary)/0.8)]" />
-        </div>
-      )}
+      {/* Removed the glowing stick for a simpler border-l on the parent */}
     </div>
   );
 }
@@ -214,7 +210,7 @@ export default function LeftPanel() {
     <div className="w-full h-full flex flex-col gap-6 animate-in fade-in slide-in-from-left-6 duration-1000 ease-fluid">
       {/* Source Info */}
       {sourceFile && (
-        <div className="depth-card p-5 rounded-2xl flex gap-5 items-center group cursor-default border border-foreground/5">
+        <div className="p-4 rounded-lg bg-secondary/40 flex gap-5 items-center group cursor-default border border-border">
           <div className="w-14 h-10 bg-primary/10 rounded-xl overflow-hidden relative flex items-center justify-center border border-primary/20 group-hover:border-primary/40 transition-colors">
             <Film className="w-5 h-5 text-primary" strokeWidth={1.5} />
             <div className="absolute inset-0 bg-gradient-to-tr from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -234,7 +230,7 @@ export default function LeftPanel() {
         <div className="flex items-center gap-2">
           <div className="w-1 h-4 bg-primary rounded-full" />
           <span className="text-[11px] font-black text-muted-foreground uppercase tracking-[0.2em]">
-            Viral Suggestions
+            Clip Candidates
           </span>
         </div>
         {hasSuggestions && (
@@ -279,7 +275,7 @@ export default function LeftPanel() {
             </SortableContext>
           </DndContext>
         ) : (
-          <div className="h-[400px] flex flex-col items-center justify-center text-center p-10 rounded-3xl bg-foreground/[0.02] border border-dashed border-foreground/10 group">
+          <div className="h-[400px] flex flex-col items-center justify-center text-center p-10 rounded-lg bg-secondary/20 border border-dashed border-border group">
             {currentStage !== "idle" ? (
               <div className="space-y-6 flex flex-col items-center">
                 <div className="relative">

@@ -30,6 +30,9 @@ import {
   Snowflake,
   Circle,
   Sparkles,
+  Sun,
+  Waves,
+  Keyboard,
   type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -38,24 +41,34 @@ import { useEditorStore } from "@/stores/editorStore";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 
-type Tab = "profile" | "appearance" | "export" | "editor" | "hardware" | "notifications" | "privacy";
+type Tab = "profile" | "appearance" | "export" | "editor" | "shortcuts" | "notifications" | "privacy";
 
 const TABS: { id: Tab; icon: LucideIcon; label: string }[] = [
   { id: "profile", icon: User, label: "Profile" },
   { id: "appearance", icon: Palette, label: "Appearance" },
-  { id: "export", icon: Download, label: "Export Defaults" },
-  { id: "editor", icon: Sliders, label: "Editor Preferences" },
-  { id: "hardware", icon: Cpu, label: "Local AI" },
+  { id: "export", icon: Download, label: "Export" },
+  { id: "editor", icon: Sliders, label: "Editor" },
+  { id: "shortcuts", icon: Keyboard, label: "Shortcuts" },
   { id: "notifications", icon: Bell, label: "Notifications" },
   { id: "privacy", icon: Shield, label: "Privacy" },
 ];
 
 const THEMES = [
-  { id: "dark", name: "Deep Ocean", description: "Bio-luminescent depth", icon: Droplets, color: "#4f46e5" },
-  { id: "crystal", name: "Pure Crystal", description: "Minimalist clarity", icon: Snowflake, color: "#3b82f6" },
-  { id: "neon", name: "Neon Flow", description: "Cyberpunk intensity", icon: Zap, color: "#d946ef" },
-  { id: "magma", name: "Obsidian Magma", description: "Volcanic energy", icon: Flame, color: "#f97316" },
-  { id: "nano", name: "Nano Black", description: "High-contrast stealth", icon: Circle, color: "#ffffff" },
+  { id: "dark", name: "Dark", description: "Default", icon: Droplets, color: "#a855f7", bg: "#08080a" },
+  { id: "light", name: "Light", description: "Clean & bright", icon: Sun, color: "#a855f7", bg: "#f8f8fc" },
+  { id: "neon", name: "Neon", description: "Electric green", icon: Zap, color: "#39ff14", bg: "#030305" },
+  { id: "crystal", name: "Crystal", description: "Sky blue", icon: Snowflake, color: "#38bdf8", bg: "#f0f9ff" },
+  { id: "magma", name: "Magma", description: "Orange-red", icon: Flame, color: "#ff4500", bg: "#0a0604" },
+  { id: "aurora", name: "Aurora", description: "Teal-green", icon: Waves, color: "#06d6a0", bg: "#061418" },
+];
+
+const SHORTCUTS = [
+  { action: "Play / Pause", keys: "Space" },
+  { action: "Skip Forward 10s", keys: "→" },
+  { action: "Skip Backward 10s", keys: "←" },
+  { action: "Run Pre-Flight", keys: "Shift + P" },
+  { action: "Export", keys: "Ctrl + E" },
+  { action: "New Project", keys: "Ctrl + N" },
 ];
 
 const QUALITY_OPTIONS = ["low", "medium", "high"] as const;
@@ -194,46 +207,52 @@ export default function SettingsPage() {
               {activeTab === "appearance" && (
                 <Card className="depth-card glass-surface rounded-[2.5rem] border-foreground/5 p-4">
                   <CardHeader className="pb-8">
-                    <CardTitle className="text-2xl font-black tracking-tight text-foreground/90">Visual Environment</CardTitle>
-                    <CardDescription className="text-base font-medium">Choose your studio aesthetic. Transitions are immediate.</CardDescription>
+                    <CardTitle className="text-2xl font-black tracking-tight text-foreground/90">
+                      Theme
+                    </CardTitle>
+                    <CardDescription className="text-base font-medium">
+                      Click any swatch — applied instantly, persists across sessions.
+                    </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-3 gap-6 max-w-md">
                       {THEMES.map((t) => {
-                        const Icon = t.icon;
                         const isActive = theme === t.id;
                         return (
                           <button
                             key={t.id}
-                            onClick={() => {
-                              setTheme(t.id);
-                              toast.success(`Active Aesthetic: ${t.name}`);
-                            }}
-                            className={cn(
-                              "flex flex-col items-start gap-4 p-6 rounded-3xl border transition-all text-left relative overflow-hidden group",
-                              isActive
-                                ? "border-primary/50 bg-primary/10 shadow-2xl shadow-primary/10"
-                                : "border-foreground/5 bg-foreground/[0.02] hover:bg-foreground/[0.05] hover:border-foreground/10",
-                            )}
+                            onClick={() => setTheme(t.id)}
+                            className="flex flex-col items-center gap-2 group focus-visible:outline-none"
+                            aria-label={`Switch to ${t.name} theme`}
                           >
                             <div
-                              className="w-10 h-10 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110 duration-500"
-                              style={{ backgroundColor: t.color, boxShadow: isActive ? `0 0 20px ${t.color}40` : "none" }}
+                              className={cn(
+                                "relative h-16 w-16 rounded-xl overflow-hidden border-2 transition-all duration-150",
+                                isActive
+                                  ? "border-primary scale-105 shadow-[0_0_0_2px_hsl(var(--background)),0_0_0_4px_hsl(var(--primary))]"
+                                  : "border-border group-hover:border-foreground/20",
+                              )}
+                              style={{ background: t.bg }}
                             >
-                              <Icon className={cn("w-5 h-5", t.id === 'nano' ? "text-black" : "text-white")} />
-                            </div>
-                            <div className="space-y-1 relative z-10">
-                              <p className={cn("text-base font-black tracking-tight", isActive ? "text-primary" : "text-foreground")}>{t.name}</p>
-                              <p className="text-[10px] text-muted-foreground uppercase font-black tracking-widest opacity-60">
-                                {t.description}
-                              </p>
-                            </div>
-                            {isActive && (
-                              <motion.div 
-                                layoutId="active-theme-indicator"
-                                className="absolute top-4 right-4 w-2 h-2 rounded-full bg-primary shadow-[0_0_10px_hsl(var(--primary))]" 
+                              <div
+                                className="absolute bottom-2 right-2 h-4 w-4 rounded-full"
+                                style={{ background: t.color }}
                               />
-                            )}
+                              <div
+                                className="absolute top-2 left-2 h-1.5 w-6 rounded-full opacity-30"
+                                style={{ background: t.color }}
+                              />
+                            </div>
+                            <span
+                              className={cn(
+                                "text-xs font-semibold transition-colors",
+                                isActive
+                                  ? "text-foreground"
+                                  : "text-muted-foreground group-hover:text-foreground",
+                              )}
+                            >
+                              {t.name}
+                            </span>
                           </button>
                         );
                       })}
@@ -336,39 +355,48 @@ export default function SettingsPage() {
                 </>
               )}
 
-              {/* ── HARDWARE ── */}
-              {activeTab === "hardware" && (
-                <>
-                  <Card className="depth-card glass-surface rounded-[2.5rem] border-foreground/5 p-4">
-                    <CardHeader className="pb-8">
-                      <CardTitle className="text-2xl font-black tracking-tight">Local AI Configuration</CardTitle>
-                      <CardDescription className="text-base font-medium">Manage browser-side neural model performance.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-8">
-                      <div className="p-6 rounded-[2rem] bg-primary/5 border border-primary/10 flex items-center gap-5">
-                         <div className="p-4 rounded-2xl bg-primary/10 border border-primary/20">
-                            <Sparkles className="w-6 h-6 text-primary" />
-                         </div>
-                         <div className="space-y-1">
-                            <h4 className="text-lg font-black tracking-tight">Performance Mode</h4>
-                            <p className="text-sm text-muted-foreground font-medium opacity-80">Studio is optimized for maximum precision.</p>
-                         </div>
-                      </div>
-                      <ToggleRow
-                        label="Whisper Precision"
-                        description="Use optimized high-speed models for faster local transcription."
-                        checked={true}
-                      />
-                      <ToggleRow
-                        label="Multi-Core Acceleration"
-                        description="Leverage parallel processing for ultra-fast browser-side encoding."
-                        checked={true}
-                        border
-                      />
-                    </CardContent>
-                  </Card>
-                  <SaveRow />
-                </>
+              {/* ── SHORTCUTS ── */}
+              {activeTab === "shortcuts" && (
+                <Card className="depth-card glass-surface rounded-[2.5rem] border-foreground/5 p-4">
+                  <CardHeader className="pb-8">
+                    <CardTitle className="text-2xl font-black tracking-tight">
+                      Keyboard Shortcuts
+                    </CardTitle>
+                    <CardDescription className="text-base font-medium">
+                      Read-only reference. Bindings are fixed in this build.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="rounded-2xl border border-border overflow-hidden">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-secondary/40 text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+                            <th className="text-left px-5 py-3 font-semibold">Action</th>
+                            <th className="text-right px-5 py-3 font-semibold">Shortcut</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {SHORTCUTS.map((s, i) => (
+                            <tr
+                              key={s.action}
+                              className={cn(
+                                "border-t border-border",
+                                i % 2 === 1 && "bg-secondary/20",
+                              )}
+                            >
+                              <td className="px-5 py-3 font-medium">{s.action}</td>
+                              <td className="px-5 py-3 text-right">
+                                <kbd className="inline-flex items-center rounded-md border border-border bg-background px-2 py-1 text-[11px] font-mono">
+                                  {s.keys}
+                                </kbd>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardContent>
+                </Card>
               )}
 
               {/* ── NOTIFICATIONS ── */}

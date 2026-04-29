@@ -268,10 +268,21 @@ function inferVideoId(
   sourceUrl: string | null | undefined,
   filename: string | null | undefined,
 ): string | null {
-  if (sourceUrl) {
-    const watch = sourceUrl.match(/[?&]v=([A-Za-z0-9_-]{6,})/);
+  // Unwrap proxy URLs (/api/proxy?url=<encoded-youtube-url>) before matching.
+  let url = sourceUrl ?? "";
+  if (url.includes("/api/proxy")) {
+    try {
+      const inner = new URL(url).searchParams.get("url");
+      if (inner) url = inner;
+    } catch {
+      // malformed — fall through with original
+    }
+  }
+
+  if (url) {
+    const watch = url.match(/[?&]v=([A-Za-z0-9_-]{6,})/);
     if (watch?.[1]) return watch[1];
-    const short = sourceUrl.match(
+    const short = url.match(
       /(?:youtu\.be\/|youtube\.com\/(?:embed\/|shorts\/))([A-Za-z0-9_-]{6,})/,
     );
     if (short?.[1]) return short[1];

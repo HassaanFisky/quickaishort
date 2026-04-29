@@ -277,16 +277,16 @@ export default function RightPanel() {
             <span className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground px-1">
               Export Quality
             </span>
-            <div className="flex gap-2 p-1 bg-foreground/5 rounded-2xl border border-foreground/5">
+            <div className="flex gap-1 p-1 bg-secondary/40 rounded-lg border border-border">
               {QUALITY_OPTIONS.map((q) => (
                 <button
                   key={q}
                   onClick={() => setExportSetting("quality", q)}
                   className={cn(
-                    "flex-1 h-10 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300",
+                    "flex-1 h-10 rounded-md text-[10px] font-black uppercase tracking-widest transition-all duration-150",
                     quality === q
-                      ? "bg-primary text-white shadow-xl scale-[1.02]"
-                      : "text-muted-foreground hover:text-foreground hover:bg-foreground/5",
+                      ? "bg-primary text-white shadow-sm"
+                      : "text-muted-foreground hover:text-foreground hover:bg-secondary",
                   )}
                 >
                   {q}
@@ -296,7 +296,7 @@ export default function RightPanel() {
           </div>
 
           {/* Auto Subtitles Toggle */}
-          <div className="flex items-center justify-between p-5 rounded-2xl glass-surface border border-foreground/5 group">
+          <div className="flex items-center justify-between p-4 rounded-lg bg-secondary/40 border border-border group">
             <div className="flex flex-col gap-0.5">
               <span className="text-[11px] font-black uppercase tracking-widest text-foreground">
                 Auto Subtitles
@@ -339,10 +339,10 @@ export default function RightPanel() {
                   key={filter}
                   variant="ghost"
                   className={cn(
-                    "h-11 justify-center rounded-xl text-[10px] font-black tracking-widest border transition-all duration-300 uppercase",
+                    "h-11 justify-center rounded-lg text-[10px] font-black tracking-widest border transition-all duration-150 uppercase",
                     activeFilter === filter
-                      ? "bg-primary/20 border-primary/40 text-primary shadow-lg shadow-primary/5"
-                      : "bg-foreground/[0.02] border-foreground/5 text-muted-foreground hover:bg-foreground/5 hover:text-foreground",
+                      ? "bg-primary/20 border-primary/40 text-primary"
+                      : "bg-secondary/40 border-border text-muted-foreground hover:bg-secondary hover:text-foreground",
                   )}
                   onClick={() => setExportSetting("filter", filter as typeof activeFilter)}
                 >
@@ -356,10 +356,10 @@ export default function RightPanel() {
           <div className="pt-4 pb-4">
             <button
               className={cn(
-                "w-full h-14 rounded-[1.25rem] relative overflow-hidden group transition-all duration-500 shadow-xl shadow-primary/10",
+                "w-full h-12 rounded-lg relative overflow-hidden transition-all duration-150",
                 isExporting || !selectedClip || !sourceFile
-                  ? "opacity-50 grayscale cursor-not-allowed"
-                  : "hover:scale-[1.02] active:scale-[0.98]",
+                  ? "opacity-50 cursor-not-allowed"
+                  : "hover:brightness-110",
               )}
               onClick={handleExport}
               disabled={isExporting || !selectedClip || !sourceFile}
@@ -411,7 +411,7 @@ export default function RightPanel() {
               {/* Idle State */}
               {!preflightResult && !isPreflightRunning && !isPremiumGated && (
                 <div
-                  className="p-8 rounded-[2rem] bg-foreground/[0.02] border border-dashed border-foreground/10 flex flex-col items-center justify-center text-center gap-4 group cursor-pointer hover:bg-foreground/[0.04] transition-all duration-500"
+                  className="p-8 rounded-lg bg-secondary/30 border border-dashed border-border flex flex-col items-center justify-center text-center gap-4 cursor-pointer hover:bg-secondary/50 transition-all duration-150"
                   onClick={handleRunPreflight}
                 >
                   <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:scale-110 transition-transform duration-500 shadow-2xl">
@@ -437,7 +437,7 @@ export default function RightPanel() {
 
               {/* Premium Gated State */}
               {isPremiumGated && (
-                <div className="p-6 rounded-[2rem] bg-amber-500/5 border border-amber-500/20 flex flex-col items-center justify-center text-center gap-3">
+                <div className="p-6 rounded-lg bg-amber-500/5 border border-amber-500/20 flex flex-col items-center justify-center text-center gap-3">
                   <AlertTriangle className="w-8 h-8 text-amber-400" strokeWidth={1.5} />
                   <p className="text-xs font-black text-amber-400 uppercase tracking-widest">
                     Pro Feature
@@ -453,7 +453,7 @@ export default function RightPanel() {
 
               {/* Error State */}
               {preflightError && !isPreflightRunning && !isPremiumGated && (
-                <div className="p-5 rounded-2xl bg-red-500/5 border border-red-500/20 text-center space-y-2">
+                <div className="p-5 rounded-lg bg-red-500/5 border border-red-500/20 text-center space-y-2">
                   <p className="text-[10px] font-black text-red-400 uppercase tracking-widest">
                     Something went wrong
                   </p>
@@ -469,7 +469,7 @@ export default function RightPanel() {
 
               {/* Loading State */}
               {isPreflightRunning && (
-                <div className="p-10 rounded-[2rem] bg-foreground/[0.03] border border-foreground/10 flex flex-col items-center justify-center gap-6">
+                <div className="p-10 rounded-lg bg-secondary/40 border border-border flex flex-col items-center justify-center gap-6">
                   <div className="relative">
                     <div className="absolute inset-0 bg-primary/20 blur-2xl rounded-full animate-pulse" />
                     <Loader2
@@ -548,7 +548,7 @@ function PersonaCard({ vote }: { vote: PersonaVote }) {
         : "text-amber-400";
 
   return (
-    <div className="p-4 rounded-2xl bg-foreground/[0.03] border border-foreground/5 space-y-3 group/persona transition-all hover:bg-foreground/[0.05] hover:border-foreground/10">
+    <div className="p-4 rounded-lg bg-secondary/40 border border-border space-y-3 transition-all hover:bg-secondary hover:-translate-y-0.5 hover:border-primary/40">
       <div className="flex items-center justify-between">
         <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground group-hover/persona:text-foreground transition-colors">
           {vote.persona_id}
@@ -609,7 +609,7 @@ function PreflightResultsPanel({
   return (
     <div className="space-y-6">
       {/* Predicted Success Node */}
-      <div className="p-6 rounded-[2rem] bg-foreground/[0.03] border border-foreground/5 flex items-center justify-between relative overflow-hidden">
+      <div className="p-6 rounded-lg bg-secondary/40 border border-border flex items-center justify-between relative overflow-hidden">
         {isViral && (
           <div className="absolute inset-0 bg-primary/5 blur-3xl rounded-full" />
         )}
@@ -655,7 +655,7 @@ function PreflightResultsPanel({
 
       {/* Smart Trim Suggestion */}
       {result.refined_clip && (
-        <div className="p-5 rounded-2xl bg-primary/5 border border-primary/20 space-y-3 relative overflow-hidden group">
+        <div className="p-5 rounded-lg bg-primary/5 border border-primary/20 space-y-3 relative overflow-hidden group">
           <div className="absolute top-0 right-0 p-3 opacity-20">
             <Zap className="w-8 h-8 text-primary" />
           </div>

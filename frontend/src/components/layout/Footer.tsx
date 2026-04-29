@@ -1,5 +1,5 @@
 import Link from "next/link";
-import Logo from "@/components/shared/Logo";
+import QSLogo from "@/components/shared/QSLogo";
 
 export default function Footer() {
   return (
@@ -7,7 +7,7 @@ export default function Footer() {
       <div className="container mx-auto px-8">
         <div className="flex flex-col md:flex-row items-center justify-between gap-10">
           <div className="flex flex-col items-center md:items-start gap-4">
-            <Logo />
+            <QSLogo variant="wordmark" size="md" className="text-muted-foreground" />
             <p className="text-muted-foreground text-sm max-w-xs text-center md:text-left leading-relaxed">
               The world&apos;s first browser-based AI Shorts generator.
               <br />

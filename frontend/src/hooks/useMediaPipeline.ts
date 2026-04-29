@@ -29,10 +29,19 @@ export function useMediaPipeline() {
       return;
     }
 
-    // If it's a URL, ensure we use the proxy if it's YouTube to avoid CORS
-    if (typeof source === "string" && (source.includes("youtube.com") || source.includes("youtu.be"))) {
-      const { getProxyUrl } = await import("@/lib/api");
-      source = getProxyUrl(source);
+    // Route YouTube URLs through the backend proxy to avoid CORS.
+    // Guard against double-wrapping: skip if sourceUrl was already set to the
+    // proxy endpoint by EditorLayout.handleAnalyze.
+    if (typeof source === "string") {
+      const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const isAlreadyProxied = source.startsWith(apiBase);
+      const isYouTube =
+        source.includes("youtube.com") || source.includes("youtu.be");
+
+      if (isYouTube && !isAlreadyProxied) {
+        const { getProxyUrl } = await import("@/lib/api");
+        source = getProxyUrl(source); // source is string here — TS can narrow this
+      }
     }
 
     try {

@@ -47,57 +47,102 @@
 
 @layer base {
   :root {
-    /* Base Theme: Deep Ocean Tech (Default Dark) */
-    --background: 230 35% 7%;
-    --foreground: 210 40% 98%;
-    --card: 230 35% 10%;
-    --card-foreground: 210 40% 98%;
-    --popover: 230 35% 8%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 250 100% 65%;
+    /* === QS Brand Tokens (Phase 1 — locked) === */
+    --bg-base:        #08080a;
+    --bg-surface:     #0f0f12;
+    --bg-surface-2:   #15151a;
+    --bg-surface-3:   #1a1a21;
+
+    --border-raw:        #22222a;
+    --border-subtle:     #1a1a20;
+    --border-accent:     rgba(168, 85, 247, 0.35);
+
+    --text-primary:   #f0f0f4;
+    --text-secondary: #9898a8;
+    --text-muted:     #4a4a5a;
+
+    --brand-purple:   #a855f7;
+    --brand-blue:     #3b82f6;
+    --brand-pink:     #ec4899;
+    --accent-glow:    rgba(168, 85, 247, 0.12);
+    --speed-trail:    linear-gradient(135deg, #3b82f6, #a855f7, #ec4899);
+    --brand-gradient: linear-gradient(135deg, #3b82f6 0%, #a855f7 60%, #ec4899 100%);
+
+    --status-success: #22c55e;
+    --status-warning: #f59e0b;
+    --status-error:   #ef4444;
+
+    --font-sans:      'Inter', system-ui, sans-serif;
+    --font-display:   'Inter', system-ui, sans-serif;
+    --font-mono:      'JetBrains Mono', monospace;
+
+    --radius-token-sm:   0.375rem;
+    --radius-token:      0.625rem;
+    --radius-token-lg:   0.875rem;
+    --radius-token-xl:   1.25rem;
+
+    /* === Existing HSL system (consumed by Tailwind utilities — kept for compat) ===
+       Tuned to brand: primary = purple #a855f7, accent = electric blue #3b82f6 */
+    --background: 240 11% 4%;          /* #08080a */
+    --foreground: 240 12% 95%;          /* #f0f0f4 */
+    --card: 240 12% 6%;                 /* #0f0f12 */
+    --card-foreground: 240 12% 95%;
+    --popover: 240 13% 8%;              /* #15151a */
+    --popover-foreground: 240 12% 95%;
+    --primary: 270 91% 65%;             /* brand purple */
     --primary-foreground: 0 0% 100%;
-    --secondary: 230 35% 15%;
-    --secondary-foreground: 210 40% 90%;
-    --muted: 230 35% 12%;
-    --muted-foreground: 220 20% 65%;
-    --accent: 190 100% 50%;
-    --accent-foreground: 230 35% 5%;
-    --destructive: 0 85% 60%;
+    --secondary: 240 12% 10%;
+    --secondary-foreground: 240 12% 90%;
+    --muted: 240 12% 8%;
+    --muted-foreground: 240 12% 63%;    /* #9898a8 */
+    --accent: 217 91% 60%;              /* electric blue */
+    --accent-foreground: 240 11% 4%;
+    --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
-    --border: 230 35% 15%;
-    --input: 230 35% 15%;
-    --ring: 250 100% 65%;
-    --radius: 1.5rem;
-    
+    --border: 240 12% 15%;              /* #22222a */
+    --input: 240 12% 15%;
+    --ring: 270 91% 65%;
+    --radius: 0.875rem;                 /* aligned to --radius-token-lg */
+
     /* Utility Helpers */
-    --glass-bg: rgba(17, 17, 19, 0.7);
-    --glass-border: rgba(255, 255, 255, 0.08);
+    --glass-bg: rgba(15, 15, 18, 0.7);
+    --glass-border: rgba(255, 255, 255, 0.06);
     --card-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.8);
     --gradient-from: #ffffff;
     --gradient-to: rgba(255, 255, 255, 0.6);
   }
 
-  /* Theme: Pure Crystal (Light) */
-  .crystal {
-    --background: 210 40% 98%;
-    --foreground: 230 35% 7%;
+  /* Theme: Light (locked spec — pairs with next-themes "light") */
+  .light {
+    --bg-base:        #f8f8fc;
+    --bg-surface:     #ffffff;
+    --bg-surface-2:   #f0f0f8;
+    --bg-surface-3:   #e8e8f4;
+    --border-raw:     #dddde8;
+    --border-subtle:  #ebebf4;
+    --text-primary:   #08080f;
+    --text-secondary: #50505f;
+    --text-muted:     #9090a0;
+    --accent-glow:    rgba(168, 85, 247, 0.08);
+
+    --background: 240 30% 98%;
+    --foreground: 240 25% 5%;
     --card: 0 0% 100%;
-    --card-foreground: 230 35% 10%;
+    --card-foreground: 240 25% 5%;
     --popover: 0 0% 100%;
-    --popover-foreground: 230 35% 10%;
-    --primary: 210 100% 50%;
+    --popover-foreground: 240 25% 5%;
+    --primary: 270 91% 60%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 210 20% 96%;
-    --secondary-foreground: 230 35% 15%;
-    --muted: 210 20% 96%;
-    --muted-foreground: 220 20% 45%;
-    --accent: 250 100% 65%;
+    --secondary: 240 30% 96%;
+    --secondary-foreground: 240 25% 15%;
+    --muted: 240 30% 95%;
+    --muted-foreground: 240 8% 45%;
+    --accent: 217 91% 55%;
     --accent-foreground: 0 0% 100%;
-    --border: 220 13% 91%;
-    --input: 220 13% 91%;
-    --ring: 210 100% 50%;
-    
-    /* Utility Helpers for Light Mode */
+    --border: 240 18% 88%;
+    --input: 240 18% 88%;
+    --ring: 270 91% 60%;
+
     --glass-bg: rgba(255, 255, 255, 0.7);
     --glass-border: rgba(0, 0, 0, 0.08);
     --card-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
@@ -105,53 +150,149 @@
     --gradient-to: rgba(15, 23, 42, 0.7);
   }
 
-  /* Theme: Neon Flow (Cyberpunk) */
-  .neon {
-    --background: 280 40% 5%;
-    --foreground: 300 100% 95%;
-    --card: 280 40% 8%;
-    --card-foreground: 300 100% 95%;
-    --popover: 280 40% 8%;
-    --popover-foreground: 300 100% 95%;
-    --primary: 320 100% 60%;
+  /* Theme: Aurora (locked spec — teal-green on deep cool dark) */
+  .aurora {
+    --bg-base:        #061418;
+    --bg-surface:     #0a1d22;
+    --bg-surface-2:   #0e272d;
+    --bg-surface-3:   #133138;
+    --border-raw:     #1a3a42;
+    --text-primary:   #e6fff8;
+    --text-secondary: #82a8a0;
+    --text-muted:     #4a6660;
+    --accent-glow:    rgba(6, 214, 160, 0.12);
+
+    --background: 190 50% 5%;
+    --foreground: 165 50% 95%;
+    --card: 190 45% 8%;
+    --card-foreground: 165 50% 95%;
+    --popover: 190 45% 8%;
+    --popover-foreground: 165 50% 95%;
+    --primary: 165 92% 42%;             /* teal-green #06d6a0 */
+    --primary-foreground: 190 50% 5%;
+    --secondary: 190 40% 15%;
+    --secondary-foreground: 165 50% 90%;
+    --muted: 190 40% 12%;
+    --muted-foreground: 175 20% 60%;
+    --accent: 165 92% 42%;
+    --accent-foreground: 190 50% 5%;
+    --border: 190 35% 18%;
+    --input: 190 35% 18%;
+    --ring: 165 92% 42%;
+
+    --glass-bg: rgba(10, 29, 34, 0.75);
+    --glass-border: rgba(6, 214, 160, 0.18);
+    --gradient-from: #06d6a0;
+    --gradient-to: #0ea5e9;
+  }
+
+  /* Theme: Crystal (sky-blue accent on light surface) */
+  .crystal {
+    --bg-base:        #f0f9ff;
+    --bg-surface:     #ffffff;
+    --bg-surface-2:   #e0f2fe;
+    --bg-surface-3:   #d0e8fa;
+    --border-raw:     #cfe2f3;
+    --text-primary:   #0c1f33;
+    --text-secondary: #4a6580;
+    --text-muted:     #8aa0b8;
+    --accent-glow:    rgba(56, 189, 248, 0.12);
+
+    --background: 204 100% 97%;
+    --foreground: 215 50% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 215 50% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 215 50% 12%;
+    --primary: 199 89% 60%;             /* sky-blue #38bdf8 */
     --primary-foreground: 0 0% 100%;
-    --secondary: 280 40% 15%;
-    --secondary-foreground: 300 100% 90%;
-    --muted: 280 40% 12%;
-    --muted-foreground: 290 30% 65%;
-    --accent: 180 100% 50%;
-    --accent-foreground: 280 40% 5%;
-    --border: 280 40% 20%;
-    --input: 280 40% 20%;
-    --ring: 320 100% 60%;
-    
-    --glass-bg: rgba(25, 10, 35, 0.7);
-    --glass-border: rgba(217, 70, 239, 0.2);
-    --gradient-from: #ff00ff;
+    --secondary: 204 80% 94%;
+    --secondary-foreground: 215 50% 18%;
+    --muted: 204 60% 94%;
+    --muted-foreground: 215 18% 45%;
+    --accent: 199 89% 60%;
+    --accent-foreground: 0 0% 100%;
+    --border: 204 40% 86%;
+    --input: 204 40% 86%;
+    --ring: 199 89% 60%;
+
+    --glass-bg: rgba(255, 255, 255, 0.7);
+    --glass-border: rgba(56, 189, 248, 0.15);
+    --card-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+    --gradient-from: #0c4a6e;
+    --gradient-to: rgba(12, 74, 110, 0.7);
+  }
+
+  /* Theme: Neon (electric green on near-black) */
+  .neon {
+    --bg-base:        #030305;
+    --bg-surface:     #08080a;
+    --bg-surface-2:   #0c0c10;
+    --bg-surface-3:   #111114;
+    --border-raw:     #1a1a22;
+    --text-primary:   #e8ffea;
+    --text-secondary: #82a888;
+    --text-muted:     #4a6650;
+    --accent-glow:    rgba(57, 255, 20, 0.14);
+
+    --background: 240 30% 2%;
+    --foreground: 125 100% 95%;
+    --card: 240 25% 4%;
+    --card-foreground: 125 100% 95%;
+    --popover: 240 25% 4%;
+    --popover-foreground: 125 100% 95%;
+    --primary: 110 100% 54%;            /* electric green #39ff14 */
+    --primary-foreground: 240 30% 2%;
+    --secondary: 240 20% 10%;
+    --secondary-foreground: 125 100% 90%;
+    --muted: 240 20% 8%;
+    --muted-foreground: 125 15% 60%;
+    --accent: 110 100% 54%;
+    --accent-foreground: 240 30% 2%;
+    --border: 240 20% 14%;
+    --input: 240 20% 14%;
+    --ring: 110 100% 54%;
+
+    --glass-bg: rgba(8, 8, 10, 0.78);
+    --glass-border: rgba(57, 255, 20, 0.22);
+    --gradient-from: #39ff14;
     --gradient-to: #00ffff;
   }
 
-  /* Theme: Obsidian Magma */
+  /* Theme: Magma (orange-red on warm near-black) */
   .magma {
-    --background: 20 10% 5%;
-    --foreground: 30 20% 95%;
-    --card: 20 10% 8%;
-    --card-foreground: 30 20% 95%;
-    --primary: 15 90% 60%;
+    --bg-base:        #0a0604;
+    --bg-surface:     #120a07;
+    --bg-surface-2:   #1a0e0a;
+    --bg-surface-3:   #22130d;
+    --border-raw:     #2a1810;
+    --text-primary:   #fff2e8;
+    --text-secondary: #b89080;
+    --text-muted:     #6a4a3a;
+    --accent-glow:    rgba(255, 69, 0, 0.14);
+
+    --background: 18 50% 4%;
+    --foreground: 24 100% 96%;
+    --card: 18 45% 6%;
+    --card-foreground: 24 100% 96%;
+    --popover: 18 45% 6%;
+    --popover-foreground: 24 100% 96%;
+    --primary: 16 100% 50%;             /* orange-red #ff4500 */
     --primary-foreground: 0 0% 100%;
-    --secondary: 20 10% 15%;
-    --secondary-foreground: 30 20% 90%;
-    --muted: 20 10% 12%;
-    --accent: 40 100% 50%;
-    --accent-foreground: 20 10% 5%;
-    --border: 20 10% 20%;
-    --input: 20 10% 20%;
-    --ring: 15 90% 60%;
-    
-    --glass-bg: rgba(25, 15, 10, 0.7);
-    --glass-border: rgba(249, 115, 22, 0.2);
-    --gradient-from: #f97316;
-    --gradient-to: #ef4444;
+    --secondary: 18 40% 14%;
+    --secondary-foreground: 24 100% 90%;
+    --muted: 18 40% 11%;
+    --muted-foreground: 24 25% 60%;
+    --accent: 16 100% 50%;
+    --accent-foreground: 0 0% 100%;
+    --border: 18 35% 18%;
+    --input: 18 35% 18%;
+    --ring: 16 100% 50%;
+
+    --glass-bg: rgba(26, 14, 10, 0.75);
+    --glass-border: rgba(255, 69, 0, 0.22);
+    --gradient-from: #ff4500;
+    --gradient-to: #f59e0b;
   }
 
   /* Theme: Nano Black (Sleek, Minimal, High Contrast) */

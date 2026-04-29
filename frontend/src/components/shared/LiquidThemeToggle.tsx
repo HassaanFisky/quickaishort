@@ -151,7 +151,7 @@ export function LiquidThemeToggle() {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9, y: 10 }}
             transition={{ type: "spring", stiffness: 300, damping: 20 }}
-            className="absolute bottom-full right-0 mb-4 w-64 p-2 rounded-2xl liquid-panel backdrop-blur-3xl overflow-hidden"
+            className="absolute top-full right-0 mt-4 w-64 p-2 rounded-2xl liquid-panel backdrop-blur-3xl overflow-hidden"
           >
             <div className="space-y-1">
               {THEMES.map((t) => (

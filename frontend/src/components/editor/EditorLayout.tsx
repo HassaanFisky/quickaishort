@@ -17,6 +17,7 @@ import BottomDock from "./BottomDock";
 import VideoCanvas from "./VideoCanvas";
 import Sidebar from "@/components/layout/Sidebar";
 import AgentWorkforce from "./AgentWorkforce";
+import { LiquidThemeToggle } from "@/components/shared/LiquidThemeToggle";
 
 export default function EditorLayout() {
   const { setSourceFile, setProcessing, isProcessing, currentStage } = useEditorStore();
@@ -39,7 +40,10 @@ export default function EditorLayout() {
         
         const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
         const infoRes = await fetch(`${API_URL}/api/info?url=${encodeURIComponent(urlInput)}`);
-        if (!infoRes.ok) throw new Error("Could not retrieve video info");
+        if (!infoRes.ok) {
+          const errData = await infoRes.json().catch(() => null);
+          throw new Error(errData?.detail || "Could not retrieve video info");
+        }
         const info = await infoRes.json();
         
         toast.success(`Found: ${info.title}`);
@@ -53,9 +57,10 @@ export default function EditorLayout() {
         });
         
         await runPipeline();
-      } catch (error) {
+      } catch (error: any) {
         console.error(error);
-        toast.error("Process interrupted. Please try another link.");
+        const errMsg = error?.message || "Process interrupted. Please try another link.";
+        toast.error(`Error: ${errMsg}`);
         setProcessing(false, "idle");
       }
     }
@@ -83,7 +88,7 @@ export default function EditorLayout() {
     <div
       onDrop={handleDrop}
       onDragOver={handleDragOver}
-      className="relative h-screen w-full overflow-hidden bg-background flex flex-col items-center p-6 pl-4 md:pl-28 pb-32 md:pb-8 selection:bg-primary/30 font-sans"
+      className="relative h-screen w-full overflow-hidden bg-background flex flex-col items-center p-6 md:pl-[256px] pb-8 selection:bg-primary/30 font-sans"
     >
       {/* Dynamic Ambient Background */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -118,23 +123,23 @@ export default function EditorLayout() {
                     : "Studio Ready"}
                 </span>
               </div>
-              <div className="h-4 w-px bg-foreground/10" />
-              <span className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-widest">
-                Project v2.5
-              </span>
+
             </div>
             <h1 className="text-2xl font-black tracking-tighter text-foreground/90 leading-none">
               QuickAI <span className="premium-gradient-text italic">Studio</span>
             </h1>
+          </div>
+          <div className="flex items-center gap-4">
+            <LiquidThemeToggle />
           </div>
         </header>
 
         {/* Central Workspace Grid */}
         <main className="flex-1 grid grid-cols-1 lg:grid-cols-[minmax(240px,20%)_1fr_minmax(280px,25%)] gap-6 overflow-hidden">
           
-          {/* Left: Content Inventory */}
+          {/* Left: Property Inspector */}
           <section className="depth-card glass-surface rounded-[2.5rem] p-6 border-foreground/5 shadow-2xl flex flex-col overflow-hidden">
-            <LeftPanel />
+            <RightPanel />
           </section>
 
           {/* Center: Creative Engine */}
@@ -248,9 +253,9 @@ export default function EditorLayout() {
             </div>
           </section>
 
-          {/* Right: Property Inspector */}
+          {/* Right: Viral Suggestions */}
           <section className="depth-card glass-surface rounded-[2.5rem] p-6 border-foreground/5 shadow-2xl flex flex-col overflow-hidden">
-            <RightPanel />
+            <LeftPanel />
           </section>
         </main>
 

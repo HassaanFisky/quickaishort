@@ -5,6 +5,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SessionProvider } from "next-auth/react";
 import { ThemeProvider } from "@/components/shared/ThemeProvider";
 import { Toaster } from "@/components/ui/sonner";
+import SplashScreen from "@/components/shared/SplashScreen";
+import PageTransition from "@/components/shared/PageTransition";
 
 export function AppProviders({ children }: { children: ReactNode }) {
   const [queryClient] = useState(
@@ -27,9 +29,10 @@ export function AppProviders({ children }: { children: ReactNode }) {
           defaultTheme="dark"
           enableSystem
           disableTransitionOnChange
-          themes={["dark", "crystal", "neon", "magma", "nano"]}
+          themes={["dark", "light", "crystal", "neon", "magma", "aurora", "nano"]}
         >
-          {children}
+          <SplashScreen />
+          <PageTransition>{children}</PageTransition>
           <Toaster position="top-center" richColors />
         </ThemeProvider>
       </QueryClientProvider>
