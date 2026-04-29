@@ -7,8 +7,10 @@ import type {
 } from "@/types/export";
 import type { UserStats } from "@/types/stats";
 
-export const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+export const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
+if (!API_URL && typeof window !== "undefined") {
+  console.warn("NEXT_PUBLIC_API_URL is not defined. API calls may fail.");
+}
 
 export async function getVideoInfo(url: string) {
   const { data } = await axios.get(`${API_URL}/api/info`, { params: { url } });

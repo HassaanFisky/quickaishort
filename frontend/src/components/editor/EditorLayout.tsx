@@ -9,6 +9,7 @@ import { GlowButton } from "@/components/ui/GlowButton";
 import { Search, Loader2, Zap, Smartphone, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { API_URL } from "@/lib/api";
 
 // Components
 import LeftPanel from "./LeftPanel";
@@ -38,7 +39,7 @@ export default function EditorLayout() {
         setProcessing(true, "loading");
         toast.info("Connecting to Viral Intelligence Engine...");
         
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
         const infoRes = await fetch(`${API_URL}/api/info?url=${encodeURIComponent(urlInput)}`);
         if (!infoRes.ok) {
           const errData = await infoRes.json().catch(() => null);

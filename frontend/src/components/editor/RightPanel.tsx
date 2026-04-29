@@ -98,9 +98,9 @@ export default function RightPanel() {
         },
       ],
       false,
-      "anonymous",
+      userId,
     );
-  }, [selectedClip, triggerPreflight]);
+  }, [selectedClip, triggerPreflight, userId]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {

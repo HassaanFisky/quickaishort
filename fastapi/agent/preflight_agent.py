@@ -307,6 +307,77 @@ preflight_root_agent = None
 preflight_runner = None
 
 
+class _TrendAgent(BaseAgent if _ADK_OK else object):
+    """Grounding agent: fetches Google Trends context."""
+
+    def __init__(self, name: str = "TrendAgent") -> None:
+        if _ADK_OK:
+            super().__init__(
+                name=name,
+                description="Fetches real-time Google Trends context (deterministic).",
+            )
+
+    async def _run_async_impl(self, ctx) -> AsyncIterator["Event"]:
+        state = ctx.session.state if hasattr(ctx, "session") else {}
+        transcript = state.get("current_clip_transcript", "")
+        keywords = " ".join(transcript.split()[:5]) or "viral shorts"
+        
+        trend_context = await fetch_trend_context(keywords)
+        trend_keywords: list[str] = []
+        try:
+            trend_data = trend_context.get("data", {})
+            if isinstance(trend_data, dict):
+                for entry in trend_data.get("interest_over_time", {}).get("timeline_data", [])[:5]:
+                    if isinstance(entry, dict) and "query" in entry:
+                        trend_keywords.append(str(entry["query"]))
+        except Exception:
+            pass
+
+        actions = EventActions(
+            state_delta={
+                "trend_context": trend_context,
+                "trend_keywords": trend_keywords,
+            }
+        )
+        yield Event(
+            author=self.name,
+            actions=actions,
+            content=genai_types.Content(
+                role="model",
+                parts=[genai_types.Part(text=f"TRENDS: keywords={len(trend_keywords)}")]
+            ),
+        )
+
+
+class _AnalyticsAgent(BaseAgent if _ADK_OK else object):
+    """Grounding agent: fetches YouTube Analytics."""
+
+    def __init__(self, name: str = "AnalyticsAgent") -> None:
+        if _ADK_OK:
+            super().__init__(
+                name=name,
+                description="Fetches YouTube creator analytics (deterministic).",
+            )
+
+    async def _run_async_impl(self, ctx) -> AsyncIterator["Event"]:
+        state = ctx.session.state if hasattr(ctx, "session") else {}
+        youtube_url = state.get("youtube_url", "")
+        
+        analytics_baseline = await fetch_youtube_analytics(youtube_url)
+        
+        actions = EventActions(
+            state_delta={"analytics_baseline": analytics_baseline}
+        )
+        yield Event(
+            author=self.name,
+            actions=actions,
+            content=genai_types.Content(
+                role="model",
+                parts=[genai_types.Part(text=f"ANALYTICS: source={analytics_baseline.get('source')}")]
+            ),
+        )
+
+
 class _DeterministicAggregator(BaseAgent if _ADK_OK else object):  # type: ignore[misc]
     """Pure-Python aggregator. No LLM call — saves one round trip per iter."""
 
@@ -479,10 +550,19 @@ def _build_pipeline() -> tuple[Any, Any]:
         max_iterations=max_iterations,
     )
 
+    trend_agent = _TrendAgent()
+    analytics_agent = _AnalyticsAgent()
+
+    # Pillar 3: Parallelize initial grounding + candidate check (DAG-like)
+    grounding_parallel = ParallelAgent(
+        name="GroundingDAG",
+        sub_agents=[clip_candidate_agent, trend_agent, analytics_agent],
+    )
+
     root_agent = SequentialAgent(
         name="PreFlight_Orchestrator",
         sub_agents=[
-            clip_candidate_agent,
+            grounding_parallel,
             audience_panel_loop,
         ],
     )
@@ -521,17 +601,11 @@ async def run_preflight_pipeline(
     clip = clip_candidates[0]
     session_id = str(uuid.uuid4())
 
-    # PRE-COMPUTE grounding outside ADK, fully in parallel.
-    trend_context, analytics_baseline = await _gather_grounding(youtube_url, clip.transcript)
+    # Grounding is now handled by TrendAgent and AnalyticsAgent in the GroundingDAG.
     trend_keywords: list[str] = []
-    try:
-        trend_data = trend_context.get("data", {}) if isinstance(trend_context, dict) else {}
-        if isinstance(trend_data, dict):
-            for entry in trend_data.get("interest_over_time", {}).get("timeline_data", [])[:5]:
-                if isinstance(entry, dict) and "query" in entry:
-                    trend_keywords.append(str(entry["query"]))
-    except Exception:
-        pass
+    trend_context = {}
+    analytics_baseline = {}
+
 
     initial_state: dict[str, Any] = {
         "youtube_url": youtube_url,
@@ -582,6 +656,11 @@ async def run_preflight_pipeline(
         session_id=session_id,
     )
     state = session.state
+    
+    # Extract grounding data that was populated by TrendAgent and AnalyticsAgent
+    trend_context = state.get("trend_context", {})
+    trend_keywords = state.get("trend_keywords", [])
+    analytics_baseline = state.get("analytics_baseline", {})
 
     # Parse persona votes (aggregator already wrote JSON).
     votes: list[PersonaVote] = []

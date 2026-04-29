@@ -4,8 +4,9 @@ import { useCallback, useState } from "react";
 import { useWorker } from "./useWorker";
 import axios from "axios";
 import { TranscriptChunk, Clip } from "@/types/pipeline";
+import { API_URL } from "@/lib/api";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
 
 export function useAnalysis() {
   const [isBackendAnalyzing, setIsBackendAnalyzing] = useState(false);

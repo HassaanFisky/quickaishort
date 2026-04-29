@@ -6,6 +6,7 @@ import { useTranscription } from "./useTranscription";
 import { useAnalysis } from "./useAnalysis";
 import { extractAudioData } from "@/lib/utils/audioExtractor";
 import { toast } from "sonner";
+import { API_URL } from "@/lib/api";
 
 export function useMediaPipeline() {
   const {
@@ -33,8 +34,7 @@ export function useMediaPipeline() {
     // Guard against double-wrapping: skip if sourceUrl was already set to the
     // proxy endpoint by EditorLayout.handleAnalyze.
     if (typeof source === "string") {
-      const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-      const isAlreadyProxied = source.startsWith(apiBase);
+      const isAlreadyProxied = API_URL && source.startsWith(API_URL);
       const isYouTube =
         source.includes("youtube.com") || source.includes("youtu.be");
 

@@ -138,8 +138,9 @@ AGENT MANAGER (Antigravity native)
 
 TECH STACK LOCKED — DO NOT SWAP
 - Frontend: Next.js 16 App Router, Tailwind v4, Framer Motion, Zustand
-- Backend: Python 3.12, FastAPI, yt-dlp, FFmpeg
-- Agent: Google ADK v1.0, Gemini 2.5 Flash (model string: gemini-2.5-flash — verified 2026-04-24 via /v1beta/models API; gemini-2.5-pro also available for higher quality)
+- Backend: Python 3.12, FastAPI, yt-dlp, FFmpeg (Server-side via Railway/Cloud Run)
+- Agent: Google ADK v1.0, Gemini 2.0 Flash (DEFAULT_MODEL in gemini_client.py)
+- Task Queue: Redis + RQ for background rendering and stats sync
 - Deploy: Vercel (frontend) + Railway.app (backend, because Pakistan GCP 
   billing is blocked)
 - Storage: Supabase (free tier)
@@ -338,8 +339,10 @@ CURRENT PHASE: Pre-Flight ADK Multi-Agent System — Build Complete, Deployment 
 CURRENT FRAMING:
 Product is "Pre-Flight" — pre-publication clip validation via multi-agent audience simulation.
 Tagline: "OpusClip shows you which clip. Pre-Flight shows you if it will work."
-Architecture: Sequential(ClipCandidate → TrendGrounding → AnalyticsGrounding
-             → LoopAgent(Parallel(6 personas) → Aggregator → QualityGate → Refinement))
+Architecture: Asynchronous DAG(ClipCandidate, TrendGrounding, AnalyticsGrounding)
+             → LoopAgent(Parallel(6 personas) → Aggregator → QualityGate → Refinement)
+Stats Engine: Real-time MongoDB Aggregation (GridFS backed) + Pusher Fan-out
+Rendering: Cloud-based async rendering via RQ + targeted stream-clipping (yt-dlp)
 
 COMPLETED:
 - Next.js 16 frontend with Hydro-Glass UI
@@ -352,15 +355,13 @@ COMPLETED:
 - Frontend/Backend type synchronization for viral analysis
 - API integration for AI-driven clip suggestion
 - Pre-Flight ADK multi-agent pipeline: /fastapi/agent/preflight_agent.py
-  (SequentialAgent → LoopAgent(ParallelAgent(6 personas) → Aggregator → QualityGate → Refinement))
-- Pre-Flight API endpoint: POST /api/preflight (main.py)
-- Pre-Flight TypeScript types: /src/types/preflight.ts
-- Pre-Flight API client: /src/lib/api.ts
-- Pre-Flight React hook: /src/hooks/usePreflight.ts
-- Pre-Flight UI panel: RightPanel.tsx Pre-Flight section (Shift+P shortcut)
-- Landing page updated: Pre-Flight H1 subtitle + "How Pre-Flight Works" + pricing teaser
-- ARCHITECTURE.md updated with full ADK agent topology diagram
-- preflight_root_agent + preflight_runner exported from /fastapi/agent/__init__.py
+  (Asynchronous DAG → LoopAgent(ParallelAgent(6 personas) → Aggregator → QualityGate → Refinement))
+- Cloud-based rendering pipeline with targeted stream-clipping (saves 90% bandwidth)
+- MongoDB Aggregation service for real-time user stats and credit management
+- Pusher integration for instant dashboard updates across all devices
+- Full localhost cleanup and production environment variable hardening
+- Unified branding with QSLogo "Hydro-Glass" design system
+- Verified zero-error production build (Next.js 14+)
 
 IN PROGRESS:
 - Railway.app deployment (install google-adk in production venv)

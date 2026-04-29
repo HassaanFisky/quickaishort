@@ -110,6 +110,10 @@ function openWebSocket(
   setTransport: (t: UseDashboardStatsResult["transport"]) => void,
   alive: () => boolean,
 ): void {
+  if (!API_URL) {
+    if (alive()) setTransport("rest");
+    return;
+  }
   const wsBase = API_URL.replace(/^http/, "ws");
   try {
     const socket = new WebSocket(`${wsBase}/ws/stats/${encodeURIComponent(userId)}`);

@@ -74,6 +74,47 @@ async def increment_stats(
     return payload
 
 
+async def deduct_credits(user_id: str, amount: int) -> bool:
+    """Atomically deduct credits if sufficient balance exists. Returns True if successful."""
+    if not user_id or user_id == "anonymous":
+        return False
+    if not is_ready():
+        return False
+
+    db = get_db()
+    
+    # Check if user exists. If not, they have the default 5000 credits.
+    # We use find_one_and_update with a condition to ensure they don't go negative.
+    
+    # First, ensure the document exists with the default 5000 credits if it's missing.
+    # This is a bit tricky with atomic operations, so we'll do an upsert with $setOnInsert first.
+    await db[COLLECTION].update_one(
+        {"user_id": user_id},
+        {"$setOnInsert": {"user_id": user_id, "credits_balance": 5000}},
+        upsert=True
+    )
+    
+    # Now atomically decrement ONLY IF balance >= amount
+    doc = await db[COLLECTION].find_one_and_update(
+        {"user_id": user_id, "credits_balance": {"$gte": amount}},
+        {
+            "$inc": {"credits_balance": -amount},
+            "$set": {"updated_at": datetime.utcnow()}
+        },
+        return_document=ReturnDocument.AFTER,
+    )
+    
+    if doc is None:
+        return False  # Insufficient credits
+        
+    payload = _serialize(doc, user_id)
+    try:
+        await emit_stats_updated(user_id, payload)
+    except Exception as exc:
+        pass
+    return True
+
+
 async def get_user_stats(user_id: str) -> dict[str, Any]:
     if not is_ready():
         return _empty(user_id)
@@ -83,11 +124,60 @@ async def get_user_stats(user_id: str) -> dict[str, Any]:
     return _serialize(doc, user_id)
 
 
+async def recalculate_user_stats(user_id: str) -> dict[str, Any]:
+    """Recalculate stats from scratch using aggregation on the exports collection."""
+    if not is_ready():
+        return _empty(user_id)
+    
+    db = get_db()
+    # exports are in GridFS, metadata is in exports.files
+    pipeline = [
+        {"$match": {"metadata.user_id": user_id}},
+        {
+            "$group": {
+                "_id": "$metadata.user_id",
+                "total_duration": {"$sum": "$metadata.duration_sec"},
+                "export_count": {"$sum": 1},
+            }
+        },
+    ]
+    
+    cursor = db["exports.files"].aggregate(pipeline)
+    result = await cursor.to_list(length=1)
+    
+    if not result:
+        return await increment_stats(user_id)  # Returns default/empty
+        
+    agg = result[0]
+    duration = float(agg.get("total_duration", 0.0))
+    count = int(agg.get("export_count", 0))
+    
+    # Sync the UserStats document
+    doc = await db[COLLECTION].find_one_and_update(
+        {"user_id": user_id},
+        {
+            "$set": {
+                "total_duration_processed": duration,
+                "export_count": count,
+                "updated_at": datetime.utcnow()
+            },
+            "$setOnInsert": {"user_id": user_id, "credits_balance": 5000}
+        },
+        upsert=True,
+        return_document=ReturnDocument.AFTER,
+    )
+    
+    payload = _serialize(doc, user_id)
+    await emit_stats_updated(user_id, payload)
+    return payload
+
+
 def _serialize(doc: dict[str, Any] | None, user_id: str) -> dict[str, Any]:
     if doc is None:
         return _empty(user_id)
     return UserStats(
         user_id=doc.get("user_id", user_id),
+        credits_balance=int(doc.get("credits_balance", 5000)),
         total_projects=int(doc.get("total_projects", 0)),
         total_duration_processed=float(doc.get("total_duration_processed", 0.0)),
         export_count=int(doc.get("export_count", 0)),

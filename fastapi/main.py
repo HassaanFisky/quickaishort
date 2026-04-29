@@ -47,7 +47,7 @@ from services.queue_service import (
 )
 from services.realtime import emit_export_event, ws_manager
 from services.signing import sign, verify
-from services.stats_service import get_user_stats, increment_stats
+from services.stats_service import get_user_stats, increment_stats, deduct_credits, recalculate_user_stats
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
@@ -258,6 +258,10 @@ def health_check():
 @app.post("/api/analyze")
 async def analyze_video(request: AnalyzeRequest):
     try:
+        user_id = request.userId or "anonymous"
+        if not await deduct_credits(user_id, 10):
+            raise HTTPException(status_code=402, detail="Insufficient AI Credits. Please upgrade or top-up.")
+
         agent = get_viral_agent()
         transcript_text = " ".join(c.text for c in request.transcript)
         suggestions = await agent.analyze_transcript(
@@ -286,6 +290,9 @@ async def analyze_video(request: AnalyzeRequest):
 
 @app.post("/api/process-video")
 async def export_video(request: ExportRequest):
+    if not await deduct_credits(request.user_id, 20):
+        raise HTTPException(status_code=402, detail="Insufficient credits for server-side export.")
+
     job_id = uuid.uuid4().hex
     options = {
         "aspect_ratio": request.aspect_ratio,
@@ -395,7 +402,9 @@ async def export_download(job_id: str, user_id: str, token: str, expires: int):
 
 
 @app.get("/api/stats")
-async def stats_endpoint(user_id: str):
+async def stats_endpoint(user_id: str, sync: bool = False):
+    if sync:
+        return await recalculate_user_stats(user_id)
     return await get_user_stats(user_id)
 
 
@@ -491,7 +500,10 @@ async def run_preflight(request: PreflightRequest):
     if not request.clip_candidates:
         raise HTTPException(status_code=422, detail="clip_candidates must contain at least one clip")
 
-    if not request.is_premium and len(request.clip_candidates) > 1:
+    # Temporarily hardcode is_premium to False until actual billing logic is implemented.
+    # This prevents users from bypassing the paywall by simply passing {"is_premium": true}.
+    is_premium_active = False 
+    if not is_premium_active and len(request.clip_candidates) > 1:
         raise HTTPException(
             status_code=402,
             detail={
@@ -500,6 +512,9 @@ async def run_preflight(request: PreflightRequest):
                 "upgrade_url": "/pricing",
             },
         )
+
+    if not await deduct_credits(request.user_id, 50):
+        raise HTTPException(status_code=402, detail="Insufficient AI Credits for Pre-flight analysis.")
 
     candidates = [
         PreflightClipCandidate(

@@ -122,6 +122,7 @@ def process_render_task(
                     "end_sec": job.end_sec,
                     "aspect_ratio": job.aspect_ratio,
                     "quality": job.quality,
+                    "duration_sec": result.duration_sec,
                     "expires_at": expires_at,
                 },
             )

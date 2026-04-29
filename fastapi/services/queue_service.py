@@ -15,11 +15,8 @@ JOB_FAILURE_TTL_SECONDS = int(os.getenv("RENDER_JOB_FAILURE_TTL", "86400"))
 
 
 def _redis() -> Redis:
-    return Redis(
-        host=os.getenv("REDIS_HOST", "localhost"),
-        port=int(os.getenv("REDIS_PORT", "6379")),
-        password=os.getenv("REDIS_PASSWORD") or None,
-    )
+    redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    return Redis.from_url(redis_url)
 
 
 redis_conn = _redis()
