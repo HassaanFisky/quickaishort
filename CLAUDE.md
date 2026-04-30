@@ -12,7 +12,7 @@ SaaS platform built for the Google for Startups AI Agents Challenge 2026.
 
 Project owner: Hassaan Fisky, solo founder, Karachi, Pakistan.
 Domain: quickaishort.online (owned since Nov 2025)
-Stack: Next.js 16 + Tailwind v4 + Framer Motion (frontend), FastAPI + yt-dlp 
+Stack: Next.js 14.2.22 + Tailwind v4 + Framer Motion (frontend), FastAPI + yt-dlp 
 + Whisper + FFmpeg.wasm (backend), Google ADK multi-agent system (being added).
 Submission deadline: June 5, 2026.
 
@@ -137,9 +137,9 @@ AGENT MANAGER (Antigravity native)
 ## 5. PROJECT-SPECIFIC CONSTRAINTS (QuickAIShort)
 
 TECH STACK LOCKED — DO NOT SWAP
-- Frontend: Next.js 16 App Router, Tailwind v4, Framer Motion, Zustand
+- Frontend: Next.js 14.2.22 App Router, Tailwind v4, Framer Motion, Zustand
 - Backend: Python 3.12, FastAPI, yt-dlp, FFmpeg (Server-side via Railway/Cloud Run)
-- Agent: Google ADK v1.0, Gemini 2.0 Flash (DEFAULT_MODEL in gemini_client.py)
+- Agent: Google ADK v1.0, gemini-2.5-flash (DEFAULT_MODEL in gemini_client.py)
 - Task Queue: Redis + RQ for background rendering and stats sync
 - Deploy: Vercel (frontend) + Railway.app (backend, because Pakistan GCP 
   billing is blocked)
@@ -345,7 +345,7 @@ Stats Engine: Real-time MongoDB Aggregation (GridFS backed) + Pusher Fan-out
 Rendering: Cloud-based async rendering via RQ + targeted stream-clipping (yt-dlp)
 
 COMPLETED:
-- Next.js 16 frontend with Hydro-Glass UI
+- Next.js 14.2.22 frontend with Hydro-Glass UI
 - FastAPI backend with yt-dlp ingestion + proxy
 - Browser-based Whisper transcription (Web Worker)
 - Viral analysis heuristics (audio energy + speech density)

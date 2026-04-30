@@ -25,7 +25,7 @@ from typing import Any, AsyncIterator, Literal, Optional
 
 from pydantic import BaseModel
 
-from services.gemini_client import DEFAULT_MODEL
+MODEL = "gemini-2.5-flash"
 
 logger = logging.getLogger(__name__)
 
@@ -479,7 +479,7 @@ def _build_pipeline() -> tuple[Any, Any]:
 
     threshold = int(os.environ.get("PREFLIGHT_THRESHOLD", THRESHOLD_DEFAULT))
     max_iterations = int(os.environ.get("PREFLIGHT_MAX_ITERATIONS", MAX_ITERATIONS_DEFAULT))
-    model = DEFAULT_MODEL
+    model = MODEL
 
     clip_candidate_agent = Agent(
         name="ClipCandidateAgent",
@@ -555,7 +555,8 @@ def _build_pipeline() -> tuple[Any, Any]:
         ],
     )
 
-    session_service = InMemorySessionService()
+    from agent.firestore_session import FirestoreSessionService
+    session_service = FirestoreSessionService()
     runner = Runner(
         agent=root_agent,
         session_service=session_service,

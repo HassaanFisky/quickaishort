@@ -14,7 +14,7 @@ from __future__ import annotations
 import logging
 import os
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import gridfs
@@ -131,7 +131,7 @@ def process_render_task(
 
         # Upload to GridFS
         bucket = _gridfs_bucket()
-        expires_at = datetime.utcnow() + timedelta(seconds=EXPORT_TTL_SECONDS)
+        expires_at = datetime.now(timezone.utc) + timedelta(seconds=EXPORT_TTL_SECONDS)
         
         with result_path.open("rb") as fh:
             grid_id = bucket.upload_from_stream(

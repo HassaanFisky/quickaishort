@@ -6,7 +6,7 @@ in main.py — call init_db() at startup, close_db() at shutdown.
 
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase, AsyncIOMotorGridFSBucket
@@ -77,4 +77,4 @@ def is_ready() -> bool:
 
 
 def utc_now() -> datetime:
-    return datetime.utcnow()
+    return datetime.now(timezone.utc)

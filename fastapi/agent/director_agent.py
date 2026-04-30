@@ -9,12 +9,13 @@ from __future__ import annotations
 import json
 import logging
 import uuid
+import os
 from typing import List, Optional, Any
 
 from pydantic import BaseModel
 import google.genai.types as genai_types
 
-from services.gemini_client import DEFAULT_MODEL
+MODEL = "gemini-2.5-flash"
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +46,7 @@ class DirectorAgent(Agent if _ADK_OK else object):
     def __init__(
         self, 
         name: str = "DirectorAgent", 
-        model: str = DEFAULT_MODEL
+        model: str = MODEL
     ):
         if not _ADK_OK:
             return
@@ -79,9 +80,11 @@ director_runner = None
 
 if _ADK_OK:
     director_agent_instance = DirectorAgent()
+    from agent.firestore_session import FirestoreSessionService
+    _session_service = FirestoreSessionService()
     director_runner = Runner(
         agent=director_agent_instance,
-        session_service=InMemorySessionService(),
+        session_service=_session_service,
         app_name="QuickAIShort_Director"
     )
 

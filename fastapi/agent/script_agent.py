@@ -9,7 +9,7 @@ from typing import List, Dict, Any, Optional
 from pathlib import Path
 from dotenv import load_dotenv
 
-import google.generativeai as genai
+import google.genai as genai
 from google.cloud import texttospeech
 
 from services.gemini_client import DEFAULT_MODEL
@@ -21,8 +21,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("script_agent")
 
 # Initialize Gemini
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-model = genai.GenerativeModel(DEFAULT_MODEL)
+client = genai.Client()
 
 class ScriptAgent:
     def __init__(self):
@@ -52,7 +51,11 @@ class ScriptAgent:
         """
         
         try:
-            response = await asyncio.to_thread(model.generate_content, prompt)
+            response = await asyncio.to_thread(
+                client.models.generate_content,
+                model=DEFAULT_MODEL,
+                contents=prompt
+            )
             # Extract JSON from response
             text = response.text.strip()
             if "```json" in text:

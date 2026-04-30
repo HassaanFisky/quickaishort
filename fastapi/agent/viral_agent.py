@@ -135,7 +135,9 @@ def _build_viral_pipeline():
         sub_agents=[segmentation_agent, scoring_agent],
     )
 
-    session_service = InMemorySessionService()
+    import os
+    from agent.firestore_session import FirestoreSessionService
+    session_service = FirestoreSessionService()
     return Runner(
         agent=root_agent,
         session_service=session_service,

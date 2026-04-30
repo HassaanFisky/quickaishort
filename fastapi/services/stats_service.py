@@ -9,7 +9,7 @@ listener in main.py routes back here.
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from pymongo import ReturnDocument
@@ -54,7 +54,7 @@ async def increment_stats(
         inc["total_projects"] = int(project_delta)
 
     update: dict[str, Any] = {
-        "$set": {"updated_at": datetime.utcnow()},
+        "$set": {"updated_at": datetime.now(timezone.utc)},
         "$setOnInsert": {"user_id": user_id},
     }
     if inc:
@@ -99,7 +99,7 @@ async def deduct_credits(user_id: str, amount: int) -> bool:
         {"user_id": user_id, "credits_balance": {"$gte": amount}},
         {
             "$inc": {"credits_balance": -amount},
-            "$set": {"updated_at": datetime.utcnow()}
+            "$set": {"updated_at": datetime.now(timezone.utc)}
         },
         return_document=ReturnDocument.AFTER,
     )
@@ -159,7 +159,7 @@ async def recalculate_user_stats(user_id: str) -> dict[str, Any]:
             "$set": {
                 "total_duration_processed": duration,
                 "export_count": count,
-                "updated_at": datetime.utcnow()
+                "updated_at": datetime.now(timezone.utc)
             },
             "$setOnInsert": {"user_id": user_id, "credits_balance": 5000}
         },
@@ -182,5 +182,5 @@ def _serialize(doc: dict[str, Any] | None, user_id: str) -> dict[str, Any]:
         total_duration_processed=float(doc.get("total_duration_processed", 0.0)),
         export_count=int(doc.get("export_count", 0)),
         ai_runs=int(doc.get("ai_runs", 0)),
-        updated_at=doc.get("updated_at") or datetime.utcnow(),
+        updated_at=doc.get("updated_at") or datetime.now(timezone.utc),
     ).model_dump(mode="json")

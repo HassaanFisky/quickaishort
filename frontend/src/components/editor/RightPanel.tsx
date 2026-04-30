@@ -50,7 +50,7 @@ export default function RightPanel() {
   } = useEditorStore();
 
   const { data: session } = useSession();
-  const userId = session?.user?.id ?? "anonymous";
+  const userId = session?.user?.id ?? "";
 
   const { exportClip, isExporting, exportProgress } = useServerExport({ userId });
   const {
@@ -79,6 +79,7 @@ export default function RightPanel() {
   };
 
   const handleRunPreflight = useCallback(async () => {
+    if (!userId) return;
     if (!selectedClip) return;
     const { sourceUrl, transcript } = useEditorStore.getState();
     const clipTranscript =
