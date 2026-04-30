@@ -72,12 +72,10 @@ class PreflightResult(BaseModel):
 
 
 PERSONA_WEIGHTS: dict[str, float] = {
-    "genz": 0.25,
-    "millennial": 0.20,
-    "sports": 0.15,
-    "tech": 0.15,
-    "arabic": 0.125,
-    "spanish": 0.125,
+    "genz": 0.30,
+    "millennial": 0.30,
+    "sports": 0.20,
+    "tech": 0.20,
 }
 
 PERSONA_IDENTITIES: dict[str, str] = {
@@ -85,13 +83,15 @@ PERSONA_IDENTITIES: dict[str, str] = {
         "You are a 19-year-old TikTok-native content creator. "
         "You consume 4+ hours of short-form video daily. "
         "Your attention span for a hook is 3 seconds; if it doesn't grab you immediately you scroll. "
-        "You value authenticity, trend-alignment, and relatable energy over polish."
+        "You value authenticity, trend-alignment, and relatable energy over polish. "
+        "You also represent global youth perspectives."
     ),
     "millennial": (
         "You are a 32-year-old YouTube-first professional who also watches Shorts. "
         "You value substance and clear value delivery. "
         "You tolerate a slightly longer hook (up to 5 seconds) if it signals expertise or storytelling. "
-        "You share content that makes you look informed to your network."
+        "You share content that makes you look informed to your network. "
+        "You also represent professional viewers from diverse cultural backgrounds."
     ),
     "sports": (
         "You are a 28-year-old sports enthusiast who primarily watches highlight reels and reaction content. "
@@ -102,18 +102,6 @@ PERSONA_IDENTITIES: dict[str, str] = {
         "You are a 26-year-old software engineer who follows tech channels for tutorials and industry news. "
         "You appreciate concise, well-structured content with clear takeaways. "
         "You will keep watching if you sense you'll learn something actionable in under 60 seconds."
-    ),
-    "arabic": (
-        "You are a 24-year-old Arabic-speaking viewer from the UAE. "
-        "You consume content in both Arabic and English. "
-        "You disengage quickly from content that feels culturally irrelevant or uses slang you don't recognise. "
-        "You share content that resonates with MENA cultural values or that teaches something universally practical."
-    ),
-    "spanish": (
-        "You are a 22-year-old Spanish-speaking viewer from Mexico. "
-        "You prefer LatAm creators but watch global content if it's entertaining or educational. "
-        "You are highly social — you share content that makes you laugh or that you can debate with friends. "
-        "You lose interest if the topic is too US-centric or the humour doesn't translate."
     ),
 }
 
@@ -517,7 +505,7 @@ def _build_pipeline() -> tuple[Any, Any]:
         for pid in PERSONA_WEIGHTS
     ]
 
-    persona_parallel = ParallelAgent(
+    persona_panel = SequentialAgent(
         name="PersonaPanel",
         sub_agents=persona_agents,
     )
@@ -546,7 +534,7 @@ def _build_pipeline() -> tuple[Any, Any]:
 
     audience_panel_loop = LoopAgent(
         name="AudiencePanelLoop",
-        sub_agents=[persona_parallel, vote_aggregator, quality_gate, clip_refinement_agent],
+        sub_agents=[persona_panel, vote_aggregator, quality_gate, clip_refinement_agent],
         max_iterations=max_iterations,
     )
 
@@ -647,8 +635,18 @@ async def run_preflight_pipeline(
         session_id=session_id,
         new_message=message,
     ):
+        logger.info("Pipeline event: author=%s, content=%s", event.author, getattr(event, 'content', 'N/A'))
         if event.is_final_response():
-            break
+            # Check if we actually have some results in state before breaking, 
+            # as is_final_response might trigger on intermediate sequential steps in some ADK versions.
+            session = await preflight_runner.session_service.get_session(
+                app_name="QuickAIShort_PreFlight",
+                user_id=user_id,
+                session_id=session_id,
+            )
+            if session.state.get("preflight_done") == "true":
+                logger.info("Final response received and preflight is marked as done.")
+                break
 
     session = await preflight_runner.session_service.get_session(
         app_name="QuickAIShort_PreFlight",

@@ -222,3 +222,106 @@ class RenderService:
             )
 
         return video
+
+
+def render_video(production_plan: dict) -> str:
+    """
+    Production-grade entry point for rendering a full production plan.
+    Downloads, trims, scales, stitches multiple clips, and overlays a voiceover.
+    """
+    from yt_dlp import YoutubeDL
+    
+    service = RenderService()
+    workdir = Path(tempfile.mkdtemp(prefix="qais-render-"))
+    
+    try:
+        segments = production_plan.get("segments", [])
+        voiceover_path = production_plan.get("voiceover_path")
+        
+        if not segments:
+            raise ValueError("No segments found in production plan")
+            
+        processed_clips = []
+        for i, seg in enumerate(segments):
+            clip_source = seg.get("clip_path")
+            start = float(seg.get("start_sec", 0))
+            end = float(seg.get("end_sec", 5))
+            duration = end - start
+            
+            target_clip = workdir / f"seg_{i}.mp4"
+            
+            if not clip_source or clip_source == "BLACK_FRAME":
+                (
+                    ffmpeg.input(f"color=c=black:s=1080x1920:d={duration}", f="lavfi")
+                    .output(str(target_clip), vcodec="libx264", pix_fmt="yuv420p")
+                    .overwrite_output()
+                    .run(quiet=True)
+                )
+            elif clip_source.startswith("http"):
+                # Real download and trim
+                ydl_opts = {
+                    "format": "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
+                    "outtmpl": str(workdir / f"download_{i}.%(ext)s"),
+                    "quiet": True,
+                }
+                with YoutubeDL(ydl_opts) as ydl:
+                    info = ydl.extract_info(clip_source, download=True)
+                    downloaded_file = ydl.prepare_filename(info)
+                
+                (
+                    ffmpeg.input(downloaded_file, ss=start, t=duration)
+                    .filter("scale", 1080, 1920, force_original_aspect_ratio="increase")
+                    .filter("crop", 1080, 1920)
+                    .output(str(target_clip), vcodec="libx264", acodec="aac", crf=23, preset="veryfast")
+                    .overwrite_output()
+                    .run(quiet=True)
+                )
+            else:
+                # Local file path
+                (
+                    ffmpeg.input(clip_source, ss=start, t=duration)
+                    .filter("scale", 1080, 1920, force_original_aspect_ratio="increase")
+                    .filter("crop", 1080, 1920)
+                    .output(str(target_clip), vcodec="libx264", acodec="aac", crf=23, preset="veryfast")
+                    .overwrite_output()
+                    .run(quiet=True)
+                )
+            
+            processed_clips.append(ffmpeg.input(str(target_clip)))
+
+        # Stitch videos
+        # We assume clips have audio or we provide silence if missing
+        joined = ffmpeg.concat(*processed_clips, v=1, a=1).node
+        v = joined[0]
+        a = joined[1]
+        
+        # Overlay voiceover if provided
+        if voiceover_path and os.path.exists(voiceover_path):
+            vo = ffmpeg.input(voiceover_path)
+            # Mix voiceover (higher volume) with ambient audio (lower volume)
+            a_ambient = a.filter("volume", 0.3)
+            a_voice = vo.filter("volume", 1.5)
+            a = ffmpeg.filter([a_ambient, a_voice], "amix", inputs=2, duration="first")
+            
+        output_path = workdir / "final_output.mp4"
+        (
+            ffmpeg.output(
+                v, a, str(output_path),
+                vcodec="libx264", acodec="aac",
+                crf=21, preset="medium",
+                movflags="faststart"
+            )
+            .overwrite_output()
+            .run(quiet=True)
+        )
+        
+        final_dest = Path(tempfile.gettempdir()) / f"qai_final_{uuid.uuid4().hex}.mp4"
+        shutil.move(str(output_path), str(final_dest))
+        logger.info(f"Render successful: {final_dest}")
+        return str(final_dest)
+        
+    except Exception as e:
+        logger.error(f"render_video failed: {e}")
+        raise
+    finally:
+        shutil.rmtree(workdir, ignore_errors=True)

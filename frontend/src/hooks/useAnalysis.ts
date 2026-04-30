@@ -45,6 +45,7 @@ export function useAnalysis() {
       videoId: string;
       transcript: TranscriptChunk[];
       duration: number;
+      user_id?: string;
     }) => {
       setIsBackendAnalyzing(true);
       setBackendError(null);

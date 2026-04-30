@@ -96,9 +96,20 @@ def _build_viral_pipeline():
     if not _ADK_OK:
         return None
 
+    model = DEFAULT_MODEL
+    # Configure retry options for Gemini API
+    retry_config = genai_types.HttpRetryOptions(
+        initial_delay=2.0,
+        attempts=5,
+    )
+    generate_config = genai_types.GenerateContentConfig(
+        http_options=genai_types.HttpOptions(retry_options=retry_config)
+    )
+
     segmentation_agent = Agent(
         name="SegmentationAgent",
-        model=DEFAULT_MODEL,
+        model=model,
+        generate_content_config=generate_config,
         description="Identifies high-potential viral segments from a video transcript.",
         instruction=(
             "Analyze the transcript provided in session state 'transcript_text'. "
@@ -113,7 +124,8 @@ def _build_viral_pipeline():
 
     scoring_agent = Agent(
         name="ScoringAgent",
-        model=DEFAULT_MODEL,
+        model=model,
+        generate_content_config=generate_config,
         description="Scores viral potential, optionally ingesting keyframes (vision).",
         instruction=SCORING_INSTRUCTION,
     )

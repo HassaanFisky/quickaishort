@@ -57,6 +57,8 @@ try:
     from agent import (
         ClipCandidate as PreflightClipCandidate,
         run_preflight_pipeline,
+        run_director_pipeline,
+        run_viral_pipeline,
     )
 
     _ADK_AVAILABLE = True
@@ -210,6 +212,17 @@ class PreflightRequest(BaseModel):
     user_id: str
     is_premium: bool
     clip_candidates: List[ClipCandidateRequest]
+
+
+class DirectRequest(BaseModel):
+    input_text: str
+    user_id: str
+
+
+class CreateVideoRequest(BaseModel):
+    script: str
+    clip_paths: List[str]
+    user_id: str
 
 
 class ReframingPayload(BaseModel):
@@ -531,7 +544,7 @@ async def run_preflight(request: PreflightRequest):
             run_preflight_pipeline(
                 youtube_url=request.youtube_url,
                 clip_candidates=candidates,
-                is_premium=request.is_premium,
+                is_premium=is_premium_active,
                 user_id=request.user_id,
             ),
             timeout=120.0,
@@ -545,6 +558,133 @@ async def run_preflight(request: PreflightRequest):
         )
     except Exception as exc:
         logger.error("POST /api/preflight failed: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/api/direct")
+async def run_director(request: DirectRequest):
+    if not _ADK_AVAILABLE:
+        raise HTTPException(
+            status_code=503,
+            detail="Director pipeline unavailable — google-adk not installed",
+        )
+
+    try:
+        # 1. Deduct credits for Storyboard generation
+        if not await deduct_credits(request.user_id, 30):
+            raise HTTPException(status_code=402, detail="Insufficient credits for Storyboard generation.")
+
+        # 2. Run the Director Agent with timeout
+        result = await asyncio.wait_for(
+            run_director_pipeline(
+                input_text=request.input_text,
+                user_id=request.user_id
+            ),
+            timeout=120.0
+        )
+        
+        await increment_stats(request.user_id, ai_run_delta=1)
+        return {"director_result": result}
+    except HTTPException:
+        # Re-raise HTTP exceptions (like 402) so they aren't swallowed by the broad except
+        raise
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail="Storyboard generation timed out after 120 seconds."
+        )
+    except Exception as exc:
+        logger.error("POST /api/direct failed: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/api/create-video")
+async def create_video(request: CreateVideoRequest):
+    """
+    Day 5 — Wire Everything Together
+    Runs: ScriptAgent → PreFlight → RenderService (Background)
+    """
+    try:
+        # 1. ScriptAgent → Production Plan
+        from agent.script_agent import ScriptAgent
+        agent = ScriptAgent()
+        production_plan = await agent.run(request.script, request.clip_paths)
+        
+        # 2. Idempotent Job ID (Hash of script + clips)
+        import hashlib
+        plan_hash = hashlib.sha256(
+            json.dumps({"script": request.script, "clips": request.clip_paths}, sort_keys=True).encode()
+        ).hexdigest()
+        job_id = f"gen-{plan_hash[:16]}"
+
+        # 3. Pre-Flight → Viral Score & Audience Simulation
+        # (This remains in-process as it's an LLM call, but could also be backgrounded)
+        viral_score = 0
+        persona_votes = []
+        
+        if _ADK_AVAILABLE and production_plan["segments"]:
+            try:
+                hero = production_plan["segments"][0]
+                candidates = [
+                    PreflightClipCandidate(
+                        start_sec=hero["start_sec"],
+                        end_sec=hero["end_sec"],
+                        score=0.9,
+                        transcript=hero["text"]
+                    )
+                ]
+                
+                result = await asyncio.wait_for(
+                    run_preflight_pipeline(
+                        youtube_url="generated-pipeline",
+                        clip_candidates=candidates,
+                        is_premium=False,
+                        user_id=request.user_id,
+                    ),
+                    timeout=60.0,
+                )
+                viral_score = result.weighted_consensus_score
+                persona_votes = [v.model_dump() for v in result.persona_votes]
+            except Exception as e:
+                logger.warning(f"Pre-flight analysis failed in video creation flow: {e}")
+
+        # 4. Enqueue Render Job (Background)
+        from render_worker import process_render_task
+        
+        # For full production plans, we pass a special 'production_plan' option 
+        # that the worker will detect and use instead of single-clip logic.
+        options = {
+            "production_plan": production_plan,
+            "user_id": request.user_id,
+        }
+
+        try:
+            render_queue.enqueue(
+                process_render_task,
+                job_id,
+                "generated", # video_id placeholder
+                0, 0, # start/end placeholders
+                request.user_id,
+                options,
+                job_id=job_id,
+                job_timeout=JOB_TIMEOUT_SECONDS,
+                result_ttl=JOB_RESULT_TTL_SECONDS,
+                failure_ttl=JOB_FAILURE_TTL_SECONDS,
+            )
+        except Exception as exc:
+            logger.exception("Failed to enqueue video creation job %s: %s", job_id, exc)
+            raise HTTPException(status_code=503, detail="Queue unavailable")
+
+        return {
+            "status": "queued",
+            "job_id": job_id,
+            "viral_score": viral_score,
+            "persona_votes": persona_votes,
+            "production_plan": production_plan,
+            "subscribe_channel": f"export-{job_id}",
+        }
+    except Exception as exc:
+        logger.exception("Video creation pipeline failed: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))
 
 

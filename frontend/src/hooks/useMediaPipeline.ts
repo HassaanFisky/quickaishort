@@ -7,8 +7,12 @@ import { useAnalysis } from "./useAnalysis";
 import { extractAudioData } from "@/lib/utils/audioExtractor";
 import { toast } from "sonner";
 import { API_URL } from "@/lib/api";
+import { useSession } from "next-auth/react";
 
 export function useMediaPipeline() {
+  const { data: session } = useSession();
+  const userId = session?.user?.id ?? "anonymous";
+
   const {
     sourceFile,
     setProcessing,
@@ -98,6 +102,7 @@ export function useMediaPipeline() {
         videoId: sourceUrl || "local-video",
         transcript: transcript.chunks || transcript,
         duration: useEditorStore.getState().duration || 0,
+        user_id: userId,
       }).then((response: any) => {
         if (response.suggestedClips) {
           setAgentState("viralAnalysis", { status: "done", progress: 100 });

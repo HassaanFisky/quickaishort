@@ -50,7 +50,7 @@ export default function RightPanel() {
   } = useEditorStore();
 
   const { data: session } = useSession();
-  const userId = session?.user?.id ?? session?.user?.email ?? "anonymous";
+  const userId = session?.user?.id ?? "anonymous";
 
   const { exportClip, isExporting, exportProgress } = useServerExport({ userId });
   const {

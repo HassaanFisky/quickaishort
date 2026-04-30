@@ -18,6 +18,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import gridfs
+import shutil
 from dotenv import load_dotenv
 from pymongo import MongoClient
 from rq import Worker
@@ -102,15 +103,37 @@ def process_render_task(
 ) -> dict:
     """Entry point invoked by RQ. Returns a dict for inspection in the web app."""
     started_at = time.time()
-    service = RenderService()
-    job = _build_job(video_id, start_sec, end_sec, options or {})
+    options = options or {}
+    production_plan = options.get("production_plan")
+    
+    # Pillar 2: Production safety — check for existing export if idempotent (partial)
+    # Note: Currently we always re-render if enqueued, but we use job_id as the stable identifier.
 
-    result = None
+    result_path = None
+    duration_sec = 0
+    
     try:
-        result = service.run(job)
+        if production_plan:
+            # Handle multi-segment production plan
+            from services.render_service import render_video
+            result_path = Path(render_video(production_plan))
+            duration_sec = sum(
+                (float(s.get("end_sec", 0)) - float(s.get("start_sec", 0))) 
+                for s in production_plan.get("segments", [])
+            )
+        else:
+            # Handle single-clip export
+            service = RenderService()
+            job = _build_job(video_id, start_sec, end_sec, options)
+            render_result = service.run(job)
+            result_path = render_result.output_path
+            duration_sec = render_result.duration_sec
+
+        # Upload to GridFS
         bucket = _gridfs_bucket()
         expires_at = datetime.utcnow() + timedelta(seconds=EXPORT_TTL_SECONDS)
-        with result.output_path.open("rb") as fh:
+        
+        with result_path.open("rb") as fh:
             grid_id = bucket.upload_from_stream(
                 f"{job_id}.mp4",
                 fh,
@@ -118,12 +141,9 @@ def process_render_task(
                     "job_id": job_id,
                     "user_id": user_id,
                     "video_id": video_id,
-                    "start_sec": job.start_sec,
-                    "end_sec": job.end_sec,
-                    "aspect_ratio": job.aspect_ratio,
-                    "quality": job.quality,
-                    "duration_sec": result.duration_sec,
+                    "duration_sec": duration_sec,
                     "expires_at": expires_at,
+                    "is_production_plan": bool(production_plan),
                 },
             )
 
@@ -131,19 +151,22 @@ def process_render_task(
             "job_id": job_id,
             "user_id": user_id,
             "gridfs_id": str(grid_id),
-            "duration_sec": result.duration_sec,
-            "file_size_bytes": result.file_size_bytes,
+            "duration_sec": duration_sec,
+            "file_size_bytes": result_path.stat().st_size,
             "elapsed_sec": time.time() - started_at,
         }
+        
         publish(CHANNEL_EXPORT_COMPLETE, payload)
         publish(
             CHANNEL_STATS_INCREMENT,
             {
                 "user_id": user_id,
                 "export_delta": 1,
-                "duration_delta": result.duration_sec,
+                "duration_delta": duration_sec,
             },
         )
+        
+        logger.info(f"Job {job_id} completed in {payload['elapsed_sec']:.2f}s")
         return {"status": "success", **payload}
 
     except Exception as exc:
@@ -155,8 +178,15 @@ def process_render_task(
         return {"status": "error", "job_id": job_id, "error": str(exc)}
 
     finally:
-        if result is not None:
-            RenderService.cleanup(result.workdir)
+        if result_path and result_path.exists():
+            # Clean up the final MP4 from local temp storage
+            try:
+                result_path.unlink()
+                # Also try to cleanup parent workdir if it's a temp dir
+                if "qais-" in str(result_path.parent):
+                    shutil.rmtree(result_path.parent, ignore_errors=True)
+            except Exception:
+                pass
 
 
 if __name__ == "__main__":

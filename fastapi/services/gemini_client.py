@@ -17,7 +17,7 @@ from google.genai import types
 logger = logging.getLogger(__name__)
 
 # Model default from env
-DEFAULT_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+DEFAULT_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
 # Initialize the modern client
 # We use a singleton-like pattern for the client
