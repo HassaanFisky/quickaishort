@@ -9,8 +9,8 @@ google-adk==1.0.0
 google-genai>=1.14.0
 google-cloud-firestore>=2.15.0
 google-cloud-storage>=2.16.0
-google-cloud-speech>=3.30.0
-google-cloud-texttospeech>=2.16.0
+google-cloud-speech
+google-cloud-texttospeech
 firebase-admin>=6.5.0
 tenacity==8.2.3
 redis==5.0.4
