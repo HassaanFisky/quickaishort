@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import warnings
 # Silence deprecation and future warnings from Google SDKs
-warnings.filterwarnings("ignore", category=FutureWarning, module="google.generativeai")
 warnings.filterwarnings("ignore", category=DeprecationWarning, module="authlib")
 
 import asyncio
@@ -47,7 +46,7 @@ from services.queue_service import (
 )
 from services.realtime import emit_export_event, ws_manager
 from services.signing import sign, verify
-from services.stats_service import get_user_stats, increment_stats, deduct_credits, recalculate_user_stats
+from services.stats_service import get_user_stats, increment_stats, deduct_credits, recalculate_user_stats, is_user_premium
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
@@ -513,9 +512,8 @@ async def run_preflight(request: PreflightRequest):
     if not request.clip_candidates:
         raise HTTPException(status_code=422, detail="clip_candidates must contain at least one clip")
 
-    # Temporarily hardcode is_premium to False until actual billing logic is implemented.
-    # This prevents users from bypassing the paywall by simply passing {"is_premium": true}.
-    is_premium_active = False 
+    # Check if user is on a Pro plan
+    is_premium_active = await is_user_premium(request.user_id)
     if not is_premium_active and len(request.clip_candidates) > 1:
         raise HTTPException(
             status_code=402,
@@ -624,6 +622,9 @@ async def create_video(request: CreateVideoRequest):
         
         if _ADK_AVAILABLE and production_plan["segments"]:
             try:
+                # Check premium status for pre-flight in video creation flow
+                is_premium_active = await is_user_premium(request.user_id)
+                
                 hero = production_plan["segments"][0]
                 candidates = [
                     PreflightClipCandidate(
@@ -638,7 +639,7 @@ async def create_video(request: CreateVideoRequest):
                     run_preflight_pipeline(
                         youtube_url="generated-pipeline",
                         clip_candidates=candidates,
-                        is_premium=False,
+                        is_premium=is_premium_active,
                         user_id=request.user_id,
                     ),
                     timeout=60.0,

@@ -1,6 +1,6 @@
 """Custom Firestore Session Service for Google ADK Python.
 Implements the BaseSessionService interface for persistent session storage.
-Fallbacks to InMemorySessionService if credentials are missing.
+This implementation is strictly persistent to support horizontal scaling.
 Author: Antigravity (Senior Engineer)
 """
 
@@ -11,7 +11,6 @@ import time
 from typing import Any, Optional
 
 from google.adk.sessions.base_session_service import BaseSessionService, ListSessionsResponse, GetSessionConfig
-from google.adk.sessions.in_memory_session_service import InMemorySessionService
 from google.adk.sessions.session import Session
 
 logger = logging.getLogger(__name__)
@@ -19,20 +18,21 @@ logger = logging.getLogger(__name__)
 class FirestoreSessionService(BaseSessionService):
     def __init__(self, collection_name: str = "adk_sessions"):
         self.collection_name = collection_name
-        self._fallback = InMemorySessionService()
         self._use_firestore = False
         
         try:
             from google.cloud import firestore
-            import google.auth.exceptions
             
-            # Test if client can be created (triggers ADC check)
+            # Initialize async client
             self.db = firestore.AsyncClient()
             self._use_firestore = True
             logger.info(f"FirestoreSessionService initialized with collection: {collection_name}")
         except Exception as e:
-            logger.warning(f"Firestore authentication failed, falling back to InMemorySessionService. Error: {e}")
+            logger.error(f"CRITICAL: Firestore initialization failed. Horizontal scaling sessions will NOT work. Error: {e}")
+            # We do NOT fallback to InMemorySessionService to comply with production safety rules.
+            # We instead let it fail hard so the infrastructure issue is visible.
             self._use_firestore = False
+            raise RuntimeError(f"Failed to initialize FirestoreSessionService: {e}")
 
     async def create_session(
         self,
@@ -43,9 +43,7 @@ class FirestoreSessionService(BaseSessionService):
         session_id: Optional[str] = None,
     ) -> Session:
         if not self._use_firestore:
-            return await self._fallback.create_session(
-                app_name=app_name, user_id=user_id, state=state, session_id=session_id
-            )
+             raise RuntimeError("FirestoreSessionService is not available.")
             
         session_id = session_id or str(uuid.uuid4())
         now = time.time()
@@ -81,9 +79,7 @@ class FirestoreSessionService(BaseSessionService):
         config: Optional[GetSessionConfig] = None,
     ) -> Optional[Session]:
         if not self._use_firestore:
-            return await self._fallback.get_session(
-                app_name=app_name, user_id=user_id, session_id=session_id, config=config
-            )
+             raise RuntimeError("FirestoreSessionService is not available.")
             
         doc_ref = self.db.collection(self.collection_name).document(session_id)
         doc = await doc_ref.get()
@@ -107,7 +103,7 @@ class FirestoreSessionService(BaseSessionService):
 
     async def list_sessions(self, *, app_name: str, user_id: str) -> ListSessionsResponse:
         if not self._use_firestore:
-            return await self._fallback.list_sessions(app_name=app_name, user_id=user_id)
+             raise RuntimeError("FirestoreSessionService is not available.")
             
         query = self.db.collection(self.collection_name)\
             .where("app_name", "==", app_name)\
@@ -129,7 +125,5 @@ class FirestoreSessionService(BaseSessionService):
 
     async def delete_session(self, *, app_name: str, user_id: str, session_id: str) -> None:
         if not self._use_firestore:
-            return await self._fallback.delete_session(
-                app_name=app_name, user_id=user_id, session_id=session_id
-            )
+             raise RuntimeError("FirestoreSessionService is not available.")
         await self.db.collection(self.collection_name).document(session_id).delete()
