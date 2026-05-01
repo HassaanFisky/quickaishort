@@ -10,7 +10,7 @@ import logging
 from dotenv import load_dotenv
 
 # Load production env
-load_dotenv(dotenv_path="../.env")
+load_dotenv()
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)

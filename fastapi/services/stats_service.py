@@ -124,6 +124,12 @@ async def get_user_stats(user_id: str) -> dict[str, Any]:
     return _serialize(doc, user_id)
 
 
+async def is_user_premium(user_id: str) -> bool:
+    """Helper to check if a user is currently on a Pro/Premium plan."""
+    stats = await get_user_stats(user_id)
+    return stats.get("is_premium", False)
+
+
 async def recalculate_user_stats(user_id: str) -> dict[str, Any]:
     """Recalculate stats from scratch using aggregation on the exports collection."""
     if not is_ready():
@@ -182,5 +188,6 @@ def _serialize(doc: dict[str, Any] | None, user_id: str) -> dict[str, Any]:
         total_duration_processed=float(doc.get("total_duration_processed", 0.0)),
         export_count=int(doc.get("export_count", 0)),
         ai_runs=int(doc.get("ai_runs", 0)),
+        is_premium=bool(doc.get("is_premium", False)),
         updated_at=doc.get("updated_at") or datetime.now(timezone.utc),
     ).model_dump(mode="json")

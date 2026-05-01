@@ -25,7 +25,8 @@ from typing import Any, AsyncIterator, Literal, Optional
 
 from pydantic import BaseModel
 
-MODEL = "gemini-2.5-flash"
+from services.gemini_client import DEFAULT_MODEL
+MODEL = DEFAULT_MODEL
 
 logger = logging.getLogger(__name__)
 
@@ -481,9 +482,19 @@ def _build_pipeline() -> tuple[Any, Any]:
     max_iterations = int(os.environ.get("PREFLIGHT_MAX_ITERATIONS", MAX_ITERATIONS_DEFAULT))
     model = MODEL
 
+    # Configure retry options for Gemini API (429/5xx protection)
+    retry_config = genai_types.HttpRetryOptions(
+        initial_delay=2.0,
+        attempts=5,
+    )
+    generate_config = genai_types.GenerateContentConfig(
+        http_options=genai_types.HttpOptions(retry_options=retry_config)
+    )
+
     clip_candidate_agent = Agent(
         name="ClipCandidateAgent",
         model=model,
+        generate_content_config=generate_config,
         description="Validates clip metadata and prepares transcript for persona evaluation.",
         instruction=(
             "Read the clip candidate from session state key 'clip_candidates' (index 0). "
@@ -498,6 +509,7 @@ def _build_pipeline() -> tuple[Any, Any]:
         Agent(
             name=f"Persona_{pid}",
             model=model,
+            generate_content_config=generate_config,
             description=f"Simulates audience persona: {pid}",
             instruction=_build_persona_instruction(pid),
             output_key=f"persona_vote_{pid}",
@@ -516,6 +528,7 @@ def _build_pipeline() -> tuple[Any, Any]:
     clip_refinement_agent = Agent(
         name="ClipRefinementAgent",
         model=model,
+        generate_content_config=generate_config,
         description="Refines the clip based on persona drop-off patterns (premium only).",
         instruction=(
             "Read 'persona_votes_json' and 'current_clip_transcript' from session state. "

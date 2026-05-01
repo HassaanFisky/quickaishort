@@ -14,6 +14,7 @@ class UserStats(BaseModel):
     total_duration_processed: float = 0.0
     export_count: int = 0
     ai_runs: int = 0
+    is_premium: bool = False
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
 

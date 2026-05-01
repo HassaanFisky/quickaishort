@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>QuickAI Shorts</title>
+  <style>
+    *, *::before, *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      background: #000000;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /*
+     * Stage: fixed full-screen layer that holds both the text and the logo.
+     * Everything is centered via flex.
+     */
+    .stage {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    /* ── TEXT ─────────────────────────────────────────────────────────────── */
+    .text-wrap {
+      position: absolute;
+      /*
+       * Clip mask: starts fully visible (clip-path right edge = 100%).
+       * The JS-driven animation shrinks it from right to left so the
+       * logo appears to "wipe" the text as it slides across.
+       */
+      clip-path: inset(0 0 0 0);          /* top right bottom left */
+      will-change: clip-path;
+    }
+
+    .splash-text {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                   Helvetica, Arial, sans-serif;
+      font-size: clamp(18px, 3.5vw, 42px);
+      font-weight: 700;
+      letter-spacing: 0.22em;
+      color: #ffffff;
+      white-space: nowrap;
+      text-align: center;
+      user-select: none;
+      /*
+       * Subtle gradient to give the text depth — pure white feels flat
+       * against the glow-heavy logo.
+       */
+      background: linear-gradient(
+        to bottom,
+        #ffffff 0%,
+        #c8d8ff 100%
+      );
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    /* ── LOGO ─────────────────────────────────────────────────────────────── */
+    .logo-wrap {
+      position: absolute;
+      /*
+       * translateX starts at 0 (centered).
+       * JS animates it to a positive value so it settles on the right.
+       * will-change hints the browser to GPU-composite the layer.
+       */
+      transform: translateX(0);
+      will-change: transform;
+    }
+
+    .logo-img {
+      display: block;
+      width: clamp(160px, 22vw, 320px);
+      height: auto;
+      /*
+       * image-rendering: auto gives the browser permission to apply
+       * high-quality resampling — no pixelation or aliasing.
+       */
+      image-rendering: auto;
+      -webkit-user-drag: none;
+      user-select: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="stage" id="stage">
+    <div class="text-wrap" id="textWrap">
+      <span class="splash-text">QUICK AI SHORTS</span>
+    </div>
+    <div class="logo-wrap" id="logoWrap">
+      <img
+        class="logo-img"
+        src="/qs-logo.png"
+        alt="QuickAI Shorts"
+        draggable="false"
+        id="logoImg"
+      />
+    </div>
+  </div>
+
+  <script>
+    /**
+     * Splash animation — no libraries, pure rAF.
+     *
+     * Sequence:
+     *   0 ms        → both logo + text visible, centered.
+     *   300 ms      → hold (user registers the brand).
+     *   300–1000 ms → logo slides right; text wipes from right edge leftward
+     *                 as the logo's left edge sweeps across it.
+     *   1000 ms+    → final state: logo parked right, text fully gone.
+     */
+
+    const HOLD_MS   = 300;   // pause before motion
+    const SLIDE_MS  = 700;   // duration of the slide
+
+    // How far right the logo travels (% of viewport width, from center).
+    // 30 % puts it nicely inset from the right edge on any screen.
+    const TRAVEL_VW = 30;
+
+    // Cubic-bezier coefficients (ease-in-out feel, slightly faster exit).
+    // Matches CSS cubic-bezier(0.4, 0, 0.2, 1) — Material standard easing.
+    function ease(t) {
+      // Hermite interpolation — equivalent to smooth-step but double-smooth.
+      return t * t * (3 - 2 * t);
+    }
+
+    const stage    = document.getElementById("stage");
+    const logoWrap = document.getElementById("logoWrap");
+    const textWrap = document.getElementById("textWrap");
+    const logoImg  = document.getElementById("logoImg");
+
+    let startTime = null;
+
+    function getLogoLeft() {
+      const logoRect  = logoWrap.getBoundingClientRect();
+      return logoRect.left;
+    }
+
+    function getTextRight() {
+      const textRect = textWrap.getBoundingClientRect();
+      return textRect.right;
+    }
+
+    function getTextLeft() {
+      const textRect = textWrap.getBoundingClientRect();
+      return textRect.left;
+    }
+
+    function animate(timestamp) {
+      if (!startTime) startTime = timestamp;
+      const elapsed = timestamp - startTime;
+
+      // ── HOLD phase ────────────────────────────────────────────────────────
+      if (elapsed < HOLD_MS) {
+        requestAnimationFrame(animate);
+        return;
+      }
+
+      // ── SLIDE phase ───────────────────────────────────────────────────────
+      const progress = Math.min((elapsed - HOLD_MS) / SLIDE_MS, 1);
+      const t = ease(progress);
+
+      const vw         = window.innerWidth;
+      const translateX = t * (TRAVEL_VW / 100) * vw;
+
+      // Move logo right.
+      logoWrap.style.transform = `translateX(${translateX}px)`;
+
+      /*
+       * Wipe text from right to left.
+       *
+       * The text starts fully visible. As the logo moves right, its left edge
+       * approaches the text. We track the logo's current left boundary and
+       * shrink the text's clip-path right edge to match, so the logo appears
+       * to erase the text beneath it.
+       *
+       * clip-path inset(top right bottom left) — we animate the RIGHT inset
+       * from 0% → 100% over the duration of the slide.
+       *
+       * Rather than tracking pixel positions (which requires rects and can
+       * jitter), we drive the wipe purely off `progress` for determinism.
+       * The wipe starts immediately when motion starts and finishes exactly
+       * when the logo finishes moving.
+       */
+      const rightInset = t * 100;   // 0% → 100%
+      textWrap.style.clipPath = `inset(0 ${rightInset}% 0 0)`;
+
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      }
+      // At progress === 1: logo is settled, text is fully clipped. Done.
+    }
+
+    // Wait for the logo image to load so the first frame shows it correctly.
+    function start() {
+      requestAnimationFrame(animate);
+    }
+
+    if (logoImg.complete) {
+      start();
+    } else {
+      logoImg.addEventListener("load", start, { once: true });
+    }
+  </script>
+</body>
+</html>

@@ -97,7 +97,7 @@ def _build_viral_pipeline():
         return None
 
     model = DEFAULT_MODEL
-    # Configure retry options for Gemini API
+    # Configure retry options for Gemini API (429/5xx protection)
     retry_config = genai_types.HttpRetryOptions(
         initial_delay=2.0,
         attempts=5,
@@ -315,18 +315,22 @@ async def run_viral_pipeline(
             new_message=message,
         ):
             if event.is_final_response():
-                final_text = event.text or "[]"
+                final_text = getattr(event, "text", None)
+                if not final_text and hasattr(event, "content"):
+                    parts = getattr(event.content, "parts", [])
+                    if parts and hasattr(parts[0], "text"):
+                        final_text = parts[0].text
+                
+                final_text = final_text or "[]"
                 break
 
         suggestions = _coerce_suggestions(final_text)
 
-        # If the ADK pipeline didn't produce frames-aware scoring (current ADK
-        # versions don't accept inline_data on session-state strings), and we
-        # have a video_id, escalate to a direct vision-grounded re-score.
-        if video_id and suggestions and all(
-            s.viralAnalysis.cameraMovement == 0.5 for s in suggestions
-        ):
+        # Pillar 3: Always escalate to vision-grounded re-scoring if we have a video_id,
+        # as ADK doesn't natively support image parts in the session state yet.
+        if video_id and suggestions:
             try:
+                logger.info("Escalating to vision-grounded re-scoring for video %s", video_id)
                 rescored = await _direct_gemini_pipeline(
                     transcript_text, duration, video_id
                 )
