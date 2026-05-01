@@ -168,6 +168,7 @@ origins = [
     "http://localhost:3000",
     "https://quickaishort.online",
     "https://www.quickaishort.online",
+    "https://quickaishort-ls7d.vercel.app",
     "http://localhost:8000",
 ]
 if allowed_origins_env:
