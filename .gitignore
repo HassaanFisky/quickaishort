@@ -40,6 +40,10 @@ yarn-error.log*
 # vercel
 .vercel
 
+# temporary tools
+atlas-cli/
+atlas-cli.zip
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
