@@ -146,7 +146,9 @@ def _build_download_url(job_id: str, user_id: str) -> str:
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    logger.info("Lifespan starting: initializing database...")
     await init_db()
+    logger.info("Database initialization call complete.")
     stop_event = asyncio.Event()
     listener_task = asyncio.create_task(_pubsub_listener(stop_event))
     try:

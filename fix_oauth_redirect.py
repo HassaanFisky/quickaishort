@@ -10,7 +10,7 @@ import subprocess
 import sys
 import os
 
-# ─── CONFIG ───────────────────────────────────────────────────────────────────
+# --- CONFIG -------------------------------------------------------------------
 PROJECT_ID = "quickaishort-agent-494304"
 CLIENT_ID_FULL = "946316698978-3v45aar5pb92gn7f39qor3c3d38snl5l.apps.googleusercontent.com"
 NUMERIC_PROJECT = "946316698978"
@@ -22,7 +22,7 @@ REQUIRED_REDIRECT_URIS = [
     "http://localhost:3000/api/auth/callback/google",
 ]
 
-# ─── STEP 1: Get access token via gcloud if available, else try ADC ──────────
+# --- STEP 1: Get access token via gcloud if available, else try ADC ----------
 def get_access_token():
     """Try multiple methods to get a Google access token."""
     
@@ -42,7 +42,7 @@ def get_access_token():
             )
             if result.returncode == 0:
                 token = result.stdout.strip()
-                print("✅ Got access token via gcloud")
+                print("[OK] Got access token via gcloud")
                 return token
     
     # Method 2: Try application default credentials file
@@ -65,12 +65,12 @@ def get_access_token():
             req = urllib.request.Request(token_url, data=data, method="POST")
             with urllib.request.urlopen(req) as resp:
                 token_data = json.loads(resp.read())
-                print("✅ Got access token via ADC refresh token")
+                print("[OK] Got access token via ADC refresh token")
                 return token_data["access_token"]
     
     return None
 
-# ─── STEP 2: Get current OAuth client config ─────────────────────────────────
+# --- STEP 2: Get current OAuth client config ---------------------------------
 def get_oauth_client(token):
     """Fetch current OAuth client configuration."""
     # The client name format for the API
@@ -88,7 +88,7 @@ def get_oauth_client(token):
         print(f"Identity Toolkit API error: {e.code} - {body}")
         return None
 
-# ─── STEP 3: Use the correct Google Cloud API endpoint ───────────────────────
+# --- STEP 3: Use the correct Google Cloud API endpoint -----------------------
 def fix_via_cloud_api(token):
     """Use Google Cloud IAP/OAuth API to update redirect URIs."""
     
@@ -109,7 +109,7 @@ def fix_via_cloud_api(token):
         print(f"API error: {e.code} - {body[:500]}")
         return None
 
-# ─── MAIN ─────────────────────────────────────────────────────────────────────
+# --- MAIN ---------------------------------------------------------------------
 def main():
     print("=" * 60)
     print("QuickAI OAuth Redirect URI Fix Script")
@@ -118,32 +118,32 @@ def main():
     print(f"Client:  {CLIENT_ID_FULL}")
     print(f"\nRequired Redirect URIs:")
     for uri in REQUIRED_REDIRECT_URIS:
-        print(f"  ✓ {uri}")
+        print(f"  [+] {uri}")
     
-    print("\n" + "─" * 60)
+    print("\n" + "-" * 60)
     print("Checking for Google credentials...")
     
     token = get_access_token()
     
     if not token:
-        print("\n❌ Could not get access token automatically.")
+        print("\n[!] Could not get access token automatically.")
         print("\nThe Google OAuth redirect URIs CANNOT be updated via API")
         print("(Google does not expose a public API to modify OAuth clients).")
-        print("\n📋 MANUAL FIX REQUIRED (2 minutes):")
-        print("─" * 40)
+        print("\n[!] MANUAL FIX REQUIRED (2 minutes):")
+        print("-" * 40)
         print("1. Open: https://console.cloud.google.com/apis/credentials")
         print(f"   Project: {PROJECT_ID}")
         print(f"\n2. Click on your OAuth 2.0 Client ID:")
         print(f"   Name starts with: {CLIENT_ID_FULL[:30]}...")
         print(f"\n3. Under 'Authorized redirect URIs', ADD these:")
         for uri in REQUIRED_REDIRECT_URIS:
-            print(f"   → {uri}")
+            print(f"   -> {uri}")
         print(f"\n4. Click SAVE")
-        print("─" * 40)
-        print("\n✅ That's it! Login will work immediately after saving.")
+        print("-" * 40)
+        print("\n[+] That's it! Login will work immediately after saving.")
         return
     
-    print(f"✅ Token obtained: {token[:20]}...")
+    print(f"[OK] Token obtained: {token[:20]}...")
     fix_via_cloud_api(token)
 
 if __name__ == "__main__":

@@ -1,8 +1,0 @@
-{
-  "experimentalServices": {
-    "fastapi": {
-      "entrypoint": "fastapi",
-      "routePrefix": "/"
-    }
-  }
-}

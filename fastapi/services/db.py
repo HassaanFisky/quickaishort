@@ -30,14 +30,16 @@ async def init_db() -> None:
         logger.warning("MONGODB_URI not set — Mongo features disabled.")
         return
 
-    _client = AsyncIOMotorClient(uri, serverSelectionTimeoutMS=5000)
+    _client = AsyncIOMotorClient(uri, serverSelectionTimeoutMS=10000)
     _db = _client[DB_NAME]
     _exports_bucket = AsyncIOMotorGridFSBucket(_db, bucket_name=EXPORTS_BUCKET)
 
     try:
+        logger.info("Pinging MongoDB...")
         await _client.admin.command("ping")
+        logger.info("MongoDB ping successful.")
     except Exception as exc:
-        logger.error("MongoDB ping failed: %s", exc)
+        logger.error("MongoDB ping failed: %s", exc, exc_info=True)
         _client = None
         _db = None
         _exports_bucket = None

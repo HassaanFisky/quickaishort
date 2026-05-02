@@ -141,9 +141,8 @@ TECH STACK LOCKED — DO NOT SWAP
 - Backend: Python 3.12, FastAPI, yt-dlp, FFmpeg (Server-side via Railway/Cloud Run)
 - Agent: Google ADK v1.0, gemini-2.5-flash (DEFAULT_MODEL in gemini_client.py)
 - Task Queue: Redis + RQ for background rendering and stats sync
-- Deploy: Vercel (frontend) + Railway.app (backend, because Pakistan GCP 
-  billing is blocked)
-- Storage: Supabase (free tier)
+- Deploy: Vercel (frontend) + Google Cloud Run (backend)
+- Storage: MongoDB Atlas (GridFS) + Supabase (free tier)
 - Domain: quickaishort.online via Cloudflare DNS
 
 FORBIDDEN CHANGES
@@ -364,13 +363,11 @@ COMPLETED:
 - Verified zero-error production build (Next.js 14+)
 
 IN PROGRESS:
-- Railway.app deployment (install google-adk in production venv)
+- Cloud Run deployment (Backend migration from Railway)
 - Google for Startups form submission
 
 BLOCKED:
-- GCP billing (Pakistani card restriction) — workaround: Railway + AI Studio API
-- BigQuery personalized analytics (requires GCP billing) — graceful fallback implemented
-- YouTube OAuth credentials not yet configured — fallback baseline (55% retention) active
+- None. (GCP billing and YouTube OAuth issues are being resolved for production).
 
 ENVIRONMENT VARIABLES NEEDED (add to fastapi/.env if not present):
 - GEMINI_API_KEY=<existing key>
