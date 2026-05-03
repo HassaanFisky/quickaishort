@@ -17,6 +17,7 @@ redis==5.0.4
 rq==1.16.2
 pusher==3.3.2
 ffmpeg-python==0.2.0
+moviepy==1.0.3
 motor==3.6.0
 pymongo==4.9.1
 httpx==0.28.1

@@ -21,13 +21,21 @@ CHANNEL_EXPORT_FAILED = "qais:export:failed"
 CHANNEL_STATS_INCREMENT = "qais:stats:increment"
 
 
+_redis_pub: Any = None
+
+
 def get_redis() -> Redis:
-    return Redis(
-        host=os.getenv("REDIS_HOST", "localhost"),
-        port=int(os.getenv("REDIS_PORT", "6379")),
-        password=os.getenv("REDIS_PASSWORD") or None,
-        decode_responses=True,
-    )
+    global _redis_pub
+    if _redis_pub is None:
+        _redis_pub = Redis(
+            host=os.getenv("REDIS_HOST", "localhost"),
+            port=int(os.getenv("REDIS_PORT", "6379")),
+            password=os.getenv("REDIS_PASSWORD") or None,
+            decode_responses=True,
+            socket_timeout=5,
+            retry_on_timeout=True,
+        )
+    return _redis_pub
 
 
 def publish(channel: str, payload: dict[str, Any]) -> None:

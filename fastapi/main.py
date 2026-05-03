@@ -13,6 +13,7 @@ import uuid
 from contextlib import asynccontextmanager
 from typing import List, Literal, Optional
 
+import httpx
 import requests
 import uvicorn
 import yt_dlp
@@ -447,9 +448,11 @@ async def stats_ws(websocket: WebSocket, user_id: str):
 
 
 @app.get("/api/info")
-def get_video_info(url: str):
+async def get_video_info(url: str):
     if not url:
         raise HTTPException(status_code=400, detail="URL is required")
+
+    import httpx
 
     # Extract video ID from URL
     video_id_match = re.search(r'(?:v=|\/)([0-9A-Za-z_-]{11}).*', url)
@@ -462,9 +465,11 @@ def get_video_info(url: str):
             # Use official YouTube Data API v3
             api_url = f"https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id={video_id}&key={api_key}"
             headers = {"Referer": "https://www.quickaishort.online"}
-            response = requests.get(api_url, headers=headers, timeout=10)
-            response.raise_for_status()
-            data = response.json()
+            
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(api_url, headers=headers)
+                response.raise_for_status()
+                data = response.json()
             
             if data.get("items"):
                 item = data["items"][0]
@@ -484,7 +489,7 @@ def get_video_info(url: str):
                     "title": item["snippet"]["title"],
                     "duration": duration_sec,
                     "thumbnail": best_thumb.get("url", ""),
-                    "formats": [], # Not provided by Data API, but UI usually doesn't need this for basic info
+                    "formats": [], 
                     "url": f"https://www.youtube.com/watch?v={video_id}",
                     "source": "youtube_data_api"
                 }
@@ -499,31 +504,38 @@ def get_video_info(url: str):
     })
 
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=False)
-            return {
-                "id": info.get("id"),
-                "title": info.get("title"),
-                "duration": info.get("duration"),
-                "thumbnail": info.get("thumbnail"),
-                "formats": info.get("formats"),
-                "url": info.get("url"),
-                "source": "yt-dlp"
-            }
+        loop = asyncio.get_event_loop()
+        def _extract():
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                return ydl.extract_info(url, download=False)
+        
+        info = await loop.run_in_executor(None, _extract)
+        return {
+            "id": info.get("id"),
+            "title": info.get("title"),
+            "duration": info.get("duration"),
+            "thumbnail": info.get("thumbnail"),
+            "formats": info.get("formats"),
+            "url": info.get("url"),
+            "source": "yt-dlp"
+        }
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
 
 @app.get("/api/proxy")
-def proxy_video(url: str):
+async def proxy_video(url: str):
     if not url:
         raise HTTPException(status_code=400, detail="URL is required")
 
-    def iterfile(stream_url):
-        with requests.get(stream_url, stream=True, timeout=30) as r:
-            r.raise_for_status()
-            for chunk in r.iter_content(chunk_size=16384):
-                yield chunk
+    import httpx
+    
+    async def iterfile(stream_url):
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            async with client.stream("GET", stream_url) as r:
+                r.raise_for_status()
+                async for chunk in r.aiter_bytes(chunk_size=16384):
+                    yield chunk
 
     stream_url = None
 
@@ -533,24 +545,47 @@ def proxy_video(url: str):
     })
     
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=False)
-            stream_url = info.get("url")
+        # We run blocking yt-dlp in a thread to avoid stalling the event loop
+        loop = asyncio.get_event_loop()
+        def _extract():
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                return ydl.extract_info(url, download=False)
+        
+        info = await loop.run_in_executor(None, _extract)
+        stream_url = info.get("url")
     except Exception as exc:
         logger.warning(f"yt-dlp failed in proxy, falling back to Cobalt API v10: {exc}")
         try:
-            cobalt_response = requests.post(
-                "https://api.cobalt.tools/",
-                json={"url": url, "videoQuality": "1080", "downloadMode": "auto"},
-                headers={"Accept": "application/json", "Content-Type": "application/json"},
-                timeout=20,
-            )
-            cobalt_response.raise_for_status()
-            cobalt_data = cobalt_response.json()
-            if cobalt_data.get("status") in ("tunnel", "redirect"):
-                stream_url = cobalt_data.get("url")
-            if not stream_url:
-                raise RuntimeError(f"Cobalt bad status: {cobalt_data.get('status')}")
+            async with httpx.AsyncClient(timeout=20.0) as client:
+                cobalt_response = await client.post(
+                    "https://api.cobalt.tools/",
+                    json={
+                        "url": url, 
+                        "videoQuality": "1080", 
+                        "downloadMode": "auto",
+                        "videoCodec": "h264"  # Prefer H.264 for browser compatibility
+                    },
+                    headers={
+                        "Accept": "application/json", 
+                        "Content-Type": "application/json",
+                        "User-Agent": "QuickAIShort-Production/1.0"
+                    },
+                )
+                cobalt_response.raise_for_status()
+                cobalt_data = cobalt_response.json()
+                
+                status = cobalt_data.get("status")
+                if status in ("tunnel", "redirect"):
+                    stream_url = cobalt_data.get("url")
+                elif status == "picker":
+                    # Take the first video-like format
+                    pickers = cobalt_data.get("picker", [])
+                    video_pickers = [p for p in pickers if "video" in p.get("type", "")]
+                    if video_pickers:
+                        stream_url = video_pickers[0].get("url")
+                
+                if not stream_url:
+                    raise RuntimeError(f"Cobalt bad status: {status}")
         except Exception as cobalt_exc:
             logger.error(f"Cobalt fallback also failed: {cobalt_exc}")
             raise HTTPException(status_code=500, detail="Both yt-dlp and Cobalt proxy failed. Video may be unavailable.")

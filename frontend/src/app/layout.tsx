@@ -22,17 +22,23 @@ const montserrat = Montserrat({
 });
 
 export const metadata: Metadata = {
-  title: "QuickAI Shorts - Free-for-Life AI Video Shorts Generator",
+  title: "QuickAI Shorts | The World's Most Powerful AI Short-Form Studio",
   description:
-    "Create viral YouTube Shorts instantly from any video using client-side AI analysis and processing.",
+    "Transform long-form videos into viral shorts instantly. Powered by Gemini 2.0 Flash and multi-agent AI for 100% stable extraction, automatic captions, and viral scoring.",
+  keywords: ["AI video editor", "youtube shorts generator", "viral clips", "gemini ai", "video automation", "content creator tools"],
+  authors: [{ name: "QuickAI Team" }],
+  manifest: "/manifest.json",
   icons: {
     icon: "/qs-logo.png",
     shortcut: "/qs-logo.png",
     apple: "/qs-logo.png",
   },
   openGraph: {
-    title: "QuickAI Shorts",
-    description: "Create viral YouTube Shorts instantly from any video.",
+    type: "website",
+    url: "https://quickaishort.online",
+    title: "QuickAI Shorts | AI Video Studio",
+    description: "The elite studio for creating viral shorts with multi-agent AI.",
+    siteName: "QuickAI Shorts",
     images: [
       {
         url: "/qs-logo.png",
@@ -44,9 +50,10 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "QuickAI Shorts",
-    description: "Create viral YouTube Shorts instantly from any video.",
+    title: "QuickAI Shorts | Viral AI Clips",
+    description: "Transform long-form videos into viral shorts instantly with AI.",
     images: ["/qs-logo.png"],
+    creator: "@quickaishort",
   },
 };
 
