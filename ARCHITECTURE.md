@@ -1,12 +1,16 @@
 # QuickAIShort.online — System Architecture
+
 **Google AI Agents Challenge 2026**
+
 **Stack:** Next.js 16 · FastAPI · Google ADK 1.0 · Gemini 2.5 Flash · FFmpeg.wasm · Whisper.wasm
 
 ---
 
+
 ## Agent Topology
 
-```
+```text
+
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                         QUICKAISHORT.ONLINE                             │
 │             Pre-Flight: Pre-Publication Clip Validation System          │
@@ -90,7 +94,7 @@
 ## ADK Primitive Usage
 
 | Node | ADK Primitive | Purpose |
-|---|---|---|
+| :--- | :--- | :--- |
 | PreFlight_Orchestrator | `SequentialAgent` | Runs 4 steps in strict order |
 | PersonaPanel | `ParallelAgent` | Fires all 6 personas simultaneously |
 | AudiencePanelLoop | `LoopAgent` | Iterates until quality gate passes or max_iter reached |
@@ -102,11 +106,13 @@
 | QualityGateAgent | `Agent` | Sets loop exit flag + recommendation |
 | ClipRefinementAgent | `Agent` | Edits clip boundaries from majority drop-off point |
 
+
 ---
 
 ## Data Flow
 
-```
+```text
+
 YouTube URL
     │
     ▼  yt-dlp (FastAPI)
@@ -144,20 +150,22 @@ Frontend (RightPanel.tsx)
 ## MCP Servers
 
 | Server | Tools Used | Purpose |
-|---|---|---|
+| :--- | :--- | :--- |
 | Supabase MCP | `execute_sql`, `list_tables`, `apply_migration` | User accounts, export history, credits |
 | BigQuery (google-cloud-bigquery Python client) | Direct SQL queries | Creator channel historical retention analytics |
+
 
 ---
 
 ## Deployment
 
 | Component | Platform | Notes |
-|---|---|---|
+| :--- | :--- | :--- |
 | Frontend | Vercel | `npm run build` → 13+ static routes |
 | Backend + ADK | Railway.app | Installs `requirements.txt`, binds `$PORT` |
 | Database | Supabase (free tier) | Managed Postgres + MCP integration |
 | AI Models | Google AI Studio | Gemini 2.5 Flash, no GCP billing required |
+
 
 **Note:** GCP direct deployment blocked (Pakistani card restriction on billing). Railway.app is the verified production workaround.
 
@@ -166,14 +174,16 @@ Frontend (RightPanel.tsx)
 ## Business Case in 3 Numbers
 
 | Metric | Value |
-|---|---|
+| :--- | :--- |
 | Creator economy TAM | **$117B** (Goldman Sachs, 2023) |
 | Creator uploads that get < 1K views | **~40%** — wasted without pre-validation |
 | Median view lift for Pre-Flight-validated clips | **3.8×** vs unvalidated baseline |
 
+
 **Core insight:** Every competitor (OpusClip, Vizard, Klap, Munch) produces clips blind. QuickAIShort is the only system that runs a simulated audience panel before publication.
 
-*"OpusClip shows you which clip. Pre-Flight shows you if it will work."*
+> *"OpusClip shows you which clip. Pre-Flight shows you if it will work."*
+
 
 ---
 
