@@ -25,6 +25,29 @@ export const metadata: Metadata = {
   title: "QuickAI Shorts - Free-for-Life AI Video Shorts Generator",
   description:
     "Create viral YouTube Shorts instantly from any video using client-side AI analysis and processing.",
+  icons: {
+    icon: "/qs-logo.png",
+    shortcut: "/qs-logo.png",
+    apple: "/qs-logo.png",
+  },
+  openGraph: {
+    title: "QuickAI Shorts",
+    description: "Create viral YouTube Shorts instantly from any video.",
+    images: [
+      {
+        url: "/qs-logo.png",
+        width: 1024,
+        height: 1024,
+        alt: "QuickAI Shorts Logo",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "QuickAI Shorts",
+    description: "Create viral YouTube Shorts instantly from any video.",
+    images: ["/qs-logo.png"],
+  },
 };
 
 export default function RootLayout({
