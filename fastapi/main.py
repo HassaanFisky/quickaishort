@@ -461,7 +461,8 @@ def get_video_info(url: str):
         try:
             # Use official YouTube Data API v3
             api_url = f"https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id={video_id}&key={api_key}"
-            response = requests.get(api_url, timeout=10)
+            headers = {"Referer": "https://www.quickaishort.online"}
+            response = requests.get(api_url, headers=headers, timeout=10)
             response.raise_for_status()
             data = response.json()
             
