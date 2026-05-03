@@ -19,6 +19,8 @@ def download_youtube_audio(url: str, job_id: str, uid: str) -> Optional[str]:
         "-x",
         "--audio-format", "mp3",
         "-o", local_path,
+        "--extractor-args", "youtube:player-client=web,ios",
+        "--no-check-certificate",
         url
     ]
     

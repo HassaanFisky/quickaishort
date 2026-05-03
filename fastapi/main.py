@@ -453,6 +453,8 @@ def get_video_info(url: str):
         "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
         "quiet": True,
         "no_warnings": True,
+        "extractor_args": {"youtube": {"player_client": ["web", "ios"]}},
+        "nocheckcertificate": True,
     }
 
     try:
