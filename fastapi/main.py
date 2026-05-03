@@ -453,7 +453,7 @@ def get_video_info(url: str):
         "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
         "quiet": True,
         "no_warnings": True,
-        "extractor_args": {"youtube": {"player_client": ["web", "ios"]}},
+        "extractor_args": {"youtube": {"player_client": ["android", "ios"]}},
         "nocheckcertificate": True,
     }
 
@@ -480,7 +480,7 @@ def proxy_video(url: str):
     ydl_opts = {
         "format": "best[ext=mp4]", 
         "quiet": True,
-        "extractor_args": {"youtube": {"player_client": ["web", "ios"]}},
+        "extractor_args": {"youtube": {"player_client": ["android", "ios"]}},
         "nocheckcertificate": True,
     }
     try:

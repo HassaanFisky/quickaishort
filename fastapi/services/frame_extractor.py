@@ -135,6 +135,8 @@ def _download_segment(video_id: str, start: float, end: float, workdir: Path) ->
         "no_warnings": True,
         "force_keyframes_at_cuts": True,
         "merge_output_format": "mp4",
+        "extractor_args": {"youtube": {"player_client": ["android", "ios"]}},
+        "nocheckcertificate": True,
     }
     youtube_url = f"https://www.youtube.com/watch?v={video_id}"
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:

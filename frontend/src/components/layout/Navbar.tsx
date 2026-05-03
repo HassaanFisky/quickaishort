@@ -154,17 +154,17 @@ export default function Navbar() {
             <div className="flex items-center gap-3">
               <Button
                 variant="ghost"
-                onClick={() => signIn("google")}
+                asChild
                 className="text-sm font-bold hover:bg-white/5 rounded-xl h-10 px-5"
               >
-                Sign In
+                <Link href="/signin">Sign In</Link>
               </Button>
               <GlowButton
-                onClick={() => signIn("google")}
+                asChild
                 size="sm"
                 className="h-10 px-6 rounded-xl"
               >
-                Get Started
+                <Link href="/signup">Get Started</Link>
               </GlowButton>
             </div>
           )}

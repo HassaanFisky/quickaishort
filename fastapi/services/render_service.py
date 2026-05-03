@@ -122,6 +122,8 @@ class RenderService:
             "no_warnings": True,
             "force_keyframes_at_cuts": True,
             "merge_output_format": "mp4",
+            "extractor_args": {"youtube": {"player_client": ["android", "ios"]}},
+            "nocheckcertificate": True,
         }
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -264,6 +266,8 @@ def render_video(production_plan: dict) -> str:
                     "format": "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
                     "outtmpl": str(workdir / f"download_{i}.%(ext)s"),
                     "quiet": True,
+                    "extractor_args": {"youtube": {"player_client": ["android", "ios"]}},
+                    "nocheckcertificate": True,
                 }
                 with YoutubeDL(ydl_opts) as ydl:
                     info = ydl.extract_info(clip_source, download=True)
