@@ -450,6 +450,47 @@ def get_video_info(url: str):
     if not url:
         raise HTTPException(status_code=400, detail="URL is required")
 
+    # Extract video ID from URL
+    import re
+    video_id_match = re.search(r'(?:v=|\/)([0-9A-Za-z_-]{11}).*', url)
+    video_id = video_id_match.group(1) if video_id_match else None
+
+    api_key = os.environ.get("YOUTUBE_API_KEY")
+
+    if api_key and video_id:
+        try:
+            # Use official YouTube Data API v3
+            api_url = f"https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id={video_id}&key={api_key}"
+            response = requests.get(api_url, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            
+            if data.get("items"):
+                item = data["items"][0]
+                # Parse duration (ISO 8601 to seconds)
+                duration_iso = item["contentDetails"]["duration"]
+                duration_sec = 0
+                time_match = re.match(r'PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?', duration_iso)
+                if time_match:
+                    h, m, s = time_match.groups()
+                    duration_sec = int(h or 0) * 3600 + int(m or 0) * 60 + int(s or 0)
+                    
+                thumbnails = item["snippet"]["thumbnails"]
+                best_thumb = thumbnails.get("maxres", thumbnails.get("high", thumbnails.get("default", {})))
+                
+                return {
+                    "id": video_id,
+                    "title": item["snippet"]["title"],
+                    "duration": duration_sec,
+                    "thumbnail": best_thumb.get("url", ""),
+                    "formats": [], # Not provided by Data API, but UI usually doesn't need this for basic info
+                    "url": f"https://www.youtube.com/watch?v={video_id}",
+                    "source": "youtube_data_api"
+                }
+        except Exception as exc:
+            logger.warning(f"YouTube Data API failed, falling back to yt-dlp: {exc}")
+
+    # Fallback to yt-dlp
     ydl_opts = inject_ydl_bypass({
         "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
         "quiet": True,
@@ -466,6 +507,7 @@ def get_video_info(url: str):
                 "thumbnail": info.get("thumbnail"),
                 "formats": info.get("formats"),
                 "url": info.get("url"),
+                "source": "yt-dlp"
             }
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
@@ -476,31 +518,55 @@ def proxy_video(url: str):
     if not url:
         raise HTTPException(status_code=400, detail="URL is required")
 
+    def iterfile(stream_url):
+        with requests.get(stream_url, stream=True, timeout=30) as r:
+            r.raise_for_status()
+            for chunk in r.iter_content(chunk_size=16384):
+                yield chunk
+
+    stream_url = None
+
     ydl_opts = inject_ydl_bypass({
         "format": "best[ext=mp4]", 
         "quiet": True,
     })
+    
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
             stream_url = info.get("url")
-            if not stream_url:
-                raise HTTPException(status_code=404, detail="Could not retrieve stream URL")
+    except Exception as exc:
+        logger.warning(f"yt-dlp failed in proxy, falling back to Cobalt API: {exc}")
+        # Cobalt API Fallback
+        try:
+            headers = {
+                "Accept": "application/json",
+                "Content-Type": "application/json"
+            }
+            payload = {
+                "url": url,
+                "videoQuality": "1080"
+            }
+            cobalt_response = requests.post("https://api.cobalt.tools/api/json", json=payload, headers=headers, timeout=15)
+            cobalt_response.raise_for_status()
+            cobalt_data = cobalt_response.json()
+            stream_url = cobalt_data.get("url")
+        except Exception as cobalt_exc:
+            logger.error(f"Cobalt fallback also failed: {cobalt_exc}")
+            raise HTTPException(status_code=500, detail="Failed to retrieve stream URL from both primary and fallback extractors.")
 
-            def iterfile():
-                with requests.get(stream_url, stream=True, timeout=30) as r:
-                    r.raise_for_status()
-                    for chunk in r.iter_content(chunk_size=16384):
-                        yield chunk
+    if not stream_url:
+        raise HTTPException(status_code=404, detail="Could not retrieve stream URL")
 
-            return StreamingResponse(
-                iterfile(),
-                media_type="video/mp4",
-                headers={
-                    "Access-Control-Allow-Origin": "*",
-                    "Cross-Origin-Resource-Policy": "cross-origin",
-                },
-            )
+    try:
+        return StreamingResponse(
+            iterfile(stream_url),
+            media_type="video/mp4",
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Cross-Origin-Resource-Policy": "cross-origin",
+            },
+        )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
