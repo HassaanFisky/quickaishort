@@ -21,6 +21,7 @@ from typing import Optional
 
 import ffmpeg
 import yt_dlp
+from app.utils.youtube_auth import inject_ydl_bypass
 
 logger = logging.getLogger(__name__)
 
@@ -126,7 +127,7 @@ def extract_clip_frames(
 
 def _download_segment(video_id: str, start: float, end: float, workdir: Path) -> Path:
     template = str(workdir / f"src_{video_id}.%(ext)s")
-    ydl_opts = {
+    ydl_opts = inject_ydl_bypass({
         # Lowest reasonable quality — we only need frames for vision scoring.
         "format": "worstvideo[ext=mp4]+worstaudio[ext=m4a]/worst[ext=mp4]/worst",
         "download_ranges": yt_dlp.utils.download_range_func(None, [(start, end)]),
@@ -135,9 +136,7 @@ def _download_segment(video_id: str, start: float, end: float, workdir: Path) ->
         "no_warnings": True,
         "force_keyframes_at_cuts": True,
         "merge_output_format": "mp4",
-        "extractor_args": {"youtube": {"player_client": ["android", "ios"]}},
-        "nocheckcertificate": True,
-    }
+    })
     youtube_url = f"https://www.youtube.com/watch?v={video_id}"
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(youtube_url, download=True)

@@ -15,6 +15,7 @@ from typing import List, Literal, Optional
 import requests
 import uvicorn
 import yt_dlp
+from app.utils.youtube_auth import inject_ydl_bypass
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -449,13 +450,11 @@ def get_video_info(url: str):
     if not url:
         raise HTTPException(status_code=400, detail="URL is required")
 
-    ydl_opts = {
+    ydl_opts = inject_ydl_bypass({
         "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
         "quiet": True,
         "no_warnings": True,
-        "extractor_args": {"youtube": {"player_client": ["android", "ios"]}},
-        "nocheckcertificate": True,
-    }
+    })
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -477,12 +476,10 @@ def proxy_video(url: str):
     if not url:
         raise HTTPException(status_code=400, detail="URL is required")
 
-    ydl_opts = {
+    ydl_opts = inject_ydl_bypass({
         "format": "best[ext=mp4]", 
         "quiet": True,
-        "extractor_args": {"youtube": {"player_client": ["android", "ios"]}},
-        "nocheckcertificate": True,
-    }
+    })
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)

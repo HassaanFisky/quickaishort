@@ -24,6 +24,7 @@ from typing import Literal, Optional
 
 import ffmpeg
 import yt_dlp
+from app.utils.youtube_auth import inject_ydl_bypass
 
 logger = logging.getLogger(__name__)
 
@@ -112,7 +113,7 @@ class RenderService:
         youtube_url = f"https://www.youtube.com/watch?v={job.video_id}"
         output_template = str(workdir / f"source_{uuid.uuid4().hex}.%(ext)s")
 
-        ydl_opts = {
+        ydl_opts = inject_ydl_bypass({
             "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
             "download_ranges": yt_dlp.utils.download_range_func(
                 None, [(job.start_sec, job.end_sec)]
@@ -122,9 +123,7 @@ class RenderService:
             "no_warnings": True,
             "force_keyframes_at_cuts": True,
             "merge_output_format": "mp4",
-            "extractor_args": {"youtube": {"player_client": ["android", "ios"]}},
-            "nocheckcertificate": True,
-        }
+        })
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(youtube_url, download=True)
@@ -262,13 +261,11 @@ def render_video(production_plan: dict) -> str:
                 )
             elif clip_source.startswith("http"):
                 # Real download and trim
-                ydl_opts = {
+                ydl_opts = inject_ydl_bypass({
                     "format": "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
                     "outtmpl": str(workdir / f"download_{i}.%(ext)s"),
                     "quiet": True,
-                    "extractor_args": {"youtube": {"player_client": ["android", "ios"]}},
-                    "nocheckcertificate": True,
-                }
+                })
                 with YoutubeDL(ydl_opts) as ydl:
                     info = ydl.extract_info(clip_source, download=True)
                     downloaded_file = ydl.prepare_filename(info)

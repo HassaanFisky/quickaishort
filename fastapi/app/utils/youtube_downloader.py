@@ -3,6 +3,7 @@ import logging
 from typing import Optional
 import yt_dlp
 from app.storage.gcs_repo import gcs_repo
+from app.utils.youtube_auth import inject_ydl_bypass
 
 logger = logging.getLogger(__name__)
 
@@ -13,7 +14,7 @@ def download_youtube_audio(url: str, job_id: str, uid: str) -> Optional[str]:
     """
     local_path = f"/tmp/{job_id}_yt_audio.mp3"
     
-    ydl_opts = {
+    ydl_opts = inject_ydl_bypass({
         "format": "bestaudio/best",
         "postprocessors": [{
             "key": "FFmpegExtractAudio",
@@ -23,9 +24,7 @@ def download_youtube_audio(url: str, job_id: str, uid: str) -> Optional[str]:
         "outtmpl": f"/tmp/{job_id}_yt_audio.%(ext)s", # yt-dlp will append .mp3 after postprocessing
         "quiet": True,
         "no_warnings": True,
-        "extractor_args": {"youtube": {"player_client": ["android", "ios"]}},
-        "nocheckcertificate": True,
-    }
+    })
     
     try:
         logger.info(f"Downloading YouTube audio: {url}")
