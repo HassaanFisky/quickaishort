@@ -31,19 +31,44 @@ _COBALT_API = "https://api.cobalt.tools/"
 
 
 def _cobalt_get_stream_url(url: str) -> str:
-    """Cobalt API v10 — returns a direct stream URL or raises."""
-    resp = requests.post(
-        _COBALT_API,
-        json={"url": url, "videoQuality": "1080", "downloadMode": "auto"},
-        headers={"Accept": "application/json", "Content-Type": "application/json"},
-        timeout=20,
-    )
-    resp.raise_for_status()
-    data = resp.json()
-    stream_url = data.get("url")
-    if data.get("status") in ("tunnel", "redirect") and stream_url:
-        return stream_url
-    raise RuntimeError(f"Cobalt bad status: {data.get('status')} — {data}")
+    """Cobalt API v10 — returns a direct stream URL or raises.
+    Uses h264 for maximum compatibility with the downstream ffmpeg pipeline.
+    """
+    try:
+        resp = requests.post(
+            _COBALT_API,
+            json={
+                "url": url, 
+                "videoQuality": "1080", 
+                "downloadMode": "auto",
+                "youtubeVideoCodec": "h264" # Ensure we get H.264 for easier processing
+            },
+            headers={
+                "Accept": "application/json", 
+                "Content-Type": "application/json"
+            },
+            timeout=30,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        
+        # Cobalt v10 can return 'tunnel', 'redirect', or 'picker'
+        status = data.get("status")
+        stream_url = data.get("url")
+        
+        if status in ("tunnel", "redirect") and stream_url:
+            return stream_url
+        
+        if status == "picker":
+            # If it's a picker, just grab the first video entry that matches our needs
+            picker_items = data.get("picker", [])
+            if picker_items:
+                return picker_items[0].get("url")
+                
+        raise RuntimeError(f"Cobalt returned status {status} but no stream URL found.")
+    except Exception as e:
+        logger.error(f"Cobalt request failed: {e}")
+        raise
 
 logger = logging.getLogger(__name__)
 
