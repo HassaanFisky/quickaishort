@@ -477,7 +477,12 @@ def proxy_video(url: str):
     if not url:
         raise HTTPException(status_code=400, detail="URL is required")
 
-    ydl_opts = {"format": "best[ext=mp4]", "quiet": True}
+    ydl_opts = {
+        "format": "best[ext=mp4]", 
+        "quiet": True,
+        "extractor_args": {"youtube": {"player_client": ["web", "ios"]}},
+        "nocheckcertificate": True,
+    }
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
