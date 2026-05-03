@@ -58,6 +58,11 @@ fastapi/.env
 fastapi/venv/
 fastapi/__pycache__/
 
+# YouTube cookies - NEVER commit these
+cookies.txt
+**/cookies.txt
+yt_cookies_*.txt
+
 # logs
 *.log
 build_log*.txt

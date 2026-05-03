@@ -20,8 +20,27 @@ from pathlib import Path
 from typing import Optional
 
 import ffmpeg
+import requests
 import yt_dlp
 from app.utils.youtube_auth import inject_ydl_bypass
+
+_COBALT_API = "https://api.cobalt.tools/"
+
+
+def _cobalt_get_stream_url(url: str) -> str:
+    """Cobalt API v10 — returns a direct download URL or raises."""
+    resp = requests.post(
+        _COBALT_API,
+        json={"url": url, "videoQuality": "360", "downloadMode": "auto"},
+        headers={"Accept": "application/json", "Content-Type": "application/json"},
+        timeout=20,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    stream_url = data.get("url")
+    if data.get("status") in ("tunnel", "redirect") and stream_url:
+        return stream_url
+    raise RuntimeError(f"Cobalt bad status: {data.get('status')}")
 
 logger = logging.getLogger(__name__)
 
@@ -138,9 +157,24 @@ def _download_segment(video_id: str, start: float, end: float, workdir: Path) ->
         "merge_output_format": "mp4",
     })
     youtube_url = f"https://www.youtube.com/watch?v={video_id}"
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(youtube_url, download=True)
-        path = Path(ydl.prepare_filename(info))
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(youtube_url, download=True)
+            path = Path(ydl.prepare_filename(info))
+    except Exception as ydl_err:
+        logger.warning(f"[frame] yt-dlp failed ({ydl_err}), using Cobalt fallback for frames...")
+        cobalt_url = _cobalt_get_stream_url(youtube_url)
+        cobalt_out = str(workdir / f"cobalt_frames_{video_id}.mp4")
+        # Grab just the needed segment via ffmpeg from the Cobalt stream URL
+        (
+            ffmpeg
+            .input(cobalt_url, ss=start, t=(end - start))
+            .output(cobalt_out, vcodec="libx264", acodec="aac", crf=28, preset="ultrafast")
+            .overwrite_output()
+            .run(quiet=True)
+        )
+        return Path(cobalt_out)
+
     if path.suffix != ".mp4":
         candidate = path.with_suffix(".mp4")
         if candidate.exists():

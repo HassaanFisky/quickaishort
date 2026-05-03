@@ -23,8 +23,27 @@ from pathlib import Path
 from typing import Literal, Optional
 
 import ffmpeg
+import requests
 import yt_dlp
 from app.utils.youtube_auth import inject_ydl_bypass
+
+_COBALT_API = "https://api.cobalt.tools/"
+
+
+def _cobalt_get_stream_url(url: str) -> str:
+    """Cobalt API v10 — returns a direct stream URL or raises."""
+    resp = requests.post(
+        _COBALT_API,
+        json={"url": url, "videoQuality": "1080", "downloadMode": "auto"},
+        headers={"Accept": "application/json", "Content-Type": "application/json"},
+        timeout=20,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    stream_url = data.get("url")
+    if data.get("status") in ("tunnel", "redirect") and stream_url:
+        return stream_url
+    raise RuntimeError(f"Cobalt bad status: {data.get('status')} — {data}")
 
 logger = logging.getLogger(__name__)
 
@@ -125,9 +144,25 @@ class RenderService:
             "merge_output_format": "mp4",
         })
 
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(youtube_url, download=True)
-            downloaded = ydl.prepare_filename(info)
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(youtube_url, download=True)
+                downloaded = ydl.prepare_filename(info)
+        except Exception as ydl_err:
+            logger.warning(f"[render] yt-dlp segment download failed ({ydl_err}), trying Cobalt...")
+            cobalt_url = _cobalt_get_stream_url(youtube_url)
+            cobalt_out = str(workdir / f"cobalt_source_{uuid.uuid4().hex}.mp4")
+            # Use ffmpeg to grab the specific time range from the Cobalt stream URL
+            (
+                ffmpeg
+                .input(cobalt_url, ss=job.start_sec, t=(job.end_sec - job.start_sec))
+                .output(cobalt_out, vcodec="libx264", acodec="aac", crf=23, preset="veryfast")
+                .overwrite_output()
+                .run(quiet=True)
+            )
+            return Path(cobalt_out)
+
+        downloaded = downloaded  # assigned inside try block above
 
         downloaded_path = Path(downloaded)
         if downloaded_path.suffix != ".mp4":
@@ -260,15 +295,25 @@ def render_video(production_plan: dict) -> str:
                     .run(quiet=True)
                 )
             elif clip_source.startswith("http"):
-                # Real download and trim
+                # Real download and trim — yt-dlp first, Cobalt fallback
                 ydl_opts = inject_ydl_bypass({
                     "format": "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
                     "outtmpl": str(workdir / f"download_{i}.%(ext)s"),
                     "quiet": True,
                 })
-                with YoutubeDL(ydl_opts) as ydl:
-                    info = ydl.extract_info(clip_source, download=True)
-                    downloaded_file = ydl.prepare_filename(info)
+                try:
+                    with YoutubeDL(ydl_opts) as ydl:
+                        info = ydl.extract_info(clip_source, download=True)
+                        downloaded_file = ydl.prepare_filename(info)
+                except Exception as ydl_clip_err:
+                    logger.warning(f"[render] clip yt-dlp failed ({ydl_clip_err}), Cobalt fallback...")
+                    downloaded_file = str(workdir / f"cobalt_clip_{i}.mp4")
+                    cobalt_url = _cobalt_get_stream_url(clip_source)
+                    with requests.get(cobalt_url, stream=True, timeout=60) as r:
+                        r.raise_for_status()
+                        with open(downloaded_file, "wb") as f:
+                            for chunk in r.iter_content(chunk_size=8192):
+                                f.write(chunk)
                 
                 (
                     ffmpeg.input(downloaded_file, ss=start, t=duration)

@@ -8,6 +8,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import uuid
 from contextlib import asynccontextmanager
 from typing import List, Literal, Optional
@@ -451,7 +452,6 @@ def get_video_info(url: str):
         raise HTTPException(status_code=400, detail="URL is required")
 
     # Extract video ID from URL
-    import re
     video_id_match = re.search(r'(?:v=|\/)([0-9A-Za-z_-]{11}).*', url)
     video_id = video_id_match.group(1) if video_id_match else None
 
@@ -537,24 +537,23 @@ def proxy_video(url: str):
             info = ydl.extract_info(url, download=False)
             stream_url = info.get("url")
     except Exception as exc:
-        logger.warning(f"yt-dlp failed in proxy, falling back to Cobalt API: {exc}")
-        # Cobalt API Fallback
+        logger.warning(f"yt-dlp failed in proxy, falling back to Cobalt API v10: {exc}")
         try:
-            headers = {
-                "Accept": "application/json",
-                "Content-Type": "application/json"
-            }
-            payload = {
-                "url": url,
-                "videoQuality": "1080"
-            }
-            cobalt_response = requests.post("https://api.cobalt.tools/api/json", json=payload, headers=headers, timeout=15)
+            cobalt_response = requests.post(
+                "https://api.cobalt.tools/",
+                json={"url": url, "videoQuality": "1080", "downloadMode": "auto"},
+                headers={"Accept": "application/json", "Content-Type": "application/json"},
+                timeout=20,
+            )
             cobalt_response.raise_for_status()
             cobalt_data = cobalt_response.json()
-            stream_url = cobalt_data.get("url")
+            if cobalt_data.get("status") in ("tunnel", "redirect"):
+                stream_url = cobalt_data.get("url")
+            if not stream_url:
+                raise RuntimeError(f"Cobalt bad status: {cobalt_data.get('status')}")
         except Exception as cobalt_exc:
             logger.error(f"Cobalt fallback also failed: {cobalt_exc}")
-            raise HTTPException(status_code=500, detail="Failed to retrieve stream URL from both primary and fallback extractors.")
+            raise HTTPException(status_code=500, detail="Both yt-dlp and Cobalt proxy failed. Video may be unavailable.")
 
     if not stream_url:
         raise HTTPException(status_code=404, detail="Could not retrieve stream URL")
