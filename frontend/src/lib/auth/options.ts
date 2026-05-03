@@ -1,7 +1,9 @@
 import { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
+import CredentialsProvider from "next-auth/providers/credentials";
 import connectDB from "@/lib/db/mongodb";
 import User from "@/lib/db/models/user";
+import bcrypt from "bcryptjs";
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -9,6 +11,36 @@ export const authOptions: NextAuthOptions = {
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
     }),
+    CredentialsProvider({
+      name: "Credentials",
+      credentials: {
+        email: { label: "Email", type: "email" },
+        password: { label: "Password", type: "password" }
+      },
+      async authorize(credentials) {
+        if (!credentials?.email || !credentials?.password) {
+          throw new Error("Missing email or password");
+        }
+        await connectDB();
+        const user = await User.findOne({ email: credentials.email }).select("+password");
+        if (!user) {
+          throw new Error("No user found with this email");
+        }
+        if (!user.password) {
+          throw new Error("This account uses Google Sign-In");
+        }
+        const isPasswordValid = await bcrypt.compare(credentials.password, user.password);
+        if (!isPasswordValid) {
+          throw new Error("Invalid password");
+        }
+        return {
+          id: user._id.toString(),
+          email: user.email,
+          name: user.name,
+          image: user.image,
+        };
+      }
+    })
   ],
   callbacks: {
     async signIn({ user, account }) {

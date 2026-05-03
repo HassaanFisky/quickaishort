@@ -3,7 +3,6 @@
 import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Card,
   CardContent,
@@ -16,10 +15,11 @@ import Link from "next/link";
 import Image from "next/image";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, ShieldCheck, Mail, Lock } from "lucide-react";
+import { Loader2, ShieldCheck, Mail, Lock, User as UserIcon } from "lucide-react";
 
-export default function SignInPage() {
+export default function SignUpPage() {
   const router = useRouter();
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -31,14 +31,29 @@ export default function SignInPage() {
     setError("");
 
     try {
-      const res = await signIn("credentials", {
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, password }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.message || "Failed to register");
+        setLoading(false);
+        return;
+      }
+
+      // Automatically sign in after successful registration
+      const signInRes = await signIn("credentials", {
         email,
         password,
         redirect: false,
       });
 
-      if (res?.error) {
-        setError(res.error);
+      if (signInRes?.error) {
+        setError("Account created, but failed to auto-login.");
         setLoading(false);
       } else {
         router.push("/dashboard");
@@ -54,8 +69,8 @@ export default function SignInPage() {
     <div className="min-h-screen flex items-center justify-center bg-background p-4 relative overflow-hidden">
       {/* Background Decor */}
       <div className="absolute top-0 left-0 w-full h-full -z-10 overflow-hidden pointer-events-none">
-        <div className="absolute top-[-10%] left-[-10%] w-[40vw] h-[40vw] bg-primary/20 blur-[120px] rounded-full animate-pulse" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40vw] h-[40vw] bg-accent/20 blur-[120px] rounded-full animate-pulse delay-700" />
+        <div className="absolute top-[-10%] right-[-10%] w-[40vw] h-[40vw] bg-accent/20 blur-[120px] rounded-full animate-pulse" />
+        <div className="absolute bottom-[-10%] left-[-10%] w-[40vw] h-[40vw] bg-primary/20 blur-[120px] rounded-full animate-pulse delay-700" />
       </div>
 
       <motion.div
@@ -66,7 +81,7 @@ export default function SignInPage() {
       >
         <Card className="w-full bg-card/40 backdrop-blur-xl border border-white/10 shadow-2xl rounded-[32px] overflow-hidden relative">
           
-          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary via-accent to-pink-500 opacity-50" />
+          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-accent via-primary to-pink-500 opacity-50" />
 
           <CardHeader className="text-center space-y-6 pt-12 pb-4">
             <div className="flex justify-center transform hover:scale-105 transition-transform duration-500">
@@ -75,16 +90,16 @@ export default function SignInPage() {
                   src="/qs-logo.png"
                   alt="QS Logo"
                   fill
-                  className="object-contain invert dark:invert-0 drop-shadow-[0_0_15px_rgba(168,85,247,0.5)]"
+                  className="object-contain invert dark:invert-0 drop-shadow-[0_0_15px_rgba(59,130,246,0.5)]"
                 />
               </div>
             </div>
             <div className="space-y-2">
               <CardTitle className="text-3xl font-black tracking-tight text-white">
-                Welcome Back
+                Create Account
               </CardTitle>
               <CardDescription className="text-sm font-medium text-muted-foreground/80">
-                Enter your credentials to access your workspace.
+                Join elite creators building viral content.
               </CardDescription>
             </div>
           </CardHeader>
@@ -98,7 +113,22 @@ export default function SignInPage() {
               )}
               
               <div className="space-y-2 relative group">
-                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors">
+                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-accent transition-colors">
+                  <UserIcon className="w-5 h-5" />
+                </div>
+                <Input
+                  id="name"
+                  type="text"
+                  placeholder="Full Name"
+                  required
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="h-14 pl-12 rounded-2xl bg-black/20 border-white/10 text-white placeholder:text-muted-foreground/50 focus-visible:ring-accent focus-visible:border-accent transition-all"
+                />
+              </div>
+
+              <div className="space-y-2 relative group">
+                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-accent transition-colors">
                   <Mail className="w-5 h-5" />
                 </div>
                 <Input
@@ -108,51 +138,47 @@ export default function SignInPage() {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="h-14 pl-12 rounded-2xl bg-black/20 border-white/10 text-white placeholder:text-muted-foreground/50 focus-visible:ring-primary focus-visible:border-primary transition-all"
+                  className="h-14 pl-12 rounded-2xl bg-black/20 border-white/10 text-white placeholder:text-muted-foreground/50 focus-visible:ring-accent focus-visible:border-accent transition-all"
                 />
               </div>
 
               <div className="space-y-2 relative group">
-                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors">
+                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-accent transition-colors">
                   <Lock className="w-5 h-5" />
                 </div>
                 <Input
                   id="password"
                   type="password"
-                  placeholder="Password"
+                  placeholder="Create Password"
                   required
+                  minLength={6}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="h-14 pl-12 rounded-2xl bg-black/20 border-white/10 text-white placeholder:text-muted-foreground/50 focus-visible:ring-primary focus-visible:border-primary transition-all"
+                  className="h-14 pl-12 rounded-2xl bg-black/20 border-white/10 text-white placeholder:text-muted-foreground/50 focus-visible:ring-accent focus-visible:border-accent transition-all"
                 />
               </div>
 
-              <div className="flex items-center justify-between mt-2 mb-4">
-                <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-                  <ShieldCheck className="w-4 h-4 text-green-500" />
-                  <span>Secure connection</span>
-                </div>
-                <Link href="#" className="text-sm font-medium text-primary hover:text-primary/80 transition-colors">
-                  Forgot password?
-                </Link>
+              <div className="flex items-center space-x-2 text-sm text-muted-foreground mt-2 mb-4">
+                <ShieldCheck className="w-4 h-4 text-green-500" />
+                <span>Verified human registration</span>
               </div>
 
               <Button
                 type="submit"
                 disabled={loading}
-                className="w-full h-14 text-lg font-bold rounded-2xl bg-gradient-to-r from-primary to-accent hover:opacity-90 text-white transition-all hover:scale-[1.02] shadow-[0_0_20px_rgba(168,85,247,0.3)] disabled:opacity-50 disabled:hover:scale-100 relative overflow-hidden"
+                className="w-full h-14 text-lg font-bold rounded-2xl bg-gradient-to-r from-accent to-primary hover:opacity-90 text-white transition-all hover:scale-[1.02] shadow-[0_0_20px_rgba(59,130,246,0.3)] disabled:opacity-50 disabled:hover:scale-100 relative overflow-hidden"
               >
                 {loading ? (
                   <Loader2 className="h-6 w-6 animate-spin" />
                 ) : (
-                  "Sign In"
+                  "Create Account"
                 )}
               </Button>
             </form>
 
             <div className="mt-8 relative flex items-center py-2">
               <div className="flex-grow border-t border-white/10"></div>
-              <span className="flex-shrink-0 mx-4 text-muted-foreground text-sm font-medium">Or continue with</span>
+              <span className="flex-shrink-0 mx-4 text-muted-foreground text-sm font-medium">Or</span>
               <div className="flex-grow border-t border-white/10"></div>
             </div>
 
@@ -169,13 +195,13 @@ export default function SignInPage() {
                 <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
                 <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
               </svg>
-              Google
+              Sign up with Google
             </Button>
 
             <p className="mt-8 text-center text-sm text-muted-foreground/80 font-medium">
-              Don't have an account?{" "}
-              <Link href="/signup" className="text-primary hover:text-white transition-colors font-bold tracking-wide underline-offset-4 hover:underline">
-                Create one now
+              Already have an account?{" "}
+              <Link href="/signin" className="text-accent hover:text-white transition-colors font-bold tracking-wide underline-offset-4 hover:underline">
+                Sign In
               </Link>
             </p>
           </CardContent>

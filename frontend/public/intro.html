@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Quick AI Shorts | Cinematic Intro</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@500;900&display=swap');
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root {
+  --bg: #08080a;
+  --primary: #a855f7;
+  --accent: #3b82f6;
+  --pink: #ec4899;
+}
+
+html,body{
+  width:100%;height:100%;overflow:hidden;
+  background: var(--bg);
+  font-family: 'Inter', sans-serif;
+}
+
+#intro {
+  position: fixed; inset: 0; z-index: 9999;
+  background: var(--bg);
+  display: flex; align-items: center; justify-content: center;
+  transition: opacity 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#intro.out { opacity: 0; pointer-events: none; }
+
+/* ── Cinematic Background ── */
+.living-bg {
+  position: absolute; inset: 0;
+  overflow: hidden; pointer-events: none;
+}
+.blob {
+  position: absolute; border-radius: 50%;
+  filter: blur(140px); opacity: 0.15;
+  animation: drift 25s infinite alternate ease-in-out;
+}
+#b1 { width: 50vw; height: 50vw; background: var(--primary); top: -10%; left: -10%; }
+#b2 { width: 45vw; height: 45vw; background: var(--accent); bottom: -5%; right: -5%; }
+
+@keyframes drift {
+  from { transform: translate(0,0) scale(1); }
+  to { transform: translate(5%, 5%) scale(1.1); }
+}
+
+/* ── Logo Container ── */
+#logo-wrap {
+  position: absolute;
+  z-index: 10;
+  will-change: transform, opacity;
+  display: flex; align-items: center; justify-content: center;
+}
+
+#logo {
+  height: clamp(80px, 10vh, 120px);
+  width: auto;
+  opacity: 0; /* JS handles fade */
+  /* Premium Glow */
+  filter: drop-shadow(0 0 30px rgba(168, 85, 247, 0.4));
+}
+
+/* ── Light Trail (The Genius Feel) ── */
+#trail {
+  position: absolute;
+  height: 2px; width: 120px;
+  background: linear-gradient(90deg, transparent, var(--primary), var(--accent), transparent);
+  border-radius: 100px;
+  opacity: 0;
+  filter: blur(4px);
+  pointer-events: none;
+}
+
+/* ── Text ── */
+#text-wrap {
+  position: relative;
+  clip-path: inset(0 0 0 0);
+  pointer-events: none;
+}
+
+#headline {
+  font-size: clamp(2.2rem, 5vw, 5.5rem);
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  text-transform: uppercase;
+  /* Premium Gradient matching the app */
+  background: linear-gradient(135deg, #3b82f6 0%, #a855f7 50%, #ec4899 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  white-space: nowrap;
+  opacity: 0; /* JS handles fade */
+  transform: scale(0.98);
+}
+
+/* ── Main Site Reveal ── */
+#main {
+  position: fixed; inset: 0; z-index: 1;
+  background: var(--bg);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  opacity: 0;
+  transition: opacity 1s ease;
+}
+#main.show { opacity: 1; }
+
+.m-logo {
+  height: clamp(70px, 9vh, 110px);
+  width: auto;
+  margin-bottom: 1.5rem;
+  filter: drop-shadow(0 0 28px rgba(168,85,247,0.35))
+          drop-shadow(0 0 10px rgba(59,130,246,0.25));
+}
+.m-title {
+  font-size: clamp(1.4rem, 3vw, 3.5rem);
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+  background: linear-gradient(135deg, #3b82f6, #a855f7, #ec4899);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 0.5rem;
+}
+.m-sub {
+  font-weight: 500;
+  font-size: clamp(0.7rem, 1.2vw, 1rem);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(152,152,168,0.6);
+}
+
+</style>
+</head>
+<body>
+
+<div id="intro">
+  <div class="living-bg">
+    <div class="blob" id="b1"></div>
+    <div class="blob" id="b2"></div>
+  </div>
+
+  <div id="logo-wrap">
+    <img id="logo" src="qs-logo-optimized.png" alt=""/>
+    <div id="trail"></div>
+  </div>
+
+  <div id="text-wrap">
+    <div id="headline">QUICK AI SHORTS</div>
+  </div>
+</div>
+
+<div id="main">
+  <img class="m-logo" src="qs-logo-optimized.png" alt="Quick AI Shorts"/>
+  <h1 class="m-title">Quick AI Shorts</h1>
+  <p class="m-sub">Intelligence &middot; Speed &middot; Vision</p>
+</div>
+
+<script>
+(function(){
+'use strict';
+
+const logoWrap = document.getElementById('logo-wrap');
+const logo     = document.getElementById('logo');
+const hl       = document.getElementById('headline');
+const tw       = document.getElementById('text-wrap');
+const trail    = document.getElementById('trail');
+const intro    = document.getElementById('intro');
+const main     = document.getElementById('main');
+
+const clamp = (v,a,b) => Math.max(a,Math.min(b,v));
+
+/* Premium Easing - Custom Apple-like curves */
+function easeOutQuart(t) { return 1 - Math.pow(1 - t, 4); }
+function easeInOutCubic(t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; }
+
+/* ── Audio Engine: Premium "Pfsh" ── */
+function playSound() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const duration = 0.8;
+    const buf = ctx.createBuffer(1, ctx.sampleRate * duration, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+
+    const source = ctx.createBufferSource();
+    source.buffer = buf;
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'highpass';
+    filter.frequency.setValueAtTime(1500, ctx.currentTime);
+    filter.frequency.exponentialRampToValueAtTime(800, ctx.currentTime + duration);
+
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0, ctx.currentTime);
+    gain.gain.linearRampToValueAtTime(0.15, ctx.currentTime + 0.05);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+
+    source.connect(filter);
+    filter.connect(gain);
+    gain.connect(ctx.destination);
+    source.start();
+  } catch(e) {}
+}
+
+/* ── Animation Core ── */
+let startTime = 0;
+let phase = 'entry'; // entry -> hold -> sweep
+const T_ENTRY = 1000; // Text and logo appear together smoothly
+const T_HOLD  = 600;  // Pause so user reads it
+const T_SWEEP = 1300; // Sweep speed perfectly tuned
+
+let sx, sy, lx, ly, ex, ey;
+
+function update(ts) {
+  if (!startTime) startTime = ts;
+  const elapsed = ts - startTime;
+
+  if (phase === 'entry') {
+    const p = clamp(elapsed / T_ENTRY, 0, 1);
+    const ep = easeOutQuart(p); // Smooth start
+
+    const cx = sx + (lx - sx) * ep;
+    const cy = sy + (ly - sy) * ep;
+
+    logoWrap.style.left = cx + 'px';
+    logoWrap.style.top  = cy + 'px';
+    logo.style.opacity = p;
+    
+    // Text fades in WITH the logo
+    hl.style.opacity = p;
+    hl.style.transform = `scale(${0.98 + (0.02 * ep)})`; // Subtle scale up
+
+    if (p >= 1) {
+      phase = 'hold';
+      startTime = ts;
+    }
+  } 
+  else if (phase === 'hold') {
+    if (elapsed >= T_HOLD) {
+      phase = 'sweep';
+      startTime = ts;
+      playSound();
+      trail.style.opacity = '0.6';
+    }
+  } 
+  else if (phase === 'sweep') {
+    const p = clamp(elapsed / T_SWEEP, 0, 1);
+    const ep = easeInOutCubic(p);
+
+    const cx = lx + (ex - lx) * ep;
+    logoWrap.style.left = cx + 'px';
+
+    // Wipe Sync - Erasing the text naturally
+    const lr = logoWrap.getBoundingClientRect();
+    const tr = tw.getBoundingClientRect();
+    const bladePos = lr.left + lr.width/2;
+    const erased = clamp(bladePos - tr.left, 0, tr.width);
+    tw.style.clipPath = `inset(0 0 0 ${erased}px)`;
+
+    if (p >= 1) {
+      phase = 'end';
+      setTimeout(() => {
+        intro.classList.add('out');
+        main.classList.add('show');
+      }, 200);
+      return;
+    }
+  }
+
+  requestAnimationFrame(update);
+}
+
+function init() {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  
+  // Need text bounds to align logo
+  const tr = tw.getBoundingClientRect();
+  const lw = logo.offsetWidth;
+  const lh = logo.offsetHeight;
+
+  // LANDING POSITION: Vertically centered, just before the 'Q'
+  ly = tr.top + tr.height/2 - lh/2;
+  lx = tr.left - lw - 10; 
+
+  // START POSITION: Just slightly left and below the 'Q'
+  // It won't come from way off-screen anymore. 
+  sx = lx - 40;
+  sy = ly + 40;
+
+  // EXIT: Right offscreen
+  ex = vw + 100;
+
+  logoWrap.style.left = sx + 'px';
+  logoWrap.style.top  = sy + 'px';
+
+  requestAnimationFrame(update);
+}
+
+// Boot
+window.onload = () => {
+  // Give a tiny moment for fonts to strictly render before starting
+  setTimeout(init, 300);
+};
+
+})();
+</script>
+</body>
+</html>
