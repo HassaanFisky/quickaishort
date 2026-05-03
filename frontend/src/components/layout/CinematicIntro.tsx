@@ -101,7 +101,7 @@ export const CinematicIntro = ({ onComplete }: { onComplete: () => void }) => {
             translate: ["0% 0%", "5% 5%"],
             scale: [1, 1.1]
           }}
-          transition={{ duration: 25, repeat: Infinity, repeatType: "alternate", ease: "easeInOut" }}
+          transition={{ duration: 25, repeat: Infinity, repeatType: "reverse", ease: "easeInOut" }}
           className="absolute -top-[10%] -left-[10%] w-[50vw] h-[50vw] bg-[#a855f7] rounded-full blur-[140px] opacity-15"
         />
         <motion.div
@@ -109,7 +109,7 @@ export const CinematicIntro = ({ onComplete }: { onComplete: () => void }) => {
             translate: ["0% 0%", "-5% -5%"],
             scale: [1, 1.1]
           }}
-          transition={{ duration: 25, repeat: Infinity, repeatType: "alternate", ease: "easeInOut", delay: 1 }}
+          transition={{ duration: 25, repeat: Infinity, repeatType: "reverse", ease: "easeInOut", delay: 1 }}
           className="absolute -bottom-[5%] -right-[5%] w-[45vw] h-[45vw] bg-[#3b82f6] rounded-full blur-[140px] opacity-15"
         />
       </div>
