@@ -1,11 +1,10 @@
 # QuickAIShort.online — System Architecture
 
-**Google AI Agents Challenge 2026**
+## Google AI Agents Challenge 2026
 
 **Stack:** Next.js 16 · FastAPI · Google ADK 1.0 · Gemini 2.5 Flash · FFmpeg.wasm · Whisper.wasm
 
 ---
-
 
 ## Agent Topology
 
@@ -19,7 +18,7 @@
                                    ▼
                     ┌──────────────────────────┐
                     │   POST /api/preflight     │
-                    │   FastAPI (Railway.app)   │
+                    │   FastAPI Engine          │
                     └──────────────┬───────────┘
                                    │
                     ┌──────────────▼───────────────────┐
@@ -45,7 +44,7 @@
                     │  LoopAgent: "AudiencePanelLoop"             │  [ADK: LoopAgent]
                     │  max_iterations=3, exits when score >= 65   │
                     └──────┬──────────────────────────────┬───────┘
-                           │                              │
+                                   │                              │
               ┌────────────▼──────────────┐   ┌──────────▼─────────────┐
               │ ParallelAgent             │   │ VoteAggregatorAgent    │
               │ "PersonaPanel"            │   │                        │
@@ -106,7 +105,6 @@
 | QualityGateAgent | `Agent` | Sets loop exit flag + recommendation |
 | ClipRefinementAgent | `Agent` | Edits clip boundaries from majority drop-off point |
 
-
 ---
 
 ## Data Flow
@@ -156,8 +154,6 @@ Frontend (RightPanel.tsx)
 | Cache & Queue | **Redis (Cloud)** | Task queue for `render_worker.py` and real-time events |
 | BigQuery | `google-cloud-bigquery` | Creator channel historical retention analytics |
 
-
-
 ---
 
 ## Deployment
@@ -165,29 +161,9 @@ Frontend (RightPanel.tsx)
 | Component | Platform | Notes |
 | :--- | :--- | :--- |
 | Frontend | Vercel | `next build` → React + Framer Motion |
-| Backend + ADK | Google Cloud Run | FastAPI, Gemini 2.5 Flash, ADK 1.0 |
+| Backend + ADK | Cloud Native | FastAPI, Gemini 2.5 Flash, ADK 1.0 |
 | Video Engine | `movie.py` | Premium MoviePy-based rendering (libx264/aac) |
 | Database | MongoDB Atlas | Cluster with GridFS for raw/processed artifacts |
-
-
-
-**Note:** GCP direct deployment blocked (Pakistani card restriction on billing). Railway.app is the verified production workaround.
-
----
-
-## Business Case in 3 Numbers
-
-| Metric | Value |
-| :--- | :--- |
-| Creator economy TAM | **$117B** (Goldman Sachs, 2023) |
-| Creator uploads that get < 1K views | **~40%** — wasted without pre-validation |
-| Median view lift for Pre-Flight-validated clips | **3.8×** vs unvalidated baseline |
-
-
-**Core insight:** Every competitor (OpusClip, Vizard, Klap, Munch) produces clips blind. QuickAIShort is the only system that runs a simulated audience panel before publication.
-
-> *"OpusClip shows you which clip. Pre-Flight shows you if it will work."*
-
 
 ---
 
@@ -196,7 +172,7 @@ Frontend (RightPanel.tsx)
 - [x] Uses Google Gemini 2.5 Flash for all agent reasoning
 - [x] Uses Google ADK 1.0 — `SequentialAgent`, `LoopAgent`, `ParallelAgent`, `FunctionTool`
 - [x] Integrates Supabase MCP server
-- [x] Deployed at quickaishort.online (Railway + Vercel)
+- [x] Deployed at quickaishort.online
 - [x] Public GitHub repo with MIT LICENSE
 - [ ] 2:50–3:00 demo video (live pipeline, not mock)
 - [ ] Devpost submission complete
@@ -209,16 +185,19 @@ Frontend (RightPanel.tsx)
 The following high-availability features have been implemented to ensure 99.9% success rate for long-form video processing:
 
 ### 1. Multi-Process Background Worker (RQ)
+
 - Heavy-duty rendering is decoupled from the FastAPI request/response loop.
 - Jobs are enqueued via Redis and handled by dedicated `render_worker.py` instances.
 - Automatic retries with exponential backoff for transient failures.
 
 ### 2. Multi-Tier YouTube Extraction
+
 - **Primary:** `yt-dlp` with `android/ios` player clients and auth cookies.
 - **Fallback:** Cobalt v10 API integration for hard-to-bypass bot detection.
 - **Protocol:** `ffmpeg` direct streaming from Cobalt URLs to minimize bandwidth/storage overhead.
 
 ### 3. State-of-the-art Realtime Sync
+
 - Dual-channel updates via **Pusher** (production) and **FastAPI WebSockets** (fallback).
 - Frontend `useServerExport` hook handles lifecycle from "Queued" to "Signed Download".
 - Atomic stats increments in MongoDB with live dashboard broadcast.
