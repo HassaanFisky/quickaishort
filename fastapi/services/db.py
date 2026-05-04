@@ -9,6 +9,9 @@ import os
 from datetime import datetime, timezone
 from typing import Optional
 
+import ssl
+
+import certifi
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase, AsyncIOMotorGridFSBucket
 
 logger = logging.getLogger(__name__)
@@ -30,7 +33,10 @@ async def init_db() -> None:
         logger.warning("MONGODB_URI not set — Mongo features disabled.")
         return
 
-    _client = AsyncIOMotorClient(uri, serverSelectionTimeoutMS=10000)
+    ssl_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    ssl_ctx.load_verify_locations(certifi.where())
+    ssl_ctx.set_ciphers("DEFAULT@SECLEVEL=1")
+    _client = AsyncIOMotorClient(uri, serverSelectionTimeoutMS=10000, ssl_context=ssl_ctx)
     _db = _client[DB_NAME]
     _exports_bucket = AsyncIOMotorGridFSBucket(_db, bucket_name=EXPORTS_BUCKET)
 

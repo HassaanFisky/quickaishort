@@ -12,7 +12,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
     nodejs \
     npm \
-    && rm -rf /var/lib/apt/lists/*
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && sed -i 's/DEFAULT@SECLEVEL=2/DEFAULT@SECLEVEL=1/g' /etc/ssl/openssl.cnf 2>/dev/null || true
 
 # Set the working directory
 WORKDIR /app
