@@ -13,8 +13,25 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     nodejs \
     npm \
     ca-certificates \
-    && rm -rf /var/lib/apt/lists/* \
-    && sed -i 's/DEFAULT@SECLEVEL=2/DEFAULT@SECLEVEL=1/g' /etc/ssl/openssl.cnf 2>/dev/null || true
+    && rm -rf /var/lib/apt/lists/*
+
+# Write a custom openssl.cnf with SECLEVEL=1 so Python's ssl module
+# can complete the TLS handshake with MongoDB Atlas M0's cipher suites.
+RUN printf '%s\n' \
+    'openssl_conf = default_conf' \
+    '' \
+    '[default_conf]' \
+    'ssl_conf = ssl_sect' \
+    '' \
+    '[ssl_sect]' \
+    'system_default = system_default_sect' \
+    '' \
+    '[system_default_sect]' \
+    'MinProtocol = TLSv1.2' \
+    'CipherString = DEFAULT@SECLEVEL=1' \
+    > /etc/ssl/openssl_custom.cnf
+
+ENV OPENSSL_CONF=/etc/ssl/openssl_custom.cnf
 
 # Set the working directory
 WORKDIR /app

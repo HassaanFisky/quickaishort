@@ -6,9 +6,10 @@ requests==2.32.3
 pydantic==2.10.3
 python-dotenv==1.0.1
 google-adk==1.0.0
+Deprecated>=1.2.14
 google-genai>=1.14.0
 google-cloud-firestore>=2.15.0
-google-cloud-storage>=2.16.0
+google-cloud-storage>=3.0.0
 google-cloud-speech
 google-cloud-texttospeech
 firebase-admin>=6.5.0
