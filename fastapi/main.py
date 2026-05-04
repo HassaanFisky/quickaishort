@@ -15,7 +15,6 @@ from contextlib import asynccontextmanager
 from typing import List, Literal, Optional
 
 import httpx
-import requests
 import uvicorn
 import yt_dlp
 from app.utils.youtube_auth import inject_ydl_bypass
@@ -61,7 +60,6 @@ try:
         ClipCandidate as PreflightClipCandidate,
         run_preflight_pipeline,
         run_director_pipeline,
-        run_viral_pipeline,
     )
 
     _ADK_AVAILABLE = True
@@ -525,7 +523,7 @@ async def get_video_info(url: str):
 
 
 @app.get("/api/proxy")
-async def proxy_video(url: str, audio_only: bool = False):
+async def proxy_video(url: str):
     if not url:
         raise HTTPException(status_code=400, detail="URL is required")
 
@@ -539,9 +537,11 @@ async def proxy_video(url: str, audio_only: bool = False):
                     yield chunk
 
     stream_url = None
-    # audio_only=True → return m4a/aac/webm so WebAudio decodeAudioData() can handle it
-    fmt = "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best" if audio_only else "best[ext=mp4]/best"
-    media_type = "audio/mp4" if audio_only else "video/mp4"
+    # android client gives itag=18 (360p H264+AAC) without PO Token — always available
+    # audio-only formats require PO Token on android, so always fall back to combined mp4
+    # browsers can extract audio from combined mp4 via decodeAudioData (AAC track)
+    fmt = "best[ext=mp4]/18/best"
+    media_type = "video/mp4"
 
     ydl_opts = inject_ydl_bypass({
         "format": fmt,

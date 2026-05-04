@@ -30,9 +30,9 @@ def get_cookie_file() -> str | None:
 def inject_ydl_bypass(opts: dict) -> dict:
     """Injects bot bypass options and cookies into yt-dlp opts."""
     new_opts = opts.copy()
-    # "web" client works with cookies and doesn't require GVS PO Tokens
-    # android/ios were deprecated in 2025 — they require PO Tokens and get skipped
-    new_opts["extractor_args"] = {"youtube": {"player_client": ["web", "mweb"]}}
+    # android client: itag=18/22 (combined mp4) available without PO Token
+    # These legacy formats work reliably with cookies on Cloud Run
+    new_opts["extractor_args"] = {"youtube": {"player_client": ["android"]}}
     new_opts["nocheckcertificate"] = True
     
     cookie_path = get_cookie_file()
