@@ -539,8 +539,8 @@ async def proxy_video(url: str, audio_only: bool = False):
                     yield chunk
 
     stream_url = None
-    # audio_only=True → return m4a/aac so WebAudio decodeAudioData() can handle it
-    fmt = "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio" if audio_only else "best[ext=mp4]"
+    # audio_only=True → return m4a/aac/webm so WebAudio decodeAudioData() can handle it
+    fmt = "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best" if audio_only else "best[ext=mp4]/best"
     media_type = "audio/mp4" if audio_only else "video/mp4"
 
     ydl_opts = inject_ydl_bypass({
