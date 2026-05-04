@@ -6,7 +6,7 @@ import { useTranscription } from "./useTranscription";
 import { useAnalysis } from "./useAnalysis";
 import { extractAudioData } from "@/lib/utils/audioExtractor";
 import { toast } from "sonner";
-import { API_URL, getProxyUrl } from "@/lib/api";
+import { API_URL, getAudioUrl } from "@/lib/api";
 import { useSession } from "next-auth/react";
 
 export function useMediaPipeline() {
@@ -43,7 +43,10 @@ export function useMediaPipeline() {
         source.includes("youtube.com") || source.includes("youtu.be");
 
       if (isYouTube && !isAlreadyProxied) {
-        source = getProxyUrl(source);
+        // /api/audio returns clean MP3 via yt-dlp+FFmpeg — decodeAudioData handles this
+        // reliably in all browsers. /api/proxy returns combined video/mp4 which can fail
+        // in strict COEP (Cross-Origin-Embedder-Policy: require-corp) contexts.
+        source = getAudioUrl(source);
       }
     }
 
@@ -71,8 +74,9 @@ export function useMediaPipeline() {
       toast.info("Reading video content...");
       transcription.transcribe(audioData, sampleRate);
     } catch (error) {
-      console.error("Pipeline error:", error);
-      toast.error("Failed to process video");
+      const msg = error instanceof Error ? error.message : String(error);
+      console.error("Pipeline error:", msg);
+      toast.error(`Processing failed: ${msg.slice(0, 120)}`);
       setAgentState("ingestion", { status: "error" });
       setProcessing(false, "idle");
     }

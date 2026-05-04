@@ -22,8 +22,10 @@ export function getProxyUrl(url: string) {
   return `${API_URL}/api/proxy?url=${encodeURIComponent(url)}`;
 }
 
-export function getAudioProxyUrl(url: string) {
-  return `${API_URL}/api/proxy?url=${encodeURIComponent(url)}&audio_only=true`;
+// Returns a clean MP3 (audio/mpeg) — always decodable by AudioContext.decodeAudioData()
+// Uses yt-dlp + FFmpeg server-side extraction, avoids combined video/mp4 decode failures
+export function getAudioUrl(url: string) {
+  return `${API_URL}/api/audio?url=${encodeURIComponent(url)}`;
 }
 
 export async function runPreflight(

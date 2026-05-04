@@ -615,6 +615,68 @@ async def proxy_video(url: str):
         raise HTTPException(status_code=500, detail=str(exc))
 
 
+@app.get("/api/audio")
+async def extract_audio(url: str):
+    """
+    Download YouTube audio via yt-dlp + FFmpeg and stream clean MP3 back to the browser.
+    Unlike /api/proxy which streams raw video/mp4, this endpoint always returns audio/mpeg
+    which decodeAudioData() handles reliably in all browsers.
+    """
+    if not url:
+        raise HTTPException(status_code=400, detail="URL is required")
+
+    job_id = uuid.uuid4().hex
+    out_template = f"/tmp/{job_id}_audio.%(ext)s"
+    mp3_path = f"/tmp/{job_id}_audio.mp3"
+
+    ydl_opts = inject_ydl_bypass({
+        "format": "bestaudio/best[ext=mp4]/best",
+        "postprocessors": [{
+            "key": "FFmpegExtractAudio",
+            "preferredcodec": "mp3",
+            "preferredquality": "96",
+        }],
+        "outtmpl": out_template,
+        "quiet": True,
+        "no_warnings": True,
+    })
+
+    loop = asyncio.get_event_loop()
+
+    def _download():
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([url])
+
+    try:
+        await loop.run_in_executor(None, _download)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Audio extraction failed: {exc}")
+
+    if not os.path.exists(mp3_path) or os.path.getsize(mp3_path) == 0:
+        raise HTTPException(status_code=500, detail="Audio file not produced")
+
+    file_size = os.path.getsize(mp3_path)
+
+    def itermp3():
+        try:
+            with open(mp3_path, "rb") as f:
+                while chunk := f.read(16384):
+                    yield chunk
+        finally:
+            if os.path.exists(mp3_path):
+                os.remove(mp3_path)
+
+    return StreamingResponse(
+        itermp3(),
+        media_type="audio/mpeg",
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Cross-Origin-Resource-Policy": "cross-origin",
+            "Content-Length": str(file_size),
+        },
+    )
+
+
 # ---- Pre-Flight ---------------------------------------------------------------
 
 
