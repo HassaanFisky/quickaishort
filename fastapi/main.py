@@ -557,20 +557,25 @@ async def proxy_video(url: str):
     except Exception as exc:
         logger.warning(f"yt-dlp failed in proxy, falling back to Cobalt API v10: {exc}")
         try:
+            cobalt_headers = {
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            }
+            cobalt_api_key = os.environ.get("COBALT_API_KEY")
+            if cobalt_api_key:
+                cobalt_headers["Authorization"] = f"Api-Key {cobalt_api_key}"
+
             async with httpx.AsyncClient(timeout=20.0) as client:
                 cobalt_response = await client.post(
                     "https://api.cobalt.tools/",
                     json={
-                        "url": url, 
-                        "videoQuality": "1080", 
+                        "url": url,
+                        "videoQuality": "1080",
                         "downloadMode": "auto",
-                        "videoCodec": "h264"  # Prefer H.264 for browser compatibility
+                        "videoCodec": "h264",
                     },
-                    headers={
-                        "Accept": "application/json", 
-                        "Content-Type": "application/json",
-                        "User-Agent": "QuickAIShort-Production/1.0"
-                    },
+                    headers=cobalt_headers,
                 )
                 cobalt_response.raise_for_status()
                 cobalt_data = cobalt_response.json()

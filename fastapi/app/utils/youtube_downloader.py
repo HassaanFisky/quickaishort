@@ -25,7 +25,11 @@ def _cobalt_get_stream_url(youtube_url: str, audio_only: bool = False) -> str:
     headers = {
         "Accept": "application/json",
         "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
     }
+    cobalt_api_key = os.environ.get("COBALT_API_KEY")
+    if cobalt_api_key:
+        headers["Authorization"] = f"Api-Key {cobalt_api_key}"
     resp = requests.post(_COBALT_API, json=payload, headers=headers, timeout=20)
     resp.raise_for_status()
     data = resp.json()
