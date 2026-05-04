@@ -3,6 +3,7 @@ from __future__ import annotations
 import warnings
 # Silence deprecation and future warnings from Google SDKs
 warnings.filterwarnings("ignore", category=DeprecationWarning, module="authlib")
+warnings.filterwarnings("ignore", category=FutureWarning, module="google")
 
 import asyncio
 import json

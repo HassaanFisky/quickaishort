@@ -22,6 +22,7 @@ const montserrat = Montserrat({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://quickaishort.online"),
   title: "QuickAI Shorts | The World's Most Powerful AI Short-Form Studio",
   description:
     "Transform long-form videos into viral shorts instantly. Powered by Gemini 2.0 Flash and multi-agent AI for 100% stable extraction, automatic captions, and viral scoring.",
