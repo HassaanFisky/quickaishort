@@ -17,6 +17,10 @@ export async function extractAudioData(
   let arrayBuffer: ArrayBuffer;
   if (typeof source === "string") {
     const response = await fetch(source);
+    if (!response.ok) {
+      const text = await response.text().catch(() => response.statusText);
+      throw new Error(`Audio proxy error ${response.status}: ${text.slice(0, 200)}`);
+    }
     arrayBuffer = await response.arrayBuffer();
   } else {
     arrayBuffer = await source.arrayBuffer();

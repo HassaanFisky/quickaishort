@@ -525,12 +525,12 @@ async def get_video_info(url: str):
 
 
 @app.get("/api/proxy")
-async def proxy_video(url: str):
+async def proxy_video(url: str, audio_only: bool = False):
     if not url:
         raise HTTPException(status_code=400, detail="URL is required")
 
     import httpx
-    
+
     async def iterfile(stream_url):
         async with httpx.AsyncClient(timeout=60.0) as client:
             async with client.stream("GET", stream_url) as r:
@@ -539,9 +539,12 @@ async def proxy_video(url: str):
                     yield chunk
 
     stream_url = None
+    # audio_only=True → return m4a/aac so WebAudio decodeAudioData() can handle it
+    fmt = "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio" if audio_only else "best[ext=mp4]"
+    media_type = "audio/mp4" if audio_only else "video/mp4"
 
     ydl_opts = inject_ydl_bypass({
-        "format": "best[ext=mp4]", 
+        "format": fmt,
         "quiet": True,
     })
     
@@ -602,7 +605,7 @@ async def proxy_video(url: str):
     try:
         return StreamingResponse(
             iterfile(stream_url),
-            media_type="video/mp4",
+            media_type=media_type,
             headers={
                 "Access-Control-Allow-Origin": "*",
                 "Cross-Origin-Resource-Policy": "cross-origin",

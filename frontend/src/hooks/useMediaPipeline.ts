@@ -6,7 +6,7 @@ import { useTranscription } from "./useTranscription";
 import { useAnalysis } from "./useAnalysis";
 import { extractAudioData } from "@/lib/utils/audioExtractor";
 import { toast } from "sonner";
-import { API_URL } from "@/lib/api";
+import { API_URL, getAudioProxyUrl } from "@/lib/api";
 import { useSession } from "next-auth/react";
 
 export function useMediaPipeline() {
@@ -43,8 +43,7 @@ export function useMediaPipeline() {
         source.includes("youtube.com") || source.includes("youtu.be");
 
       if (isYouTube && !isAlreadyProxied) {
-        const { getProxyUrl } = await import("@/lib/api");
-        source = getProxyUrl(source); // source is string here — TS can narrow this
+        source = getAudioProxyUrl(source);
       }
     }
 

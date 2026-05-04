@@ -7,7 +7,8 @@ import type {
 } from "@/types/export";
 import type { UserStats } from "@/types/stats";
 
-export const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
+// .trim() strips any accidental \r\n that Vercel CLI may append to env var values
+export const API_URL = (process.env.NEXT_PUBLIC_API_URL || "").trim();
 if (!API_URL && typeof window !== "undefined") {
   console.warn("NEXT_PUBLIC_API_URL is not defined. API calls may fail.");
 }
@@ -19,6 +20,10 @@ export async function getVideoInfo(url: string) {
 
 export function getProxyUrl(url: string) {
   return `${API_URL}/api/proxy?url=${encodeURIComponent(url)}`;
+}
+
+export function getAudioProxyUrl(url: string) {
+  return `${API_URL}/api/proxy?url=${encodeURIComponent(url)}&audio_only=true`;
 }
 
 export async function runPreflight(
