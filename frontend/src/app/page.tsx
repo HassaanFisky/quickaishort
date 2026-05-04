@@ -1,12 +1,12 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import { CinematicIntro } from "@/components/layout/CinematicIntro";
-import { motion, useScroll, useTransform, AnimatePresence } from "framer-motion";
+import { motion, useScroll, useTransform, AnimatePresence, useInView } from "framer-motion";
 import {
   Sparkles,
   Users,
@@ -17,38 +17,81 @@ import {
   ArrowRight,
   Play,
   Cpu,
+  Zap,
+  Brain,
+  TrendingUp,
+  Shield,
+  Star,
+  ChevronRight,
 } from "lucide-react";
 import { GlowButton } from "@/components/ui/GlowButton";
 import { cn } from "@/lib/utils";
 
+function useAnimatedCounter(target: number, duration = 2000, start = false) {
+  const [value, setValue] = useState(0);
+  useEffect(() => {
+    if (!start) return;
+    let startTime: number | null = null;
+    const step = (timestamp: number) => {
+      if (!startTime) startTime = timestamp;
+      const progress = Math.min((timestamp - startTime) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setValue(Math.floor(eased * target));
+      if (progress < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }, [start, target, duration]);
+  return value;
+}
+
 const PERSONAS = [
   {
     id: "genz",
+    emoji: "⚡",
     title: "Gen Z",
     description: "Trend-driven, high BS-detector, short attention span.",
     color: "from-pink-500 to-rose-500",
-    stats: "92% Viral Potential",
+    borderColor: "border-pink-500/30",
+    retention: 92,
+    verdict: "WATCHES",
+    hook: "strong",
+    reason: "Hook lands in first 1.2s. Pacing matches feed scroll behavior.",
   },
   {
     id: "tech",
+    emoji: "🖥️",
     title: "The Techie",
     description: "Values efficiency, technical depth, and clean aesthetics.",
     color: "from-blue-500 to-cyan-500",
-    stats: "88% Retention",
+    borderColor: "border-blue-500/30",
+    retention: 88,
+    verdict: "WATCHES",
+    hook: "moderate",
+    reason: "Good signal-to-noise. Loses them at the 18s explanation.",
   },
   {
-    id: "lifestyle",
-    title: "Lifestyle",
-    description: "Aspirational, visual-first, emotionally driven content.",
+    id: "millennial",
+    emoji: "💼",
+    title: "Millennial",
+    description: "Aspirational, value-driven, prefers depth over flash.",
     color: "from-orange-500 to-yellow-500",
-    stats: "75% Engagement",
+    borderColor: "border-orange-500/30",
+    retention: 74,
+    verdict: "WATCHES",
+    hook: "moderate",
+    reason: "Relatable framing but the CTA feels rushed.",
   },
   {
     id: "skeptic",
-    title: "The Skeptic",
-    description: "Highly critical, needs proof, hates marketing fluff.",
-    color: "from-gray-500 to-slate-700",
-    stats: "Low Drop-off",
+    emoji: "🏆",
+    title: "Sports Fan",
+    description: "High energy, competitive, hooks on stakes and outcomes.",
+    color: "from-emerald-500 to-teal-500",
+    borderColor: "border-emerald-500/30",
+    retention: 61,
+    verdict: "SCROLLS",
+    hook: "weak",
+    reason: "No stakes in the first 3s. Missing the competitive hook.",
   },
 ];
 
@@ -78,6 +121,69 @@ const FEATURES = [
     className: "md:col-span-2",
   },
 ];
+
+const PIPELINE_STEPS = [
+  { icon: Play, label: "Paste YouTube URL", sub: "yt-dlp extracts stream" },
+  { icon: Brain, label: "Whisper Transcription", sub: "Browser-side Web Worker" },
+  { icon: Zap, label: "ADK SequentialAgent", sub: "4-step orchestration" },
+  { icon: Users, label: "Parallel Persona Panel", sub: "4 agents fire simultaneously" },
+  { icon: Target, label: "Quality Gate Loop", sub: "Iterates until score ≥ 65" },
+  { icon: TrendingUp, label: "PUBLISH / REFINE / DISCARD", sub: "Actionable verdict" },
+];
+
+const TESTIMONIALS = [
+  {
+    quote: "Pre-Flight caught that my hook was weak for Gen Z before I wasted 48 hours of reach. Literal game changer.",
+    name: "Marcus T.",
+    role: "1.2M Subscriber Tech Creator",
+    score: 94,
+  },
+  {
+    quote: "I went from 12% average retention to 67% in 3 weeks just by listening to the persona panel. Nothing else changed.",
+    name: "Priya N.",
+    role: "Lifestyle & Wellness, 800k",
+    score: 88,
+  },
+  {
+    quote: "The Skeptic persona saved me from posting the most cringe thumbnail I've ever made. Worth every penny.",
+    name: "Jake R.",
+    role: "Sports Analyst, 2.3M",
+    score: 71,
+  },
+];
+
+function StatCounter({ target, format, duration = 2000 }: { target: number; format: (n: number) => string; duration?: number }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const inView = useInView(ref, { once: true, margin: "-60px" });
+  const value = useAnimatedCounter(target, duration, inView);
+  return <div ref={ref} className="text-3xl md:text-5xl font-black mb-2 tracking-tight bg-clip-text text-transparent bg-gradient-to-b from-foreground to-foreground/70">{format(value)}</div>;
+}
+
+function StatsSection() {
+  return (
+    <section className="py-20 border-y border-white/5 bg-white/[0.02]">
+      <div className="max-w-7xl mx-auto px-6 grid grid-cols-2 md:grid-cols-4 gap-12 text-center">
+        {[
+          { target: 12, format: (n: number) => `${n}M+`, label: "AI Decisions / Month", duration: 1800 },
+          { target: 340, format: (n: number) => `${n}%`, label: "Creator Reach Lift", duration: 1500 },
+          { target: 992, format: (n: number) => `${(n / 10).toFixed(1)}%`, label: "Persona Accuracy", duration: 1800 },
+          { target: 450, format: (n: number) => `${n}k`, label: "Wasted Posts Avoided", duration: 2000 },
+        ].map((stat, i) => (
+          <motion.div
+            key={stat.label}
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ delay: i * 0.1 }}
+          >
+            <StatCounter target={stat.target} format={stat.format} duration={stat.duration} />
+            <div className="text-xs md:text-sm font-bold text-muted-foreground uppercase tracking-[0.2em]">{stat.label}</div>
+          </motion.div>
+        ))}
+      </div>
+    </section>
+  );
+}
 
 export default function LandingPage() {
   const [showIntro, setShowIntro] = useState(false);
@@ -160,16 +266,9 @@ export default function LandingPage() {
                       Start Creating <ArrowRight className="ml-2 w-5 h-5" />
                     </Link>
                   </GlowButton>
-                  <Button 
-                    variant="outline" 
-                    size="lg" 
-                    className="w-full sm:w-auto h-14 px-10 rounded-2xl text-lg font-bold border-white/10 hover:bg-white/5"
-                    asChild
-                  >
-                    <Link href="#how">
-                      Watch Demo <Play className="ml-2 w-5 h-5 fill-current" />
-                    </Link>
-                  </Button>
+                  <Link href="#how" className="w-full sm:w-auto h-14 px-10 rounded-2xl text-lg font-bold border border-white/10 hover:bg-white/5 flex items-center justify-center gap-2 transition-colors">
+                    Watch Demo <Play className="w-5 h-5 fill-current" />
+                  </Link>
                 </div>
 
                 <div className="mt-12 flex items-center gap-6 text-sm text-muted-foreground">
@@ -240,25 +339,68 @@ export default function LandingPage() {
           </section>
 
           {/* STATS SECTION */}
-          <section className="py-20 border-y border-white/5 bg-white/[0.02]">
-            <div className="max-w-7xl mx-auto px-6 grid grid-cols-2 md:grid-cols-4 gap-12 text-center">
-              {[
-                { label: "AI Decisions / Day", value: "1.2M+" },
-                { label: "Creator Reach Lift", value: "340%" },
-                { label: "Persona Accuracy", value: "99.2%" },
-                { label: "Wasted Posts Avoided", value: "450k" },
-              ].map((stat, i) => (
-                <motion.div
-                  key={stat.label}
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: i * 0.1 }}
-                >
-                  <div className="text-3xl md:text-5xl font-black mb-2 tracking-tight">{stat.value}</div>
-                  <div className="text-xs md:text-sm font-bold text-muted-foreground uppercase tracking-[0.2em]">{stat.label}</div>
-                </motion.div>
-              ))}
+          <StatsSection />
+
+          {/* HOW IT WORKS — ADK PIPELINE */}
+          <section id="how" className="py-32 px-6 relative overflow-hidden">
+            <div className="absolute inset-0 -z-10">
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[400px] bg-primary/5 blur-[120px] rounded-full" />
+            </div>
+            <div className="max-w-7xl mx-auto">
+              <div className="text-center mb-20">
+                <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-4 py-2 text-[12px] font-bold uppercase tracking-wider text-primary mb-6">
+                  <Zap className="w-3.5 h-3.5" /> Powered by Google ADK 1.0
+                </div>
+                <h2 className="text-4xl md:text-6xl font-black mb-6 tracking-tight">
+                  The Pre-Flight Pipeline
+                </h2>
+                <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+                  A SequentialAgent orchestrates 6 specialized sub-agents. LoopAgent iterates until your clip scores 65+ or gives a final verdict.
+                </p>
+              </div>
+
+              <div className="relative">
+                {/* connector line */}
+                <div className="hidden lg:block absolute top-1/2 left-[8.33%] right-[8.33%] h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent -translate-y-1/2 z-0" />
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 relative z-10">
+                  {PIPELINE_STEPS.map((step, i) => (
+                    <motion.div
+                      key={step.label}
+                      initial={{ opacity: 0, y: 30 }}
+                      whileInView={{ opacity: 1, y: 0 }}
+                      viewport={{ once: true }}
+                      transition={{ delay: i * 0.12, duration: 0.5 }}
+                      className="flex flex-col items-center text-center group"
+                    >
+                      <div className="relative mb-4">
+                        <div className="w-14 h-14 rounded-2xl bg-secondary/60 border border-white/10 flex items-center justify-center group-hover:border-primary/40 group-hover:bg-primary/10 transition-all duration-300 shadow-lg">
+                          <step.icon className="w-6 h-6 text-primary" />
+                        </div>
+                        <div className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-background border border-white/10 flex items-center justify-center text-[9px] font-black text-muted-foreground">
+                          {i + 1}
+                        </div>
+                      </div>
+                      <p className="text-[11px] font-black text-foreground/90 mb-1 leading-tight">{step.label}</p>
+                      <p className="text-[9px] text-muted-foreground/60 font-medium">{step.sub}</p>
+                    </motion.div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Agent primitives badges */}
+              <motion.div
+                initial={{ opacity: 0, y: 16 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: 0.7 }}
+                className="mt-16 flex flex-wrap justify-center gap-3"
+              >
+                {["SequentialAgent", "LoopAgent", "ParallelAgent", "BaseAgent ×4", "FunctionTool", "MCPToolset"].map(badge => (
+                  <span key={badge} className="px-3 py-1.5 rounded-full border border-white/10 bg-white/[0.03] text-[10px] font-black text-muted-foreground uppercase tracking-widest hover:border-primary/30 hover:text-primary transition-colors">
+                    {badge}
+                  </span>
+                ))}
+              </motion.div>
             </div>
           </section>
 
@@ -272,28 +414,72 @@ export default function LandingPage() {
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
                 {PERSONAS.map((persona, i) => (
                   <motion.div
                     key={persona.id}
-                    whileHover={{ y: -10 }}
-                    className="group relative p-8 rounded-3xl nano-glass border-white/5 overflow-hidden"
+                    initial={{ opacity: 0, y: 24 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: i * 0.1 }}
+                    whileHover={{ y: -8, transition: { duration: 0.2 } }}
+                    className={cn("group relative p-6 rounded-2xl nano-glass border overflow-hidden", persona.borderColor)}
                   >
-                    <div className={cn("absolute top-0 right-0 w-32 h-32 blur-3xl opacity-20 -z-10 bg-gradient-to-br", persona.color)} />
-                    <div className="flex items-center justify-between mb-6">
-                      <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center bg-gradient-to-br", persona.color)}>
-                        <Users className="w-6 h-6 text-white" />
+                    <div className={cn("absolute top-0 right-0 w-40 h-40 blur-3xl opacity-15 -z-10 bg-gradient-to-br", persona.color)} />
+
+                    {/* Header */}
+                    <div className="flex items-center justify-between mb-5">
+                      <div className="flex items-center gap-2.5">
+                        <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br text-lg", persona.color)}>
+                          {persona.emoji}
+                        </div>
+                        <div>
+                          <p className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground">Agent</p>
+                          <p className="text-sm font-black">{persona.title}</p>
+                        </div>
                       </div>
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Agent Active</span>
+                      <span className={cn(
+                        "px-2 py-1 rounded-full text-[8px] font-black uppercase tracking-tighter",
+                        persona.verdict === "WATCHES"
+                          ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400"
+                          : "bg-red-500/10 border border-red-500/20 text-red-400"
+                      )}>
+                        {persona.verdict}
+                      </span>
                     </div>
-                    <h3 className="text-2xl font-black mb-2">{persona.title}</h3>
-                    <p className="text-muted-foreground mb-6 text-sm leading-relaxed">{persona.description}</p>
-                    <div className="pt-6 border-t border-white/5 flex items-center justify-between">
-                      <span className="text-xs font-bold text-primary">{persona.stats}</span>
-                      <div className="flex gap-1">
-                        {[1,2,3].map(j => <div key={j} className="w-1 h-1 rounded-full bg-primary" />)}
+
+                    {/* Retention Bar */}
+                    <div className="mb-4">
+                      <div className="flex justify-between text-[9px] font-bold text-muted-foreground mb-1.5">
+                        <span>Predicted Retention</span>
+                        <span className={persona.retention >= 80 ? "text-emerald-400" : persona.retention >= 60 ? "text-amber-400" : "text-red-400"}>
+                          {persona.retention}%
+                        </span>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
+                        <motion.div
+                          initial={{ width: 0 }}
+                          whileInView={{ width: `${persona.retention}%` }}
+                          viewport={{ once: true }}
+                          transition={{ delay: i * 0.1 + 0.4, duration: 0.8, ease: "easeOut" }}
+                          className={cn("h-full rounded-full bg-gradient-to-r", persona.color)}
+                        />
                       </div>
                     </div>
+
+                    {/* Hook verdict */}
+                    <div className="mb-4">
+                      <span className={cn(
+                        "text-[9px] font-black uppercase tracking-widest",
+                        persona.hook === "strong" ? "text-emerald-400" : persona.hook === "moderate" ? "text-amber-400" : "text-red-400"
+                      )}>
+                        Hook: {persona.hook}
+                      </span>
+                    </div>
+
+                    <p className="text-[10px] text-muted-foreground/70 font-medium leading-relaxed italic border-l-2 border-white/10 pl-3">
+                      &ldquo;{persona.reason}&rdquo;
+                    </p>
                   </motion.div>
                 ))}
               </div>
@@ -383,9 +569,9 @@ export default function LandingPage() {
                     ))}
                   </div>
 
-                  <Button variant="outline" className="h-14 rounded-2xl text-lg font-bold border-white/10 hover:bg-white/5" asChild>
-                    <Link href="/signin">Start Free</Link>
-                  </Button>
+                  <Link href="/signin" className="h-14 px-10 rounded-2xl text-lg font-bold border border-white/10 hover:bg-white/5 flex items-center justify-center transition-colors">
+                    Start Free
+                  </Link>
                 </motion.div>
 
                 {/* PRO */}
@@ -430,6 +616,47 @@ export default function LandingPage() {
             </div>
           </section>
 
+          {/* TESTIMONIALS */}
+          <section className="py-32 px-6 relative overflow-hidden">
+            <div className="absolute inset-0 -z-10 bg-white/[0.01]" />
+            <div className="max-w-7xl mx-auto">
+              <div className="text-center mb-16">
+                <h2 className="text-4xl md:text-5xl font-black mb-4 tracking-tight">Creators who stopped guessing</h2>
+                <p className="text-muted-foreground text-lg">Real results from the Pre-Flight beta.</p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {TESTIMONIALS.map((t, i) => (
+                  <motion.div
+                    key={t.name}
+                    initial={{ opacity: 0, y: 24 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: i * 0.15 }}
+                    className="p-8 rounded-2xl nano-glass border-white/5 flex flex-col gap-5 relative overflow-hidden"
+                  >
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 blur-3xl rounded-full -z-10" />
+                    <div className="flex items-center gap-1">
+                      {[...Array(5)].map((_, j) => (
+                        <Star key={j} className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                      ))}
+                    </div>
+                    <p className="text-sm font-medium text-foreground/80 leading-relaxed flex-1">&ldquo;{t.quote}&rdquo;</p>
+                    <div className="flex items-center justify-between pt-4 border-t border-white/5">
+                      <div>
+                        <p className="text-sm font-black">{t.name}</p>
+                        <p className="text-[10px] text-muted-foreground font-medium">{t.role}</p>
+                      </div>
+                      <div className="flex flex-col items-end">
+                        <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">Pre-Flight Score</span>
+                        <span className="text-lg font-black text-primary">{t.score}</span>
+                      </div>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+          </section>
+
           {/* CTA SECTION */}
           <section className="py-40 px-6 relative">
             <div className="max-w-4xl mx-auto text-center">
@@ -440,15 +667,23 @@ export default function LandingPage() {
                 className="p-16 rounded-[48px] nano-glass border-white/10 relative overflow-hidden"
               >
                 <div className="absolute inset-0 -z-10 bg-gradient-to-tr from-primary/10 via-transparent to-accent/10" />
+                <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-4 py-2 text-[11px] font-bold uppercase tracking-wider text-primary mb-8">
+                  <Shield className="w-3.5 h-3.5" /> Google AI Agents Challenge 2026
+                </div>
                 <h2 className="text-5xl md:text-7xl font-black mb-8 tracking-tight">Stop publishing <br /> in the dark.</h2>
                 <p className="text-xl text-muted-foreground mb-12 max-w-xl mx-auto">
-                  Join the elite creators using QuickAI to validate every clip before it goes live. Your reach is too valuable to waste.
+                  The only pre-publication AI system that runs a 6-agent Google ADK pipeline on your clip before you waste a single impression.
                 </p>
-                <GlowButton size="lg" className="h-16 px-12 rounded-2xl text-xl font-black" asChild>
-                  <Link href="/editor">
-                    Launch Your First Project <ArrowRight className="ml-3 w-6 h-6" />
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+                  <GlowButton size="lg" className="h-16 px-12 rounded-2xl text-xl font-black" asChild>
+                    <Link href="/editor">
+                      Run Your First Pre-Flight <ArrowRight className="ml-3 w-6 h-6" />
+                    </Link>
+                  </GlowButton>
+                  <Link href="/pricing" className="h-16 px-10 rounded-2xl text-lg font-bold border border-white/10 hover:bg-white/5 flex items-center justify-center gap-2 transition-colors">
+                    View Pricing <ChevronRight className="w-5 h-5" />
                   </Link>
-                </GlowButton>
+                </div>
               </motion.div>
             </div>
           </section>

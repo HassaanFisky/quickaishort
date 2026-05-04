@@ -589,26 +589,36 @@ function PersonaCard({ vote }: { vote: PersonaVote }) {
         </span>
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        <div className="flex items-center justify-between">
-          <span className={cn("text-[9px] font-black uppercase tracking-tighter", hookColor)}>
-            Hook: {vote.hook_verdict}
-          </span>
+      {/* Retention mini-bar */}
+      <div className="space-y-1">
+        <div className="flex justify-between text-[8px] font-bold text-muted-foreground/50">
+          <span className={cn("uppercase tracking-tighter", hookColor)}>Hook: {vote.hook_verdict}</span>
           <div className="flex items-center gap-2">
-            <span className="text-[9px] font-bold text-muted-foreground/50">
-              Share {Math.round(vote.share_likelihood * 100)}%
-            </span>
-            {vote.drop_off_second !== null && (
-              <span className="text-[9px] font-bold text-muted-foreground/40">
-                @{vote.drop_off_second}s
-              </span>
-            )}
+            <span>Share {Math.round(vote.share_likelihood * 100)}%</span>
+            {vote.drop_off_second !== null && <span className="text-muted-foreground/30">Drop @{vote.drop_off_second}s</span>}
           </div>
         </div>
-        <p className="text-[10px] text-muted-foreground font-medium leading-relaxed line-clamp-2 italic">
-          &ldquo;{vote.reasoning}&rdquo;
-        </p>
+        <div className="h-1 rounded-full bg-white/5 overflow-hidden">
+          <motion.div
+            initial={{ width: 0 }}
+            animate={{ width: `${vote.predicted_retention_pct}%` }}
+            transition={{ duration: 0.6, ease: "easeOut" }}
+            className="h-full rounded-full"
+            style={
+              vote.predicted_retention_pct >= 90
+                ? { background: "linear-gradient(to right, #ec4899, #a855f7)" }
+                : vote.predicted_retention_pct >= 71
+                  ? { background: "#a855f7" }
+                  : vote.predicted_retention_pct >= 41
+                    ? { background: "#f59e0b" }
+                    : { background: "#6b7280" }
+            }
+          />
+        </div>
       </div>
+      <p className="text-[10px] text-muted-foreground font-medium leading-relaxed line-clamp-2 italic border-l-2 border-white/10 pl-2.5">
+        &ldquo;{vote.reasoning}&rdquo;
+      </p>
     </div>
   );
 }
@@ -630,38 +640,58 @@ function PreflightResultsPanel({
   return (
     <div className="space-y-6">
       {/* Predicted Success Node */}
-      <div className="p-6 rounded-lg bg-secondary/40 border border-border flex items-center justify-between relative overflow-hidden">
+      <div className="p-5 rounded-xl bg-secondary/40 border border-border relative overflow-hidden">
         {isViral && (
-          <div className="absolute inset-0 bg-primary/5 blur-3xl rounded-full" />
+          <div className="absolute inset-0 bg-primary/5 blur-3xl rounded-full pointer-events-none" />
         )}
-        <div className="relative z-10">
-          <p className="text-[10px] font-black uppercase tracking-[0.25em] text-muted-foreground mb-1">
-            Predicted Success
-          </p>
-          <div className="flex items-end gap-1.5">
-            <span
-              className={cn(
-                "text-5xl font-black tracking-tighter leading-none",
-                isViral && "bg-clip-text text-transparent",
-              )}
-              style={
-                isViral
-                  ? { backgroundImage: scoreStyle.background }
-                  : { color: scoreStyle.color }
-              }
-            >
-              {Math.round(result.weighted_consensus_score)}
-            </span>
-            <span className="text-sm font-bold text-muted-foreground/40 pb-1">/100</span>
+        <div className="relative z-10 flex items-start justify-between mb-4">
+          <div>
+            <p className="text-[9px] font-black uppercase tracking-[0.25em] text-muted-foreground mb-1">
+              Pre-Flight Score
+            </p>
+            <div className="flex items-end gap-1.5">
+              <span
+                className={cn(
+                  "text-5xl font-black tracking-tighter leading-none",
+                  isViral && "bg-clip-text text-transparent",
+                )}
+                style={
+                  isViral
+                    ? { backgroundImage: scoreStyle.background }
+                    : { color: scoreStyle.color }
+                }
+              >
+                {Math.round(result.weighted_consensus_score)}
+              </span>
+              <span className="text-sm font-bold text-muted-foreground/40 pb-1">/100</span>
+            </div>
+          </div>
+          <div className="flex flex-col items-end gap-2">
+            <RecommendationBadge rec={result.recommendation} />
+            {result.timed_out && (
+              <span className="text-[9px] font-bold text-amber-500/60 uppercase tracking-widest">
+                Async Timeout
+              </span>
+            )}
           </div>
         </div>
-        <div className="relative z-10 flex flex-col items-end gap-3">
-          <RecommendationBadge rec={result.recommendation} />
-          {result.timed_out && (
-            <span className="text-[9px] font-bold text-amber-500/50 uppercase tracking-widest">
-              Async Timeout
-            </span>
-          )}
+        {/* Score context bar */}
+        <div className="space-y-1.5">
+          <div className="relative h-1.5 rounded-full overflow-hidden bg-white/5">
+            <div className="absolute inset-y-0 left-0 w-[40%] bg-[#6b7280]/40" />
+            <div className="absolute inset-y-0 left-[40%] w-[30%] bg-[#f59e0b]/40" />
+            <div className="absolute inset-y-0 left-[70%] w-[19%] bg-[#a855f7]/40" />
+            <div className="absolute inset-y-0 left-[89%] right-0 bg-gradient-to-r from-[#ec4899] to-[#a855f7] opacity-50" />
+            <motion.div
+              initial={{ left: "0%" }}
+              animate={{ left: `calc(${Math.min(result.weighted_consensus_score, 99)}% - 4px)` }}
+              transition={{ duration: 0.8, ease: "easeOut", delay: 0.2 }}
+              className="absolute top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.8)] z-10"
+            />
+          </div>
+          <div className="flex justify-between text-[8px] font-bold text-muted-foreground/40 uppercase tracking-widest">
+            <span>Weak</span><span>Moderate</span><span>Strong</span><span>Viral</span>
+          </div>
         </div>
       </div>
 
@@ -712,30 +742,34 @@ function PreflightResultsPanel({
       )}
 
       {/* Trend Insight */}
-      <div className="px-1">
-        {result.bigquery_insight ? (
-          <div className="space-y-2">
-            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-              Trend Insight
-            </p>
-            <p className="text-[11px] text-muted-foreground font-medium leading-relaxed border-l-2 border-primary/40 pl-4">
-              {result.bigquery_insight}
+      {result.bigquery_insight ? (
+        <div className="p-4 rounded-lg bg-secondary/30 border border-border space-y-2">
+          <div className="flex items-center gap-1.5">
+            <BarChart3 className="w-3 h-3 text-primary" />
+            <p className="text-[9px] font-black uppercase tracking-[0.2em] text-primary">
+              SerpAPI Trend Context
             </p>
           </div>
-        ) : (
-          <p className="text-[10px] text-muted-foreground font-medium leading-relaxed border-l-2 border-foreground/10 pl-4 italic">
-            Connect YouTube analytics for deeper audience-specific predictions.
+          <p className="text-[10px] text-muted-foreground font-medium leading-relaxed border-l-2 border-primary/30 pl-3">
+            {result.bigquery_insight}
           </p>
-        )}
-      </div>
+        </div>
+      ) : (
+        <div className="p-4 rounded-lg bg-secondary/20 border border-dashed border-white/10 space-y-1.5">
+          <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/50">Trend Grounding</p>
+          <p className="text-[10px] text-muted-foreground/50 font-medium leading-relaxed italic">
+            Add SERPAPI_KEY to env for live search trend context on every clip.
+          </p>
+        </div>
+      )}
 
       {/* Run Again */}
       <button
         onClick={onReset}
-        className="w-full py-3 text-[10px] font-black text-muted-foreground/60 uppercase tracking-widest hover:text-foreground transition-colors flex items-center justify-center gap-2"
+        className="w-full py-2.5 text-[9px] font-black text-muted-foreground/50 uppercase tracking-[0.2em] hover:text-foreground transition-colors flex items-center justify-center gap-2 rounded-lg hover:bg-white/5"
       >
         <RefreshCw className="w-3 h-3" />
-        Run Again
+        Run Another Pre-Flight
       </button>
     </div>
   );
