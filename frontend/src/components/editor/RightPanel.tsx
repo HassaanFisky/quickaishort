@@ -444,7 +444,7 @@ export default function RightPanel() {
                     Pro Feature
                   </p>
                   <p className="text-[10px] text-muted-foreground font-medium max-w-[200px]">
-                    Full 6-persona audience testing is available on the Pro plan.
+                    Multi-clip batch testing is available on the Pro plan.
                   </p>
                   <GlowButton variant="outline" size="sm" className="h-8 px-5 rounded-full text-[9px] font-black" asChild>
                     <Link href="/pricing">Upgrade</Link>
@@ -537,9 +537,17 @@ function RecommendationBadge({ rec }: { rec: Recommendation }) {
   );
 }
 
+const PERSONA_LABELS: Record<string, { name: string; emoji: string }> = {
+  genz:       { name: "Gen Z",       emoji: "⚡" },
+  millennial: { name: "Millennial",  emoji: "💼" },
+  sports:     { name: "Sports Fan",  emoji: "🏆" },
+  tech:       { name: "Tech Nerd",   emoji: "🖥️" },
+};
+
 function PersonaCard({ vote }: { vote: PersonaVote }) {
   const scoreStyle = viralScoreColor(vote.predicted_retention_pct);
   const isViral = vote.predicted_retention_pct >= 90;
+  const label = PERSONA_LABELS[vote.persona_id] ?? { name: vote.persona_id, emoji: "👤" };
 
   const hookColor =
     vote.hook_verdict === "strong"
@@ -551,12 +559,24 @@ function PersonaCard({ vote }: { vote: PersonaVote }) {
   return (
     <div className="p-4 rounded-lg bg-secondary/40 border border-border space-y-3 transition-all hover:bg-secondary hover:-translate-y-0.5 hover:border-primary/40">
       <div className="flex items-center justify-between">
-        <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground group-hover/persona:text-foreground transition-colors">
-          {vote.persona_id}
-        </span>
+        <div className="flex items-center gap-1.5">
+          <span className="text-sm leading-none">{label.emoji}</span>
+          <span className="text-[10px] font-black uppercase tracking-widest text-foreground/80">
+            {label.name}
+          </span>
+          {vote.would_watch_full ? (
+            <span className="px-1.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[8px] font-black text-emerald-400 uppercase tracking-tighter">
+              Watches
+            </span>
+          ) : (
+            <span className="px-1.5 py-0.5 rounded-full bg-red-500/10 border border-red-500/20 text-[8px] font-black text-red-400 uppercase tracking-tighter">
+              Scrolls
+            </span>
+          )}
+        </div>
         <span
           className={cn(
-            "text-sm font-black",
+            "text-sm font-black tabular-nums",
             isViral && "bg-clip-text text-transparent",
           )}
           style={
@@ -569,23 +589,23 @@ function PersonaCard({ vote }: { vote: PersonaVote }) {
         </span>
       </div>
 
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-1.5">
         <div className="flex items-center justify-between">
-          <span
-            className={cn(
-              "text-[9px] font-black uppercase tracking-tighter",
-              hookColor,
-            )}
-          >
+          <span className={cn("text-[9px] font-black uppercase tracking-tighter", hookColor)}>
             Hook: {vote.hook_verdict}
           </span>
-          {vote.drop_off_second !== null && (
-            <span className="text-[9px] font-bold text-muted-foreground/40">
-              @{vote.drop_off_second}s
+          <div className="flex items-center gap-2">
+            <span className="text-[9px] font-bold text-muted-foreground/50">
+              Share {Math.round(vote.share_likelihood * 100)}%
             </span>
-          )}
+            {vote.drop_off_second !== null && (
+              <span className="text-[9px] font-bold text-muted-foreground/40">
+                @{vote.drop_off_second}s
+              </span>
+            )}
+          </div>
         </div>
-        <p className="text-[10px] text-muted-foreground font-medium leading-relaxed line-clamp-3 italic">
+        <p className="text-[10px] text-muted-foreground font-medium leading-relaxed line-clamp-2 italic">
           &ldquo;{vote.reasoning}&rdquo;
         </p>
       </div>

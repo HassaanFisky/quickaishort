@@ -6,10 +6,12 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PORT=8000
 
-# Install FFmpeg and other OS dependencies
+# Install FFmpeg, Node.js (for npx @supabase/mcp-server-supabase), and utilities
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     wget \
+    nodejs \
+    npm \
     && rm -rf /var/lib/apt/lists/*
 
 # Set the working directory

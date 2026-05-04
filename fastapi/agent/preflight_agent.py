@@ -135,6 +135,17 @@ except ImportError as _adk_err:
     Event = EventActions = Runner = InMemorySessionService = None  # type: ignore[assignment]
     genai_types = None  # type: ignore[assignment]
 
+# MCPToolset is a sub-package of ADK — import separately so a missing optional
+# dependency never breaks the main ADK import above.
+_MCP_OK = False
+MCPToolset = StdioServerParams = None  # type: ignore[assignment]
+if _ADK_OK:
+    try:
+        from google.adk.tools.mcp_tool.mcp_toolset import MCPToolset, StdioServerParams  # type: ignore[assignment]
+        _MCP_OK = True
+    except ImportError:
+        logger.warning("google-adk MCPToolset not available — Supabase MCP agent disabled")
+
 
 # ---------------------------------------------------------------------------
 # Async grounding (runs OUTSIDE ADK so we can true-parallel both calls)
@@ -517,7 +528,7 @@ def _build_pipeline() -> tuple[Any, Any]:
         for pid in PERSONA_WEIGHTS
     ]
 
-    persona_panel = SequentialAgent(
+    persona_panel = ParallelAgent(
         name="PersonaPanel",
         sub_agents=persona_agents,
     )
@@ -554,10 +565,58 @@ def _build_pipeline() -> tuple[Any, Any]:
     trend_agent = _TrendAgent()
     analytics_agent = _AnalyticsAgent()
 
-    # Pillar 3: Parallelize initial grounding + candidate check (DAG-like)
+    # Supabase MCP agent — queries historical preflight data for channel context.
+    # Activated only when SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY are set and
+    # MCPToolset is available in the installed ADK build.
+    supabase_mcp_agent = None
+    _supabase_url = os.environ.get("SUPABASE_URL", "")
+    _supabase_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+    if _MCP_OK and _supabase_url and _supabase_key:
+        try:
+            _mcp_toolset = MCPToolset(
+                connection_params=StdioServerParams(
+                    command="npx",
+                    args=["-y", "@supabase/mcp-server-supabase@latest"],
+                    env={
+                        "SUPABASE_URL": _supabase_url,
+                        "SUPABASE_SERVICE_ROLE_KEY": _supabase_key,
+                    },
+                )
+            )
+            supabase_mcp_agent = Agent(
+                name="SupabaseMCPAgent",
+                model=model,
+                generate_content_config=generate_config,
+                tools=[_mcp_toolset],
+                description="Grounds persona predictions with historical preflight data from Supabase.",
+                instruction=(
+                    "Use the execute_sql tool to run this query: "
+                    "SELECT ROUND(AVG(consensus_score)::numeric, 1) AS avg_score, "
+                    "COUNT(*) AS sample_count FROM preflight_results "
+                    "WHERE created_at > NOW() - INTERVAL '30 days'. "
+                    "If the table does not exist or the query fails, respond with 'null'. "
+                    "Otherwise respond with the JSON result only — no extra text."
+                ),
+                output_key="historical_baseline",
+            )
+            logger.info("Supabase MCP agent initialised (channel history grounding active)")
+        except Exception as _mcp_err:
+            logger.warning("Supabase MCP agent init failed: %s", _mcp_err)
+            supabase_mcp_agent = None
+    else:
+        logger.info(
+            "Supabase MCP agent skipped (SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY not set)"
+        )
+
+    # Pillar 3: Parallelize initial grounding + candidate check (DAG-like).
+    # SupabaseMCPAgent is added to the DAG when credentials are available.
+    grounding_sub_agents = [clip_candidate_agent, trend_agent, analytics_agent]
+    if supabase_mcp_agent is not None:
+        grounding_sub_agents.append(supabase_mcp_agent)
+
     grounding_parallel = ParallelAgent(
         name="GroundingDAG",
-        sub_agents=[clip_candidate_agent, trend_agent, analytics_agent],
+        sub_agents=grounding_sub_agents,
     )
 
     root_agent = SequentialAgent(
@@ -569,7 +628,14 @@ def _build_pipeline() -> tuple[Any, Any]:
     )
 
     from agent.firestore_session import FirestoreSessionService
-    session_service = FirestoreSessionService()
+    try:
+        session_service = FirestoreSessionService()
+        logger.info("Pre-Flight using Firestore session service")
+    except Exception as fs_err:
+        logger.warning(
+            "Firestore unavailable (%s) — falling back to InMemorySessionService (dev mode)", fs_err
+        )
+        session_service = InMemorySessionService()
     runner = Runner(
         agent=root_agent,
         session_service=session_service,
@@ -583,7 +649,11 @@ def _build_pipeline() -> tuple[Any, Any]:
     return root_agent, runner
 
 
-preflight_root_agent, preflight_runner = _build_pipeline()
+try:
+    preflight_root_agent, preflight_runner = _build_pipeline()
+except Exception as _pipeline_init_err:
+    logger.error("Pre-Flight pipeline failed to initialise: %s", _pipeline_init_err)
+    preflight_root_agent, preflight_runner = None, None
 
 
 # ---------------------------------------------------------------------------

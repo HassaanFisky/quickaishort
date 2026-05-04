@@ -55,8 +55,8 @@ const PERSONAS = [
 const FEATURES = [
   {
     icon: Users,
-    title: "Six Audience Personas",
-    body: "GenZ, Millennial, Sports, Tech, Lifestyle, Skeptic — each scores hook strength and predicted retention.",
+    title: "4 Audience Personas",
+    body: "Gen Z, Millennial, Sports Fan, Tech Nerd — each scores hook strength and predicted retention.",
     className: "md:col-span-2",
   },
   {
@@ -266,9 +266,9 @@ export default function LandingPage() {
           <section className="py-32 px-6 relative overflow-hidden">
             <div className="max-w-7xl mx-auto">
               <div className="text-center mb-20">
-                <h2 className="text-4xl md:text-6xl font-black mb-6 tracking-tight">The 6-Persona Panel</h2>
+                <h2 className="text-4xl md:text-6xl font-black mb-6 tracking-tight">The 4-Persona Panel</h2>
                 <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-                  Our multi-agent system runs your clip through 6 specialized LLM agents trained on billions of engagement data points.
+                  Our multi-agent system fires 4 specialized LLM agents in parallel — each simulating a real audience segment on your clip.
                 </p>
               </div>
 
@@ -398,7 +398,7 @@ export default function LandingPage() {
                   <div className="mb-8">
                     <span className="px-4 py-1.5 rounded-full bg-primary/10 text-[10px] font-bold uppercase tracking-[0.2em] text-primary border border-primary/20">Pro Creator</span>
                     <div className="mt-6 flex items-baseline gap-2">
-                      <span className="text-6xl font-black">$29</span>
+                      <span className="text-6xl font-black">$12</span>
                       <span className="text-muted-foreground font-medium">/month</span>
                     </div>
                     <p className="mt-4 text-muted-foreground font-medium">The full suite for serious creators.</p>
@@ -407,7 +407,7 @@ export default function LandingPage() {
                   <div className="space-y-4 mb-10 flex-1">
                     {[
                       "Unlimited Pre-Flight runs",
-                      "Full 6-persona panel",
+                      "Full 4-persona parallel panel",
                       "Auto-refinement loop",
                       "4K No Watermark export",
                       "Drop-off map + analytics",

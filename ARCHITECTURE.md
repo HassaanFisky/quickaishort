@@ -2,7 +2,7 @@
 
 ## Google AI Agents Challenge 2026
 
-**Stack:** Next.js 16 · FastAPI · Google ADK 1.0 · Gemini 2.5 Flash · FFmpeg.wasm · Whisper.wasm
+**Stack:** Next.js 14.2.22 · FastAPI · Google ADK 1.0 · Gemini 2.5 Flash · FFmpeg.wasm · Whisper.wasm
 
 ---
 
@@ -48,17 +48,17 @@
               ┌────────────▼──────────────┐   ┌──────────▼─────────────┐
               │ ParallelAgent             │   │ VoteAggregatorAgent    │
               │ "PersonaPanel"            │   │                        │
-              │                           │   │ Reads 6 persona votes  │
-              │ 6 Agents fire in parallel │   │ from session state.    │
+              │                           │   │ Reads 4 persona votes  │
+              │ 4 Agents fire in parallel │   │ from session state.    │
               │ ┌───────────────────────┐ │   │ Computes:              │
-              │ │ Persona_genz    0.25  │ │   │  score = Σ w×(ret×0.6  │
-              │ │ Persona_millenn 0.20  │─┼──►│          +share×100×0.4│
-              │ │ Persona_sports  0.15  │ │   │                        │
-              │ │ Persona_tech    0.15  │ │   │ Writes consensus_score │
-              │ │ Persona_arabic  0.125 │ │   │ to session state       │
-              │ │ Persona_spanish 0.125 │ │   │ [ADK: Agent]           │
-              │ └───────────────────────┘ │   └──────────┬─────────────┘
-              │ [ADK: ParallelAgent]      │              │
+              │ │ Persona_genz    0.30  │ │   │  score = Σ w×(ret×0.6  │
+              │ │ Persona_millenn 0.30  │─┼──►│          +share×100×0.4│
+              │ │ Persona_sports  0.20  │ │   │                        │
+              │ │ Persona_tech    0.20  │ │   │ Writes consensus_score │
+              │ └───────────────────────┘ │   │ to session state       │
+              │                           │   │ [ADK: BaseAgent]       │
+              │ [ADK: ParallelAgent]      │   └──────────┬─────────────┘
+              │                           │              │
               └───────────────────────────┘   ┌──────────▼─────────────┐
                                               │ QualityGateAgent       │
                                               │                        │
@@ -95,14 +95,15 @@
 | Node | ADK Primitive | Purpose |
 | :--- | :--- | :--- |
 | PreFlight_Orchestrator | `SequentialAgent` | Runs 4 steps in strict order |
-| PersonaPanel | `ParallelAgent` | Fires all 6 personas simultaneously |
+| PersonaPanel | `ParallelAgent` | Fires all 4 personas simultaneously |
 | AudiencePanelLoop | `LoopAgent` | Iterates until quality gate passes or max_iter reached |
 | ClipCandidateAgent | `Agent` | Validates clip metadata, seeds session state |
-| TrendGroundingAgent | `Agent` + `FunctionTool` | Calls SerpAPI async via httpx |
-| AnalyticsGroundingAgent | `Agent` + `FunctionTool` | Calls YouTube Analytics v2 via OAuth |
-| Persona_* (×6) | `Agent` | Simulates a specific demographic audience member |
-| VoteAggregatorAgent | `Agent` | Weighted consensus from 6 votes |
-| QualityGateAgent | `Agent` | Sets loop exit flag + recommendation |
+| TrendGroundingAgent | `BaseAgent` | Calls SerpAPI async via httpx (deterministic) |
+| AnalyticsGroundingAgent | `BaseAgent` | Calls YouTube Analytics v2 via OAuth (deterministic) |
+| SupabaseMCPAgent | `Agent` + `MCPToolset` | Queries Supabase for historical channel preflight data via stdio MCP server |
+| Persona_* (×4) | `Agent` | Simulates a specific demographic audience member |
+| VoteAggregatorAgent | `BaseAgent` | Weighted consensus from 4 votes (pure Python, no LLM) |
+| QualityGateAgent | `BaseAgent` | Sets loop exit flag + recommendation (pure Python, no LLM) |
 | ClipRefinementAgent | `Agent` | Edits clip boundaries from majority drop-off point |
 
 ---
@@ -152,7 +153,7 @@ Frontend (RightPanel.tsx)
 | Primary Database | **MongoDB (Atlas)** | User stats, export metadata, GridFS video storage |
 | Agent Sessions | **Firestore** | Persistent ADK `SequentialAgent` and `LoopAgent` state |
 | Cache & Queue | **Redis (Cloud)** | Task queue for `render_worker.py` and real-time events |
-| BigQuery | `google-cloud-bigquery` | Creator channel historical retention analytics |
+| YouTube Analytics v2 | `google-api-python-client` | Creator channel retention analytics (falls back to baseline if no OAuth) |
 
 ---
 

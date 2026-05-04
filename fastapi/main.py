@@ -64,10 +64,10 @@ try:
     )
 
     _ADK_AVAILABLE = True
-except ImportError:
+except Exception:
     _ADK_AVAILABLE = False
     PreflightClipCandidate = None  # type: ignore[assignment]
-    logger.warning("google-adk not installed — POST /api/preflight will return 503")
+    logger.warning("google-adk unavailable — POST /api/preflight will return 503")
 
 
 PUBSUB_CHANNELS = (

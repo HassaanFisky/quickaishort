@@ -1,7 +1,108 @@
-# QUICKAISHORT MASTER AGENT PROTOCOL
-# Location: Antigravity → Settings → Custom Instructions
-# Also save as: /CLAUDE.md in project root (auto-loaded by Claude Code extension)
-# Also save as: /.antigravity/AGENTS.md (auto-loaded by Antigravity Manager)
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+---
+
+## DEVELOPMENT COMMANDS
+
+### Frontend (Next.js 14 — run from `frontend/`)
+
+```bash
+pnpm install          # install deps (uses pnpm, not npm)
+pnpm dev              # dev server on http://localhost:3000
+pnpm build            # production build (must pass zero TS errors)
+pnpm lint             # ESLint
+npx tsc --noEmit      # type-check only
+```
+
+### Backend (FastAPI — run from `fastapi/`)
+
+```bash
+python -m venv venv && source venv/bin/activate   # first-time setup
+pip install -r requirements.txt
+uvicorn main:app --reload --port 8000             # dev server
+python render_worker.py                           # start RQ render worker (requires Redis)
+python -m py_compile agent/preflight_agent.py    # syntax-check an agent file
+```
+
+### CI equivalent (what GitHub Actions runs)
+
+```bash
+cd frontend && npm install --legacy-peer-deps && npm run build
+```
+
+### Useful checks
+
+```bash
+git diff --cached | grep -iE "(api_key|secret|token|password)"  # pre-push secret scan
+```
+
+No test suite exists. CI validates via lint + `tsc --noEmit` + `next build`.
+
+---
+
+## ARCHITECTURE
+
+### Request flow (happy path)
+
+```text
+Browser → Next.js (frontend/src/app/)
+        → Next.js API routes (frontend/src/app/api/)
+        → FastAPI (fastapi/main.py) on port 8000
+             ├─ yt-dlp extracts YouTube stream URL (fastapi/app/utils/youtube_downloader.py)
+             ├─ Google ADK agents run analysis  (fastapi/agent/)
+             │    viral_agent.py → preflight_agent.py → director_agent.py
+             ├─ Long render jobs queued via Redis/RQ (fastapi/services/queue_service.py)
+             │    └─ render_worker.py processes jobs (fastapi/app/render/)
+             └─ Results pushed via Pusher + WebSocket (fastapi/services/realtime.py)
+```
+
+### ADK Multi-Agent Pipeline
+
+The core AI pipeline lives in `fastapi/agent/`. Entry points exported from `__init__.py`:
+
+- `run_viral_pipeline` — heuristic clip scoring (audio energy + speech density)
+- `run_preflight_pipeline` — Pre-Flight validation:
+  `DAG(ClipCandidate, TrendGrounding, AnalyticsGrounding)` → `LoopAgent(ParallelAgent(6 personas) → Aggregator → QualityGate → Refinement)`
+- `run_director_pipeline` — scene composition via `director_agent.py` + `script_agent.py`
+
+All agents call Gemini 2.5 Flash via `fastapi/services/gemini_client.py`. Model constant: `DEFAULT_MODEL`.
+
+### Browser-side processing (Web Workers)
+
+Heavy media work runs off the main thread in `frontend/src/workers/`:
+
+- Whisper transcription (`useTranscription` hook → Whisper.wasm via `@xenova/transformers`)
+- FFmpeg.wasm export (`useServerExport` / `clientExport.ts`)
+- MediaPipe face tracking (`useFaceTracker`)
+
+The `next.config.mjs` sets `Cross-Origin-Opener-Policy: same-origin` + `Cross-Origin-Embedder-Policy: require-corp` headers required for SharedArrayBuffer (used by FFmpeg.wasm).
+
+### State management
+
+- `frontend/src/stores/editorStore.ts` — Zustand store; single source of truth for the editor (timeline, clips, captions, export state)
+- `frontend/src/lib/api.ts` — all FastAPI calls; never call the backend URL directly from components
+- `frontend/src/types/` — shared TypeScript types; keep in sync with Pydantic schemas in `fastapi/app/models/schemas.py`
+
+### Auth
+
+NextAuth (`next-auth`) handles sessions on the frontend. `fastapi/app/auth/firebase_auth.py` validates Firebase ID tokens on protected backend endpoints. Middleware in `frontend/src/middleware.ts` protects dashboard routes.
+
+### Data stores
+
+| Store | Used for |
+| --- | --- |
+| MongoDB (motor) | User stats, credits, job history, GridFS for media |
+| Firestore | ADK agent session state (`firestore_session.py`) |
+| GCS | Rendered short exports (`fastapi/app/storage/gcs_repo.py`) |
+| Redis | RQ job queue + Pub/Sub for Pusher fan-out |
+
+---
+
+## QUICKAISHORT MASTER AGENT PROTOCOL
+
+Also saved as `.antigravity/AGENTS.md` (auto-loaded by Antigravity Manager).
 
 ---
 
@@ -12,8 +113,7 @@ SaaS platform built for the Google for Startups AI Agents Challenge 2026.
 
 Project owner: Hassaan Fisky, solo founder, Karachi, Pakistan.
 Domain: quickaishort.online (owned since Nov 2025)
-Stack: Next.js 14.2.22 + Tailwind v4 + Framer Motion (frontend), FastAPI + yt-dlp 
-+ Whisper + FFmpeg.wasm (backend), Google ADK multi-agent system (being added).
+Stack: Next.js 14.2.22 + Tailwind v4 + Framer Motion (frontend), FastAPI + yt-dlp + Whisper + FFmpeg.wasm (backend), Google ADK multi-agent system (being added).
 Submission deadline: June 5, 2026.
 
 Your mission: Ship production-grade code that wins the challenge. Every line 
@@ -316,7 +416,7 @@ The agent must treat these as acceptance tests before any "shipping" claim:
 
 - [ ] Uses Google Gemini model (not OpenAI/Claude) for core AI logic
 - [ ] Uses Google ADK v1.0+ for agent orchestration
-- [ ] Integrates at least one MCP server (Supabase MCP is current choice)
+- [x] Integrates Supabase MCP server (SupabaseMCPAgent in GroundingDAG — MCPToolset + StdioServerParams)
 - [ ] Has deployed, publicly accessible URL at quickaishort.online
 - [ ] Has public GitHub repo with MIT LICENSE file
 - [ ] Has 2:50–3:00 demo video showing live pipeline (not mock)

@@ -14,9 +14,9 @@ Built for the **Google for Startups AI Agents Challenge 2026**.
 
 1. Paste a YouTube URL
 2. System generates top clip candidates using **multimodal vision (Gemini 2.5 Flash)** + audio energy + speech density analysis
-3. **Pre-Flight runs a simulated audience panel** — 6 Gemini 2.5 Flash persona agents vote simultaneously on retention, drop-off, and share likelihood
-4. A **Parallel-Async LoopAgent** iteratively refines the clip until consensus score exceeds 65%
-5. BigQuery MCP grounds predictions in the creator's own channel history
+3. **Pre-Flight runs a simulated audience panel** — 4 Gemini 2.5 Flash persona agents fire in parallel, each voting on retention, drop-off, and share likelihood
+4. A **LoopAgent** iteratively refines the clip until consensus score exceeds 65%
+5. **Supabase MCP** grounds predictions against the creator's own historical preflight data
 6. Result: **PUBLISH** or **REFINE FIRST** — with full reasoning traces
 
 ---
@@ -27,17 +27,16 @@ RootAgent (SequentialAgent)
 
 - **ClipCandidateAgent** — yt-dlp + Whisper + audio scoring
 - **TrendGroundingAgent** — Google Trends API + SerpApi
-- **AnalyticsGroundingAgent** — YouTube Analytics API + BigQuery MCP
+- **AnalyticsGroundingAgent** — YouTube Analytics API v2
+- **SupabaseMCPAgent** — historical preflight data via Supabase MCPToolset
 - **AudiencePanelLoop** (LoopAgent, max 3 iterations)
 
-6 PersonaAgents (Gemini 2.5 Flash)
+4 PersonaAgents fire in parallel (Gemini 2.5 Flash)
 
-- GenZ Creator
+- Gen Z Creator
 - Millennial Professional
 - Sports Fan
 - Tech Enthusiast
-- Arabic Speaker
-- Spanish Speaker
 
 System Components
 
@@ -45,7 +44,7 @@ System Components
 - **QualityGateAgent** — escalate if score >= 65
 - **ClipRefinementAgent** — re-cut based on drop-off points
 
-ADK primitives used: `SequentialAgent`, `ParallelAgent`, `LoopAgent`, `FunctionTool`
+ADK primitives used: `SequentialAgent`, `ParallelAgent`, `LoopAgent`, `BaseAgent`, `MCPToolset`
 
 ---
 
@@ -53,13 +52,14 @@ ADK primitives used: `SequentialAgent`, `ParallelAgent`, `LoopAgent`, `FunctionT
 
 | Layer | Technology |
 | :--- | :--- |
-| Frontend | Next.js 16, Tailwind v4, Framer Motion, Zustand |
+| Frontend | Next.js 14.2.22, Tailwind v4, Framer Motion, Zustand |
 | Backend | FastAPI, Python 3.12, yt-dlp, FFmpeg, MoviePy |
 | AI Agents | Google ADK 1.0.0, Gemini 2.5 Flash |
+| MCP | Supabase MCP (`@supabase/mcp-server-supabase`) via ADK MCPToolset |
 | Infrastructure | Redis (RQ), Pusher (WebSockets), MongoDB Atlas |
-| Data | BigQuery, YouTube Analytics API v2 |
+| Data | YouTube Analytics API v2, Supabase (historical preflight data) |
 | Trends | SerpApi (Google Trends engine) |
-| Deploy | Vercel (frontend), Cloud Native (backend) |
+| Deploy | Vercel (frontend), Google Cloud Run (backend) |
 
 ---
 
@@ -68,7 +68,7 @@ ADK primitives used: `SequentialAgent`, `ParallelAgent`, `LoopAgent`, `FunctionT
 | Tier | Features | Price |
 | :--- | :--- | :--- |
 | Free | Manual editing, 3 exports, watermark | $0 |
-| Pro | Pre-Flight (6 personas), BigQuery grounding, no watermark | $29–99/mo |
+| Pro | Pre-Flight (4-persona parallel panel), Supabase MCP grounding, no watermark | $12/mo |
 
 **Market:** $117B creator economy, $59B short-form video market (2026)
 
