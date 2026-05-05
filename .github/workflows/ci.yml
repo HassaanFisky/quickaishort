@@ -63,8 +63,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install FFmpeg
+        run: sudo apt-get update -qq && sudo apt-get install -y ffmpeg
+
+      - name: Install yt-dlp
+        run: pip install yt-dlp --quiet
+
       - name: FFmpeg Pipeline Smoke Test
-        run: ffmpeg -version && yt-dlp --version
+        run: |
+          ffmpeg -version && yt-dlp --version && echo "PASS: FFmpeg pipeline OK"
 
       - name: Create test assets
         run: |
