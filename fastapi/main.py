@@ -23,7 +23,7 @@ from app.utils.youtube_auth import get_cookie_file, inject_ydl_bypass
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from starlette.background import BackgroundTask
 from pydantic import BaseModel, Field
 
@@ -619,79 +619,88 @@ async def proxy_video(url: str):
 
 
 @app.get("/api/audio")
-async def extract_audio(url: str = Query(...)):
-    """
-    Extract YouTube audio as MP3 via yt-dlp subprocess with 25-second hard timeout.
-    Uses FileResponse for clean one-shot delivery; temp dir cleaned up via BackgroundTask.
-    Cookie path: dynamic temp file written by get_cookie_file() from YOUTUBE_COOKIES env var
-    (NOT /app/youtube_cookies.txt — that path does not exist in this deployment).
-    """
-    from fastapi.responses import JSONResponse as _JSONResponse
+async def get_audio(url: str = Query(...)):
+    tmpdir = tempfile.mkdtemp(prefix="qai_audio_")
+    output_template = os.path.join(tmpdir, "audio.%(ext)s")
 
-    tmpdir = tempfile.mkdtemp()
-    output_path = os.path.join(tmpdir, "audio.mp3")
+    cookie_file = get_cookie_file()
 
-    cookie_path = get_cookie_file()
     cmd = ["yt-dlp"]
-    if cookie_path and os.path.exists(cookie_path):
-        cmd += ["--cookies", cookie_path]
+    if cookie_file and os.path.exists(cookie_file):
+        cmd += ["--cookies", cookie_file]
     cmd += [
-        "-x", "--audio-format", "mp3", "--audio-quality", "5",
-        "-o", output_path,
         "--no-playlist",
-        "--max-filesize", "30m",
+        "--max-filesize", "50m",
+        "--extractor-args", "youtube:player_client=android",
+        "-f", "bestaudio[ext=m4a]/bestaudio/18",
+        "--no-post-overwrites",
+        "-o", output_template,
         url,
     ]
 
-    def _cleanup():
-        shutil.rmtree(tmpdir, ignore_errors=True)
+    logger.info(f"/api/audio: running yt-dlp for {url}")
 
     try:
         proc = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            cwd=tmpdir,
         )
         try:
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=25.0)
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30.0)
         except asyncio.TimeoutError:
             proc.kill()
-            _cleanup()
-            return _JSONResponse(
-                {"error": "audio_timeout", "message": "Processing too slow"},
+            shutil.rmtree(tmpdir, ignore_errors=True)
+            logger.error("/api/audio: yt-dlp timed out after 30s")
+            return JSONResponse(
+                {"error": "audio_timeout", "message": "Video processing timed out. Try a shorter video."},
                 status_code=504,
             )
 
+        stderr_text = stderr.decode(errors="replace")
+        logger.info(f"/api/audio yt-dlp returncode={proc.returncode}")
         if proc.returncode != 0:
-            _cleanup()
-            return _JSONResponse(
-                {"error": "yt_dlp_failed", "message": stderr.decode()[-200:]},
+            logger.error(f"/api/audio yt-dlp stderr: {stderr_text[-500:]}")
+            shutil.rmtree(tmpdir, ignore_errors=True)
+            return JSONResponse(
+                {"error": "yt_dlp_failed", "message": stderr_text[-300:]},
                 status_code=500,
             )
 
-        # yt-dlp sometimes appends the extension — scan tmpdir for the actual file
-        if not os.path.exists(output_path):
-            for f in os.listdir(tmpdir):
-                if f.endswith(".mp3"):
-                    output_path = os.path.join(tmpdir, f)
-                    break
-            else:
-                _cleanup()
-                return _JSONResponse({"error": "no_output_file"}, status_code=500)
+        output_file = None
+        for fname in os.listdir(tmpdir):
+            if fname.startswith("audio."):
+                output_file = os.path.join(tmpdir, fname)
+                break
+
+        if not output_file or not os.path.exists(output_file):
+            logger.error(f"/api/audio: no output file in {tmpdir}. Files: {os.listdir(tmpdir)}")
+            shutil.rmtree(tmpdir, ignore_errors=True)
+            return JSONResponse(
+                {"error": "no_output_file", "message": "Audio file not produced"},
+                status_code=500,
+            )
+
+        ext = os.path.splitext(output_file)[1].lower()
+        media_type = "audio/mp4" if ext == ".m4a" else "audio/mpeg"
+        logger.info(f"/api/audio: serving {output_file} as {media_type}")
 
         return FileResponse(
-            output_path,
-            media_type="audio/mpeg",
+            output_file,
+            media_type=media_type,
             headers={
                 "Access-Control-Allow-Origin": "*",
                 "Cross-Origin-Resource-Policy": "cross-origin",
                 "Cache-Control": "no-cache",
             },
-            background=BackgroundTask(_cleanup),
+            background=BackgroundTask(shutil.rmtree, tmpdir, True),
         )
-    except Exception as exc:
-        _cleanup()
-        return _JSONResponse({"error": str(exc)}, status_code=500)
+
+    except Exception as e:
+        shutil.rmtree(tmpdir, ignore_errors=True)
+        logger.error(f"/api/audio unexpected error: {e}")
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 
 # ---- Pre-Flight ---------------------------------------------------------------
