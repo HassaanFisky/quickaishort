@@ -121,31 +121,21 @@ if echo "${HEALTH}" | grep -q '"mongo":false'; then
 fi
 
 # ── Step 4: Deploy worker ─────────────────────────────────────────────────────
-info "Step 4/4: Deploying render worker..."
+info "Step 4/4: Deploying render worker as a persistent service..."
 
-# Worker uses the same image but a different command via a Job
-# We create/update a Cloud Run Job for the worker process
-gcloud run jobs update "${WORKER_SERVICE}" \
-  --image "$(gcloud run services describe ${BACKEND_SERVICE} --region ${REGION} --format 'value(spec.template.spec.template.spec.containers[0].image)')" \
+gcloud run deploy "${WORKER_SERVICE}" \
+  --source fastapi \
   --region "${REGION}" \
-  --task-timeout 600 \
+  --no-allow-unauthenticated \
+  --memory 2Gi \
+  --cpu 2 \
+  --max-instances 3 \
   --set-env-vars "${ENV_VARS}" \
   --command "python3" \
-  --args "render_worker.py" \
-  --quiet 2>/dev/null || \
-gcloud run jobs create "${WORKER_SERVICE}" \
-  --image "$(gcloud run services describe ${BACKEND_SERVICE} --region ${REGION} --format 'value(spec.template.spec.template.spec.containers[0].image)')" \
-  --region "${REGION}" \
-  --task-timeout 600 \
-  --set-env-vars "${ENV_VARS}" \
-  --command "python3" \
-  --args "render_worker.py" \
+  --args "worker_health.py" \
   --quiet
 
-info "Worker job created. To run it continuously:"
-info "  gcloud run jobs execute ${WORKER_SERVICE} --region ${REGION}"
-warn "NOTE: Cloud Run Jobs are not persistent. For a persistent worker use a VM or Cloud Run Service with --command python3 render_worker.py"
-
+info "Worker service deployed successfully."
 # ── Step 5: Deploy frontend to Vercel ─────────────────────────────────────────
 info "Step 5/4: Deploying frontend to Vercel..."
 cd frontend
@@ -173,7 +163,7 @@ echo -e "${GREEN}═════════════════════
 echo -e "${GREEN}  Deployment complete${NC}"
 echo -e "${GREEN}════════════════════════════════════════${NC}"
 echo "  Backend:  ${BACKEND_URL}"
-echo "  Worker:   gcloud run jobs execute ${WORKER_SERVICE} --region ${REGION}"
+echo "  Worker:   Deployed as a continuous Cloud Run Service (${WORKER_SERVICE})"
 echo ""
 echo "  Verify end-to-end:"
 echo "    curl ${BACKEND_URL}/health"

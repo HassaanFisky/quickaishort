@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SessionProvider } from "next-auth/react";
 import { ThemeProvider } from "@/components/shared/ThemeProvider";
 import { Toaster } from "@/components/ui/sonner";
+import { PusherProvider } from "@/components/providers/PusherProvider";
 import SplashScreen from "@/components/shared/SplashScreen";
 import PageTransition from "@/components/shared/PageTransition";
 
@@ -24,17 +25,19 @@ export function AppProviders({ children }: { children: ReactNode }) {
   return (
     <SessionProvider>
       <QueryClientProvider client={queryClient}>
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="dark"
-          enableSystem
-          disableTransitionOnChange
-          themes={["dark", "light", "crystal", "neon", "magma", "aurora", "nano"]}
-        >
-          <SplashScreen />
-          <PageTransition>{children}</PageTransition>
-          <Toaster position="top-center" richColors />
-        </ThemeProvider>
+        <PusherProvider>
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="dark"
+            enableSystem
+            disableTransitionOnChange
+            themes={["dark", "light", "crystal", "neon", "magma", "aurora", "nano"]}
+          >
+            <SplashScreen />
+            <PageTransition>{children}</PageTransition>
+            <Toaster position="top-center" richColors />
+          </ThemeProvider>
+        </PusherProvider>
       </QueryClientProvider>
     </SessionProvider>
   );
