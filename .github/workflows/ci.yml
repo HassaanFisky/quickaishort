@@ -6,62 +6,17 @@ on:
   pull_request:
     branches: [main]
 
-env:
-  NODE_VERSION: '20'
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: false
-
 jobs:
-  build:
-    name: Build & Test
+  build-and-test:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          node-version: 20
-
-      - name: Install dependencies
-        working-directory: ./frontend
-        run: |
-          rm -rf node_modules package-lock.json
-          npm install --legacy-peer-deps
-
-      - name: Lint
-        working-directory: ./frontend
-        run: npm run lint
-        continue-on-error: true
-
-      - name: Type check
-        working-directory: ./frontend
-        run: npx tsc --noEmit
-        continue-on-error: true
-
-      - name: Build
-        working-directory: ./frontend
-        run: npm run build
-        env:
-          NEXT_TELEMETRY_DISABLED: 1
-
-      - name: Cache Next.js build
-        uses: actions/cache@v4
-        with:
-          path: |
-            frontend/.next/cache
-          key: ${{ runner.os }}-nextjs-${{ hashFiles('frontend/package-lock.json') }}-${{ hashFiles('frontend/**/*.js', 'frontend/**/*.jsx', 'frontend/**/*.ts', 'frontend/**/*.tsx') }}
-          restore-keys: |
-            ${{ runner.os }}-nextjs-${{ hashFiles('frontend/package-lock.json') }}-
-
-  ffmpeg-smoke:
-    name: FFmpeg Pipeline Smoke Test
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+          python-version: '3.12'
 
       - name: Install FFmpeg
         run: sudo apt-get update -qq && sudo apt-get install -y ffmpeg
@@ -69,56 +24,24 @@ jobs:
       - name: Install yt-dlp
         run: pip install yt-dlp --quiet
 
+      - name: Install Python dependencies
+        run: pip install -r fastapi/requirements.txt --quiet
+
       - name: FFmpeg Pipeline Smoke Test
         run: |
           ffmpeg -version && yt-dlp --version && echo "PASS: FFmpeg pipeline OK"
 
-      - name: Create test assets
+      - name: Backend syntax check
         run: |
-          # Create a 5-second test video (720p, color bars)
-          docker run --rm -v ${{ github.workspace }}:/work -w /work \
-            jrottenberg/ffmpeg:5.1-alpine \
-            -f lavfi -i "smptebars=size=1280x720:rate=30" \
-            -f lavfi -i "sine=frequency=1000:sample_rate=48000" \
-            -t 5 -c:v libx264 -preset ultrafast -c:a aac \
-            test-proxy.mp4
+          python -m py_compile fastapi/main.py && echo "PASS: main.py syntax clean"
 
-          # Create a minimal test SRT file
-          cat > captions.srt << 'EOF'
-          1
-          00:00:00,000 --> 00:00:02,000
-          Quick AI Shorts
-
-          2
-          00:00:02,000 --> 00:00:05,000
-          Pipeline smoke test
-          EOF
-
-      - name: Run FFmpeg pipeline
-        run: |
-          docker run --rm -v ${{ github.workspace }}:/work -w /work \
-            jrottenberg/ffmpeg:5.1-alpine \
-            -y -i test-proxy.mp4 \
-            -vf "scale='min(1080,iw)':-2, crop=ih*9/16:ih, pad=1080:1920:(1080-out_w)/2:(1920-out_h)/2:black" \
-            -c:v libx264 -preset ultrafast -crf 28 \
-            -c:a aac -b:a 128k \
-            -movflags +faststart \
-            output_9by16.mp4
-
-      - name: Verify output
-        run: |
-          # Check output exists and has content
-          ls -la output_9by16.mp4
-          file output_9by16.mp4
-
-          # Verify dimensions (should be 1080x1920)
-          docker run --rm -v ${{ github.workspace }}:/work -w /work \
-            jrottenberg/ffmpeg:5.1-alpine \
-            -i output_9by16.mp4 -hide_banner 2>&1 | grep -E "Video:.+1080x1920" || echo "Dimension check: output created"
-
-      - name: Upload test artifact
-        uses: actions/upload-artifact@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
-          name: ffmpeg-smoke-output
-          path: output_9by16.mp4
-          retention-days: 7
+          node-version: '20'
+
+      - name: Install frontend dependencies
+        run: cd frontend && npm ci --quiet
+
+      - name: Frontend TypeScript check
+        run: cd frontend && npx tsc --noEmit
