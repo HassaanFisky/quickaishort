@@ -10,6 +10,8 @@ import json
 import logging
 import os
 import re
+import shutil
+import tempfile
 import uuid
 from contextlib import asynccontextmanager
 from typing import List, Literal, Optional
@@ -17,11 +19,12 @@ from typing import List, Literal, Optional
 import httpx
 import uvicorn
 import yt_dlp
-from app.utils.youtube_auth import inject_ydl_bypass
+from app.utils.youtube_auth import get_cookie_file, inject_ydl_bypass
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
+from starlette.background import BackgroundTask
 from pydantic import BaseModel, Field
 
 from agent.viral_agent import get_viral_agent
@@ -616,65 +619,79 @@ async def proxy_video(url: str):
 
 
 @app.get("/api/audio")
-async def extract_audio(url: str):
+async def extract_audio(url: str = Query(...)):
     """
-    Download YouTube audio via yt-dlp + FFmpeg and stream clean MP3 back to the browser.
-    Unlike /api/proxy which streams raw video/mp4, this endpoint always returns audio/mpeg
-    which decodeAudioData() handles reliably in all browsers.
+    Extract YouTube audio as MP3 via yt-dlp subprocess with 25-second hard timeout.
+    Uses FileResponse for clean one-shot delivery; temp dir cleaned up via BackgroundTask.
+    Cookie path: dynamic temp file written by get_cookie_file() from YOUTUBE_COOKIES env var
+    (NOT /app/youtube_cookies.txt — that path does not exist in this deployment).
     """
-    if not url:
-        raise HTTPException(status_code=400, detail="URL is required")
+    from fastapi.responses import JSONResponse as _JSONResponse
 
-    job_id = uuid.uuid4().hex
-    out_template = f"/tmp/{job_id}_audio.%(ext)s"
-    mp3_path = f"/tmp/{job_id}_audio.mp3"
+    tmpdir = tempfile.mkdtemp()
+    output_path = os.path.join(tmpdir, "audio.mp3")
 
-    ydl_opts = inject_ydl_bypass({
-        "format": "bestaudio/best[ext=mp4]/best",
-        "postprocessors": [{
-            "key": "FFmpegExtractAudio",
-            "preferredcodec": "mp3",
-            "preferredquality": "96",
-        }],
-        "outtmpl": out_template,
-        "quiet": True,
-        "no_warnings": True,
-    })
+    cookie_path = get_cookie_file()
+    cmd = ["yt-dlp"]
+    if cookie_path and os.path.exists(cookie_path):
+        cmd += ["--cookies", cookie_path]
+    cmd += [
+        "-x", "--audio-format", "mp3", "--audio-quality", "5",
+        "-o", output_path,
+        "--no-playlist",
+        "--max-filesize", "30m",
+        url,
+    ]
 
-    loop = asyncio.get_event_loop()
-
-    def _download():
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([url])
+    def _cleanup():
+        shutil.rmtree(tmpdir, ignore_errors=True)
 
     try:
-        await loop.run_in_executor(None, _download)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Audio extraction failed: {exc}")
-
-    if not os.path.exists(mp3_path) or os.path.getsize(mp3_path) == 0:
-        raise HTTPException(status_code=500, detail="Audio file not produced")
-
-    file_size = os.path.getsize(mp3_path)
-
-    def itermp3():
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
         try:
-            with open(mp3_path, "rb") as f:
-                while chunk := f.read(16384):
-                    yield chunk
-        finally:
-            if os.path.exists(mp3_path):
-                os.remove(mp3_path)
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=25.0)
+        except asyncio.TimeoutError:
+            proc.kill()
+            _cleanup()
+            return _JSONResponse(
+                {"error": "audio_timeout", "message": "Processing too slow"},
+                status_code=504,
+            )
 
-    return StreamingResponse(
-        itermp3(),
-        media_type="audio/mpeg",
-        headers={
-            "Access-Control-Allow-Origin": "*",
-            "Cross-Origin-Resource-Policy": "cross-origin",
-            "Content-Length": str(file_size),
-        },
-    )
+        if proc.returncode != 0:
+            _cleanup()
+            return _JSONResponse(
+                {"error": "yt_dlp_failed", "message": stderr.decode()[-200:]},
+                status_code=500,
+            )
+
+        # yt-dlp sometimes appends the extension — scan tmpdir for the actual file
+        if not os.path.exists(output_path):
+            for f in os.listdir(tmpdir):
+                if f.endswith(".mp3"):
+                    output_path = os.path.join(tmpdir, f)
+                    break
+            else:
+                _cleanup()
+                return _JSONResponse({"error": "no_output_file"}, status_code=500)
+
+        return FileResponse(
+            output_path,
+            media_type="audio/mpeg",
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Cross-Origin-Resource-Policy": "cross-origin",
+                "Cache-Control": "no-cache",
+            },
+            background=BackgroundTask(_cleanup),
+        )
+    except Exception as exc:
+        _cleanup()
+        return _JSONResponse({"error": str(exc)}, status_code=500)
 
 
 # ---- Pre-Flight ---------------------------------------------------------------

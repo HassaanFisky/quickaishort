@@ -9,6 +9,7 @@ declare global {
 
 export async function extractAudioData(
   source: File | string,
+  signal?: AbortSignal,
 ): Promise<{ audioData: Float32Array; sampleRate: number; duration: number }> {
   const audioContext = new (window.AudioContext || window.webkitAudioContext)({
     sampleRate: 16000,
@@ -16,10 +17,14 @@ export async function extractAudioData(
 
   let arrayBuffer: ArrayBuffer;
   if (typeof source === "string") {
-    const response = await fetch(source);
+    const response = await fetch(source, { signal });
     if (!response.ok) {
-      const text = await response.text().catch(() => response.statusText);
-      throw new Error(`Audio proxy error ${response.status}: ${text.slice(0, 200)}`);
+      let errMsg = `Audio fetch failed: HTTP ${response.status}`;
+      try {
+        const errJson = await response.json();
+        errMsg = errJson.message || errMsg;
+      } catch { /* ignore parse failure, keep status-based message */ }
+      throw new Error(errMsg);
     }
     arrayBuffer = await response.arrayBuffer();
   } else {

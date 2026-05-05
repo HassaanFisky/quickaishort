@@ -42,13 +42,18 @@ export function useMediaPipeline() {
       const isYouTube =
         source.includes("youtube.com") || source.includes("youtu.be");
 
+      if (!isAlreadyProxied && !isYouTube) {
+        toast.error("Only YouTube URLs are supported. Google Drive and other links are not yet supported.");
+        return;
+      }
+
       if (isYouTube && !isAlreadyProxied) {
-        // /api/audio returns clean MP3 via yt-dlp+FFmpeg — decodeAudioData handles this
-        // reliably in all browsers. /api/proxy returns combined video/mp4 which can fail
-        // in strict COEP (Cross-Origin-Embedder-Policy: require-corp) contexts.
         source = getAudioUrl(source);
       }
     }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
 
     try {
       setProcessing(true, "loading");
@@ -58,8 +63,9 @@ export function useMediaPipeline() {
       // 1. Extract Audio
       toast.info("Preparing content for viral analysis...");
       const { audioData, sampleRate, duration } =
-        await extractAudioData(source);
-      
+        await extractAudioData(source, controller.signal);
+      clearTimeout(timeoutId);
+
       // Update duration in store if it was 0
       if (useEditorStore.getState().duration === 0) {
         useEditorStore.setState({ duration });
@@ -74,9 +80,14 @@ export function useMediaPipeline() {
       toast.info("Reading video content...");
       transcription.transcribe(audioData, sampleRate);
     } catch (error) {
+      clearTimeout(timeoutId);
       const msg = error instanceof Error ? error.message : String(error);
       console.error("Pipeline error:", msg);
-      toast.error(`Processing failed: ${msg.slice(0, 120)}`);
+      if (error instanceof Error && error.name === "AbortError") {
+        toast.error("Audio processing timed out — video may be too long");
+      } else {
+        toast.error(`Processing failed: ${msg.slice(0, 120)}`);
+      }
       setAgentState("ingestion", { status: "error" });
       setProcessing(false, "idle");
     }

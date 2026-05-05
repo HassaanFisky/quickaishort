@@ -63,8 +63,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Make ffmpeg.sh executable
-        run: chmod +x ffmpeg.sh
+      - name: FFmpeg Pipeline Smoke Test
+        run: ffmpeg -version && yt-dlp --version
 
       - name: Create test assets
         run: |
