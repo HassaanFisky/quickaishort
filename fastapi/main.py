@@ -622,22 +622,22 @@ async def proxy_video(url: str):
     import httpx
 
     async def iterfile(stream_url):
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=120.0, follow_redirects=True) as client:
             async with client.stream("GET", stream_url) as r:
                 r.raise_for_status()
                 async for chunk in r.aiter_bytes(chunk_size=16384):
                     yield chunk
 
     stream_url = None
-    # android client gives itag=18 (360p H264+AAC) without PO Token — always available
-    # audio-only formats require PO Token on android, so always fall back to combined mp4
-    # browsers can extract audio from combined mp4 via decodeAudioData (AAC track)
-    fmt = "best[ext=mp4]/18/best"
-    media_type = "video/mp4"
+    # Prioritize itag 140 (m4a audio) for silence detection/visualization as it's MUCH smaller.
+    # Fallback to itag 18 (360p combined) if audio-only is blocked.
+    fmt = "140/bestaudio[ext=m4a]/best[ext=mp4]/18/best"
+    media_type = "audio/mp4" # Browsers handle m4a as audio/mp4
 
     ydl_opts = inject_ydl_bypass({
         "format": fmt,
         "quiet": True,
+        "no_warnings": True,
     })
     
     try:
@@ -661,14 +661,13 @@ async def proxy_video(url: str):
             if cobalt_api_key:
                 cobalt_headers["Authorization"] = f"Api-Key {cobalt_api_key}"
 
-            async with httpx.AsyncClient(timeout=20.0) as client:
+            async with httpx.AsyncClient(timeout=40.0, follow_redirects=True) as client:
                 cobalt_response = await client.post(
                     "https://api.cobalt.tools/",
                     json={
                         "url": url,
-                        "videoQuality": "1080",
-                        "downloadMode": "auto",
-                        "videoCodec": "h264",
+                        "downloadMode": "audio", # Get audio directly for analysis
+                        "audioFormat": "mp3",
                     },
                     headers=cobalt_headers,
                 )
@@ -678,12 +677,18 @@ async def proxy_video(url: str):
                 status = cobalt_data.get("status")
                 if status in ("tunnel", "redirect"):
                     stream_url = cobalt_data.get("url")
+                    media_type = "audio/mpeg" # Cobalt returns mp3 for audio mode
                 elif status == "picker":
-                    # Take the first video-like format
-                    pickers = cobalt_data.get("picker", [])
-                    video_pickers = [p for p in pickers if "video" in p.get("type", "")]
-                    if video_pickers:
-                        stream_url = video_pickers[0].get("url")
+                    picker_items = cobalt_data.get("picker", [])
+                    if picker_items:
+                        # Prefer audio, then video
+                        audio_items = [p for p in picker_items if "audio" in p.get("type", "")]
+                        if audio_items:
+                            stream_url = audio_items[0].get("url")
+                            media_type = "audio/mpeg"
+                        else:
+                            stream_url = picker_items[0].get("url")
+                            media_type = "video/mp4"
                 
                 if not stream_url:
                     raise RuntimeError(f"Cobalt bad status: {status}")
