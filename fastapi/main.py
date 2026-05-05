@@ -620,14 +620,26 @@ async def proxy_video(url: str):
 
 @app.get("/api/audio")
 async def get_audio(url: str = Query(...)):
+    import tempfile, asyncio, os, shutil
+    from fastapi.responses import FileResponse
+    from starlette.background import BackgroundTask
+
     tmpdir = tempfile.mkdtemp(prefix="qai_audio_")
     output_template = os.path.join(tmpdir, "audio.%(ext)s")
 
-    cookie_file = get_cookie_file()
+    # Get cookie file if available
+    cookie_file = None
+    try:
+        from app.utils.youtube_auth import get_cookie_file
+        cookie_file = get_cookie_file()
+    except Exception:
+        pass
 
     cmd = ["yt-dlp"]
+
     if cookie_file and os.path.exists(cookie_file):
         cmd += ["--cookies", cookie_file]
+
     cmd += [
         "--no-playlist",
         "--max-filesize", "50m",
@@ -635,7 +647,7 @@ async def get_audio(url: str = Query(...)):
         "-f", "bestaudio[ext=m4a]/bestaudio/18",
         "--no-post-overwrites",
         "-o", output_template,
-        url,
+        url
     ]
 
     logger.info(f"/api/audio: running yt-dlp for {url}")
@@ -645,7 +657,7 @@ async def get_audio(url: str = Query(...)):
             *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
-            cwd=tmpdir,
+            cwd=tmpdir
         )
         try:
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30.0)
@@ -655,19 +667,20 @@ async def get_audio(url: str = Query(...)):
             logger.error("/api/audio: yt-dlp timed out after 30s")
             return JSONResponse(
                 {"error": "audio_timeout", "message": "Video processing timed out. Try a shorter video."},
-                status_code=504,
+                status_code=504
             )
 
         stderr_text = stderr.decode(errors="replace")
+        stdout_text = stdout.decode(errors="replace")
         logger.info(f"/api/audio yt-dlp returncode={proc.returncode}")
         if proc.returncode != 0:
             logger.error(f"/api/audio yt-dlp stderr: {stderr_text[-500:]}")
-            shutil.rmtree(tmpdir, ignore_errors=True)
             return JSONResponse(
                 {"error": "yt_dlp_failed", "message": stderr_text[-300:]},
-                status_code=500,
+                status_code=500
             )
 
+        # Find downloaded file (any audio format)
         output_file = None
         for fname in os.listdir(tmpdir):
             if fname.startswith("audio."):
@@ -676,14 +689,14 @@ async def get_audio(url: str = Query(...)):
 
         if not output_file or not os.path.exists(output_file):
             logger.error(f"/api/audio: no output file in {tmpdir}. Files: {os.listdir(tmpdir)}")
-            shutil.rmtree(tmpdir, ignore_errors=True)
             return JSONResponse(
                 {"error": "no_output_file", "message": "Audio file not produced"},
-                status_code=500,
+                status_code=500
             )
 
         ext = os.path.splitext(output_file)[1].lower()
         media_type = "audio/mp4" if ext == ".m4a" else "audio/mpeg"
+
         logger.info(f"/api/audio: serving {output_file} as {media_type}")
 
         return FileResponse(
@@ -694,7 +707,7 @@ async def get_audio(url: str = Query(...)):
                 "Cross-Origin-Resource-Policy": "cross-origin",
                 "Cache-Control": "no-cache",
             },
-            background=BackgroundTask(shutil.rmtree, tmpdir, True),
+            background=BackgroundTask(shutil.rmtree, tmpdir, True)
         )
 
     except Exception as e:
