@@ -30,10 +30,22 @@ def get_cookie_file() -> str | None:
 def inject_ydl_bypass(opts: dict) -> dict:
     """Injects bot bypass options and cookies into yt-dlp opts."""
     new_opts = opts.copy()
-    # android client: itag=18/22 (combined mp4) available without PO Token
-    # These legacy formats work reliably with cookies on Cloud Run
-    new_opts["extractor_args"] = {"youtube": {"player_client": ["android"]}}
+    
+    # ios client is currently the most resilient against "Sign in" errors
+    # android is a fallback for legacy support
+    new_opts["extractor_args"] = {
+        "youtube": {
+            "player_client": ["ios", "android"],
+            "skip": ["dash", "hls"]
+        }
+    }
     new_opts["nocheckcertificate"] = True
+    new_opts["no_warnings"] = True
+    
+    # Support for proxy rotation if provided in environment
+    proxy = os.environ.get("YOUTUBE_PROXY")
+    if proxy:
+        new_opts["proxy"] = proxy
     
     cookie_path = get_cookie_file()
     if cookie_path:

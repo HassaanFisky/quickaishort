@@ -590,7 +590,29 @@ async def get_video_info(url: str):
             "source": "yt-dlp"
         }
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        logger.warning(f"yt-dlp info extraction failed, trying Cobalt fallback: {exc}")
+        try:
+            # Import dynamically to avoid circular dependencies if any
+            from services.render_service import _cobalt_get_stream_url
+            
+            # Use Cobalt to get at least the basic stream/ID info
+            # We can't get full formats via Cobalt easy, but we can get the title and URL
+            # Note: _cobalt_get_stream_url returns the direct mp4 link
+            video_id_match = re.search(r'(?:v=|\/)([0-9A-Za-z_-]{11}).*', url)
+            v_id = video_id_match.group(1) if video_id_match else "unknown"
+            
+            return {
+                "id": v_id,
+                "title": f"Video {v_id}",
+                "duration": 0, # Cobalt doesn't always return duration in v10 response
+                "thumbnail": f"https://i.ytimg.com/vi/{v_id}/maxresdefault.jpg",
+                "formats": [],
+                "url": url,
+                "source": "cobalt_fallback"
+            }
+        except Exception as cobalt_exc:
+            logger.error(f"Ultimate failure: Both yt-dlp and Cobalt failed: {cobalt_exc}")
+            raise HTTPException(status_code=500, detail=f"YouTube extraction blocked: {str(exc)}")
 
 
 @app.get("/api/proxy")

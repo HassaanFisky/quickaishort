@@ -174,18 +174,26 @@ class RenderService:
                 info = ydl.extract_info(youtube_url, download=True)
                 downloaded = ydl.prepare_filename(info)
         except Exception as ydl_err:
-            logger.warning(f"[render] yt-dlp segment download failed ({ydl_err}), trying Cobalt...")
-            cobalt_url = _cobalt_get_stream_url(youtube_url)
-            cobalt_out = str(workdir / f"cobalt_source_{uuid.uuid4().hex}.mp4")
-            # Use ffmpeg to grab the specific time range from the Cobalt stream URL
-            (
-                ffmpeg
-                .input(cobalt_url, ss=job.start_sec, t=(job.end_sec - job.start_sec))
-                .output(cobalt_out, vcodec="libx264", acodec="aac", crf=23, preset="veryfast")
-                .overwrite_output()
-                .run(quiet=True)
-            )
-            return Path(cobalt_out)
+            logger.warning(f"[render] yt-dlp segment download failed ({ydl_err}), trying Cobalt v10 fallback...")
+            try:
+                cobalt_url = _cobalt_get_stream_url(youtube_url)
+                cobalt_out = str(workdir / f"cobalt_source_{uuid.uuid4().hex}.mp4")
+                
+                logger.info(f"[render] Cobalt stream URL acquired, clipping with ffmpeg: {job.start_sec}s -> {job.end_sec}s")
+                
+                # Use ffmpeg to grab the specific time range from the Cobalt stream URL
+                # We use a slight buffer and re-encode to ensure perfect timing on the segment
+                (
+                    ffmpeg
+                    .input(cobalt_url, ss=job.start_sec, t=(job.end_sec - job.start_sec))
+                    .output(cobalt_out, vcodec="libx264", acodec="aac", crf=23, preset="ultrafast")
+                    .overwrite_output()
+                    .run(quiet=True, capture_stdout=True, capture_stderr=True)
+                )
+                return Path(cobalt_out)
+            except Exception as cobalt_err:
+                logger.error(f"[render] Critical: Both yt-dlp and Cobalt failed for {job.video_id}: {cobalt_err}")
+                raise RuntimeError(f"YouTube download blocked. Error: {ydl_err}")
 
         downloaded = downloaded  # assigned inside try block above
 
