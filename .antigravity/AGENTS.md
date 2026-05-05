@@ -140,9 +140,8 @@ TECH STACK LOCKED — DO NOT SWAP
 - Frontend: Next.js 16 App Router, Tailwind v4, Framer Motion, Zustand
 - Backend: Python 3.12, FastAPI, yt-dlp, FFmpeg
 - Agent: Google ADK v1.0, Gemini 2.5 Flash (model string: gemini-2.5-flash — verified 2026-04-24 via /v1beta/models API; gemini-2.5-pro also available for higher quality)
-- Deploy: Vercel (frontend) + Railway.app (backend, because Pakistan GCP 
-  billing is blocked)
-- Storage: Supabase (free tier)
+- Deploy: Vercel (frontend) + Google Cloud Run (backend)
+- Storage: MongoDB Atlas (GridFS for exports) + Supabase (free tier)
 - Domain: quickaishort.online via Cloudflare DNS
 
 FORBIDDEN CHANGES
@@ -262,8 +261,8 @@ ARTIFACTS
 - Keep artifacts around for audit trail during the challenge submission
 
 SKILLS (.antigravity/skills/)
-- Create reusable skill files for: "deploy-to-railway", "run-adk-test", 
-  "record-demo-video", "submit-to-devpost"
+
+- Create reusable skill files for: "deploy-to-cloudrun", "run-adk-test", "record-demo-video", "submit-to-devpost"
 - Each skill = SKILL.md + supporting scripts
 - Agent auto-discovers skills relevant to the current task
 
@@ -296,7 +295,8 @@ WHEN A PACKAGE INSTALL FAILS
    alternative package
 
 WHEN A DEPLOYMENT FAILS
-1. Read deployment logs in full (Railway/Vercel dashboard)
+
+1. Read deployment logs in full (Cloud Run: gcloud run logs read; Vercel: vercel logs)
 2. Check health endpoint: /health should return 200
 3. Check env vars are set on the platform
 4. Check build command matches local build
@@ -339,26 +339,25 @@ COMPLETED:
 - FastAPI backend with yt-dlp ingestion + proxy
 - Browser-based Whisper transcription (Web Worker)
 - Viral analysis heuristics (audio energy + speech density)
-- FFmpeg.wasm export pipeline (trim + 9:16 + captions)
+- Server-side ffmpeg-python export pipeline (trim + 9:16 + captions via RQ worker)
 - GCP project created: quickaishort-agent (ID: 946316698978)
 
 IN PROGRESS:
-- ADK multi-agent system (/fastapi/agent/viral_agent.py)
-- Railway.app deployment config (GCP billing blocked for Pakistani cards)
+
+- Cloud Run deployment (backend)
 - Google for Startups form submission
 
 BLOCKED:
-- GCP billing (error OR_BACR2_44 on Pakistani cards) — workaround: Railway 
-  + free Gemini API via AI Studio
+
+- None. GCP billing resolved. Railway association fully terminated.
 
 NEXT ACTIONS:
-1. Complete Google for Startups form submission (no billing required)
-2. Get Gemini API key from aistudio.google.com (free, no card)
-3. Build ADK viral_agent.py using master command
-4. Deploy backend to Railway
-5. Deploy frontend to Vercel + connect domain
-6. Record 3-minute demo video
-7. Submit to Devpost
+
+1. Fill in fastapi/.env and frontend/.env.local from their .env.example templates
+2. Run ./deploy.sh to deploy backend to Cloud Run + frontend to Vercel
+3. Verify /health returns {"status":"ok","mongo":true,"adk":true}
+4. Record 3-minute demo video showing Pre-Flight live
+5. Submit to Devpost
 
 ---
 

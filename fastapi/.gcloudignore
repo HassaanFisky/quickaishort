@@ -1,0 +1,17 @@
+.gcloudignore
+.git
+.gitignore
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+.env.local
+.env.production
+.env.vercel.production
+.vscode/
+tests/
+data/
+outputs/
+tmp/

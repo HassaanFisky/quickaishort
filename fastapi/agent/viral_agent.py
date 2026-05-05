@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import uuid
 from typing import List, Optional
 
@@ -24,6 +25,7 @@ from services.gemini_client import (
     DEFAULT_MODEL,
     call_gemini,
     call_gemini_text,
+    types as genai_types,
 )
 
 load_dotenv()
@@ -135,9 +137,15 @@ def _build_viral_pipeline():
         sub_agents=[segmentation_agent, scoring_agent],
     )
 
-    import os
     from agent.firestore_session import FirestoreSessionService
-    session_service = FirestoreSessionService()
+    try:
+        session_service = FirestoreSessionService()
+        logger.info("Viral agent using Firestore session service")
+    except Exception as fs_err:
+        logger.warning(
+            "Firestore unavailable (%s) — falling back to InMemorySessionService", fs_err
+        )
+        session_service = InMemorySessionService()
     return Runner(
         agent=root_agent,
         session_service=session_service,
@@ -186,7 +194,7 @@ def _maybe_extract_frames(
 
 
 # ---------------------------------------------------------------------------
-# Direct Gemini fallback (used when ADK is missing)
+# Direct Gemini fallback (used when ADK is missing or for re-scoring)
 # ---------------------------------------------------------------------------
 
 
@@ -194,19 +202,27 @@ async def _direct_gemini_pipeline(
     transcript_text: str,
     duration: float,
     video_id: Optional[str],
+    existing_segments: Optional[list[dict]] = None,
 ) -> list[ClipSuggestion]:
-    seg_prompt = (
-        "Find 3-7 viral segments (15-59s each) in this transcript. Each segment should "
-        "be self-contained and hook-worthy. Return a JSON list of "
-        "{'start': float, 'end': float, 'reason': string}. No markdown.\n\n"
-        f"Transcript: {transcript_text}\nDuration: {duration}s"
-    )
-    try:
-        seg_text = await call_gemini_text(seg_prompt, json_mode=True)
-        raw_segments = json.loads(seg_text) if seg_text else []
-    except Exception as exc:
-        logger.error("Direct Gemini segmentation failed: %s", exc)
-        return []
+    """
+    Direct Gemini pipeline. If existing_segments is provided, it skips segmentation
+    and only performs (vision-grounded) scoring.
+    """
+    if existing_segments:
+        raw_segments = existing_segments
+    else:
+        seg_prompt = (
+            "Find 3-7 viral segments (15-59s each) in this transcript. Each segment should "
+            "be self-contained and hook-worthy. Return a JSON list of "
+            "{'start': float, 'end': float, 'reason': string}. No markdown.\n\n"
+            f"Transcript: {transcript_text}\nDuration: {duration}s"
+        )
+        try:
+            seg_text = await call_gemini_text(seg_prompt, json_mode=True)
+            raw_segments = json.loads(seg_text) if seg_text else []
+        except Exception as exc:
+            logger.error("Direct Gemini segmentation failed: %s", exc)
+            return []
 
     frames_by_segment = _maybe_extract_frames(video_id, raw_segments)
 
@@ -247,18 +263,45 @@ async def _direct_gemini_pipeline(
     return _coerce_suggestions(text)
 
 
+async def _rescore_with_vision(
+    suggestions: list[ClipSuggestion],
+    video_id: str,
+    transcript_text: str,
+    duration: float,
+) -> list[ClipSuggestion]:
+    """Escalates existing suggestions to vision-grounded scoring."""
+    raw_segments = [
+        {"start": s.start, "end": s.end, "reason": s.reason}
+        for s in suggestions
+    ]
+    logger.info("Performing vision re-score for %d segments", len(raw_segments))
+    return await _direct_gemini_pipeline(
+        transcript_text, duration, video_id, existing_segments=raw_segments
+    )
+
+
 def _coerce_suggestions(raw: str) -> list[ClipSuggestion]:
     if not raw:
         return []
     try:
-        data = json.loads(raw)
-    except json.JSONDecodeError:
-        logger.warning("Could not parse scoring response: %r", raw[:200])
+        # Strip potential markdown formatting if Gemini failed to follow "no markdown" instruction
+        cleaned = raw.strip()
+        if cleaned.startswith("```"):
+            # Remove ```json ... ``` or ``` ... ```
+            cleaned = re.sub(r"^```(?:json)?\n?|\n?```$", "", cleaned, flags=re.MULTILINE)
+        
+        data = json.loads(cleaned)
+    except Exception as exc:
+        logger.warning("Could not parse scoring response: %r. Error: %s", raw[:200], exc)
         return []
+    
     items = data if isinstance(data, list) else data.get("clips", [])
     out: list[ClipSuggestion] = []
     for item in items or []:
         try:
+            # Ensure ID exists
+            if "id" not in item:
+                item["id"] = str(uuid.uuid4())[:8]
             out.append(ClipSuggestion(**item))
         except Exception as exc:
             logger.warning("Skipping malformed suggestion: %s", exc)
@@ -269,11 +312,13 @@ def _coerce_suggestions(raw: str) -> list[ClipSuggestion]:
 # Entry point
 # ---------------------------------------------------------------------------
 
+import re
 
 async def run_viral_pipeline(
     transcript_text: str,
     duration: float,
     video_id: Optional[str] = None,
+    user_id: str = "anonymous",
 ) -> list[ClipSuggestion]:
     """Run the multi-agent ADK pipeline. Falls back to direct Gemini when ADK is missing."""
     if not _ADK_OK or viral_runner is None or genai_types is None:
@@ -281,7 +326,6 @@ async def run_viral_pipeline(
         return await _direct_gemini_pipeline(transcript_text, duration, video_id)
 
     session_id = str(uuid.uuid4())
-    user_id = "internal_system"
 
     initial_state = {
         "transcript_text": transcript_text,
@@ -331,8 +375,8 @@ async def run_viral_pipeline(
         if video_id and suggestions:
             try:
                 logger.info("Escalating to vision-grounded re-scoring for video %s", video_id)
-                rescored = await _direct_gemini_pipeline(
-                    transcript_text, duration, video_id
+                rescored = await _rescore_with_vision(
+                    suggestions, video_id, transcript_text, duration
                 )
                 if rescored:
                     return rescored
@@ -356,8 +400,9 @@ class ViralAgent:
         transcript_text: str,
         duration: float,
         video_id: Optional[str] = None,
+        user_id: str = "anonymous",
     ) -> list[ClipSuggestion]:
-        return await run_viral_pipeline(transcript_text, duration, video_id)
+        return await run_viral_pipeline(transcript_text, duration, video_id, user_id)
 
 
 def get_viral_agent() -> ViralAgent:

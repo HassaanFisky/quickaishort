@@ -9,7 +9,6 @@ google-adk==1.0.0
 Deprecated>=1.2.14
 google-genai>=1.14.0
 google-cloud-firestore>=2.15.0
-google-cloud-storage>=2.16.0,<3.0.0
 google-cloud-speech
 google-cloud-texttospeech
 firebase-admin>=6.5.0
@@ -22,3 +21,7 @@ moviepy==1.0.3
 motor==3.6.0
 pymongo==4.9.1
 httpx==0.28.1
+python-jose[cryptography]==3.3.0
+certifi>=2024.2.2
+google-api-python-client>=2.120.0
+slowapi==0.1.9

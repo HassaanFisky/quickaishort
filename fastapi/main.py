@@ -21,9 +21,12 @@ import uvicorn
 import yt_dlp
 from app.utils.youtube_auth import get_cookie_file, inject_ydl_bypass
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 from starlette.background import BackgroundTask
 from pydantic import BaseModel, Field
 
@@ -51,12 +54,35 @@ from services.queue_service import (
     render_queue,
 )
 from services.realtime import emit_export_event, ws_manager
+from services.auth import get_verified_user_id
 from services.signing import sign, verify
 from services.stats_service import get_user_stats, increment_stats, deduct_credits, recalculate_user_stats, is_user_premium
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+# Validate required environment variables at startup
+def _validate_env() -> None:
+    required = {
+        "GEMINI_API_KEY": "AI agent pipeline will not function",
+        "MONGODB_URI": "Database features (stats, credits, exports) will be disabled",
+        "REDIS_URL": "Background render queue will not function",
+        "NEXTAUTH_SECRET": "All protected endpoints will return 503 (or set AUTH_DISABLED=true for dev)",
+        "EXPORT_SIGNING_SECRET": "Download URL signing will fail — exports unreachable",
+        "PUBLIC_API_URL": "Download links sent to users will be relative paths only",
+    }
+    missing = [f"  {var}: {reason}" for var, reason in required.items() if not os.getenv(var)]
+    if missing:
+        logger.warning(
+            "STARTUP WARNING — missing environment variables:\n%s\n"
+            "Copy fastapi/.env.example to fastapi/.env and fill in the values.",
+            "\n".join(missing),
+        )
+
+_validate_env()
+
 
 try:
     from agent import (
@@ -170,6 +196,10 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
+limiter = Limiter(key_func=get_remote_address, default_limits=["200/minute"])
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "")
 origins = [
     "http://localhost:3000",
@@ -188,6 +218,21 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request as StarletteRequest
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: StarletteRequest, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        return response
+
+app.add_middleware(SecurityHeadersMiddleware)
 
 
 # ---- Pydantic request/response models ----------------------------------------
@@ -255,6 +300,22 @@ class ExportRequest(BaseModel):
     reframing: Optional[ReframingPayload] = None
 
 
+# ---- YouTube URL validation --------------------------------------------------
+
+_YT_PATTERN = re.compile(
+    r"^https?://(www\.)?(youtube\.com/watch\?.*v=|youtu\.be/)[A-Za-z0-9_-]{11}"
+)
+
+
+def _require_youtube_url(url: str) -> None:
+    """Raise 400 if url is not a recognisable YouTube URL."""
+    if not url or not _YT_PATTERN.match(url):
+        raise HTTPException(
+            status_code=400,
+            detail="A valid YouTube URL is required (youtube.com/watch?v=... or youtu.be/...).",
+        )
+
+
 # ---- Health + meta -----------------------------------------------------------
 
 
@@ -265,9 +326,16 @@ def read_root():
 
 @app.get("/health")
 def health_check():
+    redis_ok = False
+    try:
+        redis_conn.ping()
+        redis_ok = True
+    except Exception:
+        pass
     return {
         "status": "ok",
         "mongo": db_is_ready(),
+        "redis": redis_ok,
         "adk": _ADK_AVAILABLE,
     }
 
@@ -275,28 +343,29 @@ def health_check():
 # ---- Analyze ------------------------------------------------------------------
 
 
+@limiter.limit("10/minute")
 @app.post("/api/analyze")
-async def analyze_video(request: AnalyzeRequest):
+async def analyze_video(request: Request, body: AnalyzeRequest, _auth: str = Depends(get_verified_user_id)):
     try:
-        user_id = request.userId or "anonymous"
+        user_id = body.userId or "anonymous"
         if not await deduct_credits(user_id, 10):
             raise HTTPException(status_code=402, detail="Insufficient AI Credits. Please upgrade or top-up.")
 
         agent = get_viral_agent()
-        transcript_text = " ".join(c.text for c in request.transcript)
+        transcript_text = " ".join(c.text for c in body.transcript)
         suggestions = await agent.analyze_transcript(
-            transcript_text, request.duration, video_id=request.videoId
+            transcript_text, body.duration, video_id=body.videoId, user_id=user_id
         )
 
         await increment_stats(
-            request.userId or "anonymous",
-            duration_delta=request.duration,
+            body.userId or "anonymous",
+            duration_delta=body.duration,
             ai_run_delta=1,
-            project_delta=1 if request.isFirstProject else 0,
+            project_delta=1 if body.isFirstProject else 0,
         )
 
         return {
-            "videoId": request.videoId,
+            "videoId": body.videoId,
             "suggestedClips": suggestions,
             "status": "success",
         }
@@ -309,7 +378,7 @@ async def analyze_video(request: AnalyzeRequest):
 
 
 @app.post("/api/process-video")
-async def export_video(request: ExportRequest):
+async def export_video(request: ExportRequest, _auth: str = Depends(get_verified_user_id)):
     if not await deduct_credits(request.user_id, 20):
         raise HTTPException(status_code=402, detail="Insufficient credits for server-side export.")
 
@@ -451,8 +520,7 @@ async def stats_ws(websocket: WebSocket, user_id: str):
 
 @app.get("/api/info")
 async def get_video_info(url: str):
-    if not url:
-        raise HTTPException(status_code=400, detail="URL is required")
+    _require_youtube_url(url)
 
     import httpx
 
@@ -527,8 +595,7 @@ async def get_video_info(url: str):
 
 @app.get("/api/proxy")
 async def proxy_video(url: str):
-    if not url:
-        raise HTTPException(status_code=400, detail="URL is required")
+    _require_youtube_url(url)
 
     import httpx
 
@@ -620,6 +687,7 @@ async def proxy_video(url: str):
 
 @app.get("/api/audio")
 async def get_audio(url: str = Query(...)):
+    _require_youtube_url(url)
     import tempfile, asyncio, os, shutil
     from fastapi.responses import FileResponse
     from starlette.background import BackgroundTask
@@ -719,20 +787,21 @@ async def get_audio(url: str = Query(...)):
 # ---- Pre-Flight ---------------------------------------------------------------
 
 
+@limiter.limit("10/minute")
 @app.post("/api/preflight")
-async def run_preflight(request: PreflightRequest):
+async def run_preflight(request: Request, body: PreflightRequest, _auth: str = Depends(get_verified_user_id)):
     if not _ADK_AVAILABLE:
         raise HTTPException(
             status_code=503,
             detail="Pre-Flight pipeline unavailable — google-adk not installed on this instance",
         )
 
-    if not request.clip_candidates:
+    if not body.clip_candidates:
         raise HTTPException(status_code=422, detail="clip_candidates must contain at least one clip")
 
     # Check if user is on a Pro plan
-    is_premium_active = await is_user_premium(request.user_id)
-    if not is_premium_active and len(request.clip_candidates) > 1:
+    is_premium_active = await is_user_premium(body.user_id)
+    if not is_premium_active and len(body.clip_candidates) > 1:
         raise HTTPException(
             status_code=402,
             detail={
@@ -742,7 +811,7 @@ async def run_preflight(request: PreflightRequest):
             },
         )
 
-    if not await deduct_credits(request.user_id, 50):
+    if not await deduct_credits(body.user_id, 50):
         raise HTTPException(status_code=402, detail="Insufficient AI Credits for Pre-flight analysis.")
 
     candidates = [
@@ -752,20 +821,20 @@ async def run_preflight(request: PreflightRequest):
             score=c.score,
             transcript=c.transcript,
         )
-        for c in request.clip_candidates
+        for c in body.clip_candidates
     ]
 
     try:
         result = await asyncio.wait_for(
             run_preflight_pipeline(
-                youtube_url=request.youtube_url,
+                youtube_url=body.youtube_url,
                 clip_candidates=candidates,
                 is_premium=is_premium_active,
-                user_id=request.user_id,
+                user_id=body.user_id,
             ),
             timeout=120.0,
         )
-        await increment_stats(request.user_id, ai_run_delta=1)
+        await increment_stats(body.user_id, ai_run_delta=1)
         return {"preflight_result": result.model_dump()}
     except asyncio.TimeoutError:
         raise HTTPException(
@@ -777,8 +846,9 @@ async def run_preflight(request: PreflightRequest):
         raise HTTPException(status_code=500, detail=str(exc))
 
 
+@limiter.limit("10/minute")
 @app.post("/api/direct")
-async def run_director(request: DirectRequest):
+async def run_director(request: Request, body: DirectRequest, _auth: str = Depends(get_verified_user_id)):
     if not _ADK_AVAILABLE:
         raise HTTPException(
             status_code=503,
@@ -787,19 +857,19 @@ async def run_director(request: DirectRequest):
 
     try:
         # 1. Deduct credits for Storyboard generation
-        if not await deduct_credits(request.user_id, 30):
+        if not await deduct_credits(body.user_id, 30):
             raise HTTPException(status_code=402, detail="Insufficient credits for Storyboard generation.")
 
         # 2. Run the Director Agent with timeout
         result = await asyncio.wait_for(
             run_director_pipeline(
-                input_text=request.input_text,
-                user_id=request.user_id
+                input_text=body.input_text,
+                user_id=body.user_id
             ),
             timeout=120.0
         )
-        
-        await increment_stats(request.user_id, ai_run_delta=1)
+
+        await increment_stats(body.user_id, ai_run_delta=1)
         return {"director_result": result}
     except HTTPException:
         # Re-raise HTTP exceptions (like 402) so they aren't swallowed by the broad except
@@ -815,7 +885,7 @@ async def run_director(request: DirectRequest):
 
 
 @app.post("/api/create-video")
-async def create_video(request: CreateVideoRequest):
+async def create_video(request: CreateVideoRequest, _auth: str = Depends(get_verified_user_id)):
     """
     Day 5 — Wire Everything Together
     Runs: ScriptAgent → PreFlight → RenderService (Background)

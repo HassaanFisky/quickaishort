@@ -35,6 +35,21 @@ jobs:
         run: |
           python -m py_compile fastapi/main.py && echo "PASS: main.py syntax clean"
 
+      - name: Backend import validation
+        run: |
+          cd fastapi
+          AUTH_DISABLED=true NEXTAUTH_SECRET=ci-placeholder python -c "
+          import sys
+          try:
+              import main
+              print('PASS: main.py imports cleanly')
+          except ImportError as e:
+              print(f'FAIL: Import error: {e}')
+              sys.exit(1)
+          except Exception as e:
+              print(f'WARN: Runtime error (expected without services): {e}')
+          "
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -45,3 +60,10 @@ jobs:
 
       - name: Frontend TypeScript check
         run: cd frontend && npx tsc --noEmit
+
+      - name: Frontend build
+        run: cd frontend && npm run build
+        env:
+          NEXT_PUBLIC_API_URL: https://placeholder.example.com
+          NEXTAUTH_SECRET: ci-placeholder-secret-32-characters-minimum
+          NEXTAUTH_URL: http://localhost:3000

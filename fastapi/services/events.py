@@ -27,10 +27,10 @@ _redis_pub: Any = None
 def get_redis() -> Redis:
     global _redis_pub
     if _redis_pub is None:
-        _redis_pub = Redis(
-            host=os.getenv("REDIS_HOST", "localhost"),
-            port=int(os.getenv("REDIS_PORT", "6379")),
-            password=os.getenv("REDIS_PASSWORD") or None,
+        # Use REDIS_URL (same as queue_service.py) so worker and web server
+        # always talk to the same Redis instance regardless of how it's hosted.
+        _redis_pub = Redis.from_url(
+            os.environ.get("REDIS_URL", "redis://localhost:6379"),
             decode_responses=True,
             socket_timeout=5,
             retry_on_timeout=True,

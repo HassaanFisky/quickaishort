@@ -1,6 +1,6 @@
 """Custom Mongo Session Service for Google ADK Python.
 Implements the BaseSessionService interface for persistent session storage.
-This uses the existing MongoDB connection to support horizontal scaling on Railway
+This uses the existing MongoDB connection to support horizontal scaling
 without requiring Google Cloud Application Default Credentials.
 """
 

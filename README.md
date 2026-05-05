@@ -14,7 +14,7 @@ Built for the **Google for Startups AI Agents Challenge 2026**.
 
 1. Paste a YouTube URL
 2. System generates top clip candidates using **multimodal vision (Gemini 2.5 Flash)** + audio energy + speech density analysis
-3. **Pre-Flight runs a simulated audience panel** — 4 Gemini 2.5 Flash persona agents fire in parallel, each voting on retention, drop-off, and share likelihood
+3. **Pre-Flight runs a simulated audience panel** — 6 Gemini 2.5 Flash persona agents fire in parallel, each voting on retention, drop-off, and share likelihood
 4. A **LoopAgent** iteratively refines the clip until consensus score exceeds 65%
 5. **Supabase MCP** grounds predictions against the creator's own historical preflight data
 6. Result: **PUBLISH** or **REFINE FIRST** — with full reasoning traces
@@ -31,12 +31,14 @@ RootAgent (SequentialAgent)
 - **SupabaseMCPAgent** — historical preflight data via Supabase MCPToolset
 - **AudiencePanelLoop** (LoopAgent, max 3 iterations)
 
-4 PersonaAgents fire in parallel (Gemini 2.5 Flash)
+6 PersonaAgents fire in parallel (Gemini 2.5 Flash)
 
 - Gen Z Creator
 - Millennial Professional
 - Sports Fan
 - Tech Enthusiast
+- Entertainment Fan
+- News & Current Affairs
 
 System Components
 
@@ -91,7 +93,7 @@ uvicorn main:app --reload
 
 ```bash
 npm install
-cp .env.local.example .env.local   # Set NEXT_PUBLIC_API_URL
+cp frontend/.env.example .env.local   # Set NEXT_PUBLIC_API_URL
 npm run dev
 ```
 

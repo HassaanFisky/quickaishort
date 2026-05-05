@@ -117,7 +117,7 @@ const FEATURES = [
   {
     icon: Gauge,
     title: "Instant Export",
-    body: "Whisper and FFmpeg.wasm run client-side — your video never leaves your machine.",
+    body: "Whisper runs client-side for transcription. Final export is server-rendered for maximum quality.",
     className: "md:col-span-2",
   },
 ];
@@ -126,7 +126,7 @@ const PIPELINE_STEPS = [
   { icon: Play, label: "Paste YouTube URL", sub: "yt-dlp extracts stream" },
   { icon: Brain, label: "Whisper Transcription", sub: "Browser-side Web Worker" },
   { icon: Zap, label: "ADK SequentialAgent", sub: "4-step orchestration" },
-  { icon: Users, label: "Parallel Persona Panel", sub: "4 agents fire simultaneously" },
+  { icon: Users, label: "Parallel Persona Panel", sub: "6 agents fire simultaneously" },
   { icon: Target, label: "Quality Gate Loop", sub: "Iterates until score ≥ 65" },
   { icon: TrendingUp, label: "PUBLISH / REFINE / DISCARD", sub: "Actionable verdict" },
 ];

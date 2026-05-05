@@ -1,6 +1,6 @@
 /**
  * Checks if the current environment is cross-origin isolated.
- * This is required for SharedArrayBuffer to work, which FFmpeg.wasm depends on for multi-threading.
+ * This is required for SharedArrayBuffer to work, which Whisper.wasm (@xenova/transformers) uses for multi-threading.
  */
 export function checkCrossOriginIsolation(): boolean {
   if (typeof window === "undefined") return false;

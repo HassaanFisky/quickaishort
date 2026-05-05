@@ -73,10 +73,12 @@ class PreflightResult(BaseModel):
 
 
 PERSONA_WEIGHTS: dict[str, float] = {
-    "genz": 0.30,
-    "millennial": 0.30,
-    "sports": 0.20,
-    "tech": 0.20,
+    "genz": 0.25,
+    "millennial": 0.25,
+    "sports": 0.15,
+    "tech": 0.15,
+    "entertainment": 0.10,
+    "news": 0.10,
 }
 
 PERSONA_IDENTITIES: dict[str, str] = {
@@ -103,6 +105,18 @@ PERSONA_IDENTITIES: dict[str, str] = {
         "You are a 26-year-old software engineer who follows tech channels for tutorials and industry news. "
         "You appreciate concise, well-structured content with clear takeaways. "
         "You will keep watching if you sense you'll learn something actionable in under 60 seconds."
+    ),
+    "entertainment": (
+        "You are a 24-year-old entertainment enthusiast who watches celebrity content, "
+        "pop-culture commentary, and reality TV clips. "
+        "You engage with drama, surprise moments, and anything shareable with friends. "
+        "You lose interest immediately if the energy is flat or the topic is niche."
+    ),
+    "news": (
+        "You are a 38-year-old news-aware professional who watches current events and "
+        "informational shorts between meetings. "
+        "You value accuracy, relevance to the moment, and concise delivery. "
+        "You tap out at clickbait and reward genuine insight with shares."
     ),
 }
 

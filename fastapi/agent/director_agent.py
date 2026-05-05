@@ -15,7 +15,8 @@ from typing import List, Optional, Any
 from pydantic import BaseModel
 import google.genai.types as genai_types
 
-MODEL = "gemini-2.5-flash"
+from services.gemini_client import DEFAULT_MODEL
+MODEL = DEFAULT_MODEL
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +82,14 @@ director_runner = None
 if _ADK_OK:
     director_agent_instance = DirectorAgent()
     from agent.firestore_session import FirestoreSessionService
-    _session_service = FirestoreSessionService()
+    try:
+        _session_service = FirestoreSessionService()
+        logger.info("Director agent using Firestore session service")
+    except Exception as _fs_err:
+        logger.warning(
+            "Firestore unavailable (%s) — falling back to InMemorySessionService", _fs_err
+        )
+        _session_service = InMemorySessionService()
     director_runner = Runner(
         agent=director_agent_instance,
         session_service=_session_service,

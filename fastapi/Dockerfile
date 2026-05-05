@@ -1,22 +1,20 @@
-# Use an official Python runtime as a parent image
 FROM python:3.12-slim
 
-# Set environment variables
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PORT=8000
 
-# Install FFmpeg, Node.js (for npx @supabase/mcp-server-supabase), and utilities
+# System deps: ffmpeg for render pipeline, Node.js for Supabase MCP npx call
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     wget \
     nodejs \
     npm \
     ca-certificates \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Write a custom openssl.cnf with SECLEVEL=1 so Python's ssl module
-# can complete the TLS handshake with MongoDB Atlas M0's cipher suites.
+# Lower TLS security level so Python's ssl can reach MongoDB Atlas M0 cipher suites
 RUN printf '%s\n' \
     'openssl_conf = default_conf' \
     '' \
@@ -33,18 +31,23 @@ RUN printf '%s\n' \
 
 ENV OPENSSL_CONF=/etc/ssl/openssl_custom.cnf
 
-# Set the working directory
 WORKDIR /app
 
-# Copy requirements and install dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of the application
 COPY . .
 
-# Expose the port the app runs on
+# Smoke-test imports at build time so a broken dependency fails the build,
+# not the first production request.
+RUN AUTH_DISABLED=true NEXTAUTH_SECRET=build-check python -c "\
+import sys; \
+import main; \
+print('BUILD IMPORT CHECK: PASS')" || (echo 'BUILD IMPORT CHECK: FAIL — see above' && exit 1)
+
 EXPOSE $PORT
 
-# Command to run the FastAPI application
-CMD uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}
+HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
+    CMD curl -f http://localhost:${PORT}/health || exit 1
+
+CMD uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1

@@ -1,6 +1,7 @@
 """RQ worker entry point. Runs as a separate process from the FastAPI web app.
 
-Wired by Procfile / railway.toml as `worker: python render_worker.py`.
+Run as a separate process: `python render_worker.py`
+Deployed as a Cloud Run Job or standalone container alongside the web service.
 
 Each task delegates to RenderService for the heavy lifting, then synchronously
 uploads the result to GridFS using a per-job pymongo connection (workers do
@@ -46,7 +47,9 @@ EXPORT_TTL_SECONDS = int(os.getenv("EXPORT_URL_TTL_SECONDS", str(24 * 60 * 60)))
 
 
 def _gridfs_bucket() -> gridfs.GridFSBucket:
-    uri = os.environ["MONGODB_URI"]
+    uri = os.environ.get("MONGODB_URI")
+    if not uri:
+        raise RuntimeError("MONGODB_URI environment variable is not set — cannot store render output")
     client = MongoClient(uri, serverSelectionTimeoutMS=5000)
     db = client.get_database("quickai_shorts")
     return gridfs.GridFSBucket(db, bucket_name="exports")

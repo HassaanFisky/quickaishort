@@ -18,7 +18,7 @@ const PLANS = [
       "Content transcription (Standard)",
       "AI clip detection (5 clips/video)",
       "9:16 auto-reframe",
-      "FFmpeg.wasm export",
+      "Browser preview export (MediaRecorder)",
       "Face tracking",
     ],
     cta: "Start Free",

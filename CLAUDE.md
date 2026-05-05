@@ -74,10 +74,11 @@ All agents call Gemini 2.5 Flash via `fastapi/services/gemini_client.py`. Model 
 Heavy media work runs off the main thread in `frontend/src/workers/`:
 
 - Whisper transcription (`useTranscription` hook → Whisper.wasm via `@xenova/transformers`)
-- FFmpeg.wasm export (`useServerExport` / `clientExport.ts`)
+- Browser local export (`clientExport.ts`) uses the `MediaRecorder` API (Chrome/Firefox/Edge) — no FFmpeg in the browser
+- Server export (`useServerExport` hook) sends the job to the backend render queue, processed by `ffmpeg-python` via the RQ worker (production path)
 - MediaPipe face tracking (`useFaceTracker`)
 
-The `next.config.mjs` sets `Cross-Origin-Opener-Policy: same-origin` + `Cross-Origin-Embedder-Policy: require-corp` headers required for SharedArrayBuffer (used by FFmpeg.wasm).
+The `next.config.mjs` sets `Cross-Origin-Opener-Policy: same-origin` + `Cross-Origin-Embedder-Policy: require-corp` headers required for SharedArrayBuffer (used by Whisper.wasm).
 
 ### State management
 
@@ -95,7 +96,8 @@ NextAuth (`next-auth`) handles sessions on the frontend. `fastapi/app/auth/fireb
 | --- | --- |
 | MongoDB (motor) | User stats, credits, job history, GridFS for media |
 | Firestore | ADK agent session state (`firestore_session.py`) |
-| GCS | Rendered short exports (`fastapi/app/storage/gcs_repo.py`) |
+| GridFS (MongoDB) | Rendered short exports (via exports bucket) |
+| GCS | REMOVED (2026-05-05): `fastapi/app/storage/gcs_repo.py` deleted; exports moved to GridFS |
 | Redis | RQ job queue + Pub/Sub for Pusher fan-out |
 
 ---
@@ -113,7 +115,7 @@ SaaS platform built for the Google for Startups AI Agents Challenge 2026.
 
 Project owner: Hassaan Fisky, solo founder, Karachi, Pakistan.
 Domain: quickaishort.online (owned since Nov 2025)
-Stack: Next.js 14.2.22 + Tailwind v4 + Framer Motion (frontend), FastAPI + yt-dlp + Whisper + FFmpeg.wasm (backend), Google ADK multi-agent system (being added).
+Stack: Next.js 14.2.22 + Tailwind v4 + Framer Motion (frontend), FastAPI + yt-dlp + Whisper + ffmpeg-python (backend), Google ADK multi-agent system (active). Browser preview uses MediaRecorder; final export uses server-side ffmpeg-python via RQ worker.
 Submission deadline: June 5, 2026.
 
 Your mission: Ship production-grade code that wins the challenge. Every line 
@@ -238,7 +240,7 @@ AGENT MANAGER (Antigravity native)
 
 TECH STACK LOCKED — DO NOT SWAP
 - Frontend: Next.js 14.2.22 App Router, Tailwind v4, Framer Motion, Zustand
-- Backend: Python 3.12, FastAPI, yt-dlp, FFmpeg (Server-side via Railway/Cloud Run)
+- Backend: Python 3.12, FastAPI, yt-dlp, FFmpeg (Server-side via Google Cloud Run)
 - Agent: Google ADK v1.0, gemini-2.5-flash (DEFAULT_MODEL in gemini_client.py)
 - Task Queue: Redis + RQ for background rendering and stats sync
 - Deploy: Vercel (frontend) + Google Cloud Run (backend)
@@ -362,8 +364,8 @@ ARTIFACTS
 - Keep artifacts around for audit trail during the challenge submission
 
 SKILLS (.antigravity/skills/)
-- Create reusable skill files for: "deploy-to-railway", "run-adk-test", 
-  "record-demo-video", "submit-to-devpost"
+
+- Create reusable skill files for: "deploy-to-cloudrun", "run-adk-test", "record-demo-video", "submit-to-devpost"
 - Each skill = SKILL.md + supporting scripts
 - Agent auto-discovers skills relevant to the current task
 
@@ -396,7 +398,8 @@ WHEN A PACKAGE INSTALL FAILS
    alternative package
 
 WHEN A DEPLOYMENT FAILS
-1. Read deployment logs in full (Railway/Vercel dashboard)
+
+1. Read deployment logs in full (Cloud Run: gcloud run logs read; Vercel: vercel logs)
 2. Check health endpoint: /health should return 200
 3. Check env vars are set on the platform
 4. Check build command matches local build
@@ -448,7 +451,7 @@ COMPLETED:
 - FastAPI backend with yt-dlp ingestion + proxy
 - Browser-based Whisper transcription (Web Worker)
 - Viral analysis heuristics (audio energy + speech density)
-- FFmpeg.wasm export pipeline (trim + 9:16 + captions)
+- Browser local export via MediaRecorder API (`clientExport.ts`); server export via ffmpeg-python RQ worker
 - GCP project created: quickaishort-agent (ID: 946316698978)
 - ADK multi-agent system (/fastapi/agent/viral_agent.py) with Gemini 2.5 Flash
 - Frontend/Backend type synchronization for viral analysis
@@ -461,9 +464,11 @@ COMPLETED:
 - Full localhost cleanup and production environment variable hardening
 - Unified branding with QSLogo "Hydro-Glass" design system
 - Verified zero-error production build (Next.js 14+)
+- Auth middleware: NextAuth JWT verification wired to /api/analyze, /api/preflight, /api/process-video, /api/direct, /api/create-video
 
 IN PROGRESS:
-- Cloud Run deployment (Backend migration from Railway)
+
+- Cloud Run deployment (backend)
 - Google for Startups form submission
 
 BLOCKED:
@@ -484,7 +489,7 @@ NEXT ACTIONS:
 2. python -m py_compile fastapi/agent/preflight_agent.py (syntax check)
 3. npm run build (verify zero TypeScript errors)
 4. Test POST /api/preflight with a live YouTube URL end-to-end
-5. Deploy backend to Railway (push requirements.txt with google-adk)
+5. Deploy backend to Cloud Run (./deploy.sh or gcloud run deploy quickaishort-api --source fastapi --region asia-south1)
 6. Deploy frontend to Vercel
 7. Record 3-minute demo video showing Pre-Flight live
 8. Finalize Devpost submission
