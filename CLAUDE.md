@@ -417,14 +417,14 @@ WHEN THE AGENT GETS STUCK IN A LOOP
 
 The agent must treat these as acceptance tests before any "shipping" claim:
 
-- [ ] Uses Google Gemini model (not OpenAI/Claude) for core AI logic
-- [ ] Uses Google ADK v1.0+ for agent orchestration
+- [x] Uses Google Gemini model (not OpenAI/Claude) for core AI logic — gemini-2.5-flash via gemini_client.py
+- [x] Uses Google ADK v1.0+ for agent orchestration — confirmed by /health: "adk":true
 - [x] Integrates Supabase MCP server (SupabaseMCPAgent in GroundingDAG — MCPToolset + StdioServerParams)
-- [ ] Has deployed, publicly accessible URL at quickaishort.online
-- [ ] Has public GitHub repo with MIT LICENSE file
-- [ ] Has 2:50–3:00 demo video showing live pipeline (not mock)
-- [ ] Devpost submission complete with all fields filled
-- [ ] Google for Startups form submitted with correct startup stage (Pre-seed)
+- [x] Has deployed, publicly accessible URL at quickaishort.online — live 2026-05-06
+- [x] Has public GitHub repo with MIT LICENSE file — github.com/HassaanFisky/quickaishort
+- [ ] Has 2:50–3:00 demo video showing live pipeline (not mock) — NEEDS RECORDING
+- [ ] Devpost submission complete with all fields filled — NEEDS SUBMISSION
+- [ ] Google for Startups form submitted with correct startup stage (Pre-seed) — NEEDS SUBMISSION
 
 Do not claim a task is "done" until it passes every relevant item above.
 
@@ -434,9 +434,9 @@ Do not claim a task is "done" until it passes every relevant item above.
 
 Keep this section updated as the project evolves.
 
-Last updated: 2026-04-25
+Last updated: 2026-05-06
 
-CURRENT PHASE: Pre-Flight ADK Multi-Agent System — Build Complete, Deployment Pending
+CURRENT PHASE: PRODUCTION LIVE — Submission Sprint
 
 CURRENT FRAMING:
 Product is "Pre-Flight" — pre-publication clip validation via multi-agent audience simulation.
@@ -445,8 +445,17 @@ Architecture: Asynchronous DAG(ClipCandidate, TrendGrounding, AnalyticsGrounding
              → LoopAgent(Parallel(6 personas) → Aggregator → QualityGate → Refinement)
 Stats Engine: Real-time MongoDB Aggregation (GridFS backed) + Pusher Fan-out
 Rendering: Cloud-based async rendering via RQ + targeted stream-clipping (yt-dlp)
+ADK Studio: 4-step wizard (Script → Media → Voice → Render) via POST /api/adk/generate
+
+LIVE SERVICES:
+
+- Backend API:    `https://quickaishort-api-99900313102.us-central1.run.app` (revision 00008-jrl)
+- Render Worker:  `https://quickaishort-worker-99900313102.us-central1.run.app` (revision 00003-r5p)
+- Frontend:       `https://www.quickaishort.online` (Vercel, aliased)
+- Health:         `{"status":"ok","mongo":true,"redis":true,"adk":true}`
 
 COMPLETED:
+
 - Next.js 14.2.22 frontend with Hydro-Glass UI
 - FastAPI backend with yt-dlp ingestion + proxy
 - Browser-based Whisper transcription (Web Worker)
@@ -464,35 +473,33 @@ COMPLETED:
 - Full localhost cleanup and production environment variable hardening
 - Unified branding with QSLogo "Hydro-Glass" design system
 - Verified zero-error production build (Next.js 14+)
-- Auth middleware: NextAuth JWT verification wired to /api/analyze, /api/preflight, /api/process-video, /api/direct, /api/create-video
+- Auth middleware: NextAuth JWT verification wired to all protected endpoints
+- ADK Studio platform: POST /api/adk/upload, /api/adk/stock, /api/adk/generate
+  plus frontend 4-step wizard at /adk plus Zustand adkStore
+- deploy.sh fixed: python3→python, npm ci→pnpm install, vercel cd path bug
+- Production deployment complete: Cloud Run (API + Worker) + Vercel
 
 IN PROGRESS:
 
-- Cloud Run deployment (backend)
-- Google for Startups form submission
+- Demo video recording (2:50–3:00, showing live pipeline)
+- Devpost submission
+- Google for Startups form
 
 BLOCKED:
-- None. (GCP billing and YouTube OAuth issues are being resolved for production).
 
-ENVIRONMENT VARIABLES NEEDED (add to fastapi/.env if not present):
-- GEMINI_API_KEY=<existing key>
-- GOOGLE_CLOUD_PROJECT=quickaishort-agent
-- SERPAPI_KEY=<free key at serpapi.com — 100 searches/month>
-- PREFLIGHT_THRESHOLD=65
-- PREFLIGHT_MAX_ITERATIONS=3
-- YOUTUBE_CLIENT_ID=<optional — from Google Cloud Console OAuth 2.0>
-- YOUTUBE_CLIENT_SECRET=<optional — from Google Cloud Console OAuth 2.0>
-- YOUTUBE_OAUTH_CREDENTIALS=<optional — JSON string of OAuth token>
+- None.
+
+OPTIONAL ENV VARS (add to fastapi/.env for full ADK Studio features):
+
+- `PEXELS_API_KEY` — free at pexels.com/api, enables stock video search
+- `GOOGLE_TTS_API_KEY` — GCP API key with Cloud TTS API enabled, enables AI voiceover
 
 NEXT ACTIONS:
-1. pip install -r fastapi/requirements.txt (installs google-adk)
-2. python -m py_compile fastapi/agent/preflight_agent.py (syntax check)
-3. npm run build (verify zero TypeScript errors)
-4. Test POST /api/preflight with a live YouTube URL end-to-end
-5. Deploy backend to Cloud Run (./deploy.sh or gcloud run deploy quickaishort-api --source fastapi --region asia-south1)
-6. Deploy frontend to Vercel
-7. Record 3-minute demo video showing Pre-Flight live
-8. Finalize Devpost submission
+
+1. Record 3-minute demo video showing Pre-Flight + ADK Studio live at quickaishort.online
+2. Submit Devpost entry (all required fields)
+3. Submit Google for Startups AI Agents Challenge form (Pre-seed stage)
+4. Optional: add PEXELS_API_KEY + GOOGLE_TTS_API_KEY to Cloud Run env vars for full ADK Studio
 
 ---
 
