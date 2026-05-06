@@ -1,6 +1,6 @@
 """Pydantic v2 model for the UserStats collection."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -15,7 +15,7 @@ class UserStats(BaseModel):
     export_count: int = 0
     ai_runs: int = 0
     is_premium: bool = False
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class StatsIncrement(BaseModel):

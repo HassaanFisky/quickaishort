@@ -3,7 +3,7 @@ const nextConfig = {
   async headers() {
     return [
       {
-        source: "/:path*",
+        source: "/editor/:path*",
         headers: [
           {
             key: "Cross-Origin-Opener-Policy",

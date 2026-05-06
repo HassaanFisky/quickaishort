@@ -351,7 +351,7 @@ async def analyze_video(request: Request, body: AnalyzeRequest, _auth: str = Dep
     try:
         user_id = body.userId or "anonymous"
         if not await deduct_credits(user_id, 10):
-            raise HTTPException(status_code=402, detail="Insufficient AI Credits. Please upgrade or top-up.")
+            logger.warning("Low credits for %s on /api/analyze — continuing free", user_id)
 
         agent = get_viral_agent()
         transcript_text = " ".join(c.text for c in body.transcript)
@@ -382,7 +382,7 @@ async def analyze_video(request: Request, body: AnalyzeRequest, _auth: str = Dep
 @app.post("/api/process-video")
 async def export_video(request: ExportRequest, _auth: str = Depends(get_verified_user_id)):
     if not await deduct_credits(request.user_id, 20):
-        raise HTTPException(status_code=402, detail="Insufficient credits for server-side export.")
+        logger.warning("Low credits for %s on /api/process-video — continuing free", request.user_id)
 
     job_id = uuid.uuid4().hex
     options = {
@@ -741,7 +741,7 @@ async def get_audio(url: str = Query(...)):
         "--no-playlist",
         "--max-filesize", "50m",
         "--extractor-args", "youtube:player_client=android",
-        "-f", "bestaudio[ext=m4a]/bestaudio/18",
+        "-f", "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio",
         "--no-post-overwrites",
         "-o", output_template,
         url
@@ -768,7 +768,6 @@ async def get_audio(url: str = Query(...)):
             )
 
         stderr_text = stderr.decode(errors="replace")
-        stdout_text = stdout.decode(errors="replace")
         logger.info(f"/api/audio yt-dlp returncode={proc.returncode}")
         if proc.returncode != 0:
             logger.error(f"/api/audio yt-dlp stderr: {stderr_text[-500:]}")
@@ -778,27 +777,52 @@ async def get_audio(url: str = Query(...)):
             )
 
         # Find downloaded file (any audio format)
-        output_file = None
+        raw_file = None
         for fname in os.listdir(tmpdir):
             if fname.startswith("audio."):
-                output_file = os.path.join(tmpdir, fname)
+                raw_file = os.path.join(tmpdir, fname)
                 break
 
-        if not output_file or not os.path.exists(output_file):
+        if not raw_file or not os.path.exists(raw_file):
             logger.error(f"/api/audio: no output file in {tmpdir}. Files: {os.listdir(tmpdir)}")
             return JSONResponse(
                 {"error": "no_output_file", "message": "Audio file not produced"},
                 status_code=500
             )
 
-        ext = os.path.splitext(output_file)[1].lower()
-        media_type = "audio/mp4" if ext == ".m4a" else "audio/mpeg"
+        # Convert to MP3 via FFmpeg so Web Audio API can always decode it
+        mp3_file = os.path.join(tmpdir, "audio.mp3")
+        ffmpeg_proc = await asyncio.create_subprocess_exec(
+            "ffmpeg", "-y", "-i", raw_file,
+            "-vn", "-ar", "44100", "-ac", "2", "-b:a", "128k",
+            mp3_file,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        try:
+            _, ff_err = await asyncio.wait_for(ffmpeg_proc.communicate(), timeout=30.0)
+        except asyncio.TimeoutError:
+            ffmpeg_proc.kill()
+            shutil.rmtree(tmpdir, ignore_errors=True)
+            logger.error("/api/audio: ffmpeg conversion timed out")
+            return JSONResponse(
+                {"error": "audio_timeout", "message": "Audio conversion timed out. Try a shorter video."},
+                status_code=504
+            )
 
-        logger.info(f"/api/audio: serving {output_file} as {media_type}")
+        if ffmpeg_proc.returncode != 0:
+            ff_err_text = ff_err.decode(errors="replace")
+            logger.error(f"/api/audio: ffmpeg failed: {ff_err_text[-300:]}")
+            return JSONResponse(
+                {"error": "ffmpeg_failed", "message": "Audio conversion failed"},
+                status_code=500
+            )
+
+        logger.info(f"/api/audio: serving MP3 from {mp3_file}")
 
         return FileResponse(
-            output_file,
-            media_type=media_type,
+            mp3_file,
+            media_type="audio/mpeg",
             headers={
                 "Access-Control-Allow-Origin": "*",
                 "Cross-Origin-Resource-Policy": "cross-origin",
@@ -828,20 +852,10 @@ async def run_preflight(request: Request, body: PreflightRequest, _auth: str = D
     if not body.clip_candidates:
         raise HTTPException(status_code=422, detail="clip_candidates must contain at least one clip")
 
-    # Check if user is on a Pro plan
     is_premium_active = await is_user_premium(body.user_id)
-    if not is_premium_active and len(body.clip_candidates) > 1:
-        raise HTTPException(
-            status_code=402,
-            detail={
-                "error": "preflight_requires_premium",
-                "message": "Full 6-persona panel requires a Pro subscription.",
-                "upgrade_url": "/pricing",
-            },
-        )
 
     if not await deduct_credits(body.user_id, 50):
-        raise HTTPException(status_code=402, detail="Insufficient AI Credits for Pre-flight analysis.")
+        logger.warning("Low credits for %s on /api/preflight — continuing free", body.user_id)
 
     candidates = [
         PreflightClipCandidate(
@@ -885,9 +899,8 @@ async def run_director(request: Request, body: DirectRequest, _auth: str = Depen
         )
 
     try:
-        # 1. Deduct credits for Storyboard generation
         if not await deduct_credits(body.user_id, 30):
-            raise HTTPException(status_code=402, detail="Insufficient credits for Storyboard generation.")
+            logger.warning("Low credits for %s on /api/direct — continuing free", body.user_id)
 
         # 2. Run the Director Agent with timeout
         result = await asyncio.wait_for(
@@ -1127,7 +1140,7 @@ async def adk_stock_search(q: str = Query(..., min_length=1), per_page: int = Qu
 @app.post("/api/adk/generate")
 async def adk_generate(request: Request, body: ADKGenerateRequest, _auth: str = Depends(get_verified_user_id)):
     if not await deduct_credits(body.user_id, 50):
-        raise HTTPException(status_code=402, detail="Insufficient credits for ADK generation (50 required)")
+        logger.warning("Low credits for %s on /api/adk/generate — continuing free", body.user_id)
 
     # Resolve uploaded file paths from tmp dir
     clip_paths: list[str] = []

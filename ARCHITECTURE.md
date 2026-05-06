@@ -2,7 +2,7 @@
 
 ## Google AI Agents Challenge 2026
 
-**Stack:** Next.js 14.2.22 · FastAPI · Google ADK 1.0 · Gemini 2.5 Flash · FFmpeg.wasm · Whisper.wasm
+**Stack:** Next.js 14.2.22 · FastAPI · Google ADK 1.0 · Gemini 2.5 Flash · MediaRecorder (browser preview) · ffmpeg-python (server export) · Whisper.wasm (browser transcription)
 
 ---
 
@@ -48,16 +48,18 @@
               ┌────────────▼──────────────┐   ┌──────────▼─────────────┐
               │ ParallelAgent             │   │ VoteAggregatorAgent    │
               │ "PersonaPanel"            │   │                        │
-              │                           │   │ Reads 4 persona votes  │
-              │ 4 Agents fire in parallel │   │ from session state.    │
+              │                           │   │ Reads 6 persona votes  │
+              │ 6 Agents fire in parallel │   │ from session state.    │
               │ ┌───────────────────────┐ │   │ Computes:              │
-              │ │ Persona_genz    0.30  │ │   │  score = Σ w×(ret×0.6  │
-              │ │ Persona_millenn 0.30  │─┼──►│          +share×100×0.4│
-              │ │ Persona_sports  0.20  │ │   │                        │
-              │ │ Persona_tech    0.20  │ │   │ Writes consensus_score │
-              │ └───────────────────────┘ │   │ to session state       │
-              │                           │   │ [ADK: BaseAgent]       │
-              │ [ADK: ParallelAgent]      │   └──────────┬─────────────┘
+              │ │ Persona_genz    0.25  │ │   │  score = Σ w×(ret×0.6  │
+              │ │ Persona_millenn 0.25  │─┼──►│          +share×100×0.4│
+              │ │ Persona_sports  0.15  │ │   │                        │
+              │ │ Persona_tech    0.15  │ │   │ Writes consensus_score │
+              │ │ Persona_entert  0.10  │ │   │ to session state       │
+              │ │ Persona_news    0.10  │ │   │ [ADK: BaseAgent]       │
+              │ └───────────────────────┘ │   │                        │
+              │ [ADK: ParallelAgent]      │   │                        │
+              │                           │   └──────────┬─────────────┘
               │                           │              │
               └───────────────────────────┘   ┌──────────▼─────────────┐
                                               │ QualityGateAgent       │
@@ -73,7 +75,7 @@
                                                          │
                                               ┌──────────▼─────────────┐
                                               │ ClipRefinementAgent    │
-                                              │ (premium only)         │
+                                              │                        │
                                               │                        │
                                               │ Reads drop-off map     │
                                               │ Adjusts start/end sec  │
@@ -84,7 +86,7 @@
                     ┌────────────────────────────────────▼───────────────────┐
                     │                    Gemini 2.5 Flash                     │
                     │           All agents share one model endpoint           │
-                    │            google-adk 1.0 · google-generativeai         │
+                    │               google-adk 1.0 · google-genai             │
                     └─────────────────────────────────────────────────────────┘
 ```
 
@@ -94,15 +96,15 @@
 
 | Node | ADK Primitive | Purpose |
 | :--- | :--- | :--- |
-| PreFlight_Orchestrator | `SequentialAgent` | Runs 4 steps in strict order |
-| PersonaPanel | `ParallelAgent` | Fires all 4 personas simultaneously |
+| PreFlight_Orchestrator | `SequentialAgent` | Runs steps in strict order |
+| PersonaPanel | `ParallelAgent` | Fires all 6 personas simultaneously |
 | AudiencePanelLoop | `LoopAgent` | Iterates until quality gate passes or max_iter reached |
 | ClipCandidateAgent | `Agent` | Validates clip metadata, seeds session state |
 | TrendGroundingAgent | `BaseAgent` | Calls SerpAPI async via httpx (deterministic) |
 | AnalyticsGroundingAgent | `BaseAgent` | Calls YouTube Analytics v2 via OAuth (deterministic) |
 | SupabaseMCPAgent | `Agent` + `MCPToolset` | Queries Supabase for historical channel preflight data via stdio MCP server |
-| Persona_* (×4) | `Agent` | Simulates a specific demographic audience member |
-| VoteAggregatorAgent | `BaseAgent` | Weighted consensus from 4 votes (pure Python, no LLM) |
+| Persona_* (×6) | `Agent` | Simulates a specific demographic audience member |
+| VoteAggregatorAgent | `BaseAgent` | Weighted consensus from 6 votes (pure Python, no LLM) |
 | QualityGateAgent | `BaseAgent` | Sets loop exit flag + recommendation (pure Python, no LLM) |
 | ClipRefinementAgent | `Agent` | Edits clip boundaries from majority drop-off point |
 
@@ -141,7 +143,7 @@ Frontend (RightPanel.tsx)
     ├── 6 PersonaCard components (2-col grid)
     ├── RecommendationBadge  PUBLISH / REFINE FIRST / DISCARD
     ├── Before/after clip comparison  (if refined_clip != null)
-    └── BigQuery insight text
+    └── Consensus insight text
 ```
 
 ---
@@ -163,7 +165,7 @@ Frontend (RightPanel.tsx)
 | :--- | :--- | :--- |
 | Frontend | Vercel | `next build` → React + Framer Motion |
 | Backend + ADK | Cloud Native | FastAPI, Gemini 2.5 Flash, ADK 1.0 |
-| Video Engine | `movie.py` | Premium MoviePy-based rendering (libx264/aac) |
+| Video Engine | `ffmpeg-python` (RQ worker) | Server-side rendering via FFmpeg (libx264/aac); browser preview uses MediaRecorder |
 | Database | MongoDB Atlas | Cluster with GridFS for raw/processed artifacts |
 
 ---
