@@ -29,7 +29,8 @@ info "Checking prerequisites..."
 
 command -v gcloud   >/dev/null 2>&1 || error "gcloud not installed. See: https://cloud.google.com/sdk/docs/install"
 command -v vercel   >/dev/null 2>&1 || error "vercel not installed. Run: npm i -g vercel"
-command -v python3  >/dev/null 2>&1 || error "python3 not found"
+command -v python   >/dev/null 2>&1 || error "python not found"
+command -v pnpm     >/dev/null 2>&1 || error "pnpm not installed. Run: npm i -g pnpm"
 command -v node     >/dev/null 2>&1 || error "node not found"
 
 [[ -f "fastapi/.env" ]] || error "fastapi/.env not found. Copy fastapi/.env.example and fill in values."
@@ -53,17 +54,17 @@ info "All required env vars present."
 # ── Step 1: Local build verification ─────────────────────────────────────────
 info "Step 1/4: Verifying local Python imports..."
 cd fastapi
-AUTH_DISABLED=true NEXTAUTH_SECRET=validate python3 -c "import main; print('  Python import: OK')"
+AUTH_DISABLED=true NEXTAUTH_SECRET=validate python -c "import main; print('  Python import: OK')"
 cd ..
 
 info "Step 1/4: Verifying frontend build..."
 cd frontend
-npm ci --quiet
+pnpm install --frozen-lockfile
 npx tsc --noEmit
 NEXT_PUBLIC_API_URL="${PUBLIC_API_URL}" \
 NEXTAUTH_SECRET="${NEXTAUTH_SECRET}" \
 NEXTAUTH_URL="https://quickaishort.online" \
-npm run build --quiet
+pnpm build
 cd ..
 info "Local build checks passed."
 
@@ -131,16 +132,15 @@ gcloud run deploy "${WORKER_SERVICE}" \
   --cpu 2 \
   --max-instances 3 \
   --set-env-vars "${ENV_VARS}" \
-  --command "python3" \
+  --command "python" \
   --args "worker_health.py" \
   --quiet
 
 info "Worker service deployed successfully."
 # ── Step 5: Deploy frontend to Vercel ─────────────────────────────────────────
 info "Step 5/4: Deploying frontend to Vercel..."
-cd frontend
 
-# Set Vercel environment variables from .env.local
+# Set Vercel environment variables from frontend/.env.local
 while IFS= read -r line; do
   [[ "$line" =~ ^#.*$ ]] && continue
   [[ -z "$line" ]] && continue
@@ -148,14 +148,14 @@ while IFS= read -r line; do
   val="${line#*=}"
   [[ -z "$val" ]] && continue
   echo "${val}" | vercel env add "${key}" production --force >/dev/null 2>&1 || true
-done < .env.local
+done < frontend/.env.local
 
 # Override with the actual backend URL
 echo "${BACKEND_URL}" | vercel env add NEXT_PUBLIC_API_URL production --force >/dev/null 2>&1 || true
 
+# Run vercel from project root — the project's root directory setting in Vercel
+# points to 'frontend/', so we must NOT cd into it first.
 vercel --prod --yes
-
-cd ..
 
 # ── Summary ───────────────────────────────────────────────────────────────────
 echo ""

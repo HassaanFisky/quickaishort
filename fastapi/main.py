@@ -16,12 +16,14 @@ import uuid
 from contextlib import asynccontextmanager
 from typing import List, Literal, Optional
 
+import base64
 import httpx
 import uvicorn
 import yt_dlp
+from pathlib import Path
 from app.utils.youtube_auth import get_cookie_file, inject_ydl_bypass
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -1002,6 +1004,201 @@ async def create_video(request: CreateVideoRequest, _auth: str = Depends(get_ver
     except Exception as exc:
         logger.exception("Video creation pipeline failed: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))
+
+
+# ---- ADK Studio ---------------------------------------------------------------
+
+ADK_UPLOAD_DIR = Path(tempfile.gettempdir()) / "qai_adk_uploads"
+
+_ADK_EXTENSIONS = (".mp4", ".mov", ".avi", ".webm", ".mkv")
+
+
+class ADKGenerateRequest(BaseModel):
+    script: str = Field(..., min_length=10, max_length=5000)
+    voice_id: str = "en-US-Neural2-D"
+    stock_query: Optional[str] = None
+    uploaded_file_ids: List[str] = Field(default_factory=list)
+    user_id: str
+    aspect_ratio: Literal["9:16", "1:1"] = "9:16"
+    quality: Literal["low", "medium", "high"] = "medium"
+
+
+def _parse_script_to_segments(
+    script: str, clip_paths: list[str], stock_clips: list[dict]
+) -> list[dict]:
+    """Split script into timed segments; round-robin assign available clips."""
+    paragraphs = [p.strip() for p in script.split("\n\n") if p.strip()]
+    if not paragraphs:
+        paragraphs = [script.strip()]
+
+    all_clips = clip_paths + [c.get("url", "") for c in stock_clips if c.get("url")]
+    segments = []
+    for i, para in enumerate(paragraphs):
+        duration = max(3.0, len(para.split()) / 2.5)
+        clip = all_clips[i % len(all_clips)] if all_clips else "BLACK_FRAME"
+        segments.append({"clip_path": clip, "start_sec": 0, "end_sec": duration, "text": para})
+    return segments
+
+
+async def _generate_tts(text: str, voice_id: str) -> Optional[str]:
+    """Call Google Cloud TTS REST API. Returns local mp3 path or None."""
+    api_key = os.getenv("GOOGLE_TTS_API_KEY")
+    if not api_key:
+        return None
+    lang = "-".join(voice_id.split("-")[:2])
+    payload = {
+        "input": {"text": text[:4000]},
+        "voice": {"languageCode": lang, "name": voice_id},
+        "audioConfig": {"audioEncoding": "MP3"},
+    }
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(
+                f"https://texttospeech.googleapis.com/v1/text:synthesize?key={api_key}",
+                json=payload,
+            )
+            resp.raise_for_status()
+            audio_b64 = resp.json().get("audioContent", "")
+            if not audio_b64:
+                return None
+        audio_bytes = base64.b64decode(audio_b64)
+        tmp = tempfile.NamedTemporaryFile(prefix="qai_tts_", suffix=".mp3", delete=False)
+        tmp.write(audio_bytes)
+        tmp.close()
+        return tmp.name
+    except Exception as exc:
+        logger.warning("TTS generation failed: %s", exc)
+        return None
+
+
+@app.post("/api/adk/upload")
+async def adk_upload(file: UploadFile = File(...), _auth: str = Depends(get_verified_user_id)):
+    ADK_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    file_id = uuid.uuid4().hex
+    original_name = file.filename or "upload"
+    ext = Path(original_name).suffix.lower()
+    if ext not in _ADK_EXTENSIONS:
+        ext = ".mp4"
+    dest = ADK_UPLOAD_DIR / f"{file_id}{ext}"
+
+    content = await file.read()
+    if len(content) > 200 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="File too large (max 200 MB)")
+    dest.write_bytes(content)
+    logger.info("ADK upload %s → %s (%d bytes)", original_name, dest, len(content))
+    return {"file_id": file_id, "filename": original_name, "size_bytes": len(content)}
+
+
+@app.get("/api/adk/stock")
+async def adk_stock_search(q: str = Query(..., min_length=1), per_page: int = Query(12, ge=1, le=20)):
+    api_key = os.getenv("PEXELS_API_KEY")
+    if not api_key:
+        return {"videos": [], "notice": "Stock search requires PEXELS_API_KEY"}
+
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get(
+                "https://api.pexels.com/videos/search",
+                params={"query": q, "per_page": per_page, "orientation": "portrait"},
+                headers={"Authorization": api_key},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
+        videos = []
+        for v in data.get("videos", []):
+            files = v.get("video_files", [])
+            hd = next((f for f in files if f.get("quality") == "hd" and f.get("width", 9999) <= 1080), files[0] if files else None)
+            if hd:
+                videos.append({
+                    "id": str(v["id"]),
+                    "url": hd["link"],
+                    "thumbnail": v.get("image", ""),
+                    "title": f"Stock {v['id']}",
+                    "duration": v.get("duration", 5),
+                })
+        return {"videos": videos}
+    except Exception as exc:
+        logger.exception("Pexels search failed: %s", exc)
+        raise HTTPException(status_code=502, detail=str(exc))
+
+
+@limiter.limit("5/minute")
+@app.post("/api/adk/generate")
+async def adk_generate(request: Request, body: ADKGenerateRequest, _auth: str = Depends(get_verified_user_id)):
+    if not await deduct_credits(body.user_id, 50):
+        raise HTTPException(status_code=402, detail="Insufficient credits for ADK generation (50 required)")
+
+    # Resolve uploaded file paths from tmp dir
+    clip_paths: list[str] = []
+    for fid in body.uploaded_file_ids:
+        for ext in _ADK_EXTENSIONS:
+            candidate = ADK_UPLOAD_DIR / f"{fid}{ext}"
+            if candidate.exists():
+                clip_paths.append(str(candidate))
+                break
+
+    # Fetch stock clips inline (saves a round-trip vs client)
+    stock_clips: list[dict] = []
+    if body.stock_query:
+        pexels_key = os.getenv("PEXELS_API_KEY")
+        if pexels_key:
+            try:
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    resp = await client.get(
+                        "https://api.pexels.com/videos/search",
+                        params={"query": body.stock_query, "per_page": 6, "orientation": "portrait"},
+                        headers={"Authorization": pexels_key},
+                    )
+                    resp.raise_for_status()
+                    for v in resp.json().get("videos", []):
+                        files = v.get("video_files", [])
+                        hd = next((f for f in files if f.get("quality") == "hd"), files[0] if files else None)
+                        if hd:
+                            stock_clips.append({"id": str(v["id"]), "url": hd["link"]})
+            except Exception as exc:
+                logger.warning("ADK stock prefetch failed: %s", exc)
+
+    voiceover_path = await _generate_tts(body.script, body.voice_id)
+    segments = _parse_script_to_segments(body.script, clip_paths, stock_clips)
+
+    production_plan = {
+        "segments": segments,
+        "voiceover_path": voiceover_path,
+        "aspect_ratio": body.aspect_ratio,
+    }
+
+    job_id = uuid.uuid4().hex
+
+    try:
+        from render_worker import process_render_task
+        render_queue.enqueue(
+            process_render_task,
+            job_id,
+            "adk-generated",
+            0,
+            0,
+            body.user_id,
+            {"production_plan": production_plan, "quality": body.quality, "aspect_ratio": body.aspect_ratio},
+            job_id=job_id,
+            job_timeout=JOB_TIMEOUT_SECONDS,
+            result_ttl=JOB_RESULT_TTL_SECONDS,
+            failure_ttl=JOB_FAILURE_TTL_SECONDS,
+        )
+    except Exception as exc:
+        logger.exception("ADK generate enqueue failed: %s", exc)
+        raise HTTPException(status_code=503, detail=f"Queue error: {exc}")
+
+    await increment_stats(body.user_id, ai_run_delta=1)
+    logger.info("ADK job %s queued: %d segments, tts=%s", job_id, len(segments), voiceover_path is not None)
+
+    return {
+        "status": "queued",
+        "job_id": job_id,
+        "subscribe_channel": f"export-{job_id}",
+        "segments_count": len(segments),
+        "tts_enabled": voiceover_path is not None,
+    }
 
 
 if __name__ == "__main__":

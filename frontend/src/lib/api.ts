@@ -117,3 +117,50 @@ export function buildExportDownloadUrl(relative: string): string {
   }
   return `${API_URL}${relative}`;
 }
+
+// ---- ADK Studio API ----------------------------------------------------------
+
+export interface StockClip {
+  id: string;
+  url: string;
+  thumbnail: string;
+  title: string;
+  duration: number;
+}
+
+export interface ADKGeneratePayload {
+  script: string;
+  voice_id: string;
+  stock_query?: string;
+  uploaded_file_ids: string[];
+  user_id: string;
+  aspect_ratio: "9:16" | "1:1";
+  quality: "low" | "medium" | "high";
+}
+
+export interface ADKGenerateResponse {
+  status: string;
+  job_id: string;
+  subscribe_channel: string;
+  segments_count: number;
+  tts_enabled: boolean;
+}
+
+export async function uploadADKFootage(
+  file: File,
+): Promise<{ file_id: string; filename: string; size_bytes: number }> {
+  const form = new FormData();
+  form.append("file", file);
+  const { data } = await axios.post(`${API_URL}/api/adk/upload`, form);
+  return data;
+}
+
+export async function searchStockVideos(q: string): Promise<{ videos: StockClip[] }> {
+  const { data } = await axios.get(`${API_URL}/api/adk/stock`, { params: { q } });
+  return data;
+}
+
+export async function runADKGenerate(payload: ADKGeneratePayload): Promise<ADKGenerateResponse> {
+  const { data } = await axios.post<ADKGenerateResponse>(`${API_URL}/api/adk/generate`, payload);
+  return data;
+}

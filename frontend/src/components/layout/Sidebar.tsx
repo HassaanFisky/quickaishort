@@ -10,6 +10,7 @@ import {
   History as HistoryIcon,
   Settings as SettingsIcon,
   Sparkles,
+  Clapperboard,
   LogOut,
 } from "lucide-react";
 import QSLogo from "@/components/shared/QSLogo";
@@ -20,6 +21,7 @@ import { LiquidThemeToggle } from "@/components/shared/LiquidThemeToggle";
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutGrid },
   { href: "/editor", label: "Editor", icon: Scissors },
+  { href: "/adk", label: "ADK Studio", icon: Clapperboard },
   { href: "/history", label: "History", icon: HistoryIcon },
   { href: "/settings", label: "Settings", icon: SettingsIcon },
   { href: "/pricing", label: "Pricing", icon: Sparkles },
