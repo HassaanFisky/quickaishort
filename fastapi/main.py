@@ -360,7 +360,7 @@ async def analyze_video(request: Request, body: AnalyzeRequest, verified_user_id
         )
 
         await increment_stats(
-            body.userId or "anonymous",
+            user_id,
             duration_delta=body.duration,
             ai_run_delta=1,
             project_delta=1 if body.isFirstProject else 0,
@@ -994,34 +994,28 @@ async def run_director(request: Request, body: DirectRequest, verified_user_id: 
 
 
 @app.post("/api/create-video")
-async def create_video(request: CreateVideoRequest, _auth: str = Depends(get_verified_user_id)):
+async def create_video(request: CreateVideoRequest, verified_user_id: str = Depends(get_verified_user_id)):
     """
-    Day 5 — Wire Everything Together
     Runs: ScriptAgent → PreFlight → RenderService (Background)
     """
+    user_id = verified_user_id or request.user_id
     try:
-        # 1. ScriptAgent → Production Plan
         from agent.script_agent import ScriptAgent
         agent = ScriptAgent()
         production_plan = await agent.run(request.script, request.clip_paths)
-        
-        # 2. Idempotent Job ID (Hash of script + clips)
+
         import hashlib
         plan_hash = hashlib.sha256(
             json.dumps({"script": request.script, "clips": request.clip_paths}, sort_keys=True).encode()
         ).hexdigest()
         job_id = f"gen-{plan_hash[:16]}"
 
-        # 3. Pre-Flight → Viral Score & Audience Simulation
-        # (This remains in-process as it's an LLM call, but could also be backgrounded)
         viral_score = 0
         persona_votes = []
-        
+
         if _ADK_AVAILABLE and production_plan["segments"]:
             try:
-                # Check premium status for pre-flight in video creation flow
-                is_premium_active = await is_user_premium(request.user_id)
-                
+                is_premium_active = await is_user_premium(user_id)
                 hero = production_plan["segments"][0]
                 candidates = [
                     PreflightClipCandidate(
@@ -1031,13 +1025,12 @@ async def create_video(request: CreateVideoRequest, _auth: str = Depends(get_ver
                         transcript=hero["text"]
                     )
                 ]
-                
                 result = await asyncio.wait_for(
                     run_preflight_pipeline(
                         youtube_url="generated-pipeline",
                         clip_candidates=candidates,
                         is_premium=is_premium_active,
-                        user_id=request.user_id,
+                        user_id=user_id,
                     ),
                     timeout=60.0,
                 )
@@ -1046,23 +1039,19 @@ async def create_video(request: CreateVideoRequest, _auth: str = Depends(get_ver
             except Exception as e:
                 logger.warning(f"Pre-flight analysis failed in video creation flow: {e}")
 
-        # 4. Enqueue Render Job (Background)
         from render_worker import process_render_task
-        
-        # For full production plans, we pass a special 'production_plan' option 
-        # that the worker will detect and use instead of single-clip logic.
         options = {
             "production_plan": production_plan,
-            "user_id": request.user_id,
+            "user_id": user_id,
         }
 
         try:
             render_queue.enqueue(
                 process_render_task,
                 job_id,
-                "generated", # video_id placeholder
-                0, 0, # start/end placeholders
-                request.user_id,
+                "generated",
+                0, 0,
+                user_id,
                 options,
                 job_id=job_id,
                 job_timeout=JOB_TIMEOUT_SECONDS,
