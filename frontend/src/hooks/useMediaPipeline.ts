@@ -53,7 +53,7 @@ export function useMediaPipeline() {
     }
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
+    const timeoutId = setTimeout(() => controller.abort(), 35000);
 
     try {
       setProcessing(true, "loading");
@@ -136,8 +136,12 @@ export function useMediaPipeline() {
           setProgress(100);
           toast.success("AI Analysis complete! Suggestions ready.");
         }
-      }).catch((err: any) => {
-        console.error("Analysis error:", err);
+      }).catch((err: unknown) => {
+        const msg =
+          (err as { response?: { data?: { detail?: string; message?: string } } })?.response?.data?.detail ||
+          (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+          (err instanceof Error ? err.message : "Analysis failed");
+        toast.error(typeof msg === "string" ? msg : "Analysis failed. Please try again.");
         setAgentState("viralAnalysis", { status: "error" });
         setProcessing(false, "idle");
       });

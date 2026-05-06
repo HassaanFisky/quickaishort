@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import axios from "axios";
 import Pusher, { type Channel } from "pusher-js";
 import { toast } from "sonner";
 
@@ -247,9 +248,18 @@ export function useServerExport({ userId }: UseServerExportArgs) {
         const { job_id } = await requestExport(payload);
         setActiveJobId(job_id);
         subscribeRealtime(job_id);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : "Failed to queue export";
-        finishFailure(msg);
+      } catch (err: unknown) {
+        if (axios.isAxiosError(err)) {
+          const backendMsg =
+            err.response?.data?.detail ||
+            err.response?.data?.message ||
+            err.response?.data?.error ||
+            err.message ||
+            "Failed to queue export";
+          finishFailure(typeof backendMsg === "string" ? backendMsg : JSON.stringify(backendMsg));
+        } else {
+          finishFailure(err instanceof Error ? err.message : "Failed to queue export");
+        }
       }
     },
     [finishFailure, subscribeRealtime, userId],

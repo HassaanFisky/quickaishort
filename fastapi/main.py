@@ -347,9 +347,9 @@ def health_check():
 
 @limiter.limit("10/minute")
 @app.post("/api/analyze")
-async def analyze_video(request: Request, body: AnalyzeRequest, _auth: str = Depends(get_verified_user_id)):
+async def analyze_video(request: Request, body: AnalyzeRequest, verified_user_id: str = Depends(get_verified_user_id)):
     try:
-        user_id = body.userId or "anonymous"
+        user_id = verified_user_id or body.userId or "anonymous"
         if not await deduct_credits(user_id, 10):
             logger.warning("Low credits for %s on /api/analyze — continuing free", user_id)
 
@@ -380,9 +380,10 @@ async def analyze_video(request: Request, body: AnalyzeRequest, _auth: str = Dep
 
 
 @app.post("/api/process-video")
-async def export_video(request: ExportRequest, _auth: str = Depends(get_verified_user_id)):
-    if not await deduct_credits(request.user_id, 20):
-        logger.warning("Low credits for %s on /api/process-video — continuing free", request.user_id)
+async def export_video(request: ExportRequest, verified_user_id: str = Depends(get_verified_user_id)):
+    user_id = verified_user_id or request.user_id
+    if not await deduct_credits(user_id, 20):
+        logger.warning("Low credits for %s on /api/process-video — continuing free", user_id)
 
     job_id = uuid.uuid4().hex
     options = {
@@ -404,7 +405,7 @@ async def export_video(request: ExportRequest, _auth: str = Depends(get_verified
             request.videoId,
             request.start_sec,
             request.end_sec,
-            request.user_id,
+            user_id,
             options,
             job_id=job_id,
             job_timeout=JOB_TIMEOUT_SECONDS,
@@ -770,11 +771,76 @@ async def get_audio(url: str = Query(...)):
         stderr_text = stderr.decode(errors="replace")
         logger.info(f"/api/audio yt-dlp returncode={proc.returncode}")
         if proc.returncode != 0:
-            logger.error(f"/api/audio yt-dlp stderr: {stderr_text[-500:]}")
-            return JSONResponse(
-                {"error": "yt_dlp_failed", "message": stderr_text[-300:]},
-                status_code=500
+            logger.warning(
+                f"/api/audio: yt-dlp failed (rc={proc.returncode}), "
+                f"trying Cobalt v10 fallback. stderr: {stderr_text[-200:]}"
             )
+            # ── Cobalt v10 fallback ─────────────────────────────────────
+            cobalt_headers = {
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+                "User-Agent": "Mozilla/5.0 (compatible; QuickAIShort/1.0)",
+            }
+            cobalt_api_key = os.environ.get("COBALT_API_KEY")
+            if cobalt_api_key:
+                cobalt_headers["Authorization"] = f"Api-Key {cobalt_api_key}"
+
+            try:
+                async with httpx.AsyncClient(timeout=40.0, follow_redirects=True) as client:
+                    cobalt_resp = await client.post(
+                        "https://api.cobalt.tools/",
+                        json={"url": url, "downloadMode": "audio", "audioFormat": "mp3"},
+                        headers=cobalt_headers,
+                    )
+                    cobalt_resp.raise_for_status()
+                    cobalt_data = cobalt_resp.json()
+
+                cobalt_status = cobalt_data.get("status")
+                cobalt_stream_url = None
+                if cobalt_status in ("tunnel", "redirect"):
+                    cobalt_stream_url = cobalt_data.get("url")
+                elif cobalt_status == "picker":
+                    items = cobalt_data.get("picker", [])
+                    if items:
+                        cobalt_stream_url = items[0].get("url")
+
+                if not cobalt_stream_url:
+                    raise RuntimeError(f"Cobalt returned status: {cobalt_status}")
+
+                cobalt_mp3 = os.path.join(tmpdir, "cobalt_audio.mp3")
+                async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
+                    async with client.stream("GET", cobalt_stream_url) as r:
+                        r.raise_for_status()
+                        with open(cobalt_mp3, "wb") as f:
+                            async for chunk in r.aiter_bytes(8192):
+                                f.write(chunk)
+
+                logger.info("/api/audio: Cobalt fallback succeeded")
+                return FileResponse(
+                    cobalt_mp3,
+                    media_type="audio/mpeg",
+                    headers={
+                        "Access-Control-Allow-Origin": "*",
+                        "Cross-Origin-Resource-Policy": "cross-origin",
+                        "Cache-Control": "no-cache",
+                    },
+                    background=BackgroundTask(shutil.rmtree, tmpdir, True),
+                )
+
+            except Exception as cobalt_exc:
+                logger.error(f"/api/audio: Cobalt fallback failed: {cobalt_exc}")
+                shutil.rmtree(tmpdir, ignore_errors=True)
+                return JSONResponse(
+                    {
+                        "error": "extraction_failed",
+                        "message": (
+                            f"Audio extraction failed. "
+                            f"yt-dlp error: {stderr_text[-150:]}. "
+                            f"Cobalt error: {str(cobalt_exc)[:150]}"
+                        ),
+                    },
+                    status_code=500,
+                )
 
         # Find downloaded file (any audio format)
         raw_file = None
@@ -842,7 +908,8 @@ async def get_audio(url: str = Query(...)):
 
 @limiter.limit("10/minute")
 @app.post("/api/preflight")
-async def run_preflight(request: Request, body: PreflightRequest, _auth: str = Depends(get_verified_user_id)):
+async def run_preflight(request: Request, body: PreflightRequest, verified_user_id: str = Depends(get_verified_user_id)):
+    user_id = verified_user_id or body.user_id
     if not _ADK_AVAILABLE:
         raise HTTPException(
             status_code=503,
@@ -852,10 +919,10 @@ async def run_preflight(request: Request, body: PreflightRequest, _auth: str = D
     if not body.clip_candidates:
         raise HTTPException(status_code=422, detail="clip_candidates must contain at least one clip")
 
-    is_premium_active = await is_user_premium(body.user_id)
+    is_premium_active = await is_user_premium(user_id)
 
-    if not await deduct_credits(body.user_id, 50):
-        logger.warning("Low credits for %s on /api/preflight — continuing free", body.user_id)
+    if not await deduct_credits(user_id, 50):
+        logger.warning("Low credits for %s on /api/preflight — continuing free", user_id)
 
     candidates = [
         PreflightClipCandidate(
@@ -873,11 +940,11 @@ async def run_preflight(request: Request, body: PreflightRequest, _auth: str = D
                 youtube_url=body.youtube_url,
                 clip_candidates=candidates,
                 is_premium=is_premium_active,
-                user_id=body.user_id,
+                user_id=user_id,
             ),
             timeout=120.0,
         )
-        await increment_stats(body.user_id, ai_run_delta=1)
+        await increment_stats(user_id, ai_run_delta=1)
         return {"preflight_result": result.model_dump()}
     except asyncio.TimeoutError:
         raise HTTPException(
@@ -891,7 +958,8 @@ async def run_preflight(request: Request, body: PreflightRequest, _auth: str = D
 
 @limiter.limit("10/minute")
 @app.post("/api/direct")
-async def run_director(request: Request, body: DirectRequest, _auth: str = Depends(get_verified_user_id)):
+async def run_director(request: Request, body: DirectRequest, verified_user_id: str = Depends(get_verified_user_id)):
+    user_id = verified_user_id or body.user_id
     if not _ADK_AVAILABLE:
         raise HTTPException(
             status_code=503,
@@ -899,19 +967,18 @@ async def run_director(request: Request, body: DirectRequest, _auth: str = Depen
         )
 
     try:
-        if not await deduct_credits(body.user_id, 30):
-            logger.warning("Low credits for %s on /api/direct — continuing free", body.user_id)
+        if not await deduct_credits(user_id, 30):
+            logger.warning("Low credits for %s on /api/direct — continuing free", user_id)
 
-        # 2. Run the Director Agent with timeout
         result = await asyncio.wait_for(
             run_director_pipeline(
                 input_text=body.input_text,
-                user_id=body.user_id
+                user_id=user_id
             ),
             timeout=120.0
         )
 
-        await increment_stats(body.user_id, ai_run_delta=1)
+        await increment_stats(user_id, ai_run_delta=1)
         return {"director_result": result}
     except HTTPException:
         # Re-raise HTTP exceptions (like 402) so they aren't swallowed by the broad except
@@ -1138,9 +1205,10 @@ async def adk_stock_search(q: str = Query(..., min_length=1), per_page: int = Qu
 
 @limiter.limit("5/minute")
 @app.post("/api/adk/generate")
-async def adk_generate(request: Request, body: ADKGenerateRequest, _auth: str = Depends(get_verified_user_id)):
-    if not await deduct_credits(body.user_id, 50):
-        logger.warning("Low credits for %s on /api/adk/generate — continuing free", body.user_id)
+async def adk_generate(request: Request, body: ADKGenerateRequest, verified_user_id: str = Depends(get_verified_user_id)):
+    user_id = verified_user_id or body.user_id
+    if not await deduct_credits(user_id, 50):
+        logger.warning("Low credits for %s on /api/adk/generate — continuing free", user_id)
 
     # Resolve uploaded file paths from tmp dir
     clip_paths: list[str] = []
@@ -1191,7 +1259,7 @@ async def adk_generate(request: Request, body: ADKGenerateRequest, _auth: str = 
             "adk-generated",
             0,
             0,
-            body.user_id,
+            user_id,
             {"production_plan": production_plan, "quality": body.quality, "aspect_ratio": body.aspect_ratio},
             job_id=job_id,
             job_timeout=JOB_TIMEOUT_SECONDS,
@@ -1202,7 +1270,7 @@ async def adk_generate(request: Request, body: ADKGenerateRequest, _auth: str = 
         logger.exception("ADK generate enqueue failed: %s", exc)
         raise HTTPException(status_code=503, detail=f"Queue error: {exc}")
 
-    await increment_stats(body.user_id, ai_run_delta=1)
+    await increment_stats(user_id, ai_run_delta=1)
     logger.info("ADK job %s queued: %d segments, tts=%s", job_id, len(segments), voiceover_path is not None)
 
     return {

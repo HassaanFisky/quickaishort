@@ -478,6 +478,17 @@ COMPLETED:
   plus frontend 4-step wizard at /adk plus Zustand adkStore
 - deploy.sh fixed: python3→python, npm ci→pnpm install, vercel cd path bug
 - Production deployment complete: Cloud Run (API + Worker) + Vercel
+- Production hardening pass 1 (2026-05-06): HTTP 402 gates removed, COEP scoped to /editor, datetime.utcnow fixed, /api/audio FFmpeg MP3 conversion, mongo_session.py deleted, ARCHITECTURE.md aligned
+- Production hardening pass 2 (2026-05-06): /api/audio Cobalt v10 fallback; JWT verified_user_id enforced in all 5 protected endpoints; frontend shows real backend error messages; client-side YouTube URL validation in AcquirePanel; requirements.txt cleaned (removed firebase-admin, google-cloud-speech, moviepy; yt-dlp pin updated to >=2025.4.0); Dockerfile adds libgl1 + libglib2.0-0
+
+KEY DECISIONS (do not change without reason):
+- No subscription gating — core product is free and unblocked until billing is intentionally shipped
+- /api/audio: yt-dlp subprocess (bestaudio m4a/webm) → Cobalt v10 fallback → always returns audio/mpeg MP3
+- COEP/COOP headers scoped to /editor/:path* only — Google OAuth works on /signin
+- Browser export: MediaRecorder API (no FFmpeg.wasm — was never implemented)
+- Server export: ffmpeg-python via RQ worker (production path, stored in MongoDB GridFS)
+- All protected endpoints use verified_user_id from JWT, not request body
+- 6 personas in preflight panel (genz, millennial, sports, tech, entertainment, news)
 
 IN PROGRESS:
 

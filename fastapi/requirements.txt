@@ -1,7 +1,7 @@
 fastapi==0.115.5
 uvicorn[standard]>=0.34.0
 python-multipart==0.0.18
-yt-dlp>=2025.1.1
+yt-dlp>=2025.4.0
 requests==2.32.3
 pydantic==2.10.3
 python-dotenv==1.0.1
@@ -9,15 +9,12 @@ google-adk==1.0.0
 Deprecated>=1.2.14
 google-genai>=1.14.0
 google-cloud-firestore>=2.15.0
-google-cloud-speech
 google-cloud-texttospeech
-firebase-admin>=6.5.0
 tenacity==8.2.3
 redis==5.0.4
 rq==1.16.2
 pusher==3.3.2
 ffmpeg-python==0.2.0
-moviepy==1.0.3
 motor==3.6.0
 pymongo==4.9.1
 httpx==0.28.1

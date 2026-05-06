@@ -38,10 +38,20 @@ export default function AcquirePanel() {
     multiple: false,
   });
 
+  const YT_PATTERN =
+    /^https?:\/\/(www\.)?(youtube\.com\/watch\?.*v=|youtu\.be\/)[A-Za-z0-9_-]{11}/;
+
   const handleUrlSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!url) return;
-    
+
+    if (!YT_PATTERN.test(url.trim())) {
+      toast.error(
+        "Please paste a YouTube URL — e.g. youtube.com/watch?v=... or youtu.be/...",
+      );
+      return;
+    }
+
     try {
       setIsImporting(true);
       toast.loading("Fetching video metadata...", { id: "import-video" });

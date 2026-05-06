@@ -12,6 +12,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     npm \
     ca-certificates \
     curl \
+    libgl1 \
+    libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 # Lower TLS security level so Python's ssl can reach MongoDB Atlas M0 cipher suites
