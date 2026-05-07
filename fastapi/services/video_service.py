@@ -13,8 +13,6 @@ from typing import Optional, Dict, Any, List, Tuple
 from pathlib import Path
 from fastapi.responses import FileResponse, JSONResponse
 from starlette.background import BackgroundTask
-import yt_dlp
-from app.utils.youtube_auth import inject_ydl_bypass
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -185,25 +183,39 @@ class VideoService:
     @staticmethod
     async def _fetch_yt_dlp(url: str, tmpdir: str) -> Optional[str]:
         out_tmpl = os.path.join(tmpdir, "ytdlp_audio.%(ext)s")
-        base_opts = {
-            "format": "bestaudio/best",
-            "outtmpl": out_tmpl,
-            "quiet": True,
-            "no_warnings": True,
-            "extractor_args": {"youtube": {"player_client": ["ios", "mweb", "tv_embedded", "web_creator"]}},
-        }
-        ydl_opts = inject_ydl_bypass(base_opts)
+        cmd = [
+            "yt-dlp",
+            "--format", "bestaudio/best",
+            "--output", out_tmpl,
+            "--no-playlist",
+            "--no-warnings",
+        ]
+        from app.utils.youtube_auth import get_cookie_file
+        cookie_path = get_cookie_file()
+        if cookie_path:
+            cmd += ["--cookies", cookie_path]
+        proxy = os.environ.get("YOUTUBE_PROXY")
+        if proxy:
+            cmd += ["--proxy", proxy]
+        cmd.append(url)
         try:
-            loop = asyncio.get_event_loop()
-            def _dl():
-                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    return ydl.extract_info(url, download=True)
-            await loop.run_in_executor(None, _dl)
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            _, stderr = await asyncio.wait_for(proc.communicate(), timeout=60)
+            if proc.returncode != 0:
+                err = stderr.decode("utf-8", errors="replace")[-600:]
+                logger.warning(f"[VideoService] yt-dlp rc={proc.returncode}: {err}")
+                return None
             for f in os.listdir(tmpdir):
                 if f.startswith("ytdlp_audio"):
                     return os.path.join(tmpdir, f)
+        except asyncio.TimeoutError:
+            logger.warning("[VideoService] yt-dlp timed out after 60s")
         except Exception as e:
-            logger.warning(f"[VideoService] yt-dlp failed: {e}")
+            logger.warning(f"[VideoService] yt-dlp exception: {e}")
         return None
 
     @staticmethod
