@@ -345,6 +345,84 @@ def health_check():
     }
 
 
+@app.get("/ready")
+def readiness_check():
+    """
+    Readiness probe used by Cloud Run and load balancers.
+
+    Returns 503 when every extractor circuit is OPEN (no tier can serve
+    requests). The load balancer stops routing traffic to this instance
+    until the circuits recover and /ready returns 200 again.
+    Also blocks if MongoDB is down, since protected endpoints need it.
+    """
+    from services.extractor_service import get_extractor_service
+
+    svc = get_extractor_service()
+    if not svc.is_ready():
+        raise HTTPException(
+            status_code=503,
+            detail="All extraction tier circuits are open — not ready to serve",
+        )
+    if not db_is_ready():
+        raise HTTPException(
+            status_code=503,
+            detail="MongoDB not initialised — not ready to serve",
+        )
+    return {"status": "ready"}
+
+
+@app.get("/metrics")
+def prometheus_metrics():
+    """
+    Prometheus-compatible metrics endpoint.
+
+    Exposes counters and histograms for:
+      - extraction_duration_seconds (per tier, per status)
+      - tier_failures_total (per tier, per error_class)
+      - circuit_open_total (per tier)
+      - cache_hits_total / cache_misses_total
+      - extraction_exhausted_total
+      - extraction_success_total (per tier)
+
+    Scrape interval recommendation: 15s.
+    """
+    from services.extractor_service import METRICS_AVAILABLE, generate_latest, CONTENT_TYPE_LATEST
+    from fastapi.responses import Response
+
+    if not METRICS_AVAILABLE:
+        raise HTTPException(
+            status_code=501,
+            detail="prometheus-client not installed — add it to requirements.txt",
+        )
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+
+@app.get("/debug/tiers")
+def debug_tiers(request: Request):
+    """
+    Circuit breaker state snapshot per extraction tier.
+
+    Returns the current state (CLOSED/OPEN/HALF-OPEN), failure count,
+    and how long each circuit has been open (if applicable).
+
+    Internal endpoint — restrict to internal traffic in production via
+    Cloud Armor, IAP, or a header check (INTERNAL_SECRET env var).
+    """
+    from services.extractor_service import get_extractor_service
+
+    internal_secret = os.environ.get("INTERNAL_SECRET")
+    if internal_secret:
+        provided = request.headers.get("X-Internal-Secret", "")
+        if provided != internal_secret:
+            raise HTTPException(status_code=403, detail="Forbidden")
+
+    svc = get_extractor_service()
+    return {
+        "tiers": svc.tier_states(),
+        "ready": svc.is_ready(),
+    }
+
+
 # ---- Analyze ------------------------------------------------------------------
 
 

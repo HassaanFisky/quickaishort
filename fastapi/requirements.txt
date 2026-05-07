@@ -22,3 +22,5 @@ python-jose[cryptography]==3.3.0
 certifi>=2024.2.2
 google-api-python-client>=2.120.0
 slowapi==0.1.9
+structlog>=23.1.0
+prometheus-client>=0.19.0

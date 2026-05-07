@@ -8,7 +8,6 @@ import subprocess
 import random
 import re
 import shutil
-import tempfile
 from typing import Optional, Dict, Any, List, Tuple
 from pathlib import Path
 from fastapi.responses import FileResponse, JSONResponse
@@ -61,49 +60,52 @@ class VideoService:
 
     @classmethod
     async def get_audio_response(cls, url: str) -> FileResponse | JSONResponse:
-        """API entry point for audio extraction with 100% fallback logic."""
-        video_id = cls.extract_video_id(url)
-        tmpdir = tempfile.mkdtemp(prefix="qai_audio_")
-        
+        """
+        API entry point for audio extraction.
+        Delegates to ExtractorService which implements the full self-healing
+        tier chain with circuit breakers, retries, validation, and caching.
+        Returns a FileResponse streaming MP3 bytes directly from memory.
+        """
+        import io
+        import uuid as _uuid
+        from services.extractor_service import (
+            get_extractor_service,
+            AllTiersExhaustedError,
+        )
+
+        request_id = _uuid.uuid4().hex[:12]
+        svc = get_extractor_service()
+
         try:
-            # ── TIER 1: Piped API ──
-            if video_id:
-                logger.info(f"[VideoService] Tier 1: Piped for {video_id}")
-                piped_file = await cls._fetch_piped(video_id, tmpdir)
-                if piped_file:
-                    return cls._serve_audio(piped_file, tmpdir)
-
-            # ── TIER 2: yt-dlp ──
-            logger.info(f"[VideoService] Tier 2: yt-dlp for {url}")
-            yt_dlp_file = await cls._fetch_yt_dlp(url, tmpdir)
-            if yt_dlp_file:
-                return cls._serve_audio(yt_dlp_file, tmpdir)
-
-            # ── TIER 3: Cobalt v10 ──
-            logger.info(f"[VideoService] Tier 3: Cobalt for {url}")
-            cobalt_file = await cls._fetch_cobalt(url, tmpdir)
-            if cobalt_file:
-                return cls._serve_audio(cobalt_file, tmpdir)
-
-            # ── TIER 4: Invidious ──
-            if video_id:
-                logger.info(f"[VideoService] Tier 4: Invidious for {video_id}")
-                inv_file = await cls._fetch_invidious(video_id, tmpdir)
-                if inv_file:
-                    return cls._serve_audio(inv_file, tmpdir)
-
-            raise RuntimeError("All extraction tiers failed.")
-
-        except Exception as e:
-            logger.error(f"[VideoService] Global failure: {e}")
-            shutil.rmtree(tmpdir, ignore_errors=True)
+            mp3_bytes = await svc.extract_audio(url, request_id=request_id)
+        except AllTiersExhaustedError as exc:
+            logger.error("[VideoService] all tiers exhausted: %s", exc)
             return JSONResponse(
                 {
                     "error": "extraction_failed",
-                    "message": "YouTube is currently blocking extraction. Our proxies are rotating, please retry."
+                    "message": (
+                        "YouTube is currently blocking extraction from this server. "
+                        "Our extractor will recover automatically. Please retry in a moment."
+                    ),
+                    "request_id": request_id,
                 },
-                status_code=500
+                status_code=503,
             )
+        except Exception as exc:
+            logger.error("[VideoService] unexpected error request_id=%s: %s", request_id, exc)
+            return JSONResponse(
+                {"error": "internal_error", "request_id": request_id},
+                status_code=500,
+            )
+
+        # Stream bytes from memory — no temp file needed since ExtractorService
+        # already cleaned up its tmpdir.
+        from fastapi.responses import Response
+        return Response(
+            content=mp3_bytes,
+            media_type="audio/mpeg",
+            headers={"X-Request-Id": request_id},
+        )
 
     @classmethod
     async def download_segment(cls, video_id: str, start: float, end: float, workdir: Path) -> Path:
