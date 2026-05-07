@@ -183,41 +183,40 @@ class VideoService:
     @staticmethod
     async def _fetch_yt_dlp(url: str, tmpdir: str) -> Optional[str]:
         out_tmpl = os.path.join(tmpdir, "ytdlp_audio.%(ext)s")
-        cmd = [
-            "yt-dlp",
-            "--format", "bestaudio/best",
-            "--output", out_tmpl,
-            "--no-playlist",
-            "--no-warnings",
-            # android_music uses token-based auth, no JS signature/n-challenge needed
-            "--extractor-args", "youtube:player_client=android_music,android,ios",
-        ]
+        # Try 1: android_music client — token-based auth, no JS sig needed, no browser cookies
+        # Try 2: web cookies — browser cookies with default client selection
         from app.utils.youtube_auth import get_cookie_file
         cookie_path = get_cookie_file()
-        if cookie_path:
-            cmd += ["--cookies", cookie_path]
         proxy = os.environ.get("YOUTUBE_PROXY")
+
+        base = ["yt-dlp", "--format", "bestaudio/best", "--output", out_tmpl, "--no-playlist", "--no-warnings"]
         if proxy:
-            cmd += ["--proxy", proxy]
-        cmd.append(url)
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            _, stderr = await asyncio.wait_for(proc.communicate(), timeout=60)
-            if proc.returncode != 0:
-                err = stderr.decode("utf-8", errors="replace")[-3000:]
-                logger.warning(f"[VideoService] yt-dlp rc={proc.returncode}: {err}")
-                return None
-            for f in os.listdir(tmpdir):
-                if f.startswith("ytdlp_audio"):
-                    return os.path.join(tmpdir, f)
-        except asyncio.TimeoutError:
-            logger.warning("[VideoService] yt-dlp timed out after 60s")
-        except Exception as e:
-            logger.warning(f"[VideoService] yt-dlp exception: {e}")
+            base += ["--proxy", proxy]
+
+        attempts = [
+            base + ["--extractor-args", "youtube:player_client=android_music,android", url],
+        ]
+        if cookie_path:
+            attempts.append(base + ["--cookies", cookie_path, url])
+
+        for cmd in attempts:
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                _, stderr = await asyncio.wait_for(proc.communicate(), timeout=60)
+                if proc.returncode == 0:
+                    for f in os.listdir(tmpdir):
+                        if f.startswith("ytdlp_audio"):
+                            return os.path.join(tmpdir, f)
+                err = stderr.decode("utf-8", errors="replace")[-500:]
+                logger.warning(f"[VideoService] yt-dlp attempt failed: {err}")
+            except asyncio.TimeoutError:
+                logger.warning("[VideoService] yt-dlp timed out after 60s")
+            except Exception as e:
+                logger.warning(f"[VideoService] yt-dlp exception: {e}")
         return None
 
     @staticmethod
