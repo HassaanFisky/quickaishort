@@ -13,6 +13,8 @@ from typing import Optional, Dict, Any, List, Tuple
 from pathlib import Path
 from fastapi.responses import FileResponse, JSONResponse
 from starlette.background import BackgroundTask
+import yt_dlp
+from app.utils.youtube_auth import inject_ydl_bypass
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -183,13 +185,14 @@ class VideoService:
     @staticmethod
     async def _fetch_yt_dlp(url: str, tmpdir: str) -> Optional[str]:
         out_tmpl = os.path.join(tmpdir, "ytdlp_audio.%(ext)s")
-        ydl_opts = {
+        base_opts = {
             "format": "bestaudio/best",
             "outtmpl": out_tmpl,
             "quiet": True,
             "no_warnings": True,
-            "extractor_args": {"youtube": {"player_client": ["tv_embedded", "ios"]}}
+            "extractor_args": {"youtube": {"player_client": ["ios", "mweb", "tv_embedded", "web_creator"]}},
         }
+        ydl_opts = inject_ydl_bypass(base_opts)
         try:
             loop = asyncio.get_event_loop()
             def _dl():
@@ -197,8 +200,10 @@ class VideoService:
                     return ydl.extract_info(url, download=True)
             await loop.run_in_executor(None, _dl)
             for f in os.listdir(tmpdir):
-                if f.startswith("ytdlp_audio"): return os.path.join(tmpdir, f)
-        except: pass
+                if f.startswith("ytdlp_audio"):
+                    return os.path.join(tmpdir, f)
+        except Exception as e:
+            logger.warning(f"[VideoService] yt-dlp failed: {e}")
         return None
 
     @staticmethod
@@ -209,20 +214,32 @@ class VideoService:
                 resp = await client.post(
                     api_url,
                     json={"url": url, "downloadMode": "audio"},
-                    headers={"Accept": "application/json"}
+                    headers={"Accept": "application/json", "Content-Type": "application/json"},
                 )
-                if resp.status_code != 200: return None
+                if resp.status_code == 400:
+                    body = resp.json()
+                    err = body.get("error", {}).get("code", "unknown")
+                    if "auth.jwt" in err:
+                        logger.warning("[VideoService] Cobalt requires JWT auth — set COBALT_API_URL to a self-hosted instance")
+                    else:
+                        logger.warning(f"[VideoService] Cobalt 400: {err}")
+                    return None
+                if resp.status_code != 200:
+                    logger.warning(f"[VideoService] Cobalt returned {resp.status_code}")
+                    return None
                 stream_url = resp.json().get("url")
-                if not stream_url: return None
-                
+                if not stream_url:
+                    return None
                 out_path = os.path.join(tmpdir, "cobalt_audio.mp3")
                 async with httpx.AsyncClient(timeout=60.0) as dl:
                     async with dl.stream("GET", stream_url) as r:
                         r.raise_for_status()
                         with open(out_path, "wb") as f:
-                            async for chunk in r.aiter_bytes(65536): f.write(chunk)
+                            async for chunk in r.aiter_bytes(65536):
+                                f.write(chunk)
                 return out_path
-        except: pass
+        except Exception as e:
+            logger.warning(f"[VideoService] Cobalt failed: {e}")
         return None
 
     @staticmethod
