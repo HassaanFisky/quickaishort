@@ -14,8 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     libgl1 \
     libglib2.0-0 \
-    && rm -rf /var/lib/apt/lists/* \
-    && ln -sf /usr/bin/nodejs /usr/bin/node
+    && rm -rf /var/lib/apt/lists/*
 
 # Lower TLS security level so Python's ssl can reach MongoDB Atlas M0 cipher suites
 RUN printf '%s\n' \
