@@ -193,19 +193,6 @@ class VideoService:
         if proxy:
             base += ["--proxy", proxy]
 
-        # Diagnostic: log what formats are actually available
-        try:
-            diag = await asyncio.create_subprocess_exec(
-                "yt-dlp", "--list-formats", "--no-warnings", url,
-                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
-            )
-            dout, derr = await asyncio.wait_for(diag.communicate(), timeout=30)
-            logger.info(f"[VideoService] yt-dlp formats:\n{dout.decode('utf-8', errors='replace')[:3000]}")
-            if derr:
-                logger.info(f"[VideoService] yt-dlp formats stderr:\n{derr.decode('utf-8', errors='replace')[:1000]}")
-        except Exception as diag_err:
-            logger.warning(f"[VideoService] format list failed: {diag_err}")
-
         attempts = [
             base + ["--extractor-args", "youtube:player_client=android_music,android", url],
         ]
