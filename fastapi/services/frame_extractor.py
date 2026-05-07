@@ -24,7 +24,7 @@ import requests
 import yt_dlp
 from app.utils.youtube_auth import inject_ydl_bypass
 
-_COBALT_API = "https://api.cobalt.tools/"
+_COBALT_API = os.getenv("COBALT_API_URL", "https://api.cobalt.tools/")
 
 
 def _cobalt_get_stream_url(url: str) -> str:

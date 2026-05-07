@@ -36,7 +36,8 @@ ENV OPENSSL_CONF=/etc/ssl/openssl_custom.cnf
 WORKDIR /app
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir "yt-dlp>=2025.4.30"
 
 COPY . .
 

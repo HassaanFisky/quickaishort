@@ -23,52 +23,13 @@ from pathlib import Path
 from typing import Literal, Optional
 
 import ffmpeg
-import requests
 import yt_dlp
+import asyncio
 from app.utils.youtube_auth import inject_ydl_bypass
+from services.video_service import VideoService
 
-_COBALT_API = "https://api.cobalt.tools/"
 
 
-def _cobalt_get_stream_url(url: str) -> str:
-    """Cobalt API v10 — returns a direct stream URL or raises.
-    Uses h264 for maximum compatibility with the downstream ffmpeg pipeline.
-    """
-    try:
-        resp = requests.post(
-            _COBALT_API,
-            json={
-                "url": url, 
-                "videoQuality": "1080", 
-                "downloadMode": "auto",
-                "youtubeVideoCodec": "h264" # Ensure we get H.264 for easier processing
-            },
-            headers={
-                "Accept": "application/json", 
-                "Content-Type": "application/json"
-            },
-            timeout=30,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        
-        # Cobalt v10 can return 'tunnel', 'redirect', or 'picker'
-        status = data.get("status")
-        stream_url = data.get("url")
-        
-        if status in ("tunnel", "redirect") and stream_url:
-            return stream_url
-        
-        if status == "picker":
-            # If it's a picker, just grab the first video entry that matches our needs
-            picker_items = data.get("picker", [])
-            if picker_items:
-                return picker_items[0].get("url")
-                
-        raise RuntimeError(f"Cobalt returned status {status} but no stream URL found.")
-    except Exception as e:
-        logger.error(f"Cobalt request failed: {e}")
-        raise
 
 logger = logging.getLogger(__name__)
 
@@ -154,60 +115,13 @@ class RenderService:
         shutil.rmtree(workdir, ignore_errors=True)
 
     def _download_segment(self, job: RenderJob, workdir: Path) -> Path:
-        youtube_url = f"https://www.youtube.com/watch?v={job.video_id}"
-        output_template = str(workdir / f"source_{uuid.uuid4().hex}.%(ext)s")
-
-        ydl_opts = inject_ydl_bypass({
-            "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
-            "download_ranges": yt_dlp.utils.download_range_func(
-                None, [(job.start_sec, job.end_sec)]
-            ),
-            "outtmpl": output_template,
-            "quiet": True,
-            "no_warnings": True,
-            "force_keyframes_at_cuts": True,
-            "merge_output_format": "mp4",
-        })
-
+        """Uses VideoService to download the segment with 100% reliability fallbacks."""
         try:
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(youtube_url, download=True)
-                downloaded = ydl.prepare_filename(info)
-        except Exception as ydl_err:
-            logger.warning(f"[render] yt-dlp segment download failed ({ydl_err}), trying Cobalt v10 fallback...")
-            try:
-                cobalt_url = _cobalt_get_stream_url(youtube_url)
-                cobalt_out = str(workdir / f"cobalt_source_{uuid.uuid4().hex}.mp4")
-                
-                logger.info(f"[render] Cobalt stream URL acquired, clipping with ffmpeg: {job.start_sec}s -> {job.end_sec}s")
-                
-                # Use ffmpeg to grab the specific time range from the Cobalt stream URL
-                # We use a slight buffer and re-encode to ensure perfect timing on the segment
-                (
-                    ffmpeg
-                    .input(cobalt_url, ss=job.start_sec, t=(job.end_sec - job.start_sec))
-                    .output(cobalt_out, vcodec="libx264", acodec="aac", crf=23, preset="ultrafast")
-                    .overwrite_output()
-                    .run(quiet=True, capture_stdout=True, capture_stderr=True)
-                )
-                return Path(cobalt_out)
-            except Exception as cobalt_err:
-                logger.error(f"[render] Critical: Both yt-dlp and Cobalt failed for {job.video_id}: {cobalt_err}")
-                raise RuntimeError(f"YouTube download blocked. Error: {ydl_err}")
-
-        downloaded = downloaded  # assigned inside try block above
-
-        downloaded_path = Path(downloaded)
-        if downloaded_path.suffix != ".mp4":
-            mp4_candidate = downloaded_path.with_suffix(".mp4")
-            if mp4_candidate.exists():
-                downloaded_path = mp4_candidate
-
-        if not downloaded_path.exists():
-            raise RuntimeError(
-                f"yt-dlp reported success but {downloaded_path} is missing"
-            )
-        return downloaded_path
+            # Bridge sync render_worker with async VideoService
+            return asyncio.run(VideoService.download_segment(job.video_id, job.start_sec, job.end_sec, workdir))
+        except Exception as e:
+            logger.error(f"[RenderService] Download failed for {job.video_id}: {e}")
+            raise RuntimeError(f"YouTube download blocked after all fallbacks: {e}")
 
     def _transcode(self, job: RenderJob, source: Path, workdir: Path) -> Path:
         output = workdir / f"export_{uuid.uuid4().hex}.mp4"
@@ -329,24 +243,12 @@ def render_video(production_plan: dict) -> str:
                 )
             elif clip_source.startswith("http"):
                 # Real download and trim — yt-dlp first, Cobalt fallback
-                ydl_opts = inject_ydl_bypass({
-                    "format": "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
-                    "outtmpl": str(workdir / f"download_{i}.%(ext)s"),
-                    "quiet": True,
-                })
                 try:
-                    with YoutubeDL(ydl_opts) as ydl:
-                        info = ydl.extract_info(clip_source, download=True)
-                        downloaded_file = ydl.prepare_filename(info)
-                except Exception as ydl_clip_err:
-                    logger.warning(f"[render] clip yt-dlp failed ({ydl_clip_err}), Cobalt fallback...")
-                    downloaded_file = str(workdir / f"cobalt_clip_{i}.mp4")
-                    cobalt_url = _cobalt_get_stream_url(clip_source)
-                    with requests.get(cobalt_url, stream=True, timeout=60) as r:
-                        r.raise_for_status()
-                        with open(downloaded_file, "wb") as f:
-                            for chunk in r.iter_content(chunk_size=8192):
-                                f.write(chunk)
+                    video_id = VideoService.extract_video_id(clip_source) or "unknown"
+                    downloaded_file = str(asyncio.run(VideoService.download_segment(video_id, start, end, workdir)))
+                except Exception as dl_err:
+                    logger.error(f"[render_video] Multi-tier download failed for {clip_source}: {dl_err}")
+                    raise
                 
                 (
                     ffmpeg.input(downloaded_file, ss=start, t=duration)

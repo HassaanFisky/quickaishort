@@ -59,6 +59,7 @@ from services.realtime import emit_export_event, ws_manager
 from services.auth import get_verified_user_id
 from services.signing import sign, verify
 from services.stats_service import get_user_stats, increment_stats, deduct_credits, recalculate_user_stats, is_user_premium
+from services.video_service import VideoService
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
@@ -309,13 +310,15 @@ _YT_PATTERN = re.compile(
 )
 
 
-def _require_youtube_url(url: str) -> None:
-    """Raise 400 if url is not a recognisable YouTube URL."""
-    if not url or not _YT_PATTERN.match(url):
+def _require_youtube_url(url: str) -> str:
+    """Raise 400 if url is not a recognisable YouTube URL. Returns extracted ID."""
+    video_id = VideoService.extract_video_id(url)
+    if not video_id:
         raise HTTPException(
             status_code=400,
-            detail="A valid YouTube URL is required (youtube.com/watch?v=... or youtu.be/...).",
+            detail="A valid YouTube URL is required (supports watch?v=, shorts/, live/, and youtu.be/).",
         )
+    return video_id
 
 
 # ---- Health + meta -----------------------------------------------------------
@@ -523,13 +526,7 @@ async def stats_ws(websocket: WebSocket, user_id: str):
 
 @app.get("/api/info")
 async def get_video_info(url: str):
-    _require_youtube_url(url)
-
-    import httpx
-
-    # Extract video ID from URL
-    video_id_match = re.search(r'(?:v=|\/)([0-9A-Za-z_-]{11}).*', url)
-    video_id = video_id_match.group(1) if video_id_match else None
+    video_id = _require_youtube_url(url)
 
     api_key = os.environ.get("YOUTUBE_API_KEY")
 
@@ -666,7 +663,7 @@ async def proxy_video(url: str):
 
             async with httpx.AsyncClient(timeout=40.0, follow_redirects=True) as client:
                 cobalt_response = await client.post(
-                    "https://api.cobalt.tools/",
+                    os.getenv("COBALT_API_URL", "https://api.cobalt.tools/"),
                     json={
                         "url": url,
                         "downloadMode": "audio", # Get audio directly for analysis
@@ -717,190 +714,8 @@ async def proxy_video(url: str):
 
 @app.get("/api/audio")
 async def get_audio(url: str = Query(...)):
-    _require_youtube_url(url)
-    import tempfile, asyncio, os, shutil
-    from fastapi.responses import FileResponse
-    from starlette.background import BackgroundTask
-
-    tmpdir = tempfile.mkdtemp(prefix="qai_audio_")
-    output_template = os.path.join(tmpdir, "audio.%(ext)s")
-
-    # Get cookie file if available
-    cookie_file = None
-    try:
-        from app.utils.youtube_auth import get_cookie_file
-        cookie_file = get_cookie_file()
-    except Exception:
-        pass
-
-    cmd = ["yt-dlp"]
-
-    if cookie_file and os.path.exists(cookie_file):
-        cmd += ["--cookies", cookie_file]
-
-    cmd += [
-        "--no-playlist",
-        "--max-filesize", "50m",
-        "--extractor-args", "youtube:player_client=android",
-        "-f", "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio",
-        "--no-post-overwrites",
-        "-o", output_template,
-        url
-    ]
-
-    logger.info(f"/api/audio: running yt-dlp for {url}")
-
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            cwd=tmpdir
-        )
-        try:
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30.0)
-        except asyncio.TimeoutError:
-            proc.kill()
-            shutil.rmtree(tmpdir, ignore_errors=True)
-            logger.error("/api/audio: yt-dlp timed out after 30s")
-            return JSONResponse(
-                {"error": "audio_timeout", "message": "Video processing timed out. Try a shorter video."},
-                status_code=504
-            )
-
-        stderr_text = stderr.decode(errors="replace")
-        logger.info(f"/api/audio yt-dlp returncode={proc.returncode}")
-        if proc.returncode != 0:
-            logger.warning(
-                f"/api/audio: yt-dlp failed (rc={proc.returncode}), "
-                f"trying Cobalt v10 fallback. stderr: {stderr_text[-200:]}"
-            )
-            # ── Cobalt v10 fallback ─────────────────────────────────────
-            cobalt_headers = {
-                "Accept": "application/json",
-                "Content-Type": "application/json",
-                "User-Agent": "Mozilla/5.0 (compatible; QuickAIShort/1.0)",
-            }
-            cobalt_api_key = os.environ.get("COBALT_API_KEY")
-            if cobalt_api_key:
-                cobalt_headers["Authorization"] = f"Api-Key {cobalt_api_key}"
-
-            try:
-                async with httpx.AsyncClient(timeout=40.0, follow_redirects=True) as client:
-                    cobalt_resp = await client.post(
-                        "https://api.cobalt.tools/",
-                        json={"url": url, "downloadMode": "audio", "audioFormat": "mp3"},
-                        headers=cobalt_headers,
-                    )
-                    cobalt_resp.raise_for_status()
-                    cobalt_data = cobalt_resp.json()
-
-                cobalt_status = cobalt_data.get("status")
-                cobalt_stream_url = None
-                if cobalt_status in ("tunnel", "redirect"):
-                    cobalt_stream_url = cobalt_data.get("url")
-                elif cobalt_status == "picker":
-                    items = cobalt_data.get("picker", [])
-                    if items:
-                        cobalt_stream_url = items[0].get("url")
-
-                if not cobalt_stream_url:
-                    raise RuntimeError(f"Cobalt returned status: {cobalt_status}")
-
-                cobalt_mp3 = os.path.join(tmpdir, "cobalt_audio.mp3")
-                async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
-                    async with client.stream("GET", cobalt_stream_url) as r:
-                        r.raise_for_status()
-                        with open(cobalt_mp3, "wb") as f:
-                            async for chunk in r.aiter_bytes(8192):
-                                f.write(chunk)
-
-                logger.info("/api/audio: Cobalt fallback succeeded")
-                return FileResponse(
-                    cobalt_mp3,
-                    media_type="audio/mpeg",
-                    headers={
-                        "Access-Control-Allow-Origin": "*",
-                        "Cross-Origin-Resource-Policy": "cross-origin",
-                        "Cache-Control": "no-cache",
-                    },
-                    background=BackgroundTask(shutil.rmtree, tmpdir, True),
-                )
-
-            except Exception as cobalt_exc:
-                logger.error(f"/api/audio: Cobalt fallback failed: {cobalt_exc}")
-                shutil.rmtree(tmpdir, ignore_errors=True)
-                return JSONResponse(
-                    {
-                        "error": "extraction_failed",
-                        "message": (
-                            f"Audio extraction failed. "
-                            f"yt-dlp error: {stderr_text[-150:]}. "
-                            f"Cobalt error: {str(cobalt_exc)[:150]}"
-                        ),
-                    },
-                    status_code=500,
-                )
-
-        # Find downloaded file (any audio format)
-        raw_file = None
-        for fname in os.listdir(tmpdir):
-            if fname.startswith("audio."):
-                raw_file = os.path.join(tmpdir, fname)
-                break
-
-        if not raw_file or not os.path.exists(raw_file):
-            logger.error(f"/api/audio: no output file in {tmpdir}. Files: {os.listdir(tmpdir)}")
-            return JSONResponse(
-                {"error": "no_output_file", "message": "Audio file not produced"},
-                status_code=500
-            )
-
-        # Convert to MP3 via FFmpeg so Web Audio API can always decode it
-        mp3_file = os.path.join(tmpdir, "audio.mp3")
-        ffmpeg_proc = await asyncio.create_subprocess_exec(
-            "ffmpeg", "-y", "-i", raw_file,
-            "-vn", "-ar", "44100", "-ac", "2", "-b:a", "128k",
-            mp3_file,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        try:
-            _, ff_err = await asyncio.wait_for(ffmpeg_proc.communicate(), timeout=30.0)
-        except asyncio.TimeoutError:
-            ffmpeg_proc.kill()
-            shutil.rmtree(tmpdir, ignore_errors=True)
-            logger.error("/api/audio: ffmpeg conversion timed out")
-            return JSONResponse(
-                {"error": "audio_timeout", "message": "Audio conversion timed out. Try a shorter video."},
-                status_code=504
-            )
-
-        if ffmpeg_proc.returncode != 0:
-            ff_err_text = ff_err.decode(errors="replace")
-            logger.error(f"/api/audio: ffmpeg failed: {ff_err_text[-300:]}")
-            return JSONResponse(
-                {"error": "ffmpeg_failed", "message": "Audio conversion failed"},
-                status_code=500
-            )
-
-        logger.info(f"/api/audio: serving MP3 from {mp3_file}")
-
-        return FileResponse(
-            mp3_file,
-            media_type="audio/mpeg",
-            headers={
-                "Access-Control-Allow-Origin": "*",
-                "Cross-Origin-Resource-Policy": "cross-origin",
-                "Cache-Control": "no-cache",
-            },
-            background=BackgroundTask(shutil.rmtree, tmpdir, True)
-        )
-
-    except Exception as e:
-        shutil.rmtree(tmpdir, ignore_errors=True)
-        logger.error(f"/api/audio unexpected error: {e}")
-        return JSONResponse({"error": str(e)}, status_code=500)
+    """Serves the audio stream for a given YouTube URL with 100% reliability fallbacks."""
+    return await VideoService.get_audio_response(url)
 
 
 # ---- Pre-Flight ---------------------------------------------------------------
