@@ -188,7 +188,9 @@ class VideoService:
             "--format", "bestaudio/best",
             "--output", out_tmpl,
             "--no-playlist",
-            "--verbose",
+            "--no-warnings",
+            # android_music uses token-based auth, no JS signature/n-challenge needed
+            "--extractor-args", "youtube:player_client=android_music,android,ios",
         ]
         from app.utils.youtube_auth import get_cookie_file
         cookie_path = get_cookie_file()
