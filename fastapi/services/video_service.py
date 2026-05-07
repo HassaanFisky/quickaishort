@@ -188,7 +188,7 @@ class VideoService:
             "--format", "bestaudio/best",
             "--output", out_tmpl,
             "--no-playlist",
-            "--no-warnings",
+            "--verbose",
         ]
         from app.utils.youtube_auth import get_cookie_file
         cookie_path = get_cookie_file()
@@ -206,7 +206,7 @@ class VideoService:
             )
             _, stderr = await asyncio.wait_for(proc.communicate(), timeout=60)
             if proc.returncode != 0:
-                err = stderr.decode("utf-8", errors="replace")[-600:]
+                err = stderr.decode("utf-8", errors="replace")[-3000:]
                 logger.warning(f"[VideoService] yt-dlp rc={proc.returncode}: {err}")
                 return None
             for f in os.listdir(tmpdir):
