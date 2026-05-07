@@ -30,25 +30,26 @@ def get_cookie_file() -> str | None:
 def inject_ydl_bypass(opts: dict) -> dict:
     """Injects bot bypass options and cookies into yt-dlp opts."""
     new_opts = opts.copy()
-    
-    # ios client is currently the most resilient against "Sign in" errors
-    # android is a fallback for legacy support
+
+    # Merge caller's player_client list with our preferred clients; deduplicate.
+    existing_clients: list = (
+        opts.get("extractor_args", {}).get("youtube", {}).get("player_client", [])
+    )
+    merged_clients = existing_clients + [c for c in ["ios", "mweb", "tv_embedded"] if c not in existing_clients]
+
+    # Do NOT skip dash/hls — YouTube delivers audio exclusively via those manifests.
     new_opts["extractor_args"] = {
-        "youtube": {
-            "player_client": ["ios", "android"],
-            "skip": ["dash", "hls"]
-        }
+        "youtube": {"player_client": merged_clients}
     }
     new_opts["nocheckcertificate"] = True
     new_opts["no_warnings"] = True
-    
-    # Support for proxy rotation if provided in environment
+
     proxy = os.environ.get("YOUTUBE_PROXY")
     if proxy:
         new_opts["proxy"] = proxy
-    
+
     cookie_path = get_cookie_file()
     if cookie_path:
         new_opts["cookiefile"] = cookie_path
-        
+
     return new_opts
