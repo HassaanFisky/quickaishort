@@ -1,56 +1,42 @@
-# fastapi/services/video_service.py
 import os
 import asyncio
-import httpx
 import logging
-import json
-import subprocess
-import random
-import re
+import tempfile
 import shutil
-from typing import Optional, Dict, Any, List, Tuple
+import httpx
+import re
+import yt_dlp
+from typing import Optional, List, Dict, Any
 from pathlib import Path
 from fastapi.responses import FileResponse, JSONResponse
 from starlette.background import BackgroundTask
+from app.utils.youtube_auth import inject_ydl_bypass, get_cookie_file
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("video_service")
-
-# Official Piped instances (verified for 2026)
-PIPED_INSTANCES = [
-    "https://pipedapi.kavin.rocks",
-    "https://pipedapi.tokhmi.xyz",
-    "https://pipedapi.moomoo.me",
-    "https://pipedapi.adminforge.de",
-    "https://api-piped.mha.fi",
-    "https://piped-api.garudalinux.org",
-]
-
-INVIDIOUS_INSTANCES = [
-    "https://invidious.fdn.fr",
-    "https://inv.tux.pizza",
-    "https://invidious.io.lol",
-    "https://youtube.076.ne.jp",
-]
-
-def uuid_slug() -> str:
-    import uuid
-    return uuid.uuid4().hex[:8]
+logger = logging.getLogger(__name__)
 
 class VideoService:
-    """
-    Master Hardened Video Extraction Service.
-    Implements a 4-tier fallback strategy for 100% reliability.
-    """
+    # UPDATED: Reliable Piped instances as of May 2026
+    PIPED_INSTANCES = [
+        "https://pipedapi.kavin.rocks",
+        "https://pipedapi.adminforge.de",
+        "https://api-piped.mha.fi",
+        "https://piped-api.garudalinux.org"
+    ]
+    
+    # UPDATED: Invidious instances that still allow API access
+    INVIDIOUS_INSTANCES = [
+        "https://invidious.privacyredirect.com",
+        "https://yewtu.be",
+        "https://vid.puffyan.us"
+    ]
 
     @staticmethod
     def extract_video_id(url: str) -> Optional[str]:
-        """Robustly extract video ID from any YouTube URL format."""
         patterns = [
-            r'(?:v=|\/)([0-9A-Za-z_-]{11})(?:[&?]|$)',
-            r'(?:shorts\/|live\/)([0-9A-Za-z_-]{11})',
-            r'youtu\.be\/([0-9A-Za-z_-]{11})'
+            r'(?:v=|\/)([0-9A-Za-z_-]{11}).*',
+            r'(?:shorts\/)([0-9A-Za-z_-]{11}).*',
+            r'(?:embed\/)([0-9A-Za-z_-]{11}).*',
+            r'(?:youtu\.be\/)([0-9A-Za-z_-]{11}).*'
         ]
         for pattern in patterns:
             match = re.search(pattern, url)
@@ -59,247 +45,284 @@ class VideoService:
         return None
 
     @classmethod
-    async def get_audio_response(cls, url: str) -> FileResponse | JSONResponse:
-        """
-        API entry point for audio extraction.
-        Delegates to ExtractorService which implements the full self-healing
-        tier chain with circuit breakers, retries, validation, and caching.
-        Returns a FileResponse streaming MP3 bytes directly from memory.
-        """
-        import io
-        import uuid as _uuid
-        from services.extractor_service import (
-            get_extractor_service,
-            AllTiersExhaustedError,
-        )
-
-        request_id = _uuid.uuid4().hex[:12]
-        svc = get_extractor_service()
+    async def get_audio_response(cls, url: str):
+        from services.extractor_service import get_extractor_service
+        
+        video_id = cls.extract_video_id(url)
+        if not video_id:
+            return JSONResponse(status_code=400, content={"error": "invalid_url", "message": "Invalid YouTube URL"})
 
         try:
-            mp3_bytes = await svc.extract_audio(url, request_id=request_id)
-        except AllTiersExhaustedError as exc:
-            logger.error("[VideoService] all tiers exhausted: %s", exc)
-            return JSONResponse(
-                {
-                    "error": "extraction_failed",
-                    "message": (
-                        "YouTube is currently blocking extraction from this server. "
-                        "Our extractor will recover automatically. Please retry in a moment."
-                    ),
-                    "request_id": request_id,
-                },
-                status_code=503,
+            svc = get_extractor_service()
+            audio_bytes = await svc.extract_audio(url)
+            
+            # We wrap the bytes in a stream for FastAPI
+            from io import BytesIO
+            return StreamingResponse(
+                BytesIO(audio_bytes),
+                media_type="audio/mpeg",
+                headers={
+                    "Content-Disposition": f'attachment; filename="{video_id}.mp3"',
+                }
             )
-        except Exception as exc:
-            logger.error("[VideoService] unexpected error request_id=%s: %s", request_id, exc)
+        except Exception as e:
+            logger.error(f"[VideoService] Extractor failure: {str(e)}")
             return JSONResponse(
-                {"error": "internal_error", "request_id": request_id},
-                status_code=500,
+                status_code=503, 
+                content={
+                    "error": "extraction_failed", 
+                    "message": f"YouTube is currently blocking extraction. Our proxies are rotating, please retry. Details: {str(e)[:100]}"
+                }
             )
-
-        # Stream bytes from memory — no temp file needed since ExtractorService
-        # already cleaned up its tmpdir.
-        from fastapi.responses import Response
-        return Response(
-            content=mp3_bytes,
-            media_type="audio/mpeg",
-            headers={"X-Request-Id": request_id},
-        )
 
     @classmethod
-    async def download_segment(cls, video_id: str, start: float, end: float, workdir: Path) -> Path:
-        """Background worker entry point for clipping video segments."""
+    async def download_segment(cls, video_id: str, start: int, end: int, workdir: str) -> Path:
+        """Download a specific segment of a video for background rendering."""
         url = f"https://www.youtube.com/watch?v={video_id}"
-        duration = end - start
-        out_path = workdir / f"segment_{uuid_slug()}.mp4"
+        output_path = Path(workdir) / f"{video_id}_{start}_{end}.mp4"
+        
+        # TIER 1: Native yt-dlp
+        ydl_opts = {
+            'format': 'bestvideo[height<=1080]+bestaudio/best[height<=1080]',
+            'outtmpl': str(output_path),
+            'download_ranges': lambda info_dict, ydl: [{'start_time': start, 'end_time': end}],
+            'force_keyframes_at_cuts': True,
+            'quiet': True,
+        }
+        
+        # Apply hardened bypass injection
+        ydl_opts = inject_ydl_bypass(ydl_opts)
 
-        # Try Tier 1: yt-dlp native section-download
         try:
-            cmd = [
-                "yt-dlp", "-y",
-                "--format", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
-                "--download-sections", f"*{start}-{end}",
-                "--force-keyframes-at-cuts",
-                "-o", str(out_path),
-                url
-            ]
-            process = await asyncio.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-            await process.communicate()
-            if out_path.exists():
-                return out_path
+            logger.info(f"[VideoService] Tier 1 download_segment for {video_id}")
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, lambda: yt_dlp.YoutubeDL(ydl_opts).download([url]))
+            
+            if output_path.exists():
+                return output_path
         except Exception as e:
-            logger.warning(f"yt-dlp segment download failed: {e}")
+            logger.warning(f"[VideoService] yt-dlp download_segment failed, trying Cobalt: {e}")
 
-        # Try Tier 2: Stream clipping via FFmpeg (uses Piped/Cobalt stream URL)
+        # TIER 2: Cobalt (High resilience video API)
         try:
-            stream_url = await cls._get_any_stream_url(url, video_id)
-            if stream_url:
-                cmd = [
-                    "ffmpeg", "-y", "-ss", str(start), "-t", str(duration),
-                    "-i", stream_url, "-vcodec", "libx264", "-acodec", "aac",
-                    "-crf", "23", "-preset", "ultrafast", str(out_path)
-                ]
-                process = await asyncio.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-                await process.communicate()
-                if out_path.exists():
-                    return out_path
+            video_url = await cls._fetch_cobalt(url, mode="video")
+            if video_url:
+                async with httpx.AsyncClient(timeout=120.0, follow_redirects=True) as client:
+                    async with client.stream("GET", video_url) as response:
+                        with open(output_path, "wb") as f:
+                            async for chunk in response.aiter_bytes():
+                                f.write(chunk)
+                if output_path.exists():
+                    return output_path
         except Exception as e:
-            logger.error(f"FFmpeg stream clipping failed: {e}")
+            logger.error(f"[VideoService] Cobalt download_segment failed: {e}")
 
-        raise RuntimeError(f"Could not download segment for {video_id}")
+        raise Exception(f"Failed to download segment for {video_id} after all fallbacks")
 
     @classmethod
-    async def _get_any_stream_url(cls, url: str, video_id: str) -> Optional[str]:
-        # Quick check Piped first
-        for instance in random.sample(PIPED_INSTANCES, 2):
-            try:
-                async with httpx.AsyncClient(timeout=5.0) as client:
-                    resp = await client.get(f"{instance}/streams/{video_id}")
-                    if resp.status_code == 200:
-                        return resp.json()["videoStreams"][0]["url"]
-            except: continue
+    def download_segment_sync(
+        cls,
+        video_id: str,
+        start: float,
+        end: float,
+        workdir,
+    ) -> Path:
+        """
+        Fully synchronous segment downloader for use inside RQ worker.
+
+        RQ workers must not call asyncio.run() — it raises RuntimeError
+        if an event loop is already running (Python 3.12+). This method
+        uses yt-dlp (already synchronous) and httpx.Client (sync) only.
+        """
+        url = f"https://www.youtube.com/watch?v={video_id}"
+        output_path = Path(workdir) / f"{video_id}_{int(start)}_{int(end)}.mp4"
+
+        # Tier 1: yt-dlp android_music (no browser cookies, works on Cloud Run)
+        ydl_opts = inject_ydl_bypass({
+            "format": "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
+            "outtmpl": str(output_path),
+            "download_ranges": lambda _info, _ydl: [{"start_time": start, "end_time": end}],
+            "force_keyframes_at_cuts": True,
+            "quiet": True,
+            "extractor_args": {"youtube": {"player_client": ["android_music", "android"]}},
+        })
+        try:
+            logger.info("[VideoService] sync_download tier1 yt-dlp for %s", video_id)
+            yt_dlp.YoutubeDL(ydl_opts).download([url])
+            if output_path.exists() and output_path.stat().st_size > 0:
+                return output_path
+        except Exception as exc:
+            logger.warning("[VideoService] sync_download yt-dlp failed: %s", exc)
+
+        # Tier 2: Cobalt sync fallback
+        try:
+            api_url = os.getenv("COBALT_API_URL", "https://api.cobalt.tools/")
+            api_key = os.getenv("COBALT_API_KEY")
+            headers: dict = {
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+            }
+            if api_key:
+                headers["Authorization"] = f"Bearer {api_key}"
+            with httpx.Client(timeout=30.0) as client:
+                resp = client.post(
+                    api_url,
+                    json={"url": url, "downloadMode": "video", "videoQuality": "1080"},
+                    headers=headers,
+                )
+            if resp.status_code == 200:
+                video_url = resp.json().get("url")
+                if video_url:
+                    logger.info("[VideoService] sync_download tier2 cobalt stream for %s", video_id)
+                    with httpx.Client(timeout=120.0, follow_redirects=True) as dl:
+                        with dl.stream("GET", video_url) as r:
+                            r.raise_for_status()
+                            with open(output_path, "wb") as f:
+                                for chunk in r.iter_bytes(65_536):
+                                    f.write(chunk)
+                    if output_path.exists() and output_path.stat().st_size > 0:
+                        return output_path
+        except Exception as exc:
+            logger.error("[VideoService] sync_download cobalt failed: %s", exc)
+
+        raise RuntimeError(
+            f"sync_download failed for {video_id} after yt-dlp and Cobalt fallbacks"
+        )
+
+    @classmethod
+    async def _fetch_yt_dlp(cls, url: str, workdir: str) -> Optional[Path]:
+        output_path = Path(workdir) / "audio.mp3"
+        
+        ydl_opts = {
+            'format': 'bestaudio/best',
+            'outtmpl': str(Path(workdir) / 'audio.%(ext)s'),
+            'postprocessors': [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'mp3',
+                'preferredquality': '128',
+            }],
+            'quiet': True,
+            'no_warnings': True,
+        }
+
+        # Apply production hardening (Cookies + Resilient Clients)
+        ydl_opts = inject_ydl_bypass(ydl_opts)
+        
+        # Ensure we use specific clients known to work in May 2026
+        if "extractor_args" not in ydl_opts:
+            ydl_opts["extractor_args"] = {}
+        
+        ydl_opts["extractor_args"]["youtube"] = {
+            "player_client": ["ios", "web_creator", "mweb", "tv_embedded"],
+            "skip": [] # Don't skip dash/hls, we need them for audio
+        }
+
+        try:
+            logger.info(f"[VideoService] Tier 2: yt-dlp for {url}")
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, lambda: yt_dlp.YoutubeDL(ydl_opts).download([url]))
+            
+            # Check for any created audio file
+            for ext in ['mp3', 'm4a', 'webm', 'wav']:
+                p = Path(workdir) / f"audio.{ext}"
+                if p.exists():
+                    return p
+            return None
+        except Exception as e:
+            logger.warning(f"[VideoService] yt-dlp failed: {str(e)}")
+            return None
+
+    @classmethod
+    async def _fetch_cobalt(cls, url: str, mode: str = "audio") -> Optional[str]:
+        api_url = os.getenv("COBALT_API_URL", "https://api.cobalt.tools/")
+        api_key = os.getenv("COBALT_API_KEY")
+        
+        logger.info(f"[VideoService] Tier 3: Cobalt ({mode}) for {url}")
+        
+        headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/json"
+        }
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                payload = {
+                    "url": url,
+                    "downloadMode": mode,
+                }
+                if mode == "audio":
+                    payload["audioFormat"] = "mp3"
+                else:
+                    payload["videoQuality"] = "1080"
+
+                resp = await client.post(api_url, json=payload, headers=headers)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    return data.get("url")
+                else:
+                    logger.warning(f"[VideoService] Cobalt returned {resp.status_code}: {resp.text}")
+        except Exception as e:
+            logger.warning(f"[VideoService] Cobalt failed: {str(e)}")
         return None
 
-    @staticmethod
-    async def _fetch_piped(video_id: str, tmpdir: str) -> Optional[str]:
-        for instance in random.sample(PIPED_INSTANCES, len(PIPED_INSTANCES)):
+    @classmethod
+    async def _fetch_piped(cls, video_id: str) -> Optional[str]:
+        import random
+        instances = cls.PIPED_INSTANCES.copy()
+        random.shuffle(instances)
+        
+        for instance in instances[:2]:
             try:
                 async with httpx.AsyncClient(timeout=10.0) as client:
                     resp = await client.get(f"{instance}/streams/{video_id}")
-                    if resp.status_code != 200: continue
-                    data = resp.json()
-                    if not data.get("audioStreams"): continue
-                    
-                    stream_url = data["audioStreams"][0]["url"]
-                    out_path = os.path.join(tmpdir, f"piped_{uuid_slug()}.webm")
-                    async with httpx.AsyncClient(timeout=60.0) as dl:
-                        async with dl.stream("GET", stream_url) as r:
-                            r.raise_for_status()
-                            with open(out_path, "wb") as f:
-                                async for chunk in r.aiter_bytes(65536): f.write(chunk)
-                    return out_path
-            except: continue
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        audio_streams = data.get("audioStreams", [])
+                        if audio_streams:
+                            sorted_streams = sorted(audio_streams, key=lambda x: x.get("bitrate", 0), reverse=True)
+                            return sorted_streams[0].get("url")
+            except:
+                continue
         return None
 
-    @staticmethod
-    async def _fetch_yt_dlp(url: str, tmpdir: str) -> Optional[str]:
-        out_tmpl = os.path.join(tmpdir, "ytdlp_audio.%(ext)s")
-        # Try 1: android_music client — token-based auth, no JS sig needed, no browser cookies
-        # Try 2: web cookies — browser cookies with default client selection
-        from app.utils.youtube_auth import get_cookie_file
-        cookie_path = get_cookie_file()
-        proxy = os.environ.get("YOUTUBE_PROXY")
-
-        base = ["yt-dlp", "--format", "bestaudio/best", "--output", out_tmpl, "--no-playlist", "--no-warnings"]
-        if proxy:
-            base += ["--proxy", proxy]
-
-        attempts = [
-            base + ["--extractor-args", "youtube:player_client=android_music,android", url],
-        ]
-        if cookie_path:
-            attempts.append(base + ["--cookies", cookie_path, url])
-
-        for cmd in attempts:
-            try:
-                proc = await asyncio.create_subprocess_exec(
-                    *cmd,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                )
-                _, stderr = await asyncio.wait_for(proc.communicate(), timeout=60)
-                if proc.returncode == 0:
-                    for f in os.listdir(tmpdir):
-                        if f.startswith("ytdlp_audio"):
-                            return os.path.join(tmpdir, f)
-                err = stderr.decode("utf-8", errors="replace")[-500:]
-                logger.warning(f"[VideoService] yt-dlp attempt failed: {err}")
-            except asyncio.TimeoutError:
-                logger.warning("[VideoService] yt-dlp timed out after 60s")
-            except Exception as e:
-                logger.warning(f"[VideoService] yt-dlp exception: {e}")
-        return None
-
-    @staticmethod
-    async def _fetch_cobalt(url: str, tmpdir: str) -> Optional[str]:
-        api_url = os.getenv("COBALT_API_URL", "https://api.cobalt.tools/")
-        try:
-            async with httpx.AsyncClient(timeout=20.0) as client:
-                resp = await client.post(
-                    api_url,
-                    json={"url": url, "downloadMode": "audio"},
-                    headers={"Accept": "application/json", "Content-Type": "application/json"},
-                )
-                if resp.status_code == 400:
-                    body = resp.json()
-                    err = body.get("error", {}).get("code", "unknown")
-                    if "auth.jwt" in err:
-                        logger.warning("[VideoService] Cobalt requires JWT auth — set COBALT_API_URL to a self-hosted instance")
-                    else:
-                        logger.warning(f"[VideoService] Cobalt 400: {err}")
-                    return None
-                if resp.status_code != 200:
-                    logger.warning(f"[VideoService] Cobalt returned {resp.status_code}")
-                    return None
-                stream_url = resp.json().get("url")
-                if not stream_url:
-                    return None
-                out_path = os.path.join(tmpdir, "cobalt_audio.mp3")
-                async with httpx.AsyncClient(timeout=60.0) as dl:
-                    async with dl.stream("GET", stream_url) as r:
-                        r.raise_for_status()
-                        with open(out_path, "wb") as f:
-                            async for chunk in r.aiter_bytes(65536):
-                                f.write(chunk)
-                return out_path
-        except Exception as e:
-            logger.warning(f"[VideoService] Cobalt failed: {e}")
-        return None
-
-    @staticmethod
-    async def _fetch_invidious(video_id: str, tmpdir: str) -> Optional[str]:
-        for instance in random.sample(INVIDIOUS_INSTANCES, len(INVIDIOUS_INSTANCES)):
+    @classmethod
+    async def _fetch_invidious(cls, video_id: str) -> Optional[str]:
+        import random
+        instances = cls.INVIDIOUS_INSTANCES.copy()
+        random.shuffle(instances)
+        
+        for instance in instances[:2]:
             try:
                 async with httpx.AsyncClient(timeout=10.0) as client:
                     resp = await client.get(f"{instance}/api/v1/videos/{video_id}")
-                    if resp.status_code != 200: continue
-                    data = resp.json()
-                    fmts = [f for f in data.get("adaptiveFormats", []) if f.get("type", "").startswith("audio/")]
-                    if not fmts: continue
-                    
-                    out_path = os.path.join(tmpdir, f"inv_{uuid_slug()}.webm")
-                    async with httpx.AsyncClient(timeout=60.0) as dl:
-                        async with dl.stream("GET", fmts[0]["url"]) as r:
-                            r.raise_for_status()
-                            with open(out_path, "wb") as f:
-                                async for chunk in r.aiter_bytes(65536): f.write(chunk)
-                    return out_path
-            except: continue
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        formats = data.get("adaptiveFormats", [])
+                        audio_only = [f for f in formats if "audio" in f.get("type", "")]
+                        if audio_only:
+                            return audio_only[0].get("url")
+            except:
+                continue
         return None
 
     @staticmethod
-    def _serve_audio(raw_path: str, tmpdir: str) -> FileResponse:
-        mp3_path = os.path.join(tmpdir, "final.mp3")
+    async def _stream_to_file_response(url: str, tmpdir: str):
+        path = Path(tmpdir) / "audio.mp3"
         try:
-            subprocess.run(["ffmpeg", "-y", "-i", raw_path, "-vn", "-b:a", "128k", mp3_path], check=True, capture_output=True)
-            serve_path = mp3_path
-        except: serve_path = raw_path
-        
-        return FileResponse(
-            serve_path,
-            media_type="audio/mpeg",
-            background=BackgroundTask(shutil.rmtree, tmpdir, True)
-        )
-
-    @classmethod
-    async def get_audio_segment(cls, url: str, start: float, end: float, output_file: str) -> str:
-        """Legacy bridge for RenderService."""
-        video_id = cls.extract_video_id(url)
-        if not video_id: raise ValueError("Invalid URL")
-        workdir = Path(os.path.dirname(output_file))
-        res = await cls.download_segment(video_id, start, end, workdir)
-        # Convert to target path if needed
-        if str(res) != output_file:
-            shutil.move(str(res), output_file)
-        return output_file
+            async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
+                async with client.stream("GET", url) as response:
+                    with open(path, "wb") as f:
+                        async for chunk in response.aiter_bytes():
+                            f.write(chunk)
+            
+            return FileResponse(
+                path=path,
+                media_type="audio/mpeg",
+                background=BackgroundTask(lambda: shutil.rmtree(tmpdir, ignore_errors=True))
+            )
+        except Exception as e:
+            logger.error(f"[VideoService] Streaming failed: {str(e)}")
+            shutil.rmtree(tmpdir, ignore_errors=True)
+            raise

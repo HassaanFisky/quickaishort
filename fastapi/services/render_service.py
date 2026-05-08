@@ -79,6 +79,7 @@ class RenderJob:
     reframing: Optional[Reframing] = None
     captions: CaptionsConfig = field(default_factory=CaptionsConfig)
     watermark: WatermarkConfig = field(default_factory=WatermarkConfig)
+    background_music: Optional[str] = None  # Local path or URL
 
 
 @dataclass
@@ -95,11 +96,17 @@ class RenderService:
     def __init__(self) -> None:
         pass
 
-    def run(self, job: RenderJob) -> RenderResult:
+    def run(self, job: RenderJob, progress_callback: Optional[callable] = None) -> RenderResult:
         workdir = Path(tempfile.mkdtemp(prefix="qais-export-"))
         try:
+            if progress_callback:
+                progress_callback("Downloading segment from YouTube...")
             source = self._download_segment(job, workdir)
+            
+            if progress_callback:
+                progress_callback("Transcoding video (applying aspect ratio, captions)...")
             output = self._transcode(job, source, workdir)
+            
             return RenderResult(
                 output_path=output,
                 workdir=workdir,
@@ -115,12 +122,13 @@ class RenderService:
         shutil.rmtree(workdir, ignore_errors=True)
 
     def _download_segment(self, job: RenderJob, workdir: Path) -> Path:
-        """Uses VideoService to download the segment with 100% reliability fallbacks."""
+        """Sync download for use inside RQ worker. No event loop created."""
         try:
-            # Bridge sync render_worker with async VideoService
-            return asyncio.run(VideoService.download_segment(job.video_id, job.start_sec, job.end_sec, workdir))
+            return VideoService.download_segment_sync(
+                job.video_id, job.start_sec, job.end_sec, workdir
+            )
         except Exception as e:
-            logger.error(f"[RenderService] Download failed for {job.video_id}: {e}")
+            logger.error("[RenderService] Download failed for %s: %s", job.video_id, e)
             raise RuntimeError(f"YouTube download blocked after all fallbacks: {e}")
 
     def _transcode(self, job: RenderJob, source: Path, workdir: Path) -> Path:
@@ -160,6 +168,14 @@ class RenderService:
                 str(captions_path).replace("\\", "/"),
                 force_style=job.captions.style,
             )
+
+        if job.background_music:
+            try:
+                music = ffmpeg.input(job.background_music, stream_loop=-1)
+                # Volume filter: primary 1.0, music 0.15 (ambient)
+                audio = ffmpeg.filter([audio, music.audio.filter("volume", 0.15)], "amix", duration="first")
+            except Exception as exc:
+                logger.warning("Background music mix failed: %s — falling back to original audio", exc)
 
         preset = QUALITY_PRESETS[job.quality]
         out = ffmpeg.output(
@@ -245,9 +261,11 @@ def render_video(production_plan: dict) -> str:
                 # Real download and trim — yt-dlp first, Cobalt fallback
                 try:
                     video_id = VideoService.extract_video_id(clip_source) or "unknown"
-                    downloaded_file = str(asyncio.run(VideoService.download_segment(video_id, start, end, workdir)))
+                    downloaded_file = str(
+                        VideoService.download_segment_sync(video_id, start, end, workdir)
+                    )
                 except Exception as dl_err:
-                    logger.error(f"[render_video] Multi-tier download failed for {clip_source}: {dl_err}")
+                    logger.error("[render_video] sync download failed for %s: %s", clip_source, dl_err)
                     raise
                 
                 (

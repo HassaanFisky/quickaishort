@@ -183,6 +183,17 @@ export default function EditorLayout() {
                           e.key === "Enter" && handleAnalyze()
                         }
                       />
+                      <button
+                        onClick={() => {
+                          setUrlInput("https://www.youtube.com/watch?v=P6FORh8U0Og");
+                          // Use a short delay to ensure the state update is reflected
+                          setTimeout(() => handleAnalyze(), 100);
+                        }}
+                        className="text-[9px] font-black uppercase tracking-widest text-primary hover:text-primary/80 transition-colors px-3 h-full border-l border-foreground/5"
+                        title="Try with a safe demo video"
+                      >
+                        Try Demo
+                      </button>
                     </div>
                     
                     <GlowButton

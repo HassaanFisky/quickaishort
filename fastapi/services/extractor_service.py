@@ -28,7 +28,8 @@ from typing import Any, Awaitable, Callable, Dict, List, Optional, Set
 
 import httpx
 
-from services.circuit_breaker import CircuitBreaker
+from services.circuit_breaker import CircuitBreaker, RedisCircuitBreaker
+from services.logging import log_metric
 
 logger = logging.getLogger(__name__)
 
@@ -359,6 +360,81 @@ async def _run_ytdlp(cmd: List[str], tmpdir: str, tier_name: str) -> str:
 # They must not swallow exceptions — the caller classifies and logs them.
 # ──────────────────────────────────────────────────────────────────────────────
 
+async def tier_piped(url: str, tmpdir: str) -> str:
+    """
+    Tier 1: Piped API.
+    Fastest extraction via public Piped instances. Returns a direct audio URL
+    which we then stream to a local file.
+    """
+    from services.video_service import VideoService
+    video_id = VideoService.extract_video_id(url)
+    if not video_id:
+        raise ExtractionError("Invalid YouTube URL", TierError.INVALID_OUTPUT, "piped")
+
+    instances = VideoService.PIPED_INSTANCES.copy()
+    random.shuffle(instances)
+
+    for instance in instances[:3]:
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.get(f"{instance}/streams/{video_id}")
+                if resp.status_code == 200:
+                    data = resp.json()
+                    audio_streams = data.get("audioStreams", [])
+                    if audio_streams:
+                        sorted_streams = sorted(audio_streams, key=lambda x: x.get("bitrate", 0), reverse=True)
+                        stream_url = sorted_streams[0].get("url")
+                        
+                        out_path = os.path.join(tmpdir, "piped_audio.mp3")
+                        async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as dl:
+                            async with dl.stream("GET", stream_url) as r:
+                                r.raise_for_status()
+                                with open(out_path, "wb") as f:
+                                    async for chunk in r.aiter_bytes(65_536):
+                                        f.write(chunk)
+                        return out_path
+        except Exception as e:
+            logger.debug(f"[extractor] piped instance {instance} failed: {e}")
+            continue
+
+    raise ExtractionError("All Piped instances failed", TierError.PROVIDER_DOWN, "piped")
+
+
+async def tier_invidious(url: str, tmpdir: str) -> str:
+    """
+    Tier 5: Invidious API (Public fallback).
+    """
+    from services.video_service import VideoService
+    video_id = VideoService.extract_video_id(url)
+    if not video_id:
+        raise ExtractionError("Invalid YouTube URL", TierError.INVALID_OUTPUT, "invidious")
+
+    instances = VideoService.INVIDIOUS_INSTANCES.copy()
+    random.shuffle(instances)
+
+    for instance in instances[:2]:
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.get(f"{instance}/api/v1/videos/{video_id}")
+                if resp.status_code == 200:
+                    data = resp.json()
+                    formats = data.get("adaptiveFormats", [])
+                    audio_only = [f for f in formats if "audio" in f.get("type", "")]
+                    if audio_only:
+                        stream_url = audio_only[0].get("url")
+                        out_path = os.path.join(tmpdir, "invidious_audio.mp3")
+                        async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as dl:
+                            async with dl.stream("GET", stream_url) as r:
+                                r.raise_for_status()
+                                with open(out_path, "wb") as f:
+                                    async for chunk in r.aiter_bytes(65_536):
+                                        f.write(chunk)
+                        return out_path
+        except Exception:
+            continue
+
+    raise ExtractionError("All Invidious instances failed", TierError.PROVIDER_DOWN, "invidious")
+
 async def tier_android_music(url: str, tmpdir: str) -> str:
     """
     Tier 1: yt-dlp with android_music + android clients, no browser cookies.
@@ -506,11 +582,20 @@ async def tier_cobalt(url: str, tmpdir: str) -> str:
 
 TIER_CONFIG: List[Dict[str, Any]] = [
     {
+        "name": "piped",
+        "fn": tier_piped,
+        "max_retries": 1,
+        "retry_on": [TierError.TRANSIENT, TierError.TIMEOUT],
+        "circuit_ignore_errors": {"rate_limited"},
+        "circuit_failure_threshold": 8, # Higher threshold as public instances are often flaky
+        "circuit_open_duration_s": 60.0,
+        "circuit_success_threshold": 1,
+    },
+    {
         "name": "android_music",
         "fn": tier_android_music,
         "max_retries": 1,
         "retry_on": [TierError.TRANSIENT, TierError.TIMEOUT],
-        # Don't open circuit on rate limits (handled by retry backoff)
         "circuit_ignore_errors": {"rate_limited"},
         "circuit_failure_threshold": 5,
         "circuit_open_duration_s": 120.0,
@@ -520,7 +605,6 @@ TIER_CONFIG: List[Dict[str, Any]] = [
         "name": "web_cookies",
         "fn": tier_web_cookies,
         "max_retries": 0,
-        # Retrying with stale cookies never helps — don't waste time
         "retry_on": [],
         "circuit_ignore_errors": {"rate_limited", "auth_required"},
         "circuit_failure_threshold": 3,
@@ -536,6 +620,16 @@ TIER_CONFIG: List[Dict[str, Any]] = [
         "circuit_failure_threshold": 4,
         "circuit_open_duration_s": 240.0,
         "circuit_success_threshold": 2,
+    },
+    {
+        "name": "invidious",
+        "fn": tier_invidious,
+        "max_retries": 0,
+        "retry_on": [],
+        "circuit_ignore_errors": {"rate_limited"},
+        "circuit_failure_threshold": 5,
+        "circuit_open_duration_s": 300.0,
+        "circuit_success_threshold": 1,
     },
 ]
 
@@ -556,16 +650,36 @@ class ExtractorService:
 
     def __init__(self, redis_conn: Any) -> None:
         self.cache = ExtractionCache(redis_conn)
-        self.circuits: Dict[str, CircuitBreaker] = {
-            t["name"]: CircuitBreaker(
-                tier_name=t["name"],
-                failure_threshold=t["circuit_failure_threshold"],
-                open_duration_s=t["circuit_open_duration_s"],
-                success_threshold=t["circuit_success_threshold"],
-                ignore_error_classes=t["circuit_ignore_errors"],
+        # Use Redis-backed circuit breakers so state is shared across all
+        # Cloud Run instances. Falls back to in-process if Redis is down.
+        try:
+            self.circuits: Dict[str, Any] = {
+                t["name"]: RedisCircuitBreaker(
+                    tier_name=t["name"],
+                    redis_conn=redis_conn,
+                    failure_threshold=t["circuit_failure_threshold"],
+                    open_duration_s=t["circuit_open_duration_s"],
+                    success_threshold=t["circuit_success_threshold"],
+                    ignore_error_classes=t["circuit_ignore_errors"],
+                )
+                for t in TIER_CONFIG
+            }
+            logger.info("[extractor] Redis-backed circuit breakers active")
+        except Exception as _cb_err:
+            logger.warning(
+                "[extractor] Redis CB init failed (%s) — falling back to in-process",
+                _cb_err,
             )
-            for t in TIER_CONFIG
-        }
+            self.circuits = {
+                t["name"]: CircuitBreaker(
+                    tier_name=t["name"],
+                    failure_threshold=t["circuit_failure_threshold"],
+                    open_duration_s=t["circuit_open_duration_s"],
+                    success_threshold=t["circuit_success_threshold"],
+                    ignore_error_classes=t["circuit_ignore_errors"],
+                )
+                for t in TIER_CONFIG
+            }
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -653,6 +767,8 @@ class ExtractorService:
                     result_bytes = final_path.read_bytes()
                     await self.cache.set(url, result_bytes)
 
+                    log_metric("extraction_success", 1, metadata={"tier": tier_name, "request_id": request_id, "duration_ms": int(duration_s * 1000)})
+
                     logger.info(
                         "[extractor] tier.success request_id=%s tier=%s "
                         "duration_ms=%d size_bytes=%d",
@@ -683,16 +799,16 @@ class ExtractorService:
 
                     # Emit circuit-open metric here (avoids circular import in
                     # circuit_breaker.py)
-                    if METRICS_AVAILABLE and cb.state == "OPEN":
-                        _METRIC_CIRCUIT_OPENS.labels(tier=tier_name).inc()
+                    if cb.state == "OPEN":
+                        log_metric("circuit_open", 1, metadata={"tier": tier_name, "request_id": request_id})
+                        if METRICS_AVAILABLE:
+                            _METRIC_CIRCUIT_OPENS.labels(tier=tier_name).inc()
 
-                    if METRICS_AVAILABLE:
-                        _METRIC_TIER_FAILURES.labels(
-                            tier=tier_name, error_class=ec.value
-                        ).inc()
                         _METRIC_DURATION.labels(
                             tier=tier_name, status="failure"
                         ).observe(duration_s)
+
+                    log_metric("extraction_failure", 1, metadata={"tier": tier_name, "error_class": ec.value, "request_id": request_id, "duration_ms": int(duration_s * 1000)})
 
                     logger.warning(
                         "[extractor] tier.failure request_id=%s tier=%s "

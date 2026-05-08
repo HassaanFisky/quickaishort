@@ -16,22 +16,35 @@ import uuid
 from contextlib import asynccontextmanager
 from typing import List, Literal, Optional
 
-import base64
+from pathlib import Path
+
 import httpx
 import uvicorn
 import yt_dlp
-from pathlib import Path
-from app.utils.youtube_auth import get_cookie_file, inject_ydl_bypass
+import sentry_sdk
+from datetime import datetime
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, File, HTTPException, Header, Query, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse, RedirectResponse
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from starlette.background import BackgroundTask
 from pydantic import BaseModel, Field
+try:
+    from sentry_sdk.integrations.fastapi import FastApiIntegration
+    sentry_sdk.init(
+        dsn=os.getenv("SENTRY_DSN"),
+        integrations=[FastApiIntegration()],
+        traces_sample_rate=0.1,
+    )
+except ImportError:
+    print("[WARN] sentry_sdk not found, skipping initialization")
+except Exception as _sentry_err:
+    print(f"[ERROR] Sentry initialization failed: {_sentry_err}")
 
+from app.utils.youtube_auth import get_cookie_file, inject_ydl_bypass
 from agent.viral_agent import get_viral_agent
 from models.user_stats import StatsIncrement
 from services.db import (
@@ -58,12 +71,23 @@ from services.queue_service import (
 from services.realtime import emit_export_event, ws_manager
 from services.auth import get_verified_user_id
 from services.signing import sign, verify
+from services.logging import log_metric
 from services.stats_service import get_user_stats, increment_stats, deduct_credits, recalculate_user_stats, is_user_premium
 from services.video_service import VideoService
+from services.project_service import get_project_service
+from services.demo_service import DemoService
+from services.tts_service import get_tts_service
+from services.music_service import get_music_service
+from services.storage_service import get_storage_service
 
 load_dotenv()
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from services.logging import setup_logging, get_logger, correlation_id
+setup_logging()
+logger = get_logger("api")
+
+from services.queue_service import is_overloaded, get_job_cost_est
+
+_STARTUP_COMPLETE = False
 
 
 # Validate required environment variables at startup
@@ -147,8 +171,13 @@ async def _pubsub_listener(stop: asyncio.Event) -> None:
 
 
 async def _route_pubsub(channel: str, payload: dict) -> None:
+    # Tracing
+    cid = payload.get("correlation_id")
+    if cid: correlation_id.set(cid)
+
     if channel == CHANNEL_STATS_INCREMENT:
         delta = StatsIncrement.model_validate(payload)
+        from services.stats_service import increment_stats
         await increment_stats(
             delta.user_id,
             duration_delta=delta.duration_delta,
@@ -166,6 +195,25 @@ async def _route_pubsub(channel: str, payload: dict) -> None:
             CHANNEL_EXPORT_COMPLETE: "complete",
             CHANNEL_EXPORT_FAILED: "error",
         }[channel]
+
+        # Auto-update project status in DB if this belongs to a project
+        if event in ("complete", "error"):
+            try:
+                db = get_db()
+                status = "ready" if event == "complete" else "failed"
+                updates = {"status": status}
+                if event == "error":
+                    updates["error"] = payload.get("error", "Unknown error")
+                
+                # Find project by job_id and update
+                await db["Projects"].update_one(
+                    {"job_id": job_id, "user_id": user_id},
+                    {"$set": updates}
+                )
+                logger.info("project_status_updated", job_id=job_id, status=status)
+            except Exception as e:
+                logger.error("project_status_update_failed", job_id=job_id, error=str(e))
+
         if event == "complete":
             payload = {**payload, "download_url": _build_download_url(job_id, user_id)}
         await emit_export_event(user_id, job_id, event, payload)
@@ -180,9 +228,16 @@ def _build_download_url(job_id: str, user_id: str) -> str:
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    logger.info("Lifespan starting: initializing database...")
+    logger.info("lifespan_starting")
     await init_db()
-    logger.info("Database initialization call complete.")
+    from services.diagnostics import run_startup_checks
+    try:
+        await run_startup_checks()
+        global _STARTUP_COMPLETE
+        _STARTUP_COMPLETE = True
+    except Exception as e:
+        logger.error("startup_checks_failed", error=str(e))
+    
     stop_event = asyncio.Event()
     listener_task = asyncio.create_task(_pubsub_listener(stop_event))
     try:
@@ -190,11 +245,8 @@ async def lifespan(_app: FastAPI):
     finally:
         stop_event.set()
         listener_task.cancel()
-        try:
-            await listener_task
-        except (asyncio.CancelledError, Exception):
-            pass
         await close_db()
+        logger.info("lifespan_shutdown")
 
 
 app = FastAPI(lifespan=lifespan)
@@ -245,6 +297,15 @@ class TranscriptChunk(BaseModel):
     text: str
     start: float
     end: float
+
+class ProjectCreateRequest(BaseModel):
+    title: str
+    script: str
+
+class ProjectUpdateRequest(BaseModel):
+    title: Optional[str] = None
+    script: Optional[str] = None
+    status: Optional[str] = None
 
 
 class AnalyzeRequest(BaseModel):
@@ -397,6 +458,8 @@ def prometheus_metrics():
     return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
+
+
 @app.get("/debug/tiers")
 def debug_tiers(request: Request):
     """
@@ -463,8 +526,27 @@ async def analyze_video(request: Request, body: AnalyzeRequest, verified_user_id
 @app.post("/api/process-video")
 async def export_video(request: ExportRequest, verified_user_id: str = Depends(get_verified_user_id)):
     user_id = verified_user_id or request.user_id
+    
+    # Pillar 1: Overload Guardrail
+    if is_overloaded():
+        raise HTTPException(status_code=503, detail="System currently overloaded or in maintenance. Try again later.")
+
+    # Pillar 2: Duration Limit
+    duration = request.end_sec - request.start_sec
+    if duration > 180: # Max 3 minutes per export
+        raise HTTPException(status_code=400, detail="Export duration exceeds maximum limit of 180 seconds.")
+
     if not await deduct_credits(user_id, 20):
         logger.warning("Low credits for %s on /api/process-video — continuing free", user_id)
+
+    # --- Pillar 4: Safe Demo Bypass ---
+    if DemoService.is_demo_url(request.videoId):
+        logger.info("demo_export_triggered", user_id=user_id, video_id=request.videoId)
+        return {
+            "status": "queued",
+            "job_id": "demo-job-showcase",
+            "subscribe_channel": f"export-demo-job-showcase",
+        }
 
     job_id = uuid.uuid4().hex
     options = {
@@ -479,6 +561,7 @@ async def export_video(request: ExportRequest, verified_user_id: str = Depends(g
 
     try:
         from render_worker import process_render_task
+        from rq import Retry as RqRetry
 
         render_queue.enqueue(
             process_render_task,
@@ -492,7 +575,7 @@ async def export_video(request: ExportRequest, verified_user_id: str = Depends(g
             job_timeout=JOB_TIMEOUT_SECONDS,
             result_ttl=JOB_RESULT_TTL_SECONDS,
             failure_ttl=JOB_FAILURE_TTL_SECONDS,
-            retry=None,
+            retry=RqRetry(max=2, interval=[30, 60]),
         )
     except Exception as exc:
         logger.exception("Failed to enqueue export %s: %s", job_id, exc)
@@ -507,6 +590,11 @@ async def export_video(request: ExportRequest, verified_user_id: str = Depends(g
 
 @app.get("/api/status/{job_id}")
 async def export_status(job_id: str, user_id: str):
+    if DemoService.is_demo_job(job_id):
+        payload = DemoService.get_cached_render_payload(job_id, "system")
+        payload["download_url"] = _build_download_url(job_id, "system")
+        return payload
+
     try:
         from rq.job import Job
 
@@ -532,53 +620,37 @@ async def export_status(job_id: str, user_id: str):
 
 @app.get("/api/download/{job_id}")
 async def export_download(job_id: str, user_id: str, token: str, expires: int):
+    """
+    Returns a secure GCS signed URL for the rendered video.
+    Offloads heavy download traffic to Google's edge network.
+    """
+    # Enforce HMAC token — verify() uses hmac.compare_digest (timing-safe)
     if not verify(job_id, user_id, expires, token):
-        raise HTTPException(status_code=403, detail="Invalid or expired token")
-    if not db_is_ready():
-        raise HTTPException(status_code=503, detail="Storage unavailable")
+        raise HTTPException(status_code=403, detail="Invalid or expired download token.")
 
-    db = get_db()
-    file_doc = await db[f"{EXPORTS_BUCKET}.files"].find_one(
-        {"metadata.job_id": job_id, "metadata.user_id": user_id}
-    )
-    if not file_doc:
-        raise HTTPException(status_code=404, detail="Export not found or expired")
-
-    bucket = get_exports_bucket()
-    stream = await bucket.open_download_stream(file_doc["_id"])
-
-    async def iterator():
-        try:
-            while True:
-                chunk = await stream.readchunk()
-                if not chunk:
-                    break
-                yield chunk
-        finally:
-            try:
-                await stream.close()
-            except Exception:
-                pass
-
-    filename = file_doc.get("filename", f"{job_id}.mp4")
-    return StreamingResponse(
-        iterator(),
-        media_type="video/mp4",
-        headers={
-            "Content-Disposition": f'attachment; filename="{filename}"',
-            "Content-Length": str(file_doc.get("length", "")),
-        },
-    )
+    storage = get_storage_service()
+    remote_path = f"exports/{user_id}/{job_id}.mp4"
+    
+    signed_url = storage.generate_signed_url(remote_path)
+    if not signed_url:
+        logger.error("signed_url_generation_failed", job_id=job_id, user_id=user_id)
+        raise HTTPException(status_code=404, detail="Export not found or storage error")
+        
+    return RedirectResponse(url=signed_url)
 
 
 # ---- Stats --------------------------------------------------------------------
 
 
 @app.get("/api/stats")
-async def stats_endpoint(user_id: str, sync: bool = False):
+async def stats_endpoint(
+    verified_user_id: str = Depends(get_verified_user_id),
+    sync: bool = False,
+):
+    """Returns stats for the authenticated user only."""
     if sync:
-        return await recalculate_user_stats(user_id)
-    return await get_user_stats(user_id)
+        return await recalculate_user_stats(verified_user_id)
+    return await get_user_stats(verified_user_id)
 
 
 @app.websocket("/ws/stats/{user_id}")
@@ -799,6 +871,48 @@ async def get_audio(url: str = Query(...)):
 # ---- Pre-Flight ---------------------------------------------------------------
 
 
+def _viral_to_preflight_result(viral_suggestions: list, original_candidates: list) -> dict:
+    """
+    Adapter: converts ViralAgent output (List[ViralSuggestion]) into a
+    PreflightResult-compatible dict for the degraded fallback response.
+
+    Persona votes are empty (viral agent has no persona panel).
+    Scores are normalised from 0–100 → 0–1.
+    """
+    clip_candidates = []
+    total_score = 0.0
+
+    for sug in viral_suggestions:
+        raw_score = getattr(getattr(sug, "viralAnalysis", None), "score", 50) or 50
+        score = round(raw_score / 100.0, 3)
+        total_score += score
+        captions = getattr(sug, "suggestedCaptions", [])
+        clip_candidates.append({
+            "start_sec": sug.start,
+            "end_sec": sug.end,
+            "score": score,
+            "transcript": getattr(sug, "reason", ""),
+            "recommendation": captions[0] if captions else getattr(sug, "reason", ""),
+        })
+
+    weighted = round(total_score / len(viral_suggestions), 3) if viral_suggestions else 0.0
+    top = clip_candidates[0] if clip_candidates else {}
+
+    return {
+        "clip_candidates": clip_candidates,
+        "weighted_consensus_score": weighted,
+        "recommendation": (
+            f"[Degraded — viral fallback] Top clip scores {top.get('score', 0):.0%}. "
+            "Full audience simulation unavailable."
+        ),
+        "persona_votes": [],
+        "audience_analysis": (
+            "Persona panel could not run (full pipeline timed out or failed). "
+            "Score is derived from ViralAgent SequentialAgent only."
+        ),
+    }
+
+
 @limiter.limit("10/minute")
 @app.post("/api/preflight")
 async def run_preflight(request: Request, body: PreflightRequest, verified_user_id: str = Depends(get_verified_user_id)):
@@ -816,6 +930,16 @@ async def run_preflight(request: Request, body: PreflightRequest, verified_user_
 
     if not await deduct_credits(user_id, 50):
         logger.warning("Low credits for %s on /api/preflight — continuing free", user_id)
+
+    # --- Pillar 4: Safe Demo Bypass ---
+    if DemoService.is_demo_url(body.youtube_url):
+        logger.info("demo_mode_triggered", user_id=user_id, url=body.youtube_url)
+        cached_result = DemoService.get_cached_preflight()
+        return {
+            "preflight_result": cached_result,
+            "strategy": "demo_cached",
+            "degraded": False,
+        }
 
     candidates = [
         PreflightClipCandidate(
@@ -838,15 +962,77 @@ async def run_preflight(request: Request, body: PreflightRequest, verified_user_
             timeout=120.0,
         )
         await increment_stats(user_id, ai_run_delta=1)
-        return {"preflight_result": result.model_dump()}
-    except asyncio.TimeoutError:
-        raise HTTPException(
-            status_code=504,
-            detail="Pre-Flight analysis timed out after 120 seconds. Try again with a shorter clip.",
+        log_metric("preflight_success", 1, user_id=user_id, metadata={"strategy": "full"})
+        return {
+            "preflight_result": result.model_dump(),
+            "strategy": "full",
+            "degraded": False,
+        }
+
+    except (asyncio.TimeoutError, Exception) as primary_exc:
+        # Classify the failure type for logging
+        exc_type = (
+            "timeout" if isinstance(primary_exc, asyncio.TimeoutError)
+            else type(primary_exc).__name__
         )
-    except Exception as exc:
-        logger.error("POST /api/preflight failed: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        logger.warning(
+            "preflight_primary_failed user=%s type=%s error=%s — attempting viral fallback",
+            user_id, exc_type, str(primary_exc)[:200],
+        )
+        log_metric("preflight_fallback_activation", 1, user_id=user_id, metadata={"reason": exc_type})
+        if exc_type == "timeout":
+            log_metric("agent_timeout", 1, user_id=user_id, metadata={"pipeline": "preflight_primary"})
+
+        # --- Strategy switch: degrade to ViralAgent (SequentialAgent, no MCP) ---
+        # The ViralAgent is faster (<45s), simpler, and has no external service deps.
+        # It produces a scored clip list the client can still act on.
+        try:
+            from agent.viral_agent import run_viral_pipeline
+
+            first = candidates[0] if candidates else None
+            video_id = VideoService.extract_video_id(body.youtube_url) or body.youtube_url
+
+            viral_suggestions = await asyncio.wait_for(
+                run_viral_pipeline(
+                    youtube_url=body.youtube_url,
+                    video_id=video_id,
+                    transcript_text=first.transcript if first else "",
+                    duration=(
+                        (first.end_sec - first.start_sec) if first else 60.0
+                    ),
+                ),
+                timeout=45.0,
+            )
+
+            if viral_suggestions:
+                await increment_stats(user_id, ai_run_delta=1)
+                log_metric("preflight_success", 1, user_id=user_id, metadata={"strategy": "viral_fallback"})
+                return {
+                    "preflight_result": _viral_to_preflight_result(
+                        viral_suggestions, candidates
+                    ),
+                    "strategy": "viral_fallback",
+                    "degraded": True,
+                    "fallback_reason": exc_type,
+                }
+
+            # Fallback ran but returned nothing — fall through to error
+            raise ValueError("Viral fallback returned no suggestions")
+
+        except Exception as fb_exc:
+            logger.error(
+                "preflight_fallback_failed user=%s error=%s", user_id, str(fb_exc)[:200]
+            )
+            # Both strategies exhausted — now raise
+            if isinstance(primary_exc, asyncio.TimeoutError):
+                raise HTTPException(
+                    status_code=504,
+                    detail=(
+                        "Pre-Flight analysis timed out and the viral fallback also failed. "
+                        "Try again with a shorter clip."
+                    ),
+                )
+            raise HTTPException(status_code=500, detail=str(primary_exc))
 
 
 @limiter.limit("10/minute")
@@ -939,6 +1125,7 @@ async def create_video(request: CreateVideoRequest, verified_user_id: str = Depe
         }
 
         try:
+            from rq import Retry as RqRetry
             render_queue.enqueue(
                 process_render_task,
                 job_id,
@@ -950,6 +1137,7 @@ async def create_video(request: CreateVideoRequest, verified_user_id: str = Depe
                 job_timeout=JOB_TIMEOUT_SECONDS,
                 result_ttl=JOB_RESULT_TTL_SECONDS,
                 failure_ttl=JOB_FAILURE_TTL_SECONDS,
+                retry=RqRetry(max=2, interval=[30, 60]),
             )
         except Exception as exc:
             logger.exception("Failed to enqueue video creation job %s: %s", job_id, exc)
@@ -970,9 +1158,7 @@ async def create_video(request: CreateVideoRequest, verified_user_id: str = Depe
 
 # ---- ADK Studio ---------------------------------------------------------------
 
-ADK_UPLOAD_DIR = Path(tempfile.gettempdir()) / "qai_adk_uploads"
-
-_ADK_EXTENSIONS = (".mp4", ".mov", ".avi", ".webm", ".mkv")
+from services.adk_service import ADK_UPLOAD_DIR, _ADK_EXTENSIONS
 
 
 class ADKGenerateRequest(BaseModel):
@@ -999,38 +1185,25 @@ def _parse_script_to_segments(
         duration = max(3.0, len(para.split()) / 2.5)
         clip = all_clips[i % len(all_clips)] if all_clips else "BLACK_FRAME"
         segments.append({"clip_path": clip, "start_sec": 0, "end_sec": duration, "text": para})
+    # Legacy TTS removed in favor of services.tts_service
     return segments
 
 
-async def _generate_tts(text: str, voice_id: str) -> Optional[str]:
-    """Call Google Cloud TTS REST API. Returns local mp3 path or None."""
-    api_key = os.getenv("GOOGLE_TTS_API_KEY")
-    if not api_key:
-        return None
-    lang = "-".join(voice_id.split("-")[:2])
-    payload = {
-        "input": {"text": text[:4000]},
-        "voice": {"languageCode": lang, "name": voice_id},
-        "audioConfig": {"audioEncoding": "MP3"},
-    }
-    try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(
-                f"https://texttospeech.googleapis.com/v1/text:synthesize?key={api_key}",
-                json=payload,
-            )
-            resp.raise_for_status()
-            audio_b64 = resp.json().get("audioContent", "")
-            if not audio_b64:
-                return None
-        audio_bytes = base64.b64decode(audio_b64)
-        tmp = tempfile.NamedTemporaryFile(prefix="qai_tts_", suffix=".mp3", delete=False)
-        tmp.write(audio_bytes)
-        tmp.close()
-        return tmp.name
-    except Exception as exc:
-        logger.warning("TTS generation failed: %s", exc)
-        return None
+@app.get("/health/live")
+async def liveness():
+    return {"status": "alive"}
+
+@app.get("/health/ready")
+async def readiness():
+    if not db_is_ready():
+        raise HTTPException(status_code=503, detail="DB_NOT_READY")
+    return {"status": "ready"}
+
+@app.get("/health/startup")
+async def startup_check():
+    if not _STARTUP_COMPLETE:
+        raise HTTPException(status_code=503, detail="STARTING_UP")
+    return {"status": "complete"}
 
 
 @app.post("/api/adk/upload")
@@ -1087,81 +1260,165 @@ async def adk_stock_search(q: str = Query(..., min_length=1), per_page: int = Qu
 
 @limiter.limit("5/minute")
 @app.post("/api/adk/generate")
-async def adk_generate(request: Request, body: ADKGenerateRequest, verified_user_id: str = Depends(get_verified_user_id)):
-    user_id = verified_user_id or body.user_id
+async def adk_generate(request: Request, body: ADKGenerateRequest, user_id: str = Depends(get_verified_user_id)):
+    # Pillar 1: Overload Guardrail
+    if is_overloaded():
+        raise HTTPException(status_code=503, detail="System currently overloaded or in maintenance.")
+
     if not await deduct_credits(user_id, 50):
-        logger.warning("Low credits for %s on /api/adk/generate — continuing free", user_id)
+        logger.warning("low_credits_continuing", user_id=user_id)
 
-    # Resolve uploaded file paths from tmp dir
-    clip_paths: list[str] = []
-    for fid in body.uploaded_file_ids:
-        for ext in _ADK_EXTENSIONS:
-            candidate = ADK_UPLOAD_DIR / f"{fid}{ext}"
-            if candidate.exists():
-                clip_paths.append(str(candidate))
-                break
-
-    # Fetch stock clips inline (saves a round-trip vs client)
-    stock_clips: list[dict] = []
-    if body.stock_query:
-        pexels_key = os.getenv("PEXELS_API_KEY")
-        if pexels_key:
-            try:
-                async with httpx.AsyncClient(timeout=10.0) as client:
-                    resp = await client.get(
-                        "https://api.pexels.com/videos/search",
-                        params={"query": body.stock_query, "per_page": 6, "orientation": "portrait"},
-                        headers={"Authorization": pexels_key},
-                    )
-                    resp.raise_for_status()
-                    for v in resp.json().get("videos", []):
-                        files = v.get("video_files", [])
-                        hd = next((f for f in files if f.get("quality") == "hd"), files[0] if files else None)
-                        if hd:
-                            stock_clips.append({"id": str(v["id"]), "url": hd["link"]})
-            except Exception as exc:
-                logger.warning("ADK stock prefetch failed: %s", exc)
-
-    voiceover_path = await _generate_tts(body.script, body.voice_id)
-    segments = _parse_script_to_segments(body.script, clip_paths, stock_clips)
-
-    production_plan = {
-        "segments": segments,
-        "voiceover_path": voiceover_path,
-        "aspect_ratio": body.aspect_ratio,
-    }
+    from services.adk_service import ADKService
+    plan = await ADKService.generate_production_plan(
+        script=body.script,
+        voice_id=body.voice_id,
+        uploaded_file_ids=body.uploaded_file_ids,
+        stock_query=body.stock_query,
+        aspect_ratio=body.aspect_ratio
+    )
 
     job_id = uuid.uuid4().hex
+    project_svc = get_project_service()
+    project_id = await project_svc.create_project(
+        user_id, 
+        f"Short - {datetime.now().strftime('%Y-%m-%d %H:%M')}", 
+        body.script
+    )
+    
+    await project_svc.update_project(project_id, user_id, {
+        "status": "processing",
+        "job_id": job_id,
+        "segments": plan["segments"],
+        "voice_id": body.voice_id,
+        "aspect_ratio": body.aspect_ratio
+    })
 
-    try:
-        from render_worker import process_render_task
-        render_queue.enqueue(
-            process_render_task,
-            job_id,
-            "adk-generated",
-            0,
-            0,
-            user_id,
-            {"production_plan": production_plan, "quality": body.quality, "aspect_ratio": body.aspect_ratio},
-            job_id=job_id,
-            job_timeout=JOB_TIMEOUT_SECONDS,
-            result_ttl=JOB_RESULT_TTL_SECONDS,
-            failure_ttl=JOB_FAILURE_TTL_SECONDS,
-        )
-    except Exception as exc:
-        logger.exception("ADK generate enqueue failed: %s", exc)
-        raise HTTPException(status_code=503, detail=f"Queue error: {exc}")
+    from render_worker import process_render_task
+    from rq import Retry as RqRetry
+    render_queue.enqueue(
+        process_render_task,
+        job_id,
+        "adk-generated",
+        0, 0,
+        user_id,
+        {"production_plan": plan, "quality": body.quality, "aspect_ratio": body.aspect_ratio},
+        job_id=job_id,
+        job_timeout=JOB_TIMEOUT_SECONDS,
+        result_ttl=JOB_RESULT_TTL_SECONDS,
+        failure_ttl=JOB_FAILURE_TTL_SECONDS,
+        retry=RqRetry(max=2, interval=[30, 60]),
+    )
 
+    from services.stats_service import increment_stats
     await increment_stats(user_id, ai_run_delta=1)
-    logger.info("ADK job %s queued: %d segments, tts=%s", job_id, len(segments), voiceover_path is not None)
-
     return {
         "status": "queued",
         "job_id": job_id,
-        "subscribe_channel": f"export-{job_id}",
-        "segments_count": len(segments),
-        "tts_enabled": voiceover_path is not None,
+        "project_id": project_id,
+        "subscribe_channel": f"export-{job_id}"
     }
+
+# ---- Projects Endpoints ------------------------------------------------------
+
+@app.get("/api/projects")
+async def list_projects(verified_user_id: str = Depends(get_verified_user_id)):
+    svc = get_project_service()
+    return await svc.list_projects(verified_user_id)
+
+@app.get("/api/projects/{project_id}")
+async def get_project(project_id: str, verified_user_id: str = Depends(get_verified_user_id)):
+    svc = get_project_service()
+    project = await svc.get_project(project_id, verified_user_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return project
+
+@app.patch("/api/projects/{project_id}")
+async def update_project(project_id: str, body: ProjectUpdateRequest, verified_user_id: str = Depends(get_verified_user_id)):
+    svc = get_project_service()
+    success = await svc.update_project(project_id, verified_user_id, body.model_dump(exclude_none=True))
+    if not success:
+        raise HTTPException(status_code=404, detail="Project not found or no changes made")
+    return {"status": "success"}
+
+@app.delete("/api/projects/{project_id}")
+async def delete_project(project_id: str, verified_user_id: str = Depends(get_verified_user_id)):
+    svc = get_project_service()
+    success = await svc.delete_project(project_id, verified_user_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return {"status": "success"}
+
+
+# ---- Agent Trace (debug + demo visibility) ------------------------------------
+
+
+@app.get("/api/agent-trace/{session_id}")
+async def agent_trace(
+    session_id: str,
+    verified_user_id: str = Depends(get_verified_user_id),
+):
+    """
+    Returns the ADK session state for a given session_id.
+
+    Use this after any /api/analyze, /api/preflight, or /api/direct call
+    to inspect the full multi-agent reasoning trace stored in Firestore.
+    The session_id is returned in the X-ADK-Session-Id response header
+    (see below) or in the job response body.
+
+    Access is restricted to the session owner (user_id must match).
+    """
+    try:
+        from agent.preflight_agent import preflight_runner
+    except ImportError:
+        preflight_runner = None
+
+    # Resolve a Firestore session service from any available runner
+    svc = None
+    if preflight_runner and hasattr(preflight_runner, "session_service"):
+        svc = preflight_runner.session_service
+    if svc is None:
+        raise HTTPException(status_code=503, detail="Session service unavailable — ADK not initialised")
+
+    # Direct Firestore document read (session_id == doc ID)
+    try:
+        doc = await svc.db.collection(svc.collection_name).document(session_id).get()
+    except Exception as exc:
+        logger.error("agent_trace firestore error: %s", exc)
+        raise HTTPException(status_code=500, detail="Firestore read failed")
+
+    if not doc.exists:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    data = doc.to_dict() or {}
+    if data.get("user_id") != verified_user_id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    state = data.get("state", {})
+    return {
+        "session_id": session_id,
+        "app_name": data.get("app_name"),
+        "user_id": verified_user_id,
+        "created_at": data.get("created_at"),
+        "updated_at": data.get("updated_at"),
+        # Key agent outputs surfaced for readability
+        "summary": {
+            "recommendation": state.get("recommendation"),
+            "consensus_score": state.get("consensus_score"),
+            "loop_iteration": state.get("loop_iteration"),
+            "preflight_done": state.get("preflight_done"),
+            "trend_keywords": state.get("trend_keywords"),
+        },
+        # Full raw state for deep inspection
+        "state": state,
+    }
+
+# ---- Music Endpoints ---------------------------------------------------------
+
+@app.get("/api/music")
+async def list_music():
+    svc = get_music_service()
+    return svc.list_tracks()
 
 
 if __name__ == "__main__":

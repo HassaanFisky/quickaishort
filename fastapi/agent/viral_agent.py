@@ -66,15 +66,47 @@ try:
     from google.adk.agents import Agent, SequentialAgent
     from google.adk.runners import Runner
     from google.adk.sessions import InMemorySessionService
+    from google.adk.tools import FunctionTool
     import google.genai.types as genai_types
 
     _ADK_OK = True
 except ImportError:
     logger.warning("google-adk not installed — using direct Gemini fallback for viral agent.")
     _ADK_OK = False
-    Agent = SequentialAgent = Runner = InMemorySessionService = None  # type: ignore[assignment]
+    Agent = SequentialAgent = Runner = InMemorySessionService = FunctionTool = None  # type: ignore[assignment]
     genai_types = None  # type: ignore[assignment]
 
+
+# ---------------------------------------------------------------------------
+# FunctionTool: Redis-backed viral score cache
+# Zero new dependencies — uses Redis already required by queue_service.
+# Sub-millisecond read. Gives ScoringAgent grounding from prior runs.
+# ---------------------------------------------------------------------------
+
+
+def get_viral_score_cache(video_id: str) -> dict:
+    """
+    Retrieve the cached top viral score for this video from a previous analysis run.
+
+    Returns found=True with cached_score and cached_at (unix seconds) when
+    a prior run exists. Returns found=False otherwise. Use this to calibrate
+    your scoring against established data for the same video.
+    """
+    try:
+        from services.queue_service import redis_conn
+        data = redis_conn.hgetall(f"viral:cache:{video_id}")
+        if data:
+            return {
+                "found": True,
+                "cached_score": int(data.get("score", 0)),
+                "cached_at": int(data.get("cached_at", 0)),
+            }
+        return {"found": False, "reason": "No prior analysis cached for this video"}
+    except Exception as exc:
+        return {"found": False, "reason": str(exc)}
+
+
+# ---------------------------------------------------------------------------
 
 SCORING_INSTRUCTION = (
     "Analyze the candidate segments provided in your input. "
@@ -85,6 +117,10 @@ SCORING_INSTRUCTION = (
     "Assign a 'score' (0-100) based on hook strength, retention potential, and visual energy. "
     "Emotional Triggers must be specific (e.g. 'Instant Gratification', 'Contrarian POV'). "
     "Generate 3-5 captions optimized for high CTR. "
+    "If 'user_scoring_context' is in session state and non-empty, read it and use it as "
+    "calibration guidance: adjust score thresholds to reflect what has historically "
+    "been actionable for this specific user. Higher weight to clips at or above their "
+    "proven threshold. "
     "Schema: {id: string, start: float, end: float, confidence: float, reason: string, "
     "viralAnalysis: {score: int, hookStrength: float, retentionPotential: float, "
     "visualEnergy: float, cameraMovement: float, emotionalTriggers: string[], reasoning: string}, "
@@ -124,12 +160,16 @@ def _build_viral_pipeline():
         ),
     )
 
+    # ScoringAgent has access to get_viral_score_cache to ground predictions
+    # against real historical data from prior runs of this video.
+    _scoring_tools = [FunctionTool(get_viral_score_cache)] if FunctionTool else []
     scoring_agent = Agent(
         name="ScoringAgent",
         model=model,
         generate_content_config=generate_config,
         description="Scores viral potential, optionally ingesting keyframes (vision).",
         instruction=SCORING_INSTRUCTION,
+        tools=_scoring_tools,
     )
 
     root_agent = SequentialAgent(
@@ -333,7 +373,23 @@ async def run_viral_pipeline(
         "video_id": video_id or "",
         "raw_segments": "[]",
         "final_suggestions": "[]",
+        "user_scoring_context": "",  # populated below from learning service
     }
+
+    # Learning loop — read side.
+    # Inject the user's historical export behaviour as scoring calibration.
+    # Silently no-ops when no history exists or Redis is unavailable.
+    try:
+        from services.learning_service import LearningService
+        ctx = LearningService.get_scoring_context(user_id)
+        if ctx:
+            initial_state["user_scoring_context"] = ctx
+            logger.info(
+                "learning_context_injected user=%s context_len=%d",
+                user_id, len(ctx),
+            )
+    except Exception:
+        pass
 
     await viral_runner.session_service.create_session(
         app_name="QuickAIShort_ViralEngine",
@@ -379,9 +435,36 @@ async def run_viral_pipeline(
                     suggestions, video_id, transcript_text, duration
                 )
                 if rescored:
-                    return rescored
+                    suggestions = rescored
             except Exception as exc:
                 logger.warning("Vision rescore skipped: %s", exc)
+
+        # Cache the top viral score for this video so FunctionTool can use it
+        # on the next run. Fire-and-forget — never blocks the response.
+        if video_id and suggestions:
+            try:
+                import time as _time
+                from services.queue_service import redis_conn as _rc
+                top = max(suggestions, key=lambda s: s.viralAnalysis.score)
+                _rc.hset(f"viral:cache:{video_id}", mapping={
+                    "score": str(top.viralAnalysis.score),
+                    "cached_at": str(int(_time.time())),
+                })
+                _rc.expire(f"viral:cache:{video_id}", 86400)  # 24h TTL
+            except Exception:
+                pass  # non-critical
+
+        # Level 5 Learning Loop Enforcement: Deterministic post-processing.
+        # Apply the user's historical action boundary to guarantee the 
+        # learning signal alters the decision function.
+        if suggestions and user_id and user_id != "anonymous":
+            try:
+                from services.learning_service import LearningService
+                raw_dicts = [s.model_dump() for s in suggestions]
+                adjusted_dicts = LearningService.apply_learned_decision_boundary(user_id, raw_dicts)
+                suggestions = [ClipSuggestion(**d) for d in adjusted_dicts]
+            except Exception as exc:
+                logger.warning("Failed to apply learned boundary: %s", exc)
 
         return suggestions
 

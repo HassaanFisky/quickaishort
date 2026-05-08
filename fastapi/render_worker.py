@@ -1,36 +1,25 @@
-"""RQ worker entry point. Runs as a separate process from the FastAPI web app.
-
-Run as a separate process: `python render_worker.py`
-Deployed as a Cloud Run Job or standalone container alongside the web service.
-
-Each task delegates to RenderService for the heavy lifting, then synchronously
-uploads the result to GridFS using a per-job pymongo connection (workers do
-NOT share the web app's motor pool — different process). On success/failure it
-publishes to Redis pubsub so the FastAPI lifespan listener can fan out a stats
-increment + Pusher event.
-"""
-
-from __future__ import annotations
-
 import logging
 import os
 import time
+import signal
+import threading
+import http.server
+import socketserver
+import shutil
+import asyncio
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-import gridfs
-import shutil
-from dotenv import load_dotenv
-from pymongo import MongoClient
 from rq import Worker
-
+from services.queue_service import redis_conn, render_queue
+from services.logging import get_logger, log_workload, log_metric
+from services.storage_service import get_storage_service
 from services.events import (
     CHANNEL_EXPORT_COMPLETE,
     CHANNEL_EXPORT_FAILED,
     CHANNEL_STATS_INCREMENT,
     publish,
 )
-from services.queue_service import redis_conn, render_queue
 from services.render_service import (
     CaptionsConfig,
     Reframing,
@@ -38,22 +27,64 @@ from services.render_service import (
     RenderService,
     WatermarkConfig,
 )
+from services.job_persistence import persist_failed_job
 
-load_dotenv()
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("render_worker")
+logger = get_logger("render_worker")
 
-EXPORT_TTL_SECONDS = int(os.getenv("EXPORT_URL_TTL_SECONDS", str(24 * 60 * 60)))
+def get_mem_usage_mb() -> float:
+    """Heuristic for memory pressure (Linux/Cloud Run only)."""
+    try:
+        with open("/proc/self/status") as f:
+            for line in f:
+                if line.startswith("VmRSS:"):
+                    return float(line.split()[1]) / 1024.0
+    except Exception:
+        return 0.0
 
+def check_memory_pressure():
+    """Warn if memory usage is > 80% of typical 8GB limit."""
+    mem = get_mem_usage_mb()
+    if mem > 6500:
+        logger.warning("memory_pressure_high", mem_mb=round(mem, 2))
+    return mem
 
-def _gridfs_bucket() -> gridfs.GridFSBucket:
-    uri = os.environ.get("MONGODB_URI")
-    if not uri:
-        raise RuntimeError("MONGODB_URI environment variable is not set — cannot store render output")
-    client = MongoClient(uri, serverSelectionTimeoutMS=5000)
-    db = client.get_database("quickai_shorts")
-    return gridfs.GridFSBucket(db, bucket_name="exports")
+# --- Health Check Server for Cloud Run ---
+class HealthCheckHandler(http.server.SimpleHTTPRequestHandler):
+    def do_GET(self):
+        if self.path == '/health/live':
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b'{"status": "alive"}')
+        elif self.path == '/health/ready':
+            # Basic readiness check: can we talk to Redis?
+            try:
+                redis_conn.ping()
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(b'{"status": "ready"}')
+            except Exception:
+                self.send_response(503)
+                self.end_headers()
+                self.wfile.write(b'{"status": "not_ready"}')
+        else:
+            self.send_response(404)
+            self.end_headers()
 
+def run_health_server():
+    port = int(os.environ.get("PORT", 8080))
+    logger.info("starting_health_server", port=port)
+    with socketserver.TCPServer(("", port), HealthCheckHandler) as httpd:
+        httpd.serve_forever()
+
+# --- Signal Handling for Preemption Safety ---
+def handle_preemption(signum, frame):
+    """Gracefully handle SIGTERM from Cloud Run."""
+    logger.warning("preemption_signal_received", signal=signum)
+    # The worker will finish the current job if possible within the grace period (10s on Cloud Run)
+    # RQ's Worker handles this partially, but we log it here for observability.
+    # No os._exit(0) yet, let RQ finish current job if it can.
+
+signal.signal(signal.SIGTERM, handle_preemption)
 
 def _build_job(
     video_id: str,
@@ -84,7 +115,7 @@ def _build_job(
         else None,
     )
 
-    return RenderJob(
+    job = RenderJob(
         video_id=video_id,
         start_sec=float(start_sec),
         end_sec=float(end_sec),
@@ -95,6 +126,15 @@ def _build_job(
         watermark=watermark,
     )
 
+    music_id = options.get("music_id")
+    if music_id:
+        from services.music_service import get_music_service
+        music_svc = get_music_service()
+        track = music_svc.get_track(music_id)
+        if track:
+            job.background_music = track.url
+
+    return job
 
 def process_render_task(
     job_id: str,
@@ -104,93 +144,131 @@ def process_render_task(
     user_id: str,
     options: dict,
 ) -> dict:
-    """Entry point invoked by RQ. Returns a dict for inspection in the web app."""
+    """Entry point invoked by RQ."""
     started_at = time.time()
     options = options or {}
     production_plan = options.get("production_plan")
     
-    # Pillar 2: Production safety — check for existing export if idempotent (partial)
-    # Note: Currently we always re-render if enqueued, but we use job_id as the stable identifier.
+    logger.info("processing_render_task_start", job_id=job_id, user_id=user_id)
 
-    result_path = None
-    duration_sec = 0
-    
+    def progress(status: str, progress_val: int = 0):
+        # Monitor memory at every progress update
+        mem = check_memory_pressure()
+        from services.events import CHANNEL_EXPORT_PROGRESS
+        publish(CHANNEL_EXPORT_PROGRESS, {
+            "job_id": job_id, 
+            "user_id": user_id, 
+            "status": status, 
+            "progress": progress_val,
+            "mem_usage_mb": round(mem, 2)
+        })
+
     try:
+        # Pillar 5: Idempotency Check
+        storage = get_storage_service()
+        remote_filename = f"exports/{user_id}/{job_id}.mp4"
+        
+        # Check if this job was already successfully processed (e.g. retry of a successful job)
+        if storage.exists(remote_filename):
+            logger.info("render_job_idempotency_hit", job_id=job_id)
+            payload = {
+                "job_id": job_id,
+                "user_id": user_id,
+                "storage_path": remote_filename,
+                "status": "success",
+                "idempotency_hit": True
+            }
+            publish(CHANNEL_EXPORT_COMPLETE, payload)
+            log_metric("render_idempotency_hit", 1, user_id=user_id, metadata={"job_id": job_id})
+            return payload
+
         if production_plan:
-            # Handle multi-segment production plan
             from services.render_service import render_video
+            progress("Starting production render...", 5)
             result_path = Path(render_video(production_plan))
             duration_sec = sum(
                 (float(s.get("end_sec", 0)) - float(s.get("start_sec", 0))) 
                 for s in production_plan.get("segments", [])
             )
         else:
-            # Handle single-clip export
+            # Pillar 2: Duration Limit Guard
+            if (end_sec - start_sec) > 180:
+                raise ValueError("Render duration exceeds 180s limit.")
+
             service = RenderService()
             job = _build_job(video_id, start_sec, end_sec, options)
-            render_result = service.run(job)
+            render_result = service.run(job, progress_callback=lambda s: progress(s, 30))
             result_path = render_result.output_path
             duration_sec = render_result.duration_sec
 
-        # Upload to GridFS
-        bucket = _gridfs_bucket()
-        expires_at = datetime.now(timezone.utc) + timedelta(seconds=EXPORT_TTL_SECONDS)
+        # Storage
+        progress("Finalizing export...", 90)
+        storage = get_storage_service()
+        remote_filename = f"exports/{user_id}/{job_id}.mp4"
         
-        with result_path.open("rb") as fh:
-            grid_id = bucket.upload_from_stream(
-                f"{job_id}.mp4",
-                fh,
-                metadata={
-                    "job_id": job_id,
-                    "user_id": user_id,
-                    "video_id": video_id,
-                    "duration_sec": duration_sec,
-                    "expires_at": expires_at,
-                    "is_production_plan": bool(production_plan),
-                },
-            )
+        gcs_uri = storage.upload_file(
+            local_path=result_path,
+            remote_path=remote_filename,
+            content_type="video/mp4"
+        )
 
         payload = {
             "job_id": job_id,
             "user_id": user_id,
-            "gridfs_id": str(grid_id),
+            "storage_path": remote_filename,
             "duration_sec": duration_sec,
-            "file_size_bytes": result_path.stat().st_size,
             "elapsed_sec": time.time() - started_at,
         }
         
         publish(CHANNEL_EXPORT_COMPLETE, payload)
-        publish(
-            CHANNEL_STATS_INCREMENT,
-            {
-                "user_id": user_id,
-                "export_delta": 1,
-                "duration_delta": duration_sec,
-            },
-        )
+        publish(CHANNEL_STATS_INCREMENT, {"user_id": user_id, "export_delta": 1, "duration_delta": duration_sec})
         
-        logger.info(f"Job {job_id} completed in {payload['elapsed_sec']:.2f}s")
+        # Learning loop — write side.
+        # Record this export as a positive outcome so the ScoringAgent can
+        # calibrate future analyses against this user's proven score threshold.
+        try:
+            from services.learning_service import LearningService
+            LearningService.record_outcome(
+                user_id=user_id,
+                video_id=video_id,
+                job_id=job_id,
+            )
+        except Exception:
+            pass  # never block the render path
+
+        # Trace cost in logs
+        log_workload("render", payload['elapsed_sec'], user_id, {"job_id": job_id})
+        log_metric("render_success", 1, user_id=user_id, metadata={"job_id": job_id, "duration_sec": duration_sec, "elapsed_sec": payload['elapsed_sec']})
+        
         return {"status": "success", **payload}
 
     except Exception as exc:
-        logger.exception("Render job %s failed: %s", job_id, exc)
-        publish(
-            CHANNEL_EXPORT_FAILED,
-            {"job_id": job_id, "user_id": user_id, "error": str(exc)},
-        )
+        logger.exception("render_job_failed", job_id=job_id, error=str(exc))
+        publish(CHANNEL_EXPORT_FAILED, {"job_id": job_id, "user_id": user_id, "error": str(exc)})
+        
+        # Dead Letter Persistence (Atomic Recovery)
+        asyncio.run(persist_failed_job(job_id, user_id, str(exc), {
+            "video_id": video_id,
+            "options": options
+        }))
+        log_metric("render_failure", 1, user_id=user_id, metadata={"job_id": job_id, "error": str(exc)[:200]})
+        
         return {"status": "error", "job_id": job_id, "error": str(exc)}
 
     finally:
-        if result_path and result_path.exists():
-            # Clean up the final MP4 from local temp storage
+        if 'result_path' in locals() and result_path.exists():
             try:
                 result_path.unlink()
-                # Also try to cleanup parent workdir if it's a temp dir
                 if "qais-" in str(result_path.parent):
                     shutil.rmtree(result_path.parent, ignore_errors=True)
             except Exception:
                 pass
 
-
 if __name__ == "__main__":
+    # 1. Start health server
+    health_thread = threading.Thread(target=run_health_server, daemon=True)
+    health_thread.start()
+    
+    # 2. Start RQ Worker
+    logger.info("worker_booting", queue="render_queue")
     Worker([render_queue], connection=redis_conn).work()
