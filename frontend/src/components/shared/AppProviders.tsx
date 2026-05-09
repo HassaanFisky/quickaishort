@@ -8,6 +8,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { PusherProvider } from "@/components/providers/PusherProvider";
 import SplashScreen from "@/components/shared/SplashScreen";
 import PageTransition from "@/components/shared/PageTransition";
+import { SessionExpiryModal } from "@/components/shared/SessionExpiryModal";
 
 export function AppProviders({ children }: { children: ReactNode }) {
   const [queryClient] = useState(
@@ -36,6 +37,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
             <SplashScreen />
             <PageTransition>{children}</PageTransition>
             <Toaster position="top-center" richColors />
+            <SessionExpiryModal />
           </ThemeProvider>
         </PusherProvider>
       </QueryClientProvider>

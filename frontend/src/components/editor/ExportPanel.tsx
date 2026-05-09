@@ -13,7 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { CheckCircle, Download, Rocket, ShieldCheck, Clock, Settings2 } from "lucide-react";
+import { CheckCircle, Download, ShieldCheck, Clock, Settings2, Rocket } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { useState, useEffect } from "react";
@@ -137,12 +137,14 @@ export default function ExportPanel() {
               </div>
             ) : (
               <Button
+                id="export-video-btn"
+                aria-label="Export and download the selected clip as a video file"
                 className="w-full h-14 rounded-2xl text-[12px] font-black uppercase tracking-widest bg-primary text-white hover:bg-primary/90 shadow-[0_0_20px_hsl(var(--primary)/0.3)] group transition-all"
                 onClick={handleExport}
                 disabled={!selectedClipId || isExporting}
               >
-                <Rocket className="mr-3 w-5 h-5 group-hover:-translate-y-1 group-hover:translate-x-1 transition-transform" />
-                Render Selection
+                <Download className="mr-3 w-5 h-5 group-hover:-translate-y-0.5 group-hover:translate-x-0 transition-transform" />
+                Export Video
               </Button>
             )}
           </div>

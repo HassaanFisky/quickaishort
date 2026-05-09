@@ -6,7 +6,7 @@ import { useAnalysis } from "@/hooks/useAnalysis";
 import { useEffect } from "react";
 import { useEditorStore } from "@/stores/editorStore";
 import { TelemetryDock } from "@/components/editor/TelemetryDock";
-
+import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import { extractAudioData } from "@/lib/utils/audioExtractor";
 
 export default function EditorPage() {
@@ -75,9 +75,9 @@ export default function EditorPage() {
   }, []);
 
   return (
-    <>
+    <ErrorBoundary>
       <EditorLayout />
       <TelemetryDock />
-    </>
+    </ErrorBoundary>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useEditorStore } from "@/stores/editorStore";
 import { useTranscription } from "./useTranscription";
 import { useAnalysis } from "./useAnalysis";
@@ -24,6 +24,14 @@ export function useMediaPipeline() {
 
   const transcription = useTranscription();
   const analysis = useAnalysis();
+
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  /** Cancels the running pipeline immediately. */
+  const cancelPipeline = useCallback(() => {
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+  }, []);
 
   const runPipeline = useCallback(async () => {
     const { sourceFile, sourceUrl } = useEditorStore.getState();
@@ -52,8 +60,10 @@ export function useMediaPipeline() {
       }
     }
 
+    // Extended to 120 seconds to handle long-form content (podcasts, lectures)
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 35000);
+    abortControllerRef.current = controller;
+    const timeoutId = setTimeout(() => controller.abort(), 120000);
 
     try {
       setProcessing(true, "loading");
@@ -202,6 +212,7 @@ export function useMediaPipeline() {
 
   return {
     runPipeline,
+    cancelPipeline,
     status: transcription.status || analysis.status,
     progress: transcription.progress || analysis.progress,
     stage: useEditorStore.getState().currentStage,

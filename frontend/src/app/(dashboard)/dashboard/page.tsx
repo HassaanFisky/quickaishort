@@ -224,13 +224,14 @@ export default function DashboardPage() {
            </div>
            <Link
             href="/editor"
+            id="new-project-btn"
             className="inline-flex h-14 items-center rounded-2xl px-8 text-sm font-black text-white transition hover:scale-[1.02] active:scale-[0.98] shadow-2xl shadow-primary/20"
             style={{
               background: "linear-gradient(135deg, #3b82f6 0%, #a855f7 60%, #ec4899 100%)",
             }}
           >
             <Plus className="w-5 h-5 mr-3" />
-            New Intelligence
+            New Project
           </Link>
         </div>
       </div>
