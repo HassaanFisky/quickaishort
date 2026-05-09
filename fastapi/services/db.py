@@ -36,15 +36,14 @@ async def init_db() -> None:
     _exports_bucket = AsyncIOMotorGridFSBucket(_db, bucket_name=EXPORTS_BUCKET)
 
     try:
-        logger.info("Pinging MongoDB...")
-        await _client.admin.command("ping")
+        logger.info("Pinging MongoDB (5s timeout)...")
+        await asyncio.wait_for(_client.admin.command("ping"), timeout=5.0)
         logger.info("MongoDB ping successful.")
     except Exception as exc:
-        logger.error("MongoDB ping failed: %s", exc, exc_info=True)
-        _client = None
-        _db = None
-        _exports_bucket = None
-        return
+        logger.error("MongoDB ping failed — proceeding in degraded mode (readiness may fail): %s", exc)
+        # We do NOT nullify _db here; we allow the app to start.
+        # If the connection is truly broken, subsequent queries will fail normally.
+        # This prevents the entire service from staying in 503 if the whitelist is slow.
 
     await _db["UserStats"].create_index("user_id", unique=True)
     await _db[f"{EXPORTS_BUCKET}.files"].create_index(
