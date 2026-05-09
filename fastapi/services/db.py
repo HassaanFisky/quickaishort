@@ -4,6 +4,7 @@ Single source of truth for the connection pool. Owned by the FastAPI lifespan
 in main.py — call init_db() at startup, close_db() at shutdown.
 """
 
+import asyncio
 import logging
 import os
 from datetime import datetime, timezone
