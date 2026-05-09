@@ -1,5 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  env: {
+    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || "https://quickai-api-y2cgnbsbxa-uc.a.run.app",
+  },
   async headers() {
     return [
       {

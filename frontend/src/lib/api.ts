@@ -7,8 +7,8 @@ import type {
 } from "@/types/export";
 import type { UserStats } from "@/types/stats";
 
-// .trim() strips any accidental \r\n that Vercel CLI may append to env var values
-export const API_URL = (process.env.NEXT_PUBLIC_API_URL || "").trim();
+// Hardcoded production URL to bypass Vercel environment variable bugs
+export const API_URL = "https://quickai-api-y2cgnbsbxa-uc.a.run.app";
 if (!API_URL && typeof window !== "undefined") {
   console.warn("NEXT_PUBLIC_API_URL is not defined. API calls may fail.");
 }

@@ -17,12 +17,19 @@ export async function extractAudioData(
 
   let arrayBuffer: ArrayBuffer;
   if (typeof source === "string") {
-    const response = await fetch(source, { signal });
+    let response: Response;
+    try {
+      response = await fetch(source, { signal });
+    } catch (err: any) {
+      if (err.name === "AbortError") throw err;
+      throw new Error("Network Error: Could not retrieve audio stream from backend. Backend might be unreachable.");
+    }
+    
     if (!response.ok) {
       let errMsg = `Audio fetch failed: HTTP ${response.status}`;
       try {
         const errJson = await response.json();
-        errMsg = errJson.message || errMsg;
+        errMsg = errJson.detail || errJson.message || errMsg;
       } catch { /* ignore parse failure, keep status-based message */ }
       throw new Error(errMsg);
     }

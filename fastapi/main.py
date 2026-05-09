@@ -624,6 +624,9 @@ async def export_download(job_id: str, user_id: str, token: str, expires: int):
     Returns a secure GCS signed URL for the rendered video.
     Offloads heavy download traffic to Google's edge network.
     """
+    if DemoService.is_demo_job(job_id):
+        return RedirectResponse(url="https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_1MB.mp4")
+
     # Enforce HMAC token — verify() uses hmac.compare_digest (timing-safe)
     if not verify(job_id, user_id, expires, token):
         raise HTTPException(status_code=403, detail="Invalid or expired download token.")
@@ -677,6 +680,17 @@ async def stats_ws(websocket: WebSocket, user_id: str):
 @app.get("/api/info")
 async def get_video_info(url: str):
     video_id = _require_youtube_url(url)
+
+    if DemoService.is_demo_url(url):
+        return {
+            "id": video_id,
+            "title": "AI Evolution: The Next Frontier (Demo)",
+            "duration": 45,
+            "thumbnail": f"https://i.ytimg.com/vi/{video_id}/maxresdefault.jpg",
+            "formats": [], 
+            "url": url,
+            "source": "demo_cache"
+        }
 
     api_key = os.environ.get("YOUTUBE_API_KEY")
 
@@ -768,6 +782,10 @@ async def get_video_info(url: str):
 @app.get("/api/proxy")
 async def proxy_video(url: str):
     _require_youtube_url(url)
+    
+    if DemoService.is_demo_url(url):
+        # Redirect to a known safe open source video for the demo
+        return RedirectResponse(url="https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_1MB.mp4")
 
     import httpx
 
@@ -865,6 +883,9 @@ async def proxy_video(url: str):
 @app.get("/api/audio")
 async def get_audio(url: str = Query(...)):
     """Serves the audio stream for a given YouTube URL with 100% reliability fallbacks."""
+    if DemoService.is_demo_url(url):
+        # Redirect to a known safe open source video for the demo audio
+        return RedirectResponse(url="https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_1MB.mp4")
     return await VideoService.get_audio_response(url)
 
 
