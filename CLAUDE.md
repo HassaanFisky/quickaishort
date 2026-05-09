@@ -95,9 +95,9 @@ NextAuth (`next-auth`) handles sessions on the frontend. `fastapi/app/auth/fireb
 | Store | Used for |
 | --- | --- |
 | MongoDB (motor) | User stats, credits, job history, GridFS for media |
-| Firestore | ADK agent session state (`firestore_session.py`) |
-| GridFS (MongoDB) | Rendered short exports (via exports bucket) |
-| GCS | REMOVED (2026-05-05): `fastapi/app/storage/gcs_repo.py` deleted; exports moved to GridFS |
+| Firestore | ADK agent session state (`firestore_session.py`) — falls back to InMemory |
+| GridFS (MongoDB) | Media storage (rendered exports + uploaded assets) |
+| GCS | REMOVED (2026-05-09): Full migration to GridFS complete. Pruned all GCS logic. |
 | Redis | RQ job queue + Pub/Sub for Pusher fan-out |
 
 ---
@@ -449,9 +449,9 @@ ADK Studio: 4-step wizard (Script → Media → Voice → Render) via POST /api/
 
 LIVE SERVICES:
 
-- Backend API:    `https://quickaishort-api-99900313102.us-central1.run.app` (revision 00008-jrl)
-- Render Worker:  `https://quickaishort-worker-99900313102.us-central1.run.app` (revision 00003-r5p)
-- Frontend:       `https://www.quickaishort.online` (Vercel, aliased)
+- Backend API:    `https://quickaishort-api-946316698978.us-central1.run.app`
+- Render Worker:  `https://quickaishort-worker-946316698978.us-central1.run.app`
+- Frontend:       `https://www.quickaishort.online`
 - Health:         `{"status":"ok","mongo":true,"redis":true,"adk":true}`
 
 COMPLETED:
@@ -480,6 +480,7 @@ COMPLETED:
 - Production deployment complete: Cloud Run (API + Worker) + Vercel
 - Production hardening pass 1 (2026-05-06): HTTP 402 gates removed, COEP scoped to /editor, datetime.utcnow fixed, /api/audio FFmpeg MP3 conversion, mongo_session.py deleted, ARCHITECTURE.md aligned
 - Production hardening pass 2 (2026-05-06): /api/audio Cobalt v10 fallback; JWT verified_user_id enforced in all 5 protected endpoints; frontend shows real backend error messages; client-side YouTube URL validation in AcquirePanel; requirements.txt cleaned (removed firebase-admin, google-cloud-speech, moviepy; yt-dlp pin updated to >=2025.4.0); Dockerfile adds libgl1 + libglib2.0-0
+- Production stability pass (2026-05-09): Fully migrated to MongoDB GridFS for all media; removed GCS dependencies; implemented lazy runner initialization for all agents; fixed startup 503 timeout by making DB ping non-blocking; optimized WEB_CONCURRENCY for stability.
 
 KEY DECISIONS (do not change without reason):
 - No subscription gating — core product is free and unblocked until billing is intentionally shipped
