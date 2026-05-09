@@ -78,7 +78,12 @@ class VideoService:
     @classmethod
     async def download_segment(cls, video_id: str, start: int, end: int, workdir: str) -> Path:
         """Download a specific segment of a video for background rendering."""
-        url = f"https://www.youtube.com/watch?v={video_id}"
+        if video_id.startswith(("http://", "https://")):
+            url = video_id
+            video_id = cls.extract_video_id(url) or "unknown"
+        else:
+            url = f"https://www.youtube.com/watch?v={video_id}"
+        
         output_path = Path(workdir) / f"{video_id}_{start}_{end}.mp4"
         
         # TIER 1: Native yt-dlp
@@ -134,7 +139,12 @@ class VideoService:
         if an event loop is already running (Python 3.12+). This method
         uses yt-dlp (already synchronous) and httpx.Client (sync) only.
         """
-        url = f"https://www.youtube.com/watch?v={video_id}"
+        if video_id.startswith(("http://", "https://")):
+            url = video_id
+            video_id = cls.extract_video_id(url) or "unknown"
+        else:
+            url = f"https://www.youtube.com/watch?v={video_id}"
+            
         output_path = Path(workdir) / f"{video_id}_{int(start)}_{int(end)}.mp4"
 
         # Tier 1: yt-dlp android_music (no browser cookies, works on Cloud Run)

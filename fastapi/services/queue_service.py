@@ -14,7 +14,13 @@ MAX_QUEUE_DEPTH = int(os.getenv("MAX_QUEUE_DEPTH", "50"))
 SAFE_MODE = os.getenv("SAFE_MODE", "false").lower() == "true"
 
 redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379")
-redis_conn = redis.Redis.from_url(redis_url, decode_responses=True)
+
+# Sync connection for RQ
+redis_conn = redis.Redis.from_url(redis_url)
+
+# Async connection for ExtractorService and other async paths
+import redis.asyncio as async_redis
+async_redis_conn = async_redis.from_url(redis_url)
 
 render_queue = Queue(
     "render_queue",

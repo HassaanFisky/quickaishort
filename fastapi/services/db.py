@@ -17,15 +17,17 @@ logger = logging.getLogger(__name__)
 
 DB_NAME = "quickai_shorts"
 EXPORTS_BUCKET = "exports"
+UPLOADS_BUCKET = "uploads"
 
 _client: Optional[AsyncIOMotorClient] = None
 _db: Optional[AsyncIOMotorDatabase] = None
 _exports_bucket: Optional[AsyncIOMotorGridFSBucket] = None
+_uploads_bucket: Optional[AsyncIOMotorGridFSBucket] = None
 
 
 async def init_db() -> None:
     """Create the motor client, ensure indexes, and verify connectivity."""
-    global _client, _db, _exports_bucket
+    global _client, _db, _exports_bucket, _uploads_bucket
 
     uri = os.environ.get("MONGODB_URI")
     if not uri:
@@ -35,6 +37,7 @@ async def init_db() -> None:
     _client = AsyncIOMotorClient(uri, serverSelectionTimeoutMS=10000, tlsCAFile=certifi.where())
     _db = _client[DB_NAME]
     _exports_bucket = AsyncIOMotorGridFSBucket(_db, bucket_name=EXPORTS_BUCKET)
+    _uploads_bucket = AsyncIOMotorGridFSBucket(_db, bucket_name=UPLOADS_BUCKET)
 
     try:
         logger.info("Pinging MongoDB (5s timeout)...")
@@ -45,22 +48,26 @@ async def init_db() -> None:
         # We do NOT nullify _db here; we allow the app to start.
         # If the connection is truly broken, subsequent queries will fail normally.
         # This prevents the entire service from staying in 503 if the whitelist is slow.
+        # CHANGED: Ensure _db is still assigned if it exists
+        if _client:
+            _db = _client[DB_NAME]
 
     await _db["UserStats"].create_index("user_id", unique=True)
     await _db[f"{EXPORTS_BUCKET}.files"].create_index(
         "metadata.expires_at",
         expireAfterSeconds=0,
     )
-    logger.info("MongoDB initialized (db=%s, bucket=%s).", DB_NAME, EXPORTS_BUCKET)
+    logger.info("MongoDB initialized (db=%s, bucket=%s, uploads=%s).", DB_NAME, EXPORTS_BUCKET, UPLOADS_BUCKET)
 
 
 async def close_db() -> None:
-    global _client, _db, _exports_bucket
+    global _client, _db, _exports_bucket, _uploads_bucket
     if _client is not None:
         _client.close()
     _client = None
     _db = None
     _exports_bucket = None
+    _uploads_bucket = None
 
 
 def get_db() -> AsyncIOMotorDatabase:
@@ -73,6 +80,12 @@ def get_exports_bucket() -> AsyncIOMotorGridFSBucket:
     if _exports_bucket is None:
         raise RuntimeError("Exports GridFS bucket is not initialized.")
     return _exports_bucket
+
+
+def get_uploads_bucket() -> AsyncIOMotorGridFSBucket:
+    if _uploads_bucket is None:
+        raise RuntimeError("Uploads GridFS bucket is not initialized.")
+    return _uploads_bucket
 
 
 def is_ready() -> bool:

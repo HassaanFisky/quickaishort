@@ -1,14 +1,22 @@
 import os, sys
-_REQUIRED = ["MONGODB_URI", "REDIS_URL", "GEMINI_API_KEY"]
-_missing = [k for k in _REQUIRED if not os.environ.get(k)]
-if _missing:
-    print(f"[FATAL] Missing env vars: {_missing}", file=sys.stderr)
-    sys.exit(1)
-for k in _REQUIRED:
-    v = os.environ[k]
-    if v.startswith(("redis://localhost", "redis://127")):
-        print(f"[FATAL] {k} is localhost — not valid in Cloud Run. Fix Cloud Run env vars.", file=sys.stderr)
+from pathlib import Path
+
+# Ensure the current directory is in sys.path for reliable module resolution
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
+
+def validate_env():
+    _REQUIRED = ["MONGODB_URI", "REDIS_URL", "GEMINI_API_KEY"]
+    _missing = [k for k in _REQUIRED if not os.environ.get(k)]
+    if _missing:
+        print(f"[FATAL] Missing env vars: {_missing}", file=sys.stderr)
         sys.exit(1)
+    for k in _REQUIRED:
+        v = os.environ[k]
+        if v.startswith(("redis://localhost", "redis://127")):
+            print(f"[FATAL] {k} is localhost — not valid in Cloud Run. Fix Cloud Run env vars.", file=sys.stderr)
+            sys.exit(1)
 
 import logging
 import os
@@ -63,7 +71,7 @@ def check_memory_pressure():
 # --- Health Check Server for Cloud Run ---
 class HealthCheckHandler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
-        if self.path == '/health/live':
+        if self.path in ('/', '/health', '/health/live'):
             self.send_response(200)
             self.end_headers()
             self.wfile.write(b'{"status": "alive"}')
@@ -277,10 +285,30 @@ def process_render_task(
                 pass
 
 if __name__ == "__main__":
-    # 1. Start health server
-    health_thread = threading.Thread(target=run_health_server, daemon=True)
-    health_thread.start()
+    import sys
+    # Force line-buffered output for Cloud Logging
+    sys.stdout.reconfigure(line_buffering=True)
+    sys.stderr.reconfigure(line_buffering=True)
+    validate_env()
+
+    from services.db import init_db
     
-    # 2. Start RQ Worker
-    logger.info("worker_booting", queue="render_queue")
-    Worker([render_queue], connection=redis_conn).work()
+    # Initialize MongoDB (needed for storage_service and job_persistence)
+    try:
+        asyncio.run(init_db())
+        logger.info("mongodb_initialized_for_worker")
+    except Exception as e:
+        logger.error("mongodb_initialization_failed", error=str(e))
+        # We continue anyway; services will fail late with better errors if needed
+
+    logger.info("worker_starting_production_lifecycle", queue=render_queue.name)
+    
+    # Start health server in background
+    threading.Thread(target=run_health_server, daemon=True).start()
+    
+    try:
+        worker = Worker([render_queue], connection=redis_conn)
+        worker.work(with_scheduler=True)
+    except Exception as e:
+        logger.error("worker_fatal_crash", error=str(e))
+        sys.exit(1)

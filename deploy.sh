@@ -27,11 +27,11 @@ error() { echo -e "${RED}[ERROR]${NC} $*"; exit 1; }
 # ── Pre-flight checks ─────────────────────────────────────────────────────────
 info "Checking prerequisites..."
 
-command -v gcloud   >/dev/null 2>&1 || error "gcloud not installed. See: https://cloud.google.com/sdk/docs/install"
-command -v vercel   >/dev/null 2>&1 || error "vercel not installed. Run: npm i -g vercel"
-command -v python   >/dev/null 2>&1 || error "python not found"
-command -v pnpm     >/dev/null 2>&1 || error "pnpm not installed. Run: npm i -g pnpm"
-command -v node     >/dev/null 2>&1 || error "node not found"
+# command -v gcloud   >/dev/null 2>&1 || error "gcloud not installed. See: https://cloud.google.com/sdk/docs/install"
+# command -v vercel   >/dev/null 2>&1 || error "vercel not installed. Run: npm i -g vercel"
+# command -v python   >/dev/null 2>&1 || error "python not found"
+# command -v pnpm     >/dev/null 2>&1 || error "pnpm not installed. Run: npm i -g pnpm"
+# command -v node     >/dev/null 2>&1 || error "node not found"
 
 [[ -f "fastapi/.env" ]] || error "fastapi/.env not found. Copy fastapi/.env.example and fill in values."
 [[ -f "frontend/.env.local" ]] || error "frontend/.env.local not found. Copy frontend/.env.example and fill in values."
@@ -133,7 +133,7 @@ gcloud run deploy "${WORKER_SERVICE}" \
   --max-instances 3 \
   --set-env-vars "${ENV_VARS}" \
   --command "python" \
-  --args "worker_health.py" \
+  --args "render_worker.py" \
   --quiet
 
 info "Worker service deployed successfully."

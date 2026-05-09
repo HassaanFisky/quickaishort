@@ -27,6 +27,7 @@ import yt_dlp
 import asyncio
 from app.utils.youtube_auth import inject_ydl_bypass
 from services.video_service import VideoService
+from services.storage_service import get_storage_service
 
 
 
@@ -257,6 +258,36 @@ def render_video(production_plan: dict) -> str:
                     .overwrite_output()
                     .run(quiet=True)
                 )
+            elif clip_source.startswith("gridfs://"):
+                # Handle GridFS URIs (used for ADK uploads)
+                remote_path = clip_source[len("gridfs://"):]
+                local_source = workdir / f"gridfs_src_{i}.mp4"
+                storage = get_storage_service()
+                
+                # We assume uploads bucket for adk_uploads/ paths
+                bucket: Literal["uploads", "exports"] = "uploads" if "adk_uploads/" in remote_path else "exports"
+                
+                success = storage.download_file(remote_path, local_source, bucket_name=bucket)
+                if not success:
+                    logger.error("[render_video] GridFS download failed for %s", clip_source)
+                    # Fallback to black frame to avoid crashing the whole render
+                    clip_source = "BLACK_FRAME"
+                    # Re-run this iteration with BLACK_FRAME
+                    (
+                        ffmpeg.input(f"color=c=black:s=1080x1920:d={duration}", f="lavfi")
+                        .output(str(target_clip), vcodec="libx264", pix_fmt="yuv420p")
+                        .overwrite_output()
+                        .run(quiet=True)
+                    )
+                else:
+                    (
+                        ffmpeg.input(str(local_source), ss=start, t=duration)
+                        .filter("scale", 1080, 1920, force_original_aspect_ratio="increase")
+                        .filter("crop", 1080, 1920)
+                        .output(str(target_clip), vcodec="libx264", acodec="aac", crf=23, preset="veryfast")
+                        .overwrite_output()
+                        .run(quiet=True)
+                    )
             elif clip_source.startswith("http"):
                 # Real download and trim — yt-dlp first, Cobalt fallback
                 try:
@@ -296,12 +327,19 @@ def render_video(production_plan: dict) -> str:
         a = joined[1]
         
         # Overlay voiceover if provided
-        if voiceover_path and os.path.exists(voiceover_path):
-            vo = ffmpeg.input(voiceover_path)
-            # Mix voiceover (higher volume) with ambient audio (lower volume)
-            a_ambient = a.filter("volume", 0.3)
-            a_voice = vo.filter("volume", 1.5)
-            a = ffmpeg.filter([a_ambient, a_voice], "amix", inputs=2, duration="first")
+        if voiceover_path:
+            local_vo = voiceover_path
+            if voiceover_path.startswith("gridfs://"):
+                remote_vo = voiceover_path[len("gridfs://"):]
+                local_vo = str(workdir / "voiceover.mp3")
+                get_storage_service().download_file(remote_vo, Path(local_vo), bucket_name="uploads")
+            
+            if os.path.exists(local_vo):
+                vo = ffmpeg.input(local_vo)
+                # Mix voiceover (higher volume) with ambient audio (lower volume)
+                a_ambient = a.filter("volume", 0.3)
+                a_voice = vo.filter("volume", 1.5)
+                a = ffmpeg.filter([a_ambient, a_voice], "amix", inputs=2, duration="first")
             
         output_path = workdir / "final_output.mp4"
         (
