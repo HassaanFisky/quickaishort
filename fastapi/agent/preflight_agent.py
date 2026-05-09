@@ -663,11 +663,21 @@ def _build_pipeline() -> tuple[Any, Any]:
     return root_agent, runner
 
 
-try:
-    preflight_root_agent, preflight_runner = _build_pipeline()
-except Exception as _pipeline_init_err:
-    logger.error("Pre-Flight pipeline failed to initialise: %s", _pipeline_init_err)
-    preflight_root_agent, preflight_runner = None, None
+_preflight_runner_cache: Optional[Runner] = None
+
+def get_preflight_runner() -> Optional[Runner]:
+    """Lazy initializer for the ADK pipeline to speed up app boot."""
+    global _preflight_runner_cache
+    if _preflight_runner_cache is not None:
+        return _preflight_runner_cache
+    
+    try:
+        _, runner = _build_pipeline()
+        _preflight_runner_cache = runner
+        return runner
+    except Exception as exc:
+        logger.error("Lazy preflight pipeline init failed: %s", exc)
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -681,8 +691,9 @@ async def run_preflight_pipeline(
     is_premium: bool,
     user_id: str,
 ) -> PreflightResult:
-    if not _ADK_OK or preflight_runner is None:
-        raise RuntimeError("google-adk not installed — cannot run Pre-Flight pipeline")
+    runner = get_preflight_runner()
+    if not _ADK_OK or runner is None:
+        raise RuntimeError("google-adk not installed or failed to init — cannot run Pre-Flight pipeline")
 
     clip = clip_candidates[0]
     session_id = str(uuid.uuid4())
@@ -712,7 +723,7 @@ async def run_preflight_pipeline(
         "skip_refinement": "false",
     }
 
-    await preflight_runner.session_service.create_session(
+    await runner.session_service.create_session(
         app_name="QuickAIShort_PreFlight",
         user_id=user_id,
         session_id=session_id,
@@ -728,7 +739,7 @@ async def run_preflight_pipeline(
         ],
     )
 
-    async for event in preflight_runner.run_async(
+    async for event in runner.run_async(
         user_id=user_id,
         session_id=session_id,
         new_message=message,
@@ -737,7 +748,7 @@ async def run_preflight_pipeline(
         if event.is_final_response():
             # Check if we actually have some results in state before breaking, 
             # as is_final_response might trigger on intermediate sequential steps in some ADK versions.
-            session = await preflight_runner.session_service.get_session(
+            session = await runner.session_service.get_session(
                 app_name="QuickAIShort_PreFlight",
                 user_id=user_id,
                 session_id=session_id,
@@ -746,7 +757,7 @@ async def run_preflight_pipeline(
                 logger.info("Final response received and preflight is marked as done.")
                 break
 
-    session = await preflight_runner.session_service.get_session(
+    session = await runner.session_service.get_session(
         app_name="QuickAIShort_PreFlight",
         user_id=user_id,
         session_id=session_id,
