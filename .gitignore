@@ -39,6 +39,7 @@ dist/
 *.key
 *.cert
 fastapi/.env
+fastapi/*.yaml
 frontend/.env.local
 
 # YouTube Cookies (CRITICAL)

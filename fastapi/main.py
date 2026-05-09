@@ -621,8 +621,7 @@ async def export_status(job_id: str, user_id: str):
 @app.get("/api/download/{job_id}")
 async def export_download(job_id: str, user_id: str, token: str, expires: int):
     """
-    Returns a secure GCS signed URL for the rendered video.
-    Offloads heavy download traffic to Google's edge network.
+    Serves the rendered video directly from GridFS.
     """
     if DemoService.is_demo_job(job_id):
         return RedirectResponse(url="https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_1MB.mp4")
@@ -631,15 +630,42 @@ async def export_download(job_id: str, user_id: str, token: str, expires: int):
     if not verify(job_id, user_id, expires, token):
         raise HTTPException(status_code=403, detail="Invalid or expired download token.")
 
-    storage = get_storage_service()
     remote_path = f"exports/{user_id}/{job_id}.mp4"
     
-    signed_url = storage.generate_signed_url(remote_path)
-    if not signed_url:
-        logger.error("signed_url_generation_failed", job_id=job_id, user_id=user_id)
-        raise HTTPException(status_code=404, detail="Export not found or storage error")
+    try:
+        bucket = get_exports_bucket()
+        # Find the file by name
+        cursor = bucket.find({"filename": remote_path})
+        files = await cursor.to_list(length=1)
         
-    return RedirectResponse(url=signed_url)
+        if not files:
+            logger.error("export_not_found_in_gridfs", path=remote_path)
+            raise HTTPException(status_code=404, detail="Export not found")
+            
+        file_id = files[0]["_id"]
+        
+        # GridFS bucket open_download_stream returns an async stream
+        grid_out = await bucket.open_download_stream(file_id)
+        
+        async def stream_gridfs():
+            while True:
+                chunk = await grid_out.read(256 * 1024) # 256KB chunks
+                if not chunk:
+                    break
+                yield chunk
+
+        return StreamingResponse(
+            stream_gridfs(),
+            media_type="video/mp4",
+            headers={
+                "Content-Disposition": f'attachment; filename="{job_id}.mp4"',
+                "Content-Length": str(files[0]["length"])
+            }
+        )
+    except Exception as e:
+        logger.error("gridfs_download_failed", error=str(e))
+        raise HTTPException(status_code=500, detail="Internal storage error")
+
 
 
 # ---- Stats --------------------------------------------------------------------
