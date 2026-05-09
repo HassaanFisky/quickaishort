@@ -1,3 +1,15 @@
+import os, sys
+_REQUIRED = ["MONGODB_URI", "REDIS_URL", "GEMINI_API_KEY"]
+_missing = [k for k in _REQUIRED if not os.environ.get(k)]
+if _missing:
+    print(f"[FATAL] Missing env vars: {_missing}", file=sys.stderr)
+    sys.exit(1)
+for k in _REQUIRED:
+    v = os.environ[k]
+    if v.startswith(("redis://localhost", "redis://127")):
+        print(f"[FATAL] {k} is localhost — not valid in Cloud Run. Fix Cloud Run env vars.", file=sys.stderr)
+        sys.exit(1)
+
 import logging
 import os
 import time

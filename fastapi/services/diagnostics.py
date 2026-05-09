@@ -41,10 +41,7 @@ async def run_startup_checks():
                 # We raise in prod to prevent zombie service starts
                 raise RuntimeError(f"STARTUP_HALTED: Missing secret {secret}")
                 
-    # 4. Storage Bucket
-    bucket = os.getenv("GCS_BUCKET_NAME")
-    if is_prod and not bucket:
-        raise RuntimeError("STARTUP_HALTED: GCS_BUCKET_NAME not set")
+
 
     # 5. Cleanup Stale Jobs
     try:

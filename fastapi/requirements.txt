@@ -8,7 +8,6 @@ pydantic==2.10.3
 python-dotenv==1.0.1
 google-adk==1.0.0
 google-genai>=1.14.0
-google-cloud-storage>=2.14.0
 google-cloud-firestore>=2.15.0
 google-cloud-texttospeech
 tenacity==8.2.3
@@ -26,4 +25,3 @@ slowapi==0.1.9
 structlog>=23.1.0
 prometheus-client>=0.19.0
 sentry-sdk[fastapi]>=2.0.0
-google-cloud-secret-manager>=2.20.0
