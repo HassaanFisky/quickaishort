@@ -75,35 +75,48 @@ class DirectorAgent(Agent if _ADK_OK else object):
             generate_content_config={"response_mime_type": "application/json"}
         )
 
-# --- Global Instances (Guarded) ---
-director_agent_instance = None
-director_runner = None
+_director_runner_cache: Optional[Runner] = None
 
-if _ADK_OK:
-    director_agent_instance = DirectorAgent()
-    from agent.firestore_session import FirestoreSessionService
+def get_director_runner() -> Optional[Runner]:
+    """Lazy initializer for the Director runner."""
+    global _director_runner_cache
+    if _director_runner_cache is not None:
+        return _director_runner_cache
+    
+    if not _ADK_OK:
+        return None
+    
     try:
-        _session_service = FirestoreSessionService()
-        logger.info("Director agent using Firestore session service")
-    except Exception as _fs_err:
-        logger.warning(
-            "Firestore unavailable (%s) — falling back to InMemorySessionService", _fs_err
+        from agent.firestore_session import FirestoreSessionService
+        try:
+            _session_service = FirestoreSessionService()
+            logger.info("Director agent using Firestore session service")
+        except Exception as _fs_err:
+            logger.warning(
+                "Firestore unavailable (%s) — falling back to InMemorySessionService", _fs_err
+            )
+            _session_service = InMemorySessionService()
+        
+        agent = DirectorAgent()
+        _director_runner_cache = Runner(
+            agent=agent,
+            session_service=_session_service,
+            app_name="QuickAIShort_Director"
         )
-        _session_service = InMemorySessionService()
-    director_runner = Runner(
-        agent=director_agent_instance,
-        session_service=_session_service,
-        app_name="QuickAIShort_Director"
-    )
+        return _director_runner_cache
+    except Exception as exc:
+        logger.error("Lazy director runner init failed: %s", exc)
+        return None
 
 async def run_director_pipeline(input_text: str, user_id: str) -> dict:
     """High-level async entry point for the Director Agent."""
-    if not _ADK_OK or not director_runner:
-        raise RuntimeError("Director pipeline unavailable — google-adk not installed")
+    runner = get_director_runner()
+    if not _ADK_OK or not runner:
+        raise RuntimeError("Director pipeline unavailable — google-adk not installed or failed to init")
 
     session_id = f"dir-{uuid.uuid4()}"
 
-    await director_runner.session_service.create_session(
+    await runner.session_service.create_session(
         app_name="QuickAIShort_Director",
         user_id=user_id,
         session_id=session_id,
@@ -115,7 +128,7 @@ async def run_director_pipeline(input_text: str, user_id: str) -> dict:
         parts=[genai_types.Part(text=f"Create storyboard for: {input_text}")]
     )
 
-    async for event in director_runner.run_async(
+    async for event in runner.run_async(
         user_id=user_id,
         session_id=session_id,
         new_message=message
@@ -123,7 +136,7 @@ async def run_director_pipeline(input_text: str, user_id: str) -> dict:
         if event.is_final_response():
             break
 
-    session = await director_runner.session_service.get_session(
+    session = await runner.session_service.get_session(
         app_name="QuickAIShort_Director",
         user_id=user_id,
         session_id=session_id

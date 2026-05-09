@@ -193,7 +193,24 @@ def _build_viral_pipeline():
     )
 
 
-viral_runner = _build_viral_pipeline()
+_viral_runner_cache: Optional[Runner] = None
+
+def get_viral_runner() -> Optional[Runner]:
+    """Lazy initializer for the Viral runner."""
+    global _viral_runner_cache
+    if _viral_runner_cache is not None:
+        return _viral_runner_cache
+    
+    if not _ADK_OK:
+        return None
+        
+    try:
+        runner = _build_viral_pipeline()
+        _viral_runner_cache = runner
+        return runner
+    except Exception as exc:
+        logger.error("Lazy viral runner init failed: %s", exc)
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -361,8 +378,9 @@ async def run_viral_pipeline(
     user_id: str = "anonymous",
 ) -> list[ClipSuggestion]:
     """Run the multi-agent ADK pipeline. Falls back to direct Gemini when ADK is missing."""
-    if not _ADK_OK or viral_runner is None or genai_types is None:
-        logger.info("Falling back to direct Gemini pipeline (ADK unavailable)")
+    runner = get_viral_runner()
+    if not _ADK_OK or runner is None or genai_types is None:
+        logger.info("Falling back to direct Gemini pipeline (ADK unavailable or failed to init)")
         return await _direct_gemini_pipeline(transcript_text, duration, video_id)
 
     session_id = str(uuid.uuid4())
@@ -391,7 +409,7 @@ async def run_viral_pipeline(
     except Exception:
         pass
 
-    await viral_runner.session_service.create_session(
+    await runner.session_service.create_session(
         app_name="QuickAIShort_ViralEngine",
         user_id=user_id,
         session_id=session_id,
@@ -409,7 +427,7 @@ async def run_viral_pipeline(
 
     try:
         final_text = "[]"
-        async for event in viral_runner.run_async(
+        async for event in runner.run_async(
             user_id=user_id,
             session_id=session_id,
             new_message=message,
