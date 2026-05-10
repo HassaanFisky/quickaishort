@@ -49,9 +49,11 @@ from agent.viral_agent import get_viral_agent
 from models.user_stats import StatsIncrement
 from services.db import (
     EXPORTS_BUCKET,
+    UPLOADS_BUCKET,
     close_db,
     get_db,
     get_exports_bucket,
+    get_uploads_bucket,
     init_db,
     is_ready as db_is_ready,
 )
@@ -549,6 +551,29 @@ async def export_video(request: ExportRequest, verified_user_id: str = Depends(g
         }
 
     job_id = uuid.uuid4().hex
+    
+    # CHANGED: Autonomous metadata lookup for 'Genius' features
+    # (Auto-Reframing + Auto-Hook Overlay + Cinematic Peaks)
+    salient_center_x = 0.5
+    hook_overlay = ""
+    emotional_peaks = []
+    cinematic_style = "Impact"
+    
+    if not request.reframing:
+        try:
+            lookup_key = f"{request.start_sec:.2f}:{request.end_sec:.2f}"
+            raw_meta = redis_conn.hget(f"segment:metadata:{request.videoId}", lookup_key)
+            if raw_meta:
+                import json as _json
+                meta = _json.loads(raw_meta)
+                salient_center_x = float(meta.get("cx", 0.5))
+                hook_overlay = meta.get("hook", "")
+                emotional_peaks = meta.get("peaks", [])
+                cinematic_style = meta.get("style", "Impact")
+                logger.info("autonomous_metadata_hit", video_id=request.videoId, peaks=emotional_peaks)
+        except Exception:
+            pass
+
     options = {
         "aspect_ratio": request.aspect_ratio,
         "quality": request.quality,
@@ -557,6 +582,10 @@ async def export_video(request: ExportRequest, verified_user_id: str = Depends(g
         "captions_style": request.captions.style,
         "watermark_enabled": request.watermark_enabled,
         "reframing": request.reframing.model_dump() if request.reframing else None,
+        "salient_center_x": salient_center_x if not request.reframing else None,
+        "hook_overlay": hook_overlay,
+        "emotional_peaks": emotional_peaks,
+        "cinematic_style": cinematic_style,
     }
 
     try:
@@ -1254,21 +1283,47 @@ async def startup_check():
 
 
 @app.post("/api/adk/upload")
-async def adk_upload(file: UploadFile = File(...), _auth: str = Depends(get_verified_user_id)):
-    ADK_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+async def adk_upload(file: UploadFile = File(...), verified_user_id: str = Depends(get_verified_user_id)):
+    """
+    Uploads a media file for ADK Studio, persisting it in GridFS.
+    This ensures horizontal scalability as all worker instances can access the file.
+    """
     file_id = uuid.uuid4().hex
     original_name = file.filename or "upload"
     ext = Path(original_name).suffix.lower()
     if ext not in _ADK_EXTENSIONS:
         ext = ".mp4"
-    dest = ADK_UPLOAD_DIR / f"{file_id}{ext}"
+    
+    filename = f"{file_id}{ext}"
+    remote_path = f"adk_uploads/{verified_user_id}/{filename}"
 
     content = await file.read()
     if len(content) > 200 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="File too large (max 200 MB)")
-    dest.write_bytes(content)
-    logger.info("ADK upload %s → %s (%d bytes)", original_name, dest, len(content))
-    return {"file_id": file_id, "filename": original_name, "size_bytes": len(content)}
+    
+    try:
+        bucket = get_uploads_bucket()
+        # CHANGED: Persist to GridFS instead of local disk
+        await bucket.upload_from_stream(
+            remote_path,
+            content,
+            metadata={
+                "user_id": verified_user_id,
+                "original_name": original_name,
+                "uploaded_at": datetime.utcnow().isoformat()
+            }
+        )
+        logger.info("ADK upload persisted to GridFS: %s (%d bytes)", remote_path, len(content))
+    except Exception as e:
+        logger.error("ADK upload to GridFS failed: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to store upload")
+
+    return {
+        "file_id": file_id, 
+        "filename": original_name, 
+        "size_bytes": len(content),
+        "gridfs_path": remote_path
+    }
 
 
 @app.get("/api/adk/stock")
@@ -1320,6 +1375,7 @@ async def adk_generate(request: Request, body: ADKGenerateRequest, user_id: str 
         script=body.script,
         voice_id=body.voice_id,
         uploaded_file_ids=body.uploaded_file_ids,
+        user_id=user_id,
         stock_query=body.stock_query,
         aspect_ratio=body.aspect_ratio
     )

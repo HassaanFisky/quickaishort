@@ -152,9 +152,9 @@ Frontend (RightPanel.tsx)
 
 | Component | Technology | Purpose |
 | :--- | :--- | :--- |
-| Primary Database | **MongoDB (Atlas)** | User stats, export metadata, GridFS video storage |
+| Primary Database | **MongoDB (Atlas)** | User stats, export metadata, GridFS storage (Exports, ADK Uploads, TTS Cache) |
 | Agent Sessions | **Firestore** | Persistent ADK `SequentialAgent` and `LoopAgent` state |
-| Cache & Queue | **Redis (Cloud)** | Task queue for `render_worker.py` and real-time events |
+| Cache & Queue | **Redis (Cloud)** | Task queue for `render_worker.py` and extraction cache |
 | YouTube Analytics v2 | `google-api-python-client` | Creator channel retention analytics (falls back to baseline if no OAuth) |
 
 ---
@@ -164,9 +164,9 @@ Frontend (RightPanel.tsx)
 | Component | Platform | Notes |
 | :--- | :--- | :--- |
 | Frontend | Vercel | `next build` → React + Framer Motion |
-| Backend + ADK | Cloud Native | FastAPI, Gemini 2.5 Flash, ADK 1.0 |
-| Video Engine | `ffmpeg-python` (RQ worker) | Server-side rendering via FFmpeg (libx264/aac); browser preview uses MediaRecorder |
-| Database | MongoDB Atlas | Cluster with GridFS for raw/processed artifacts |
+| Backend + ADK | Google Cloud Run | FastAPI, Gemini 2.5 Flash, ADK 1.0 (Horizontal Auto-scaling) |
+| Video Engine | `ffmpeg-python` (RQ worker) | Server-side rendering; shared GridFS state across worker instances |
+| Database | MongoDB Atlas | Cluster with GridFS for ALL raw/processed artifacts (No local FS dependency) |
 
 ---
 

@@ -1,8 +1,3 @@
-"""Text-to-Speech service.
-
-Supports Google Cloud TTS and ElevenLabs with caching.
-"""
-
 import os
 import logging
 import hashlib
@@ -12,6 +7,8 @@ from pathlib import Path
 from typing import Optional, Literal
 
 import httpx
+from services.storage_service import get_storage_service
+from services.db import is_ready
 
 logger = logging.getLogger(__name__)
 
@@ -21,12 +18,11 @@ class TTSService:
     def __init__(self):
         self.google_api_key = os.getenv("GOOGLE_TTS_API_KEY")
         self.eleven_api_key = os.getenv("ELEVENLABS_API_KEY")
-        self.cache_dir = Path(tempfile.gettempdir()) / "qai_tts_cache"
-        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        self.storage = get_storage_service()
 
-    def _get_cache_path(self, text: str, voice_id: str, provider: Provider) -> Path:
+    def _get_cache_key(self, text: str, voice_id: str, provider: Provider) -> str:
         hash_key = hashlib.md5(f"{provider}:{voice_id}:{text}".encode()).hexdigest()
-        return self.cache_dir / f"{hash_key}.mp3"
+        return f"tts_cache/{hash_key}.mp3"
 
     async def generate(
         self, 
@@ -34,20 +30,40 @@ class TTSService:
         voice_id: str = "en-US-Neural2-D", 
         provider: Provider = "google"
     ) -> Optional[str]:
-        """Generates audio from text. Returns local file path."""
+        """Generates audio from text. Returns gridfs:// URI."""
         if not text:
             return None
 
-        cache_path = self._get_cache_path(text, voice_id, provider)
-        if cache_path.exists():
-            logger.info(f"[TTS] Cache hit for {voice_id}")
-            return str(cache_path)
+        remote_path = self._get_cache_key(text, voice_id, provider)
+        
+        # Check GridFS cache
+        if await self.storage.exists_async(remote_path, bucket_name="uploads"):
+            logger.info(f"[TTS] Cache hit in GridFS for {voice_id}")
+            return f"gridfs://{remote_path}"
 
-        if provider == "elevenlabs" and self.eleven_api_key:
-            return await self._generate_elevenlabs(text, voice_id, cache_path)
-        else:
-            # Fallback to Google if ElevenLabs key missing or explicitly requested
-            return await self._generate_google(text, voice_id, cache_path)
+        # If not in cache, generate and upload
+        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp:
+            tmp_path = Path(tmp.name)
+            
+        try:
+            if provider == "elevenlabs" and self.eleven_api_key:
+                success_path = await self._generate_elevenlabs(text, voice_id, tmp_path)
+            else:
+                success_path = await self._generate_google(text, voice_id, tmp_path)
+            
+            if success_path:
+                # Upload to GridFS
+                gridfs_uri = await self.storage.upload_file_async(
+                    tmp_path, 
+                    remote_path, 
+                    content_type="audio/mpeg", 
+                    bucket_name="uploads"
+                )
+                return gridfs_uri
+            return None
+        finally:
+            if tmp_path.exists():
+                os.remove(tmp_path)
 
     async def _generate_google(self, text: str, voice_id: str, cache_path: Path) -> Optional[str]:
         if not self.google_api_key:
@@ -83,9 +99,6 @@ class TTSService:
         if not self.eleven_api_key:
             return None
 
-        # Voice ID for ElevenLabs is usually a hash (e.g. "21m00Tcm4TlvDq8ikWAM" for Rachel)
-        # If the voice_id doesn't look like an ElevenLabs ID, we might need a mapping.
-        
         url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
         headers = {
             "Accept": "audio/mpeg",

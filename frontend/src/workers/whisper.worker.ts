@@ -1,7 +1,6 @@
 import { pipeline } from "@xenova/transformers";
 
 // Use any for pipeline as the types are complex and not fully exported
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 let transcriber: any = null;
 
 async function loadWhisper(model: string = "Xenova/whisper-tiny.en") {

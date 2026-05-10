@@ -121,6 +121,13 @@ def _build_job(
             center_y=float(center.get("y", 0.5)),
             scale=float(raw_reframe.get("scale", 1.0)),
         )
+    elif "salient_center_x" in options:
+        # CHANGED: Added autonomous reframing fallback from viral agent analysis
+        reframing = Reframing(
+            center_x=float(options["salient_center_x"]),
+            center_y=0.5,
+            scale=1.0
+        )
 
     captions = CaptionsConfig(
         enabled=bool(options.get("captions_enabled", False)),
@@ -144,6 +151,9 @@ def _build_job(
         reframing=reframing,
         captions=captions,
         watermark=watermark,
+        hook_overlay=str(options.get("hook_overlay", "")),
+        emotional_peaks=list(options.get("emotional_peaks", [])),
+        cinematic_style=str(options.get("cinematic_style", "Impact")),
     )
 
     music_id = options.get("music_id")

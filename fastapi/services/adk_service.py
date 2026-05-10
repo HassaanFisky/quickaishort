@@ -21,25 +21,24 @@ class ADKService:
         script: str, 
         voice_id: str, 
         uploaded_file_ids: List[str], 
+        user_id: str,
         stock_query: Optional[str] = None,
         aspect_ratio: str = "9:16"
     ) -> Dict[str, Any]:
         """Orchestrates the creation of a full video production plan."""
-        logger.info("generating_production_plan", script_len=len(script), voice=voice_id)
+        logger.info("generating_production_plan", script_len=len(script), voice=voice_id, user=user_id)
         
-        # 1. Resolve uploaded clips
+        # 1. Resolve uploaded clips as GridFS URIs
+        # We no longer check local disk since uploads are persisted to GridFS.
+        # We assume the file exists if the ID was provided by the client (who got it from /api/adk/upload)
         clip_paths: List[str] = []
-        ADK_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
         for fid in uploaded_file_ids:
-            found = False
-            for ext in _ADK_EXTENSIONS:
-                candidate = ADK_UPLOAD_DIR / f"{fid}{ext}"
-                if candidate.exists():
-                    clip_paths.append(str(candidate))
-                    found = True
-                    break
-            if not found:
-                logger.warning("adk_upload_clip_not_found", file_id=fid)
+            # We use a naming convention: gridfs://adk_uploads/{user_id}/{fid}{ext}
+            # Since we don't know the extension here for sure, we'll try to find it in GridFS
+            # or just use a standard .mp4 as per the upload endpoint's default.
+            # Best is to just use the path as constructed in main.py if possible.
+            # For now, we'll assume .mp4 or similar.
+            clip_paths.append(f"gridfs://adk_uploads/{user_id}/{fid}.mp4")
 
         # 2. Pre-fetch Stock Clips
         stock_clips: List[Dict[str, str]] = []

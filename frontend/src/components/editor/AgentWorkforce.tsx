@@ -49,9 +49,9 @@ const AgentNode = ({ agent, icon: Icon, isActive, isNext }: AgentNodeProps) => {
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
       className={cn(
-        "relative flex items-center gap-6 p-4 rounded-3xl transition-all duration-500",
+        "relative flex items-center gap-6 p-4 rounded-3xl transition-all duration-700",
         isActive
-          ? "glass-surface border border-foreground/10 shadow-2xl"
+          ? "nano-glass border border-white/10 shadow-[0_0_30px_rgba(0,0,0,0.15)]"
           : "opacity-40",
       )}
     >
@@ -140,7 +140,7 @@ const AgentNode = ({ agent, icon: Icon, isActive, isNext }: AgentNodeProps) => {
         </div>
         
         {agent.reasoningLogs && agent.reasoningLogs.length > 0 && (
-          <div className="mt-2 p-2 bg-foreground/5 rounded-md max-h-24 overflow-y-auto custom-scrollbar border border-foreground/5">
+          <div className="mt-2 p-2 bg-black/20 rounded-xl max-h-24 overflow-y-auto custom-scrollbar border border-white/5 shadow-inner">
             {agent.reasoningLogs.map((log, idx) => (
               <div key={idx} className="text-[10px] text-muted-foreground/80 font-mono tracking-tight leading-relaxed">
                 <span className="text-primary mr-1">&gt;</span>{log}
@@ -150,7 +150,7 @@ const AgentNode = ({ agent, icon: Icon, isActive, isNext }: AgentNodeProps) => {
         )}
 
         {/* Mini Progress Bar */}
-        <div className="w-full h-1 bg-foreground/5 rounded-full overflow-hidden mt-1">
+        <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden mt-1 shadow-inner">
           <motion.div
             className={cn("h-full", statusColor.replace("text-", "bg-"))}
             animate={{ width: `${agent.progress}%` }}
@@ -174,7 +174,7 @@ export default function AgentWorkforce() {
             Studio Active
           </span>
         </div>
-        <h2 className="text-2xl font-black text-foreground tracking-tighter">
+        <h2 className="text-3xl font-black tracking-tighter premium-gradient-text">
           Analyzing Your Video
         </h2>
         <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest max-w-sm">
@@ -225,7 +225,7 @@ export default function AgentWorkforce() {
       </div>
 
       {/* Footer */}
-      <div className="flex items-center gap-4 mt-4 px-6 py-3 glass-surface rounded-2xl border border-foreground/5 opacity-60">
+      <div className="flex items-center gap-4 mt-4 px-6 py-3 nano-glass rounded-2xl border border-white/5 opacity-60 hover:opacity-100 transition-opacity">
         <Cpu className="w-4 h-4 text-primary" />
         <span className="text-[10px] font-medium text-muted-foreground">
           Processing locally on your device

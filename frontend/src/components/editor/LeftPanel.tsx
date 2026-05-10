@@ -83,10 +83,10 @@ function DraggableClip({
       {...listeners}
       onClick={onClick}
       className={cn(
-        "group relative p-4 rounded-lg cursor-grab active:cursor-grabbing transition-all duration-150",
+        "group relative p-4 rounded-xl cursor-grab active:cursor-grabbing transition-all duration-300",
         isSelected
-          ? "bg-secondary text-foreground border border-primary/40 border-l-[3px] border-l-primary"
-          : "bg-secondary/40 border border-border hover:bg-secondary hover:border-border",
+          ? "nano-glass bg-primary/10 border-primary/40 border-l-4 border-l-primary shadow-[0_0_20px_rgba(168,85,247,0.1)]"
+          : "nano-glass border-white/5 hover:bg-white/5 hover:border-white/20 hover:-translate-y-0.5",
       )}
       tabIndex={0}
     >
@@ -129,8 +129,8 @@ function DraggableClip({
 
       {/* Why This Works Section */}
       {clip.viralReasoning && (
-        <div className="relative overflow-hidden p-4 rounded-lg bg-secondary/40 border border-border group/insight">
-          <div className="absolute -top-4 -right-4 w-12 h-12 bg-primary/10 blur-2xl group-hover/insight:bg-primary/20 transition-all duration-700" />
+        <div className="relative overflow-hidden p-4 rounded-xl glass-surface border-white/5 group/insight mt-4">
+          <div className="absolute -top-4 -right-4 w-12 h-12 bg-primary/10 blur-2xl group-hover/insight:bg-primary/30 transition-all duration-700" />
 
           <div className="flex items-center gap-2 text-primary mb-2">
             <Info className="w-3.5 h-3.5" />
@@ -210,8 +210,8 @@ export default function LeftPanel() {
     <div className="w-full h-full flex flex-col gap-6 animate-in fade-in slide-in-from-left-6 duration-1000 ease-fluid">
       {/* Source Info */}
       {sourceFile && (
-        <div className="p-4 rounded-lg bg-secondary/40 flex gap-5 items-center group cursor-default border border-border">
-          <div className="w-14 h-10 bg-primary/10 rounded-xl overflow-hidden relative flex items-center justify-center border border-primary/20 group-hover:border-primary/40 transition-colors">
+        <div className="p-4 rounded-xl nano-glass border-white/5 flex gap-5 items-center group cursor-default">
+          <div className="w-14 h-10 bg-primary/10 rounded-lg overflow-hidden relative flex items-center justify-center border border-primary/20 group-hover:border-primary/40 transition-colors shadow-inner">
             <Film className="w-5 h-5 text-primary" strokeWidth={1.5} />
             <div className="absolute inset-0 bg-gradient-to-tr from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
           </div>
@@ -275,7 +275,8 @@ export default function LeftPanel() {
             </SortableContext>
           </DndContext>
         ) : (
-          <div className="h-[400px] flex flex-col items-center justify-center text-center p-10 rounded-lg bg-secondary/20 border border-dashed border-border group">
+          <div className="h-[400px] flex flex-col items-center justify-center text-center p-10 rounded-2xl glass-surface border-white/5 group relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/20" />
             {currentStage !== "idle" ? (
               <div className="space-y-6 flex flex-col items-center">
                 <div className="relative">

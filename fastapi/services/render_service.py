@@ -81,6 +81,9 @@ class RenderJob:
     captions: CaptionsConfig = field(default_factory=CaptionsConfig)
     watermark: WatermarkConfig = field(default_factory=WatermarkConfig)
     background_music: Optional[str] = None  # Local path or URL
+    hook_overlay: str = ""  # Punchy text hook to overlay at start
+    emotional_peaks: list[float] = field(default_factory=list)  # Seconds relative to clip start
+    cinematic_style: str = "Impact"
 
 
 @dataclass
@@ -144,6 +147,21 @@ class RenderService:
 
         video = self._apply_aspect_ratio(video, job)
 
+        # APPLY CINEMATIC EFFECTS (ZOOM/PULSE)
+        if job.emotional_peaks:
+            # CHANGED: Autonomous 'Genius' cinematic zoom logic
+            # For each peak, we create a 0.5s zoom-in (scale 1.0 -> 1.1)
+            # We use the zoompan filter which is powerful but requires careful syntax
+            zoom_expr = "1.0"
+            for peak in job.emotional_peaks:
+                # pulse at peak: (t is relative to clip start in zoompan)
+                # We use a simple step function for the 0.5s window
+                zoom_expr = f"if(between(it,{peak},{peak+0.5}),1.1,{zoom_expr})"
+            
+            # zoompan: z=zoom, d=duration(frames), s=output_size
+            # Note: zoompan happens at 30fps by default
+            video = video.filter("zoompan", z=zoom_expr, d=1, s="1080x1920", fps=30)
+
         if job.watermark.enabled and job.watermark.image_path is not None:
             wm = ffmpeg.input(str(job.watermark.image_path)).filter(
                 "scale", 200, -1
@@ -161,6 +179,22 @@ class RenderService:
                 fontcolor="white@0.8",
                 x="w-tw-40",
                 y="h-th-40",
+            )
+
+        if job.hook_overlay:
+            # CHANGED: Apply the 'Genius' hook overlay for the first 3 seconds
+            # Style: Big, yellow, centered with box
+            video = video.drawtext(
+                text=job.hook_overlay.upper(),
+                fontfile="/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+                fontsize=72,
+                fontcolor="yellow",
+                box=1,
+                boxcolor="black@0.6",
+                boxborderw=10,
+                x="(w-text_w)/2",
+                y="(h-text_h)/2-100",
+                enable="between(t,0,3)",
             )
 
         if captions_path is not None:

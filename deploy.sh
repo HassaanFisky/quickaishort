@@ -86,11 +86,11 @@ gcloud run deploy "${BACKEND_SERVICE}" \
   --source fastapi \
   --region "${REGION}" \
   --allow-unauthenticated \
-  --memory 2Gi \
+  --memory 4Gi \
   --cpu 2 \
-  --timeout 300 \
+  --timeout 900 \
   --max-instances 3 \
-  --set-env-vars "${ENV_VARS}" \
+  --set-env-vars "${ENV_VARS},WEB_CONCURRENCY=3" \
   --quiet
 
 BACKEND_URL=$(gcloud run services describe "${BACKEND_SERVICE}" \

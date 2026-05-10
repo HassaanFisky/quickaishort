@@ -173,7 +173,7 @@ export default function SignInPage() {
             </Button>
 
             <p className="mt-8 text-center text-sm text-muted-foreground/80 font-medium">
-              Don't have an account?{" "}
+              Don&apos;t have an account?{" "}
               <Link href="/signup" className="text-primary hover:text-white transition-colors font-bold tracking-wide underline-offset-4 hover:underline">
                 Create one now
               </Link>

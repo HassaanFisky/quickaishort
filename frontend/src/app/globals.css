@@ -509,3 +509,101 @@ html.liquid-transition::view-transition-new(root) {
 ::-webkit-scrollbar-thumb:hover {
   background: hsl(var(--foreground) / 0.2);
 }
+
+/* =============================================
+   ADDITIONAL UTILITY CLASSES — QuickAI Studio
+   ============================================= */
+
+/* Ghost border used in Footer + sections */
+.ghost-border {
+  border-color: hsl(var(--foreground) / 0.06);
+}
+
+/* Interactive — click / hover feedback */
+.interactive {
+  cursor: pointer;
+  transition: opacity 150ms ease, transform 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.interactive:hover  { opacity: 0.85; }
+.interactive:active { transform: scale(0.97); }
+
+/* custom-scrollbar used inside AgentWorkforce */
+.custom-scrollbar::-webkit-scrollbar { width: 4px; }
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: hsl(var(--foreground) / 0.08);
+  border-radius: 100px;
+}
+
+/* ── Marquee (social proof ticker) ─────────────── */
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+.marquee-track {
+  display: flex;
+  width: max-content;
+  animation: marquee 30s linear infinite;
+}
+.marquee-track:hover { animation-play-state: paused; }
+
+/* ── Hero ambient glow ──────────────────────────── */
+@keyframes hero-pulse {
+  0%, 100% { opacity: 0.07; transform: scale(1);    }
+  50%       { opacity: 0.13; transform: scale(1.08); }
+}
+.hero-glow-a {
+  position: absolute;
+  border-radius: 50%;
+  background: hsl(var(--primary));
+  filter: blur(120px);
+  animation: hero-pulse 8s ease-in-out infinite;
+}
+.hero-glow-b {
+  position: absolute;
+  border-radius: 50%;
+  background: hsl(var(--accent));
+  filter: blur(140px);
+  animation: hero-pulse 10s ease-in-out infinite 2s;
+}
+
+/* ── Count-up flash (score reveal) ─────────────── */
+@keyframes score-reveal {
+  from { opacity: 0; transform: scale(0.8) translateY(6px); }
+  to   { opacity: 1; transform: scale(1) translateY(0);     }
+}
+.score-reveal { animation: score-reveal 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+
+/* ── Elite-tier pulse ring ──────────────────────── */
+@keyframes elite-ring {
+  0%   { box-shadow: 0 0 0 0   hsl(var(--primary) / 0.5); }
+  70%  { box-shadow: 0 0 0 12px hsl(var(--primary) / 0);  }
+  100% { box-shadow: 0 0 0 0   hsl(var(--primary) / 0);   }
+}
+.elite-ring { animation: elite-ring 2s ease-out infinite; }
+
+/* ── Gradient border trick (used on CTA card) ───── */
+.gradient-border {
+  position: relative;
+  background: var(--glass-bg);
+  border-radius: inherit;
+}
+.gradient-border::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, hsl(var(--primary) / 0.5), hsl(var(--accent) / 0.3), transparent);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: destination-out;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* ── Staggered fade-in rows ─────────────────────── */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0);    }
+}
+.fade-up { animation: fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) both; }
+

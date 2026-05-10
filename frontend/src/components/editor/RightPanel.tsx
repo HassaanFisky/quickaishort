@@ -33,6 +33,22 @@ import { toast } from "sonner";
 import type { PreflightResult, PersonaVote, Recommendation } from "@/types/preflight";
 import { motion, AnimatePresence } from "framer-motion";
 
+function useAnimatedCounter(target: number, duration = 1500) {
+  const [value, setValue] = React.useState(0);
+  React.useEffect(() => {
+    let startTime: number | null = null;
+    const step = (timestamp: number) => {
+      if (!startTime) startTime = timestamp;
+      const progress = Math.min((timestamp - startTime) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setValue(Math.floor(eased * target));
+      if (progress < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }, [target, duration]);
+  return value;
+}
+
 const QUALITY_OPTIONS = ["low", "medium", "high"] as const;
 const FILTER_OPTIONS = ["None", "Urban", "Retro", "Cinematic"] as const;
 
@@ -544,7 +560,7 @@ const PERSONA_LABELS: Record<string, { name: string; emoji: string }> = {
   tech:       { name: "Tech Nerd",   emoji: "🖥️" },
 };
 
-function PersonaCard({ vote }: { vote: PersonaVote }) {
+function PersonaCard({ vote, index }: { vote: PersonaVote; index: number }) {
   const scoreStyle = viralScoreColor(vote.predicted_retention_pct);
   const isViral = vote.predicted_retention_pct >= 90;
   const label = PERSONA_LABELS[vote.persona_id] ?? { name: vote.persona_id, emoji: "👤" };
@@ -557,7 +573,12 @@ function PersonaCard({ vote }: { vote: PersonaVote }) {
         : "text-amber-400";
 
   return (
-    <div className="p-4 rounded-lg bg-secondary/40 border border-border space-y-3 transition-all hover:bg-secondary hover:-translate-y-0.5 hover:border-primary/40">
+    <motion.div 
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: index * 0.1, duration: 0.4 }}
+      className="p-4 rounded-xl nano-glass border-white/5 space-y-3 transition-all interactive hover:border-primary/30"
+    >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
           <span className="text-sm leading-none">{label.emoji}</span>
@@ -619,7 +640,7 @@ function PersonaCard({ vote }: { vote: PersonaVote }) {
       <p className="text-[10px] text-muted-foreground font-medium leading-relaxed line-clamp-2 italic border-l-2 border-white/10 pl-2.5">
         &ldquo;{vote.reasoning}&rdquo;
       </p>
-    </div>
+    </motion.div>
   );
 }
 
@@ -636,11 +657,12 @@ function PreflightResultsPanel({
 }) {
   const scoreStyle = viralScoreColor(result.weighted_consensus_score);
   const isViral = result.weighted_consensus_score >= 90;
+  const animatedScore = useAnimatedCounter(result.weighted_consensus_score);
 
   return (
     <div className="space-y-6">
       {/* Predicted Success Node */}
-      <div className="p-5 rounded-xl bg-secondary/40 border border-border relative overflow-hidden">
+      <div className="p-6 rounded-2xl glass-surface border-white/10 relative overflow-hidden">
         {isViral && (
           <div className="absolute inset-0 bg-primary/5 blur-3xl rounded-full pointer-events-none" />
         )}
@@ -652,16 +674,16 @@ function PreflightResultsPanel({
             <div className="flex items-end gap-1.5">
               <span
                 className={cn(
-                  "text-5xl font-black tracking-tighter leading-none",
-                  isViral && "bg-clip-text text-transparent",
+                  "text-6xl font-black tracking-tighter leading-none score-reveal",
+                  isViral && "premium-gradient-text",
                 )}
                 style={
                   isViral
-                    ? { backgroundImage: scoreStyle.background }
+                    ? {}
                     : { color: scoreStyle.color }
                 }
               >
-                {Math.round(result.weighted_consensus_score)}
+                {animatedScore}
               </span>
               <span className="text-sm font-bold text-muted-foreground/40 pb-1">/100</span>
             </div>
@@ -697,9 +719,9 @@ function PreflightResultsPanel({
 
       {/* Audience Segments Grid */}
       {result.persona_votes.length > 0 && (
-        <div className="grid grid-cols-1 gap-2.5">
-          {result.persona_votes.map((vote) => (
-            <PersonaCard key={vote.persona_id} vote={vote} />
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+          {result.persona_votes.map((vote, idx) => (
+            <PersonaCard key={vote.persona_id} vote={vote} index={idx} />
           ))}
         </div>
       )}

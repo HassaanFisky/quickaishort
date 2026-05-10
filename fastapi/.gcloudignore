@@ -15,3 +15,7 @@ tests/
 data/
 outputs/
 tmp/
+*.mp4
+*.m4a
+*.webm
+downloads/

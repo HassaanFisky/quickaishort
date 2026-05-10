@@ -258,16 +258,6 @@ async def validate_output(path: Path, request_id: str) -> None:
 class ExtractionCache:
     """
     Redis-backed result cache.
-
-    Keys:
-      extract:v1:<sha256(url:quality)>   → raw MP3 bytes
-      extract:lock:<sha256(url)>         → stampede prevention lock
-
-    Cache stampede prevention: the first request acquires a Redis lock.
-    Subsequent concurrent requests for the same URL also proceed (they
-    do not block), but the first one to finish writes the result. This
-    trades a small amount of duplicate work against added lock complexity.
-    For a video pipeline, duplicate work is acceptable.
     """
 
     _VERSION = "v1"
@@ -287,29 +277,29 @@ class ExtractionCache:
 
     async def get(self, url: str) -> Optional[bytes]:
         try:
-            return self._r.get(self._key(url))
+            return await self._r.get(self._key(url))
         except Exception as exc:
             logger.warning("[cache] get failed: %s", exc)
             return None
 
     async def set(self, url: str, data: bytes) -> None:
         try:
-            self._r.setex(self._key(url), self._ttl, data)
+            await self._r.setex(self._key(url), self._ttl, data)
         except Exception as exc:
             logger.warning("[cache] set failed: %s", exc)
 
-    def acquire_lock(self, url: str) -> bool:
+    async def acquire_lock(self, url: str) -> bool:
         """NX lock. Returns True if acquired, False if already held."""
         try:
             return bool(
-                self._r.set(self._lock_key(url), "1", nx=True, ex=self._LOCK_TTL_S)
+                await self._r.set(self._lock_key(url), "1", nx=True, ex=self._LOCK_TTL_S)
             )
         except Exception:
             return True  # Redis unavailable → proceed without lock
 
-    def release_lock(self, url: str) -> None:
+    async def release_lock(self, url: str) -> None:
         try:
-            self._r.delete(self._lock_key(url))
+            await self._r.delete(self._lock_key(url))
         except Exception:
             pass
 
@@ -706,7 +696,7 @@ class ExtractorService:
         if METRICS_AVAILABLE:
             _METRIC_CACHE_MISSES.inc()
 
-        lock_acquired = self.cache.acquire_lock(url)
+        lock_acquired = await self.cache.acquire_lock(url)
         tmpdir = tempfile.mkdtemp(prefix=f"qais-{request_id[:8]}-")
         attempted: List[str] = []
         req_start = time.monotonic()
@@ -838,7 +828,7 @@ class ExtractorService:
 
         finally:
             if lock_acquired:
-                self.cache.release_lock(url)
+                await self.cache.release_lock(url)
             shutil.rmtree(tmpdir, ignore_errors=True)
 
     def tier_states(self) -> Dict[str, dict]:
@@ -862,13 +852,12 @@ _service_instance: Optional[ExtractorService] = None
 
 def get_extractor_service() -> ExtractorService:
     """
-    Lazy singleton. Safe to call at import time — redis_conn is imported
-    from queue_service which initialises its connection at module load.
+    Lazy singleton.
     """
     global _service_instance
     if _service_instance is None:
-        from services.queue_service import redis_conn  # noqa: PLC0415
-        _service_instance = ExtractorService(redis_conn)
+        from services.queue_service import async_redis_conn  # noqa: PLC0415
+        _service_instance = ExtractorService(async_redis_conn)
     return _service_instance
 
 

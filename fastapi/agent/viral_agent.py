@@ -43,6 +43,10 @@ class ViralAnalysis(BaseModel):
     retentionPotential: float = Field(..., description="Predicted retention 0.0-1.0")
     visualEnergy: float = Field(default=0.5, description="0.0-1.0 visual action / energy from frames")
     cameraMovement: float = Field(default=0.5, description="0.0-1.0 camera dynamism from frames")
+    salientCenterX: float = Field(default=0.5, description="Predicted horizontal center of interest (0.0-1.0) for 9:16 cropping")
+    hookOverlay: str = Field(default="", description="Punchy 1-5 word text to overlay at the start")
+    emotionalPeaks: List[float] = Field(default_factory=list, description="Timestamps within the clip where an 'Emotional Peak' occurs for cinematic effects")
+    cinematicStyle: str = Field(default="Impact", description="Editing style suggestion: 'Impact', 'Minimal', 'Dynamic'")
     emotionalTriggers: List[str] = Field(default_factory=list, description="E.g. 'Curiosity', 'Shock'")
     reasoning: str = Field(..., description="Why this segment will perform well")
 
@@ -114,7 +118,14 @@ SCORING_INSTRUCTION = (
     "If frames have been provided to your prompt, score `visualEnergy` (0.0-1.0) and "
     "`cameraMovement` (0.0-1.0) from what you actually see. Otherwise estimate from "
     "the transcript and reasoning. "
+    "CRITICAL: Based on the visual frames, predict the 'salientCenterX' (0.0-1.0) — this is the "
+    "horizontal coordinate of the primary subject (e.g. face of the speaker). If no frames or "
+    "unclear, use 0.5. "
     "Assign a 'score' (0-100) based on hook strength, retention potential, and visual energy. "
+    "Generate a 'hookOverlay' — a punchy, bold 1-5 word text hook (e.g. 'THE UNTOLD TRUTH', 'WATCH "
+    "UNTIL END') that will be burned onto the start of the video. "
+    "Identify 'emotionalPeaks' — a list of 1-3 timestamps (seconds relative to clip start) "
+    "where the speaker is most expressive or a punchline occurs. These will trigger cinematic zoom effects. "
     "Emotional Triggers must be specific (e.g. 'Instant Gratification', 'Contrarian POV'). "
     "Generate 3-5 captions optimized for high CTR. "
     "If 'user_scoring_context' is in session state and non-empty, read it and use it as "
@@ -123,7 +134,7 @@ SCORING_INSTRUCTION = (
     "proven threshold. "
     "Schema: {id: string, start: float, end: float, confidence: float, reason: string, "
     "viralAnalysis: {score: int, hookStrength: float, retentionPotential: float, "
-    "visualEnergy: float, cameraMovement: float, emotionalTriggers: string[], reasoning: string}, "
+    "visualEnergy: float, cameraMovement: float, salientCenterX: float, hookOverlay: string, emotionalPeaks: float[], cinematicStyle: string, emotionalTriggers: string[], reasoning: string}, "
     "suggestedCaptions: string[]} "
     "Return the final JSON list. "
     "Return ONLY the JSON array — no markdown."
@@ -457,20 +468,39 @@ async def run_viral_pipeline(
             except Exception as exc:
                 logger.warning("Vision rescore skipped: %s", exc)
 
-        # Cache the top viral score for this video so FunctionTool can use it
-        # on the next run. Fire-and-forget — never blocks the response.
+        # Cache the viral data and saliency mapping for this video.
+        # This allows the render worker to recover salient center coordinates 
+        # even if the frontend doesn't pass them back in the export request.
         if video_id and suggestions:
             try:
                 import time as _time
                 from services.queue_service import redis_conn as _rc
+                
+                # 1. Store top score for grounding
                 top = max(suggestions, key=lambda s: s.viralAnalysis.score)
                 _rc.hset(f"viral:cache:{video_id}", mapping={
                     "score": str(top.viralAnalysis.score),
                     "cached_at": str(int(_time.time())),
                 })
+                
+                # 2. Store saliency, hook & peaks map (start:end -> {cx, hook, peaks, style})
+                data_map = {}
+                for s in suggestions:
+                    key = f"{s.start:.2f}:{s.end:.2f}"
+                    data_map[key] = json.dumps({
+                        "cx": s.viralAnalysis.salientCenterX,
+                        "hook": s.viralAnalysis.hookOverlay,
+                        "peaks": s.viralAnalysis.emotionalPeaks,
+                        "style": s.viralAnalysis.cinematicStyle
+                    })
+                
+                if data_map:
+                    _rc.hset(f"segment:metadata:{video_id}", mapping=data_map)
+                    _rc.expire(f"segment:metadata:{video_id}", 86400)
+                
                 _rc.expire(f"viral:cache:{video_id}", 86400)  # 24h TTL
-            except Exception:
-                pass  # non-critical
+            except Exception as e:
+                logger.debug("Failed to cache saliency: %s", e)
 
         # Level 5 Learning Loop Enforcement: Deterministic post-processing.
         # Apply the user's historical action boundary to guarantee the 

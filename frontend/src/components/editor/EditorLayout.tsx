@@ -202,9 +202,9 @@ export default function EditorLayout() {
         {/* Central Workspace Grid */}
         <main className="flex-1 grid grid-cols-1 lg:grid-cols-[minmax(240px,20%)_1fr_minmax(280px,25%)] gap-6 overflow-hidden">
 
-          {/* Left: Property Inspector */}
+          {/* Left: Viral Suggestions & Source */}
           <section className="depth-card glass-surface rounded-[2.5rem] p-6 border-foreground/5 shadow-2xl flex flex-col overflow-hidden">
-            <RightPanel />
+            <LeftPanel />
           </section>
 
           {/* Center: Creative Engine */}
@@ -229,7 +229,7 @@ export default function EditorLayout() {
               >
                 <div className="absolute inset-0 bg-primary/20 blur-2xl rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
 
-                <div className="relative glass-surface rounded-[1.5rem] p-2 flex flex-col gap-1 border-foreground/10 shadow-2xl backdrop-blur-3xl overflow-hidden">
+                <div className="relative glass-surface rounded-[1.5rem] p-2 flex flex-col gap-1 shadow-[0_0_50px_rgba(0,0,0,0.2)] border border-white/10 backdrop-blur-3xl overflow-hidden">
                   <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
 
                   <div className="text-[9px] font-black text-center text-primary/50 uppercase tracking-[0.25em] pt-2 pb-1">
@@ -267,12 +267,12 @@ export default function EditorLayout() {
                   <div className="flex items-center gap-2 p-1.5">
                     <div
                       className={cn(
-                        "relative flex-1 bg-foreground/[0.03] rounded-xl border transition-all duration-300",
+                        "relative flex-1 bg-black/20 rounded-xl border transition-all duration-300 shadow-inner",
                         urlValid === true
-                          ? "border-emerald-500/40"
+                          ? "border-emerald-500/40 bg-emerald-500/5"
                           : urlValid === false
-                          ? "border-destructive/40"
-                          : "border-foreground/5",
+                          ? "border-destructive/40 bg-destructive/5"
+                          : "border-white/5 hover:border-white/20",
                       )}
                     >
                       {urlValid === true ? (
@@ -411,9 +411,9 @@ export default function EditorLayout() {
             </div>
           </section>
 
-          {/* Right: Viral Suggestions */}
+          {/* Right: Property Inspector & AI Results */}
           <section className="depth-card glass-surface rounded-[2.5rem] p-6 border-foreground/5 shadow-2xl flex flex-col overflow-hidden">
-            <LeftPanel />
+            <RightPanel />
           </section>
         </main>
 
