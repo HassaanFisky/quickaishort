@@ -25,7 +25,6 @@ const NAV_ITEMS = [
   { href: "/adk", label: "ADK Studio", icon: Clapperboard },
   { href: "/history", label: "History", icon: HistoryIcon },
   { href: "/settings", label: "Settings", icon: SettingsIcon },
-  { href: "/pricing", label: "Pricing", icon: Sparkles },
 ];
 
 export default function Sidebar() {
@@ -94,7 +93,7 @@ export default function Sidebar() {
               <div className="flex-1 min-w-0 text-left">
                 <p className="text-sm font-bold truncate text-foreground/90">{session.user.name}</p>
                 <p className="text-[10px] text-muted-foreground truncate font-medium uppercase tracking-wider">
-                  Pro Creator
+                  Founder Member
                 </p>
               </div>
             </div>

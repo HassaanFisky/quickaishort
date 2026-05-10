@@ -114,7 +114,7 @@ export default function RightPanel() {
           transcript: clipTranscript,
         },
       ],
-      false,
+      true,
       userId,
     );
   }, [selectedClip, triggerPreflight, userId]);
@@ -452,32 +452,8 @@ export default function RightPanel() {
                 </div>
               )}
 
-              {/* Premium Gated State */}
-              {isPremiumGated && (
-                <div className="p-6 rounded-lg bg-amber-500/5 border border-amber-500/20 flex flex-col items-center justify-center text-center gap-3">
-                  <AlertTriangle className="w-8 h-8 text-amber-400" strokeWidth={1.5} />
-                  <p className="text-xs font-black text-amber-400 uppercase tracking-widest">
-                    Pro Feature
-                  </p>
-                  <p className="text-[10px] text-muted-foreground font-medium max-w-[200px]">
-                    Multi-clip batch testing is available on the Pro plan.
-                  </p>
-                  <GlowButton variant="outline" size="sm" className="h-8 px-5 rounded-full text-[9px] font-black" asChild>
-                    <Link href="/pricing">Upgrade</Link>
-                  </GlowButton>
-                </div>
-              )}
-
               {/* Error State */}
-              {preflightError && !isPreflightRunning && !isPremiumGated && (
-                <div className="p-5 rounded-lg bg-red-500/5 border border-red-500/20 text-center space-y-2">
-                  <p className="text-[10px] font-black text-red-400 uppercase tracking-widest">
-                    Something went wrong
-                  </p>
-                  <p className="text-[9px] text-muted-foreground">{preflightError}</p>
-                  <button
-                    onClick={resetPreflight}
-                    className="text-[9px] font-black text-muted-foreground/60 hover:text-foreground transition-colors uppercase tracking-widest"
+              {preflightError && !isPreflightRunning && (
                   >
                     Try Again
                   </button>

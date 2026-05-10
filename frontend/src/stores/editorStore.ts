@@ -23,6 +23,17 @@ export interface ExportSettings {
   format: "mp4" | "webm";
 }
 
+export interface CanvasElement {
+  id: string;
+  type: "text" | "image" | "sticker";
+  content: string;
+  x: number;
+  y: number;
+  scale: number;
+  rotation: number;
+  style?: any;
+}
+
 const DEFAULT_EXPORT_SETTINGS: ExportSettings = {
   quality: "medium",
   aspectRatio: "9:16",
@@ -66,6 +77,9 @@ interface EditorState {
   captionsEnabled: boolean;
   selectedClipId: string | null;
 
+  // Canvas Elements (Interactivity like PowerPoint/Canva)
+  canvasElements: CanvasElement[];
+
   // Export settings (shared across RightPanel + ExportPanel)
   exportSettings: ExportSettings;
 
@@ -95,6 +109,12 @@ interface EditorState {
   selectClip: (id: string | null) => void;
   updateClip: (id: string, updates: Partial<Clip>) => void;
   setExportSetting: <K extends keyof ExportSettings>(key: K, value: ExportSettings[K]) => void;
+  
+  // Canvas Actions
+  addCanvasElement: (element: Omit<CanvasElement, "id">) => void;
+  updateCanvasElement: (id: string, updates: Partial<CanvasElement>) => void;
+  removeCanvasElement: (id: string) => void;
+
   reset: () => void;
 }
 
@@ -125,6 +145,7 @@ export const useEditorStore = create<EditorState>()(
       audioData: null,
       captionsEnabled: true,
       selectedClipId: null,
+      canvasElements: [],
       exportSettings: { ...DEFAULT_EXPORT_SETTINGS },
 
       setCurrentTime: (time) => set({ currentTime: time }),
@@ -183,6 +204,26 @@ export const useEditorStore = create<EditorState>()(
           exportSettings: { ...state.exportSettings, [key]: value },
         })),
 
+      addCanvasElement: (element) =>
+        set((state) => ({
+          canvasElements: [
+            ...state.canvasElements,
+            { ...element, id: Math.random().toString(36).substr(2, 9) },
+          ],
+        })),
+
+      updateCanvasElement: (id, updates) =>
+        set((state) => ({
+          canvasElements: state.canvasElements.map((el) =>
+            el.id === id ? { ...el, ...updates } : el,
+          ),
+        })),
+
+      removeCanvasElement: (id) =>
+        set((state) => ({
+          canvasElements: state.canvasElements.filter((el) => el.id !== id),
+        })),
+
       reset: () =>
         set({
           sourceFile: null,
@@ -207,6 +248,7 @@ export const useEditorStore = create<EditorState>()(
           audioData: null,
           captionsEnabled: true,
           selectedClipId: null,
+          canvasElements: [],
           exportSettings: { ...DEFAULT_EXPORT_SETTINGS },
         }),
     }),

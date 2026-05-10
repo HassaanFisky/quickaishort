@@ -264,7 +264,7 @@ function MediaStep() {
           <input
             value={stockQuery}
             onChange={(e) => setStockQuery(e.target.value)}
-            placeholder="Search cinematic footage… (requires PEXELS_API_KEY)"
+            placeholder="Search cinematic footage…"
             className="w-full rounded-xl bg-secondary/30 border border-foreground/8 pl-10 pr-4 py-3 text-sm placeholder:text-muted-foreground/40 focus:outline-none focus:border-primary/40 transition-colors"
           />
         </div>
@@ -318,7 +318,7 @@ function VoiceStep() {
       <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
         AI Narrator
         <span className="ml-2 font-normal normal-case text-muted-foreground/50">
-          (Google Cloud TTS — requires GOOGLE_TTS_API_KEY)
+          (Google Cloud TTS)
         </span>
       </p>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

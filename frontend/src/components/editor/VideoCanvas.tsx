@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { useEditorStore } from "@/stores/editorStore";
 import { useFaceTracker } from "@/hooks/useFaceTracker";
 import { CaptionOverlay } from "./CaptionOverlay";
+import { CanvasLayer } from "./CanvasLayer";
 import { cn } from "@/lib/utils";
 
 export default function VideoCanvas() {
@@ -173,6 +174,7 @@ export default function VideoCanvas() {
         )}
 
         <CaptionOverlay videoRef={videoRef} transcript={transcript || undefined} />
+        <CanvasLayer />
 
         {sourceUrl && !isBuffering && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-500 interactive">

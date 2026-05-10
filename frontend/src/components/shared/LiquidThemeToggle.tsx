@@ -48,39 +48,25 @@ const THEMES = [
 
 export function LiquidThemeToggle() {
   const { theme, setTheme } = useTheme();
-  const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Close when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(event.target as Node)
-      ) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+  const handleThemeChange = async (event: React.MouseEvent) => {
+    // Cycle to next theme
+    const currentIndex = THEMES.findIndex((t) => t.id === theme);
+    const nextIndex = (currentIndex + 1) % THEMES.length;
+    const nextTheme = THEMES[nextIndex];
 
-  const handleThemeChange = async (
-    newTheme: string,
-    event: React.MouseEvent,
-  ) => {
     // 1. Check for View Transition API support (Visionary Performance)
     if (
       !document.startViewTransition ||
       window.matchMedia("(prefers-reduced-motion: reduce)").matches
     ) {
-      setTheme(newTheme);
-      setIsOpen(false);
+      setTheme(nextTheme.id);
       return;
     }
 
     // 2. Calculate interaction coordinates for the "Spill" origin
-    const target = event.target as HTMLElement;
+    const target = event.currentTarget as HTMLElement;
     const rect = target.getBoundingClientRect();
     const x = rect.left + rect.width / 2;
     const y = rect.top + rect.height / 2;
@@ -92,7 +78,7 @@ export function LiquidThemeToggle() {
     // 3. Execute the "Liquid Spill" View Transition
     document.documentElement.classList.add("liquid-transition");
     const transition = document.startViewTransition(() => {
-      setTheme(newTheme);
+      setTheme(nextTheme.id);
     });
 
     transition.ready.then(() => {
@@ -105,7 +91,7 @@ export function LiquidThemeToggle() {
           ],
         },
         {
-          duration: 600,
+          duration: 700,
           easing: "cubic-bezier(0.25, 1, 0.5, 1)", // Fluid ease
           pseudoElement: "::view-transition-new(root)",
         },
@@ -114,8 +100,7 @@ export function LiquidThemeToggle() {
 
     transition.finished.then(() => {
       document.documentElement.classList.remove("liquid-transition");
-      setIsOpen(false);
-      toast.success(`Theme spilled: ${newTheme}`);
+      toast.success(`Switched to: ${nextTheme.name}`);
     });
   };
 
@@ -126,73 +111,36 @@ export function LiquidThemeToggle() {
     <div className="relative z-50" ref={containerRef}>
       {/* The Trigger: A Floating Liquid Orb */}
       <motion.button
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.95 }}
-        onClick={() => setIsOpen(!isOpen)}
+        whileHover={{ scale: 1.1 }}
+        whileTap={{ scale: 0.9 }}
+        onClick={handleThemeChange}
         className={cn(
-          "w-10 h-10 rounded-full flex items-center justify-center relative",
-          "liquid-panel border-white/20 hover:border-white/40 interactive",
-          isOpen && "ring-2 ring-primary/50",
+          "w-12 h-12 rounded-2xl flex items-center justify-center relative",
+          "liquid-panel border-white/20 hover:border-white/40 interactive group overflow-hidden shadow-xl",
         )}
+        title={`Cycle Theme (Current: ${currentThemeConfig.name})`}
       >
-        <CurrentIcon className="w-5 h-5 text-foreground/80" />
+        <CurrentIcon className="w-5 h-5 text-foreground/80 group-hover:text-primary transition-colors relative z-10" />
         {/* Glow effect matching current theme */}
-        <div
-          className="absolute inset-0 rounded-full opacity-20 blur-md"
+        <motion.div
+          layoutId="theme-glow"
+          className="absolute inset-0 rounded-full opacity-30 blur-xl"
           style={{ backgroundColor: currentThemeConfig.color }}
         />
+        {/* Animated spill wave in background */}
+        <motion.div
+          animate={{
+            scale: [1, 1.2, 1],
+            rotate: [0, 90, 180, 270, 360],
+          }}
+          transition={{
+            duration: 8,
+            repeat: Infinity,
+            ease: "linear"
+          }}
+          className="absolute inset-0 opacity-10 bg-gradient-to-tr from-transparent via-white/20 to-transparent pointer-events-none"
+        />
       </motion.button>
-
-      {/* The Spill Menu: Holographic Dropdown */}
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9, y: 10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9, y: 10 }}
-            transition={{ type: "spring", stiffness: 300, damping: 20 }}
-            className="absolute top-full right-0 mt-4 w-64 p-2 rounded-2xl liquid-panel backdrop-blur-3xl overflow-hidden"
-          >
-            <div className="space-y-1">
-              {THEMES.map((t) => (
-                <button
-                  key={t.id}
-                  onClick={(e) => handleThemeChange(t.id, e)}
-                  className={cn(
-                    "w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-300 group",
-                    theme === t.id
-                      ? "bg-white/10 shadow-[inner_0_0_10px_rgba(255,255,255,0.05)] border border-white/10"
-                      : "hover:bg-white/5 hover:translate-x-1",
-                  )}
-                >
-                  <div
-                    className={cn(
-                      "w-8 h-8 rounded-full flex items-center justify-center shadow-lg transition-transform group-hover:scale-110",
-                    )}
-                    style={{
-                      backgroundColor: t.color,
-                      boxShadow: `0 0 15px ${t.color}40`,
-                    }}
-                  >
-                    <t.icon className="w-4 h-4 text-white" />
-                  </div>
-                  <div className="flex flex-col items-start">
-                    <span className="text-sm font-semibold tracking-wide">
-                      {t.name}
-                    </span>
-                    <span className="text-[10px] text-muted-foreground uppercase tracking-wider opacity-70">
-                      {t.description}
-                    </span>
-                  </div>
-                  {theme === t.id && (
-                    <div className="ml-auto w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                  )}
-                </button>
-              ))}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }

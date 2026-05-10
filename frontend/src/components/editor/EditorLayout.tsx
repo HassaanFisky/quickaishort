@@ -99,6 +99,7 @@ export default function EditorLayout() {
         currentStage: "loading",
       });
 
+      useEditorStore.getState().setSourceUrl(url);
       await runPipeline();
     } catch (error: any) {
       console.error(error);
