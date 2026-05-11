@@ -3,48 +3,44 @@ import os
 import uuid
 import time
 from pathlib import Path
-from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorGridFSBucket
 from redis import Redis
 from rq import Queue
 from dotenv import load_dotenv
 
 load_dotenv()
 
-MONGODB_URI = os.getenv("MONGODB_URI")
-DB_NAME = os.getenv("DB_NAME", "quickaishort")
 REDIS_URL = os.getenv("REDIS_URL")
 
 async def run_e2e_test():
-    print("Starting E2E Verification...")
-    
-    # 1. GridFS Upload (Direct)
-    client = AsyncIOMotorClient(MONGODB_URI)
-    db = client[DB_NAME]
-    bucket = AsyncIOMotorGridFSBucket(db, bucket_name="uploads")
+    print("Starting E2E Verification (Canvas Overlays + YouTube Source)...")
     
     user_id = "verification_agent"
     job_id = f"test_{uuid.uuid4().hex[:8]}"
-    remote_path = f"adk_uploads/{user_id}/{job_id}.mp4"
+    video_id = "jNQXAC9IVRw" # Me at the zoo (short, fast download)
     
-    dummy_video = Path("test_video.mp4")
-    if not dummy_video.exists():
-        print("Creating test video...")
-        os.system("ffmpeg -y -f lavfi -i color=c=black:s=1080x1920:d=1 -vcodec libx264 -pix_fmt yuv420p test_video.mp4")
-    
-    print(f"Uploading to GridFS: {remote_path}")
-    with open(dummy_video, "rb") as f:
-        await bucket.upload_from_stream(remote_path, f, metadata={"contentType": "video/mp4"})
-    
-    # 2. Build Production Plan
-    plan = {
-        "segments": [
+    # 2. Build Job Options with new Canvas Overlays
+    options = {
+        "aspect_ratio": "9:16",
+        "quality": "low",
+        "captions_enabled": True,
+        "captions_srt": "1\n00:00:00,000 --> 00:00:05,000\nThis is a verification test.",
+        "hook_overlay": "Verification Active",
+        "canvas_overlays": [
             {
-                "start_sec": 0,
-                "end_sec": 1,
-                "clip_source": f"gridfs://{remote_path}"
+                "type": "text",
+                "content": "AGENT VERIFIED",
+                "x_pct": 0.1,
+                "y_pct": 0.1,
+                "scale": 1.5
+            },
+            {
+                "type": "sticker",
+                "content": "ROCKET_EMOJI",
+                "x_pct": 0.8,
+                "y_pct": 0.8,
+                "scale": 2.0
             }
-        ],
-        "voiceover_path": None
+        ]
     }
     
     # 3. Enqueue Job
@@ -54,18 +50,21 @@ async def run_e2e_test():
     
     job = q.enqueue(
         "render_worker.process_render_task",
+        job_id,
+        video_id,
+        0.0,
+        5.0, # 5 second clip
+        user_id,
+        options,
         job_id=job_id,
-        video_id="verification_video",
-        start_sec=0,
-        end_sec=1,
-        user_id=user_id,
-        options={"production_plan": plan}
+        result_ttl=86400,
+        failure_ttl=86400
     )
     
     print(f"Job enqueued! ID: {job.id}")
-    print(f"MONITOR CLOUD RUN LOGS NOW: gcloud logging read 'resource.type=cloud_run_revision AND resource.labels.service_name=quickaishort-worker' --limit 20")
-    
-    client.close()
+    print(f"Status: {job.get_status()}")
+    print(f"Monitor: https://quickaishort-api-946316698978.us-central1.run.app/api/status/{job_id}?user_id={user_id}")
+    print("\nCheck worker logs in GCP console or run check_workers.py next.")
 
 if __name__ == "__main__":
     asyncio.run(run_e2e_test())

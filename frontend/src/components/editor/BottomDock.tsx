@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef, useState, useCallback, useEffect } from "react";
 import { useEditorStore } from "@/stores/editorStore";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,12 +13,119 @@ import {
   Mic,
   Layout,
   SquareSplitHorizontal,
+  GripVertical,
 } from "lucide-react";
-import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { formatTime } from "@/lib/utils/formatTime";
+import { toast } from "sonner";
 
+// ---- TimelineClip Component with Trim & Drag Support ----
+function TimelineClip({
+  clip,
+  duration,
+  isSelected,
+  onSelect,
+}: {
+  clip: any;
+  duration: number;
+  isSelected: boolean;
+  onSelect: () => void;
+}) {
+  const { updateClip, setPendingSeek } = useEditorStore();
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragType, setDragType] = useState<"move" | "start" | "end" | null>(null);
+  const startX = useRef(0);
+  const startStart = useRef(0);
+  const startEnd = useRef(0);
 
+  const handleMouseDown = (e: React.MouseEvent, type: "move" | "start" | "end") => {
+    e.stopPropagation();
+    setIsDragging(true);
+    setDragType(type);
+    startX.current = e.clientX;
+    startStart.current = clip.start;
+    startEnd.current = clip.end;
+    onSelect();
+  };
+
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const deltaX = e.clientX - startX.current;
+      const timelineWidth = document.getElementById("video-track-area")?.clientWidth || 1;
+      const deltaT = (deltaX / timelineWidth) * duration;
+
+      if (dragType === "move") {
+        const newStart = Math.max(0, Math.min(duration - (startEnd.current - startStart.current), startStart.current + deltaT));
+        const diff = startEnd.current - startStart.current;
+        updateClip(clip.id, { start: newStart, end: newStart + diff });
+      } else if (dragType === "start") {
+        const newStart = Math.max(0, Math.min(clip.end - 0.5, startStart.current + deltaT));
+        updateClip(clip.id, { start: newStart });
+      } else if (dragType === "end") {
+        const newEnd = Math.max(clip.start + 0.5, Math.min(duration, startEnd.current + deltaT));
+        updateClip(clip.id, { end: newEnd });
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+      setDragType(null);
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isDragging, dragType, duration, clip.id, clip.start, clip.end, updateClip]);
+
+  const left = ((clip.start / duration) * 100).toFixed(2);
+  const width = (((clip.end - clip.start) / duration) * 100).toFixed(2);
+
+  return (
+    <div
+      className={cn(
+        "absolute top-0.5 bottom-0.5 rounded-md flex items-center transition-shadow select-none",
+        isSelected
+          ? "bg-gradient-to-r from-primary/40 to-primary/20 border-2 border-primary shadow-[0_0_15px_hsl(var(--primary)/0.3)] z-10"
+          : "bg-foreground/10 border border-foreground/10 hover:bg-foreground/20",
+        isDragging && "opacity-80 scale-[1.02] z-50",
+      )}
+      style={{ left: `${left}%`, width: `${width}%` }}
+      onMouseDown={(e) => handleMouseDown(e, "move")}
+    >
+      {/* Left Trim Handle */}
+      <div
+        className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-primary/50 rounded-l-md"
+        onMouseDown={(e) => handleMouseDown(e, "start")}
+      />
+      
+      {/* Middle Label / Grabber */}
+      <div className="flex-1 flex items-center justify-center overflow-hidden px-2 pointer-events-none">
+        <GripVertical className="w-2.5 h-2.5 text-foreground/20 mr-1 shrink-0" />
+        <span
+          className={cn(
+            "text-[8px] font-bold truncate uppercase tracking-tighter",
+            isSelected ? "text-primary" : "text-muted-foreground",
+          )}
+        >
+          {clip.start.toFixed(1)}s – {clip.end.toFixed(1)}s
+        </span>
+      </div>
+
+      {/* Right Trim Handle */}
+      <div
+        className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-primary/50 rounded-r-md"
+        onMouseDown={(e) => handleMouseDown(e, "end")}
+      />
+    </div>
+  );
+}
+
+// ---- Main BottomDock ----
 export default function BottomDock() {
   const {
     transcript,
@@ -27,8 +135,11 @@ export default function BottomDock() {
     isPlaying,
     setIsPlaying,
     setCurrentTime,
+    setPendingSeek,
     selectedClipId,
     selectClip,
+    splitClipAtTime,
+    addCanvasElement,
   } = useEditorStore();
 
   const [visualizerHeights] = useState<number[]>(() =>
@@ -38,13 +149,65 @@ export default function BottomDock() {
   const stopPlayback = () => {
     setIsPlaying(false);
     setCurrentTime(0);
+    setPendingSeek(0);
   };
 
   const playheadPct = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const videoTrackRef = useRef<HTMLDivElement>(null);
+
+  const handleTrackClick = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      if (!videoTrackRef.current || duration === 0) return;
+      const rect = videoTrackRef.current.getBoundingClientRect();
+      const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+      setPendingSeek(pct * duration);
+    },
+    [duration, setPendingSeek],
+  );
+
+  const handleSplit = useCallback(() => {
+    const clip = selectedClipId
+      ? suggestions.find((c) => c.id === selectedClipId)
+      : suggestions[0];
+
+    if (!clip) {
+      toast.error("Select a clip on the timeline first.");
+      return;
+    }
+    if (currentTime <= clip.start + 1 || currentTime >= clip.end - 1) {
+      toast.error(
+        `Playhead must be inside the clip (${formatTime(clip.start + 1)} – ${formatTime(clip.end - 1)}).`,
+      );
+      return;
+    }
+    splitClipAtTime(currentTime);
+    toast.success(`Clip split at ${formatTime(currentTime)}`);
+  }, [currentTime, selectedClipId, suggestions, splitClipAtTime]);
+
+  const handleAddText = useCallback(() => {
+    addCanvasElement({
+      type: "text",
+      content: "NEW TEXT",
+      x: 100,
+      y: 200,
+      scale: 1.5,
+      rotation: 0,
+      style: { className: "text-4xl font-black text-white" },
+    });
+    toast.success("Text added to canvas.");
+  }, [addCanvasElement]);
+
+  const tools = [
+    { icon: SquareSplitHorizontal, label: "Split", action: handleSplit },
+    { icon: Scissors, label: "Trim", action: () => toast.info("Drag the edges of clips on the timeline to trim.") },
+    { icon: Type, label: "Text", action: handleAddText },
+    { icon: Wand2, label: "FX", action: () => toast.info("FX coming soon.") },
+    { icon: Layout, label: "Transitions", action: () => toast.info("Transitions coming soon.") },
+    { icon: Mic, label: "Voiceover", action: () => toast.info("Voiceover coming soon.") },
+  ] as const;
 
   return (
     <div className="w-full h-full flex flex-col gap-4 animate-in slide-in-from-bottom-4 duration-500">
-      {/* Controls Row */}
       <div className="flex items-center justify-between px-2">
         <div className="flex items-center gap-3">
           <Button
@@ -53,11 +216,7 @@ export default function BottomDock() {
             className="w-8 h-8 text-foreground/60 hover:text-primary transition-colors"
             onClick={() => setIsPlaying(!isPlaying)}
           >
-            {isPlaying ? (
-              <Pause className="w-4 h-4 fill-current" />
-            ) : (
-              <Play className="w-4 h-4 fill-current" />
-            )}
+            {isPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current" />}
           </Button>
           <Button
             variant="ghost"
@@ -67,68 +226,55 @@ export default function BottomDock() {
           >
             <Square className="w-3.5 h-3.5 fill-current" />
           </Button>
-          <span className="text-[10px] font-mono text-muted-foreground/60 tabular-nums">
+          <span className="text-[10px] font-mono text-muted-foreground/60 tabular-nums select-none">
             {formatTime(currentTime)} / {formatTime(duration)}
           </span>
         </div>
 
-        <div className="flex items-center gap-6">
-          {[
-            { icon: SquareSplitHorizontal, label: "Split" },
-            { icon: Scissors, label: "Trim" },
-            { icon: Type, label: "Text" },
-            { icon: Wand2, label: "FX" },
-            { icon: Layout, label: "Transitions" },
-            { icon: Mic, label: "Voiceover" },
-          ].map(({ icon: Icon, label }) => (
-            <div key={label} className="flex items-center gap-2 group cursor-pointer">
+        <div className="flex items-center gap-5">
+          {tools.map(({ icon: Icon, label, action }) => (
+            <button
+              key={label}
+              onClick={action}
+              className="flex items-center gap-2 group cursor-pointer focus:outline-none"
+            >
               <Icon className="w-4 h-4 text-foreground/40 group-hover:text-primary transition-colors" />
               <span className="text-[10px] font-black text-foreground/40 uppercase tracking-widest group-hover:text-primary transition-colors">
                 {label}
               </span>
-            </div>
+            </button>
           ))}
         </div>
       </div>
 
-      {/* Multi-Track Timeline */}
       <div className="flex-1 flex flex-col gap-1.5 overflow-hidden">
         <TimeScale duration={duration} />
 
-        {/* Video Track */}
+        {/* Video Track Area */}
         <div className="flex gap-4 items-center group">
-          <span className="w-16 text-[9px] font-black text-muted-foreground/40 uppercase tracking-widest text-right">
+          <span className="w-16 text-[9px] font-black text-muted-foreground/40 uppercase tracking-widest text-right shrink-0">
             Video
           </span>
-          <div className="flex-1 h-7 rounded-lg bg-foreground/5 border border-foreground/5 relative overflow-hidden">
+          <div
+            id="video-track-area"
+            ref={videoTrackRef}
+            onClick={handleTrackClick}
+            className="flex-1 h-8 rounded-lg bg-foreground/5 border border-foreground/5 relative overflow-hidden cursor-crosshair"
+          >
             {duration > 0 && suggestions.length > 0 ? (
-              suggestions.map((clip) => {
-                const left = ((clip.start / duration) * 100).toFixed(2);
-                const width = (((clip.end - clip.start) / duration) * 100).toFixed(2);
-                const isSelected = clip.id === selectedClipId;
-                return (
-                  <button
-                    key={clip.id}
-                    onClick={() => selectClip(clip.id)}
-                    className={cn(
-                      "absolute top-0.5 bottom-0.5 rounded-md flex items-center px-2 transition-all",
-                      isSelected
-                        ? "bg-gradient-to-r from-primary/40 to-primary/20 border border-primary/60 shadow-[0_0_15px_hsl(var(--primary)/0.2)]"
-                        : "bg-foreground/5 border border-foreground/10 hover:bg-foreground/10",
-                    )}
-                    style={{ left: `${left}%`, width: `${width}%` }}
-                    title={`Clip ${clip.start.toFixed(1)}s – ${clip.end.toFixed(1)}s`}
-                  >
-                    <span className={cn("text-[8px] font-bold truncate uppercase", isSelected ? "text-primary" : "text-muted-foreground")}>
-                      {clip.start.toFixed(0)}s
-                    </span>
-                  </button>
-                );
-              })
+              suggestions.map((clip: any) => (
+                <TimelineClip
+                  key={clip.id}
+                  clip={clip}
+                  duration={duration}
+                  isSelected={clip.id === selectedClipId}
+                  onSelect={() => selectClip(clip.id)}
+                />
+              ))
             ) : (
-              <div className="flex items-center justify-center h-full">
+              <div className="flex items-center justify-center h-full pointer-events-none">
                 <span className="text-[8px] text-muted-foreground/30 uppercase tracking-widest">
-                  {duration === 0 ? "No video loaded" : "No clips yet"}
+                  {duration === 0 ? "No video" : "No clips"}
                 </span>
               </div>
             )}
@@ -136,10 +282,10 @@ export default function BottomDock() {
             {/* Playhead */}
             {duration > 0 && (
               <div
-                className="absolute top-[-30px] bottom-[-8px] w-0.5 bg-foreground z-20 pointer-events-none"
+                className="absolute top-[-30px] bottom-[-10px] w-0.5 bg-foreground z-30 pointer-events-none"
                 style={{ left: `${playheadPct}%` }}
               >
-                <div className="absolute -top-1 -left-[3px] w-2 h-2 bg-foreground rotate-45 shadow-[0_0_10px_hsl(var(--foreground)/0.5)]" />
+                <div className="absolute -top-1 -left-[3px] w-2 h-2 bg-foreground rotate-45 shadow-[0_0_10px_white/30]" />
               </div>
             )}
           </div>
@@ -147,52 +293,22 @@ export default function BottomDock() {
 
         {/* Audio Track */}
         <div className="flex gap-4 items-center group">
-          <span className="w-16 text-[9px] font-black text-muted-foreground/40 uppercase tracking-widest text-right">
+          <span className="w-16 text-[9px] font-black text-muted-foreground/40 uppercase tracking-widest text-right shrink-0">
             Audio
           </span>
           <div className="flex-1 h-7 rounded-lg bg-foreground/5 border border-foreground/5 relative flex gap-1 p-0.5">
             {transcript ? (
               <div className="flex-1 h-full bg-emerald-500/10 border border-emerald-500/20 rounded-md flex items-center px-2 gap-1 overflow-hidden">
-                <span className="text-[8px] font-bold text-emerald-400 truncate uppercase">
-                  Transcript
-                </span>
+                <span className="text-[8px] font-bold text-emerald-400 truncate uppercase">Transcript</span>
                 <div className="flex items-center gap-0.5 h-3 flex-1 overflow-hidden">
                   {visualizerHeights.slice(0, 20).map((h, i) => (
-                    <div
-                      key={i}
-                      className="w-0.5 bg-emerald-400/40 rounded-full flex-shrink-0"
-                      style={{ height: `${h}%` }}
-                    />
+                    <div key={i} className="w-0.5 bg-emerald-400/40 rounded-full shrink-0" style={{ height: `${h}%` }} />
                   ))}
                 </div>
               </div>
             ) : (
               <div className="flex items-center justify-center flex-1 h-full">
-                <span className="text-[8px] text-muted-foreground/30 uppercase tracking-widest">
-                  No audio
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Text / Captions Track */}
-        <div className="flex gap-4 items-center group">
-          <span className="w-16 text-[9px] font-black text-muted-foreground/40 uppercase tracking-widest text-right">
-            Text
-          </span>
-          <div className="flex-1 h-7 rounded-lg bg-foreground/5 border border-foreground/5 relative flex gap-1 p-0.5">
-            {transcript?.chunks && transcript.chunks.length > 0 ? (
-              <div className="w-32 h-full bg-primary/10 border border-primary/20 rounded-md flex items-center px-2">
-                <span className="text-[8px] font-bold text-primary truncate uppercase">
-                  {transcript.chunks.length} captions
-                </span>
-              </div>
-            ) : (
-              <div className="flex items-center justify-center flex-1 h-full">
-                <span className="text-[8px] text-muted-foreground/30 uppercase tracking-widest">
-                  No captions
-                </span>
+                <span className="text-[8px] text-muted-foreground/30 uppercase tracking-widest">No audio</span>
               </div>
             )}
           </div>
@@ -203,26 +319,11 @@ export default function BottomDock() {
 }
 
 function TimeScale({ duration }: { duration: number }) {
-  if (duration === 0) {
-    return (
-      <div className="flex items-center h-4 px-[100px] gap-[100px] text-[8px] font-black text-muted-foreground/30 uppercase tracking-[0.3em]">
-        <span>0:00</span>
-        <span>0:10</span>
-        <span>0:20</span>
-        <span>0:30</span>
-      </div>
-    );
-  }
-
-  // Generate 4 evenly spaced time markers
+  if (duration === 0) return <div className="h-4 pl-20" />;
   const markers = [0, 0.25, 0.5, 0.75].map((frac) => frac * duration);
   return (
-    <div className="flex items-center h-4 pl-[100px] pr-4 justify-between text-[8px] font-black text-muted-foreground/30 uppercase tracking-[0.3em]">
-      {markers.map((t) => (
-        <span key={t}>{formatTime(t)}</span>
-      ))}
+    <div className="flex items-center h-4 pl-20 pr-4 justify-between text-[8px] font-black text-muted-foreground/30 uppercase tracking-[0.3em]">
+      {markers.map((t) => <span key={t}>{formatTime(t)}</span>)}
     </div>
   );
 }
-
-

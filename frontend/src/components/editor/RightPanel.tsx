@@ -374,12 +374,12 @@ export default function RightPanel() {
             <button
               className={cn(
                 "w-full h-12 rounded-lg relative overflow-hidden transition-all duration-150",
-                isExporting || !selectedClip || !sourceFile
+                isExporting || !selectedClip || (!sourceFile && !useEditorStore.getState().sourceUrl)
                   ? "opacity-50 cursor-not-allowed"
                   : "hover:brightness-110",
               )}
               onClick={handleExport}
-              disabled={isExporting || !selectedClip || !sourceFile}
+              disabled={isExporting || !selectedClip || (!sourceFile && !useEditorStore.getState().sourceUrl)}
             >
               <div className="absolute inset-0 bg-gradient-to-r from-primary via-primary/80 to-accent animate-gradient-x" />
               <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-500" />
@@ -454,6 +454,13 @@ export default function RightPanel() {
 
               {/* Error State */}
               {preflightError && !isPreflightRunning && (
+                <div className="p-6 rounded-lg bg-destructive/10 border border-destructive/30 flex flex-col items-center gap-4">
+                  <p className="text-[10px] font-black text-destructive uppercase tracking-widest text-center">
+                    {preflightError}
+                  </p>
+                  <button
+                    onClick={handleRunPreflight}
+                    className="h-9 px-6 rounded-full bg-destructive/10 border border-destructive/30 text-[9px] font-black text-destructive uppercase tracking-widest hover:bg-destructive/20 transition-colors"
                   >
                     Try Again
                   </button>

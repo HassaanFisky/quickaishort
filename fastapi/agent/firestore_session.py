@@ -51,11 +51,8 @@ class FirestoreSessionService(BaseSessionService):
         session = Session(
             app_name=app_name,
             user_id=user_id,
-            session_id=session_id,
+            id=session_id,
             state=state or {},
-            created_at=now,
-            updated_at=now,
-            events=[]
         )
         
         doc_ref = self.db.collection(self.collection_name).document(session_id)
@@ -94,11 +91,8 @@ class FirestoreSessionService(BaseSessionService):
         return Session(
             app_name=app_name,
             user_id=user_id,
-            session_id=session_id,
+            id=session_id,
             state=data.get("state", {}),
-            created_at=data.get("created_at", 0),
-            updated_at=data.get("updated_at", 0),
-            events=[]
         )
 
     async def list_sessions(self, *, app_name: str, user_id: str) -> ListSessionsResponse:
@@ -116,10 +110,8 @@ class FirestoreSessionService(BaseSessionService):
             sessions.append(Session(
                 app_name=app_name,
                 user_id=user_id,
-                session_id=doc.id,
+                id=doc.id,
                 state=data.get("state", {}),
-                created_at=data.get("created_at", 0),
-                updated_at=data.get("updated_at", 0)
             ))
         return ListSessionsResponse(sessions=sessions)
 

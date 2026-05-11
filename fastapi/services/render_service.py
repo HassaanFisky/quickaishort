@@ -20,7 +20,7 @@ import tempfile
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Literal, Optional, List
 
 import ffmpeg
 import yt_dlp
@@ -71,6 +71,17 @@ class WatermarkConfig:
 
 
 @dataclass
+class CanvasOverlay:
+    """A user-placed text or sticker element to composite onto the video."""
+    type: str          # "text" or "sticker"
+    content: str       # Raw text / emoji
+    x_pct: float = 0.5  # Fractional x position (0=left, 1=right)
+    y_pct: float = 0.5  # Fractional y position (0=top, 1=bottom)
+    scale: float = 1.0
+    rotation: float = 0.0
+
+
+@dataclass
 class RenderJob:
     video_id: str
     start_sec: float
@@ -80,10 +91,11 @@ class RenderJob:
     reframing: Optional[Reframing] = None
     captions: CaptionsConfig = field(default_factory=CaptionsConfig)
     watermark: WatermarkConfig = field(default_factory=WatermarkConfig)
-    background_music: Optional[str] = None  # Local path or URL
-    hook_overlay: str = ""  # Punchy text hook to overlay at start
-    emotional_peaks: list[float] = field(default_factory=list)  # Seconds relative to clip start
+    background_music: Optional[str] = None
+    hook_overlay: str = ""
+    emotional_peaks: list[float] = field(default_factory=list)
     cinematic_style: str = "Impact"
+    canvas_overlays: List[CanvasOverlay] = field(default_factory=list)
 
 
 @dataclass
@@ -196,6 +208,39 @@ class RenderService:
                 y="(h-text_h)/2-100",
                 enable="between(t,0,3)",
             )
+
+        # Canvas overlays — applied before captions so captions render on top
+        for overlay in job.canvas_overlays:
+            # Compute pixel position from fractional coords using ffmpeg expressions.
+            # Output size at this point in the filter chain is always 1080x1920 (9:16).
+            out_w, out_h = (1080, 1920) if job.aspect_ratio == "9:16" else (1080, 1080)
+            px = int(overlay.x_pct * out_w)
+            py = int(overlay.y_pct * out_h)
+            font_size = max(24, int(48 * overlay.scale))
+
+            # Sanitise text: ffmpeg drawtext uses ':' and '\n' as special chars
+            safe_text = (
+                overlay.content
+                .replace("\\", "\\\\")
+                .replace(":", "\\:")
+                .replace("'", "\\'")[:200]  # hard cap — long text breaks ffmpeg parser
+            )
+
+            try:
+                video = video.drawtext(
+                    text=safe_text,
+                    fontfile="/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+                    fontsize=font_size,
+                    fontcolor="white",
+                    box=1,
+                    boxcolor="black@0.5",
+                    boxborderw=6,
+                    x=str(px),
+                    y=str(py),
+                )
+            except Exception as _ov_err:
+                # Never let a canvas overlay crash the whole render
+                logger.warning("canvas_overlay_skipped content=%r err=%s", overlay.content, _ov_err)
 
         if captions_path is not None:
             video = video.filter(

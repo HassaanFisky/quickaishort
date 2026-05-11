@@ -115,6 +115,7 @@ interface EditorState {
   updateCanvasElement: (id: string, updates: Partial<CanvasElement>) => void;
   removeCanvasElement: (id: string) => void;
 
+  splitClipAtTime: (time: number) => void;
   reset: () => void;
 }
 
@@ -198,6 +199,37 @@ export const useEditorStore = create<EditorState>()(
             c.id === id ? { ...c, ...updates } : c,
           ),
         })),
+
+      splitClipAtTime: (time) =>
+        set((state) => {
+          const { selectedClipId, suggestions } = state;
+          const clip = selectedClipId
+            ? suggestions.find((c) => c.id === selectedClipId)
+            : suggestions[0];
+
+          // Guard: time must be inside the clip bounds with at least 1s on each side
+          if (!clip || time <= clip.start + 1 || time >= clip.end - 1) return {};
+
+          const idx = suggestions.findIndex((c) => c.id === clip.id);
+          const idA = `${clip.id}-a`;
+          const idB = `${clip.id}-b`;
+
+          const clipA: typeof clip = {
+            ...clip,
+            id: idA,
+            end: time,
+          };
+          const clipB: typeof clip = {
+            ...clip,
+            id: idB,
+            start: time,
+          };
+
+          const next = [...suggestions];
+          next.splice(idx, 1, clipA, clipB);
+
+          return { suggestions: next, selectedClipId: idA };
+        }),
 
       setExportSetting: (key, value) =>
         set((state) => ({

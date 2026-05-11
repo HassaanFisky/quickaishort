@@ -348,10 +348,13 @@ class ReframingPayload(BaseModel):
     scale: float = 1.0
 
 
-class CaptionsPayload(BaseModel):
-    enabled: bool = False
-    srt_content: str = ""
-    style: Optional[str] = None
+class CanvasOverlayPayload(BaseModel):
+    type: str
+    content: str
+    x_pct: float
+    y_pct: float
+    scale: float = 1.0
+    rotation: float = 0.0
 
 
 class ExportRequest(BaseModel):
@@ -364,6 +367,7 @@ class ExportRequest(BaseModel):
     captions: CaptionsPayload = Field(default_factory=CaptionsPayload)
     watermark_enabled: bool = False
     reframing: Optional[ReframingPayload] = None
+    canvas_overlays: List[CanvasOverlayPayload] = Field(default_factory=list)
 
 
 # ---- YouTube URL validation --------------------------------------------------
@@ -586,6 +590,7 @@ async def export_video(request: ExportRequest, verified_user_id: str = Depends(g
         "hook_overlay": hook_overlay,
         "emotional_peaks": emotional_peaks,
         "cinematic_style": cinematic_style,
+        "canvas_overlays": [ov.model_dump() for ov in request.canvas_overlays],
     }
 
     try:

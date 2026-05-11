@@ -14,6 +14,7 @@ import {
   requestExport,
 } from "@/lib/api";
 import type {
+  CanvasOverlay,
   ExportAspect,
   ExportQuality,
   ExportRequestPayload,
@@ -168,6 +169,7 @@ export function useServerExport({ userId }: UseServerExportArgs) {
         suggestions,
         transcript,
         captionsEnabled,
+        canvasElements,
       } = useEditorStore.getState();
 
       const clip = selectedClipId
@@ -219,6 +221,19 @@ export function useServerExport({ userId }: UseServerExportArgs) {
           ? generateSRT(transcript.chunks, clip.start, clip.end)
           : "";
 
+      // Normalise canvas elements to fractional coordinates for the backend.
+      // Reference canvas: 1080 × 1920 (9:16 at 1080p)
+      const CANVAS_W = 1080;
+      const CANVAS_H = 1920;
+      const canvas_overlays: CanvasOverlay[] = canvasElements.map((el) => ({
+        type: el.type === "sticker" ? "sticker" : "text",
+        content: el.content,
+        x_pct: Math.max(0, Math.min(1, el.x / CANVAS_W)),
+        y_pct: Math.max(0, Math.min(1, el.y / CANVAS_H)),
+        scale: el.scale,
+        rotation: el.rotation,
+      }));
+
       const payload: ExportRequestPayload = {
         videoId,
         start_sec: clip.start,
@@ -238,6 +253,7 @@ export function useServerExport({ userId }: UseServerExportArgs) {
               scale: clip.reframing.scale,
             }
           : null,
+        canvas_overlays,
       };
 
       setIsExporting(true);

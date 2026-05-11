@@ -1,6 +1,18 @@
 export type ExportQuality = "low" | "medium" | "high";
 export type ExportAspect = "9:16" | "16:9" | "1:1";
 
+/** A text or sticker overlay composited by FFmpeg drawtext/overlay. */
+export interface CanvasOverlay {
+  type: "text" | "sticker";
+  /** Raw text string or emoji character */
+  content: string;
+  /** Fractional position — 0.0 (left/top) to 1.0 (right/bottom) */
+  x_pct: number;
+  y_pct: number;
+  scale: number;
+  rotation: number;
+}
+
 export interface ExportRequestPayload {
   videoId: string;
   start_sec: number;
@@ -18,6 +30,8 @@ export interface ExportRequestPayload {
     center: { x: number; y: number };
     scale: number;
   } | null;
+  /** Canvas text/sticker overlays to composite on export */
+  canvas_overlays?: CanvasOverlay[];
 }
 
 export interface ExportEnqueueResponse {

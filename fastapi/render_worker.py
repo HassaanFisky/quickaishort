@@ -41,6 +41,7 @@ from services.events import (
     publish,
 )
 from services.render_service import (
+    CanvasOverlay,
     CaptionsConfig,
     Reframing,
     RenderJob,
@@ -154,6 +155,18 @@ def _build_job(
         hook_overlay=str(options.get("hook_overlay", "")),
         emotional_peaks=list(options.get("emotional_peaks", [])),
         cinematic_style=str(options.get("cinematic_style", "Impact")),
+        canvas_overlays=[
+            CanvasOverlay(
+                type=str(ov.get("type", "text")),
+                content=str(ov.get("content", ""))[:200],
+                x_pct=float(ov.get("x_pct", 0.5)),
+                y_pct=float(ov.get("y_pct", 0.5)),
+                scale=float(ov.get("scale", 1.0)),
+                rotation=float(ov.get("rotation", 0.0)),
+            )
+            for ov in options.get("canvas_overlays", [])
+            if isinstance(ov, dict) and ov.get("content")
+        ],
     )
 
     music_id = options.get("music_id")
@@ -175,10 +188,28 @@ def process_render_task(
     options: dict,
 ) -> dict:
     """Entry point invoked by RQ."""
+    return asyncio.run(_async_process_render_task(
+        job_id, video_id, start_sec, end_sec, user_id, options
+    ))
+
+async def _async_process_render_task(
+    job_id: str,
+    video_id: str,
+    start_sec: float,
+    end_sec: float,
+    user_id: str,
+    options: dict,
+) -> dict:
+    """Actual async implementation that shares a single event loop."""
     started_at = time.time()
     options = options or {}
     production_plan = options.get("production_plan")
     
+    # Initialize DB for THIS loop
+    from services.db import init_db, is_ready
+    if not is_ready():
+        await init_db()
+
     logger.info("processing_render_task_start", job_id=job_id, user_id=user_id)
 
     def progress(status: str, progress_val: int = 0):
@@ -199,7 +230,7 @@ def process_render_task(
         remote_filename = f"exports/{user_id}/{job_id}.mp4"
         
         # Check if this job was already successfully processed (e.g. retry of a successful job)
-        if storage.exists(remote_filename):
+        if await storage.exists_async(remote_filename):
             logger.info("render_job_idempotency_hit", job_id=job_id)
             payload = {
                 "job_id": job_id,
@@ -215,6 +246,8 @@ def process_render_task(
         if production_plan:
             from services.render_service import render_video
             progress("Starting production render...", 5)
+            # render_video is sync because it calls ffmpeg.run() which is blocking
+            # This is fine; we are in a worker thread/process.
             result_path = Path(render_video(production_plan))
             duration_sec = sum(
                 (float(s.get("end_sec", 0)) - float(s.get("start_sec", 0))) 
@@ -236,7 +269,7 @@ def process_render_task(
         storage = get_storage_service()
         remote_filename = f"exports/{user_id}/{job_id}.mp4"
         
-        gcs_uri = storage.upload_file(
+        gcs_uri = await storage.upload_file_async(
             local_path=result_path,
             remote_path=remote_filename,
             content_type="video/mp4"
@@ -254,8 +287,6 @@ def process_render_task(
         publish(CHANNEL_STATS_INCREMENT, {"user_id": user_id, "export_delta": 1, "duration_delta": duration_sec})
         
         # Learning loop — write side.
-        # Record this export as a positive outcome so the ScoringAgent can
-        # calibrate future analyses against this user's proven score threshold.
         try:
             from services.learning_service import LearningService
             LearningService.record_outcome(
@@ -277,13 +308,14 @@ def process_render_task(
         publish(CHANNEL_EXPORT_FAILED, {"job_id": job_id, "user_id": user_id, "error": str(exc)})
         
         # Dead Letter Persistence (Atomic Recovery)
-        asyncio.run(persist_failed_job(job_id, user_id, str(exc), {
+        await persist_failed_job(job_id, user_id, str(exc), {
             "video_id": video_id,
             "options": options
-        }))
+        })
         log_metric("render_failure", 1, user_id=user_id, metadata={"job_id": job_id, "error": str(exc)[:200]})
         
         return {"status": "error", "job_id": job_id, "error": str(exc)}
+
 
     finally:
         if 'result_path' in locals() and result_path.exists():
@@ -301,15 +333,10 @@ if __name__ == "__main__":
     sys.stderr.reconfigure(line_buffering=True)
     validate_env()
 
-    from services.db import init_db
-    
-    # Initialize MongoDB (needed for storage_service and job_persistence)
-    try:
-        asyncio.run(init_db())
-        logger.info("mongodb_initialized_for_worker")
-    except Exception as e:
-        logger.error("mongodb_initialization_failed", error=str(e))
-        # We continue anyway; services will fail late with better errors if needed
+    # Skip top-level init_db here; let process_render_task handle it per-loop
+    # to avoid "Event loop is closed" errors.
+    logger.info("mongodb_init_deferred_to_task_lifecycle")
+
 
     logger.info("worker_starting_production_lifecycle", queue=render_queue.name)
     
