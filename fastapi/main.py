@@ -373,6 +373,12 @@ class ExportRequest(BaseModel):
     watermark_enabled: bool = False
     reframing: Optional[ReframingPayload] = None
     canvas_overlays: List[CanvasOverlayPayload] = Field(default_factory=list)
+    audio_boost: float = 85.0
+    playback_speed: float = 100.0
+    noise_suppression: float = 20.0
+    filter_name: str = "None"
+    transition_enabled: bool = False
+    voiceover_enabled: bool = False
 
 
 # ---- YouTube URL validation --------------------------------------------------

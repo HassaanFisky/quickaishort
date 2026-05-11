@@ -96,6 +96,12 @@ class RenderJob:
     emotional_peaks: list[float] = field(default_factory=list)
     cinematic_style: str = "Impact"
     canvas_overlays: List[CanvasOverlay] = field(default_factory=list)
+    audio_boost: float = 85.0
+    playback_speed: float = 100.0
+    noise_suppression: float = 20.0
+    filter_name: str = "None"
+    transition_enabled: bool = False
+    voiceover_enabled: bool = False
 
 
 @dataclass
@@ -158,6 +164,42 @@ class RenderService:
         audio = ffmpeg.input(str(source)).audio
 
         video = self._apply_aspect_ratio(video, job)
+
+        # ---------------------------------------------------------
+        # APPLY NEW EDITOR SETTINGS (Speed, FX, Transitions, Audio)
+        # ---------------------------------------------------------
+        if job.playback_speed != 100.0:
+            speed = max(0.5, min(2.0, job.playback_speed / 100.0))
+            video = video.filter("setpts", f"{1.0/speed}*PTS")
+            audio = audio.filter("atempo", speed)
+
+        if job.filter_name == "Urban":
+            video = video.filter("eq", contrast=1.2, saturation=0.8, gamma=1.1)
+        elif job.filter_name == "Retro":
+            video = video.filter("colorchannelmixer", rr=0.393, rg=0.769, rb=0.189,
+                                 gr=0.349, gg=0.686, gb=0.168,
+                                 br=0.272, bg=0.534, bb=0.131)
+        elif job.filter_name == "Cinematic":
+            video = video.filter("eq", contrast=1.1, saturation=1.2)
+
+        if job.transition_enabled:
+            # Simple fade in/out for 0.5s
+            duration = job.end_sec - job.start_sec
+            video = video.filter("fade", t="in", st=0, d=0.5).filter("fade", t="out", st=duration - 0.5, d=0.5)
+
+        if job.audio_boost != 85.0:
+            volume = job.audio_boost / 85.0
+            audio = audio.filter("volume", volume)
+        
+        if job.noise_suppression > 0:
+            # Highpass filter for basic noise reduction
+            audio = audio.filter("highpass", f=200)
+
+        if job.voiceover_enabled:
+            # AI Voiceover Enhancement: Boost vocal frequencies (around 3kHz)
+            audio = audio.filter("equalizer", f=3000, width_type="h", width=2000, g=5)
+
+        # ---------------------------------------------------------
 
         # APPLY CINEMATIC EFFECTS (ZOOM/PULSE)
         if job.emotional_peaks:

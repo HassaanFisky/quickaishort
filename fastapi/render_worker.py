@@ -167,6 +167,12 @@ def _build_job(
             for ov in options.get("canvas_overlays", [])
             if isinstance(ov, dict) and ov.get("content")
         ],
+        audio_boost=float(options.get("audio_boost", 85.0)),
+        playback_speed=float(options.get("playback_speed", 100.0)),
+        noise_suppression=float(options.get("noise_suppression", 20.0)),
+        filter_name=str(options.get("filter_name", "None")),
+        transition_enabled=bool(options.get("transition_enabled", False)),
+        voiceover_enabled=bool(options.get("voiceover_enabled", False)),
     )
 
     music_id = options.get("music_id")

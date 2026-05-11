@@ -32,6 +32,12 @@ export interface ExportRequestPayload {
   } | null;
   /** Canvas text/sticker overlays to composite on export */
   canvas_overlays?: CanvasOverlay[];
+  audio_boost?: number;
+  playback_speed?: number;
+  noise_suppression?: number;
+  filter_name?: string;
+  transition_enabled?: boolean;
+  voiceover_enabled?: boolean;
 }
 
 export interface ExportEnqueueResponse {

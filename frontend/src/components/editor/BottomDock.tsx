@@ -140,6 +140,8 @@ export default function BottomDock() {
     selectClip,
     splitClipAtTime,
     addCanvasElement,
+    setExportSetting,
+    exportSettings,
   } = useEditorStore();
 
   const [visualizerHeights] = useState<number[]>(() =>
@@ -197,13 +199,36 @@ export default function BottomDock() {
     toast.success("Text added to canvas.");
   }, [addCanvasElement]);
 
+  const handleFX = useCallback(() => {
+    const filters = ["None", "Urban", "Retro", "Cinematic"] as const;
+    const currentIdx = filters.indexOf(exportSettings.filter as any);
+    const nextFilter = filters[(currentIdx + 1) % filters.length];
+    setExportSetting("filter", nextFilter);
+    toast.success(`FX changed to: ${nextFilter}`);
+  }, [exportSettings.filter, setExportSetting]);
+
+  const handleTransitions = useCallback(() => {
+    const nextVal = !exportSettings.transitionEnabled;
+    setExportSetting("transitionEnabled", nextVal);
+    toast.success(nextVal ? "Crossfade transitions enabled!" : "Transitions disabled.");
+  }, [exportSettings.transitionEnabled, setExportSetting]);
+
+  const handleVoiceover = useCallback(() => {
+    const nextVal = !exportSettings.voiceoverEnabled;
+    setExportSetting("voiceoverEnabled", nextVal);
+    if (nextVal) {
+      setExportSetting("audioBoost", 150); // Automatically boost audio to support voiceover freq
+    }
+    toast.success(nextVal ? "AI Voiceover Track/Enhancement enabled." : "Voiceover disabled.");
+  }, [exportSettings.voiceoverEnabled, setExportSetting]);
+
   const tools = [
     { icon: SquareSplitHorizontal, label: "Split", action: handleSplit },
     { icon: Scissors, label: "Trim", action: () => toast.info("Drag the edges of clips on the timeline to trim.") },
     { icon: Type, label: "Text", action: handleAddText },
-    { icon: Wand2, label: "FX", action: () => toast.info("FX coming soon.") },
-    { icon: Layout, label: "Transitions", action: () => toast.info("Transitions coming soon.") },
-    { icon: Mic, label: "Voiceover", action: () => toast.info("Voiceover coming soon.") },
+    { icon: Wand2, label: "FX", action: handleFX },
+    { icon: Layout, label: "Transitions", action: handleTransitions },
+    { icon: Mic, label: "Voiceover", action: handleVoiceover },
   ] as const;
 
   return (

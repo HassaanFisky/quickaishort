@@ -254,6 +254,12 @@ export function useServerExport({ userId }: UseServerExportArgs) {
             }
           : null,
         canvas_overlays,
+        audio_boost: useEditorStore.getState().exportSettings.audioBoost,
+        playback_speed: useEditorStore.getState().exportSettings.playbackSpeed,
+        noise_suppression: useEditorStore.getState().exportSettings.noiseSuppression,
+        filter_name: useEditorStore.getState().exportSettings.filter,
+        transition_enabled: useEditorStore.getState().exportSettings.transitionEnabled,
+        voiceover_enabled: useEditorStore.getState().exportSettings.voiceoverEnabled,
       };
 
       setIsExporting(true);

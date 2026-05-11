@@ -21,6 +21,8 @@ export interface ExportSettings {
   playbackSpeed: number;
   noiseSuppression: number;
   format: "mp4" | "webm";
+  transitionEnabled: boolean;
+  voiceoverEnabled: boolean;
 }
 
 export interface CanvasElement {
@@ -42,6 +44,8 @@ const DEFAULT_EXPORT_SETTINGS: ExportSettings = {
   playbackSpeed: 100,
   noiseSuppression: 20,
   format: "mp4",
+  transitionEnabled: false,
+  voiceoverEnabled: false,
 };
 
 interface EditorState {
