@@ -348,6 +348,11 @@ class ReframingPayload(BaseModel):
     scale: float = 1.0
 
 
+class CaptionsPayload(BaseModel):
+    enabled: bool = False
+    srt_content: str = ""
+    style: Optional[str] = None
+
 class CanvasOverlayPayload(BaseModel):
     type: str
     content: str
