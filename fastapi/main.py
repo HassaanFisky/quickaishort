@@ -369,7 +369,7 @@ class ExportRequest(BaseModel):
 # ---- YouTube URL validation --------------------------------------------------
 
 _YT_PATTERN = re.compile(
-    r"^https?://(www\.)?(youtube\.com/watch\?.*v=|youtu\.be/)[A-Za-z0-9_-]{11}"
+    r"(?:https?://)?(?:www\.)?(?:youtube\.com/(?:watch\?v=|embed/|shorts/|v/|live/)|youtu\.be/)([A-Za-z0-9_-]{11})"
 )
 
 

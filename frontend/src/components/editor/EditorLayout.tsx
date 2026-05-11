@@ -30,9 +30,9 @@ import AgentWorkforce from "./AgentWorkforce";
 import { LiquidThemeToggle } from "@/components/shared/LiquidThemeToggle";
 import axios from "axios";
 
-// YouTube URL regex — accepts youtube.com/watch and youtu.be short links
+// YouTube URL regex — accepts watch, shorts, live, embed, and youtu.be short links
 const YT_REGEX =
-  /^(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/watch\?.*v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
+  /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/|v\/|live\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
 
 function extractYouTubeId(url: string): string | null {
   const match = url.match(YT_REGEX);
@@ -99,7 +99,7 @@ export default function EditorLayout() {
         currentStage: "loading",
       });
 
-      useEditorStore.getState().setSourceUrl(url);
+      // REMOVED: setSourceUrl(url) was overwriting the working proxyUrl with a raw YouTube link
       await runPipeline();
     } catch (error: any) {
       console.error(error);
