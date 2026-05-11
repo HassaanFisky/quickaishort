@@ -122,12 +122,13 @@ export const CinematicIntro = ({ onComplete }: { onComplete: () => void }) => {
           animate={
             phase === "entry" ? { opacity: 1, x: 0, y: 0 } :
             phase === "sweep" ? { x: "100vw" } :
+            phase === "end" ? { x: "100vw", opacity: 0 } :
             { opacity: 1, x: 0, y: 0 }
           }
           transition={{
-            opacity: { duration: T_ENTRY / 1000 },
+            opacity: { duration: phase === "end" ? 0.5 : T_ENTRY / 1000 },
             x: { 
-              duration: phase === "sweep" ? T_SWEEP / 1000 : T_ENTRY / 1000,
+              duration: phase === "sweep" ? T_SWEEP / 1000 : phase === "end" ? 0 : T_ENTRY / 1000,
               ease: phase === "sweep" ? [0.645, 0.045, 0.355, 1] : "easeOut"
             },
             y: { duration: T_ENTRY / 1000, ease: "easeOut" }

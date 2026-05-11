@@ -48,276 +48,176 @@
 @layer base {
   :root {
     /* === QS Brand Tokens (Phase 1 — locked) === */
-    --bg-base:        #08080a;
-    --bg-surface:     #0f0f12;
-    --bg-surface-2:   #15151a;
-    --bg-surface-3:   #1a1a21;
+    --bg-base:        #020203;
+    --bg-surface:     #08080a;
+    --bg-surface-2:   #0c0c10;
+    --bg-surface-3:   #121218;
 
-    --border-raw:        #22222a;
-    --border-subtle:     #1a1a20;
-    --border-accent:     rgba(168, 85, 247, 0.35);
+    --border-raw:        #18181f;
+    --border-subtle:     #121218;
+    --border-accent:     rgba(168, 85, 247, 0.4);
 
-    --text-primary:   #f0f0f4;
-    --text-secondary: #9898a8;
-    --text-muted:     #4a4a5a;
+    --text-primary:   #fcfcfd;
+    --text-secondary: #a1a1aa;
+    --text-muted:     #52525b;
 
     --brand-purple:   #a855f7;
     --brand-blue:     #3b82f6;
     --brand-pink:     #ec4899;
-    --accent-glow:    rgba(168, 85, 247, 0.12);
+    --accent-glow:    rgba(168, 85, 247, 0.15);
     --speed-trail:    linear-gradient(135deg, #3b82f6, #a855f7, #ec4899);
     --brand-gradient: linear-gradient(135deg, #3b82f6 0%, #a855f7 60%, #ec4899 100%);
 
-    --status-success: #22c55e;
+    --status-success: #10b981;
     --status-warning: #f59e0b;
     --status-error:   #ef4444;
 
     --font-sans:      'Inter', system-ui, sans-serif;
-    --font-display:   'Inter', system-ui, sans-serif;
+    --font-display:   'Outfit', 'Inter', system-ui, sans-serif;
     --font-mono:      'JetBrains Mono', monospace;
 
-    --radius-token-sm:   0.375rem;
-    --radius-token:      0.625rem;
-    --radius-token-lg:   0.875rem;
-    --radius-token-xl:   1.25rem;
+    --radius-token-sm:   0.5rem;
+    --radius-token:      0.75rem;
+    --radius-token-lg:   1.25rem;
+    --radius-token-xl:   2rem;
 
-    /* === Existing HSL system (consumed by Tailwind utilities — kept for compat) ===
-       Tuned to brand: primary = purple #a855f7, accent = electric blue #3b82f6 */
-    --background: 240 11% 4%;          /* #08080a */
-    --foreground: 240 12% 95%;          /* #f0f0f4 */
-    --card: 240 12% 6%;                 /* #0f0f12 */
-    --card-foreground: 240 12% 95%;
-    --popover: 240 13% 8%;              /* #15151a */
-    --popover-foreground: 240 12% 95%;
-    --primary: 270 91% 65%;             /* brand purple */
+    --background: 240 10% 2%;          /* #020203 */
+    --foreground: 240 5% 98%;           /* #fcfcfd */
+    --card: 240 10% 4%;                 /* #08080a */
+    --card-foreground: 240 5% 98%;
+    --popover: 240 10% 6%;              /* #0c0c10 */
+    --popover-foreground: 240 5% 98%;
+    --primary: 270 91% 65%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 240 12% 10%;
-    --secondary-foreground: 240 12% 90%;
-    --muted: 240 12% 8%;
-    --muted-foreground: 240 12% 63%;    /* #9898a8 */
-    --accent: 217 91% 60%;              /* electric blue */
-    --accent-foreground: 240 11% 4%;
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 240 12% 15%;              /* #22222a */
-    --input: 240 12% 15%;
+    --secondary: 240 10% 10%;
+    --secondary-foreground: 240 5% 90%;
+    --muted: 240 10% 8%;
+    --muted-foreground: 240 5% 65%;
+    --accent: 217 91% 60%;
+    --accent-foreground: 240 10% 2%;
+    --border: 240 10% 12%;
+    --input: 240 10% 12%;
     --ring: 270 91% 65%;
-    --radius: 0.875rem;                 /* aligned to --radius-token-lg */
+    --radius: 1.25rem;
 
-    /* Utility Helpers */
-    --glass-bg: rgba(15, 15, 18, 0.7);
-    --glass-border: rgba(255, 255, 255, 0.06);
-    --card-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.8);
+    --glass-bg: rgba(8, 8, 10, 0.75);
+    --glass-border: rgba(255, 255, 255, 0.08);
+    --card-shadow: 0 20px 50px -12px rgba(0, 0, 0, 0.5);
     --gradient-from: #ffffff;
-    --gradient-to: rgba(255, 255, 255, 0.6);
+    --gradient-to: rgba(255, 255, 255, 0.5);
   }
 
-  /* Theme: Light (locked spec — pairs with next-themes "light") */
   .light {
-    --bg-base:        #f8f8fc;
+    --bg-base:        #fdfdff;
     --bg-surface:     #ffffff;
-    --bg-surface-2:   #f0f0f8;
-    --bg-surface-3:   #e8e8f4;
-    --border-raw:     #dddde8;
-    --border-subtle:  #ebebf4;
-    --text-primary:   #08080f;
-    --text-secondary: #50505f;
-    --text-muted:     #9090a0;
-    --accent-glow:    rgba(168, 85, 247, 0.08);
+    --bg-surface-2:   #f4f4f9;
+    --bg-surface-3:   #ededf5;
+    --text-primary:   #09090b;
+    --text-secondary: #4b5563;
+    --text-muted:     #9ca3af;
+    --accent-glow:    rgba(168, 85, 247, 0.1);
 
-    --background: 240 30% 98%;
-    --foreground: 240 25% 5%;
+    --background: 240 20% 99%;
+    --foreground: 240 10% 4%;
     --card: 0 0% 100%;
-    --card-foreground: 240 25% 5%;
+    --card-foreground: 240 10% 4%;
     --popover: 0 0% 100%;
-    --popover-foreground: 240 25% 5%;
+    --popover-foreground: 240 10% 4%;
     --primary: 270 91% 60%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 240 30% 96%;
-    --secondary-foreground: 240 25% 15%;
-    --muted: 240 30% 95%;
-    --muted-foreground: 240 8% 45%;
+    --secondary: 240 20% 96%;
+    --secondary-foreground: 240 10% 15%;
+    --muted: 240 20% 94%;
+    --muted-foreground: 240 10% 45%;
     --accent: 217 91% 55%;
     --accent-foreground: 0 0% 100%;
-    --border: 240 18% 88%;
-    --input: 240 18% 88%;
+    --border: 240 10% 90%;
+    --input: 240 10% 90%;
     --ring: 270 91% 60%;
 
-    --glass-bg: rgba(255, 255, 255, 0.7);
-    --glass-border: rgba(0, 0, 0, 0.08);
-    --card-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+    --glass-bg: rgba(255, 255, 255, 0.85);
+    --glass-border: rgba(0, 0, 0, 0.05);
+    --card-shadow: 0 20px 40px -12px rgba(31, 38, 135, 0.08);
     --gradient-from: #0f172a;
     --gradient-to: rgba(15, 23, 42, 0.7);
   }
 
-  /* Theme: Aurora (locked spec — teal-green on deep cool dark) */
   .aurora {
-    --bg-base:        #061418;
-    --bg-surface:     #0a1d22;
-    --bg-surface-2:   #0e272d;
-    --bg-surface-3:   #133138;
-    --border-raw:     #1a3a42;
-    --text-primary:   #e6fff8;
-    --text-secondary: #82a8a0;
-    --text-muted:     #4a6660;
-    --accent-glow:    rgba(6, 214, 160, 0.12);
-
-    --background: 190 50% 5%;
-    --foreground: 165 50% 95%;
-    --card: 190 45% 8%;
-    --card-foreground: 165 50% 95%;
-    --popover: 190 45% 8%;
-    --popover-foreground: 165 50% 95%;
-    --primary: 165 92% 42%;             /* teal-green #06d6a0 */
-    --primary-foreground: 190 50% 5%;
-    --secondary: 190 40% 15%;
-    --secondary-foreground: 165 50% 90%;
-    --muted: 190 40% 12%;
-    --muted-foreground: 175 20% 60%;
-    --accent: 165 92% 42%;
-    --accent-foreground: 190 50% 5%;
-    --border: 190 35% 18%;
-    --input: 190 35% 18%;
-    --ring: 165 92% 42%;
-
-    --glass-bg: rgba(10, 29, 34, 0.75);
-    --glass-border: rgba(6, 214, 160, 0.18);
-    --gradient-from: #06d6a0;
-    --gradient-to: #0ea5e9;
-  }
-
-  /* Theme: Crystal (sky-blue accent on light surface) */
-  .crystal {
-    --bg-base:        #f0f9ff;
-    --bg-surface:     #ffffff;
-    --bg-surface-2:   #e0f2fe;
-    --bg-surface-3:   #d0e8fa;
-    --border-raw:     #cfe2f3;
-    --text-primary:   #0c1f33;
-    --text-secondary: #4a6580;
-    --text-muted:     #8aa0b8;
-    --accent-glow:    rgba(56, 189, 248, 0.12);
-
-    --background: 204 100% 97%;
-    --foreground: 215 50% 12%;
-    --card: 0 0% 100%;
-    --card-foreground: 215 50% 12%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 215 50% 12%;
-    --primary: 199 89% 60%;             /* sky-blue #38bdf8 */
-    --primary-foreground: 0 0% 100%;
-    --secondary: 204 80% 94%;
-    --secondary-foreground: 215 50% 18%;
-    --muted: 204 60% 94%;
-    --muted-foreground: 215 18% 45%;
-    --accent: 199 89% 60%;
-    --accent-foreground: 0 0% 100%;
-    --border: 204 40% 86%;
-    --input: 204 40% 86%;
-    --ring: 199 89% 60%;
-
-    --glass-bg: rgba(255, 255, 255, 0.7);
-    --glass-border: rgba(56, 189, 248, 0.15);
-    --card-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
-    --gradient-from: #0c4a6e;
-    --gradient-to: rgba(12, 74, 110, 0.7);
-  }
-
-  /* Theme: Neon (electric green on near-black) */
-  .neon {
-    --bg-base:        #030305;
-    --bg-surface:     #08080a;
-    --bg-surface-2:   #0c0c10;
-    --bg-surface-3:   #111114;
-    --border-raw:     #1a1a22;
-    --text-primary:   #e8ffea;
-    --text-secondary: #82a888;
-    --text-muted:     #4a6650;
-    --accent-glow:    rgba(57, 255, 20, 0.14);
-
-    --background: 240 30% 2%;
-    --foreground: 125 100% 95%;
-    --card: 240 25% 4%;
-    --card-foreground: 125 100% 95%;
-    --popover: 240 25% 4%;
-    --popover-foreground: 125 100% 95%;
-    --primary: 110 100% 54%;            /* electric green #39ff14 */
-    --primary-foreground: 240 30% 2%;
-    --secondary: 240 20% 10%;
-    --secondary-foreground: 125 100% 90%;
-    --muted: 240 20% 8%;
-    --muted-foreground: 125 15% 60%;
-    --accent: 110 100% 54%;
-    --accent-foreground: 240 30% 2%;
-    --border: 240 20% 14%;
-    --input: 240 20% 14%;
-    --ring: 110 100% 54%;
-
-    --glass-bg: rgba(8, 8, 10, 0.78);
-    --glass-border: rgba(57, 255, 20, 0.22);
-    --gradient-from: #39ff14;
-    --gradient-to: #00ffff;
-  }
-
-  /* Theme: Magma (orange-red on warm near-black) */
-  .magma {
-    --bg-base:        #0a0604;
-    --bg-surface:     #120a07;
-    --bg-surface-2:   #1a0e0a;
-    --bg-surface-3:   #22130d;
-    --border-raw:     #2a1810;
-    --text-primary:   #fff2e8;
-    --text-secondary: #b89080;
-    --text-muted:     #6a4a3a;
-    --accent-glow:    rgba(255, 69, 0, 0.14);
-
-    --background: 18 50% 4%;
-    --foreground: 24 100% 96%;
-    --card: 18 45% 6%;
-    --card-foreground: 24 100% 96%;
-    --popover: 18 45% 6%;
-    --popover-foreground: 24 100% 96%;
-    --primary: 16 100% 50%;             /* orange-red #ff4500 */
-    --primary-foreground: 0 0% 100%;
-    --secondary: 18 40% 14%;
-    --secondary-foreground: 24 100% 90%;
-    --muted: 18 40% 11%;
-    --muted-foreground: 24 25% 60%;
-    --accent: 16 100% 50%;
-    --accent-foreground: 0 0% 100%;
-    --border: 18 35% 18%;
-    --input: 18 35% 18%;
-    --ring: 16 100% 50%;
-
-    --glass-bg: rgba(26, 14, 10, 0.75);
-    --glass-border: rgba(255, 69, 0, 0.22);
-    --gradient-from: #ff4500;
-    --gradient-to: #f59e0b;
-  }
-
-  /* Theme: Nano Black (Sleek, Minimal, High Contrast) */
-  .nano {
-    --background: 0 0% 1%; /* #030303 */
-    --foreground: 0 0% 100%;
-    --card: 0 0% 3%; /* #080808 */
-    --card-foreground: 0 0% 100%;
-    --popover: 0 0% 3%;
-    --popover-foreground: 0 0% 100%;
-    --primary: 210 100% 50%; /* Vibrant Blue */
-    --primary-foreground: 0 0% 100%;
-    --secondary: 0 0% 7%;
-    --secondary-foreground: 0 0% 90%;
-    --muted: 0 0% 5%;
-    --muted-foreground: 0 0% 60%;
-    --accent: 210 100% 50%;
-    --accent-foreground: 0 0% 100%;
-    --border: 0 0% 10%;
-    --input: 0 0% 10%;
-    --ring: 210 100% 50%;
-    --radius: 1rem;
+    --background: 220 60% 3%;
+    --foreground: 160 100% 97%;
+    --card: 220 60% 6%;
+    --card-foreground: 160 100% 97%;
+    --primary: 160 100% 45%;             /* Neon Emerald */
+    --primary-foreground: 220 60% 3%;
+    --accent: 190 100% 50%;              /* Electric Cyan */
+    --accent-foreground: 220 60% 3%;
+    --border: 220 50% 12%;
+    --muted: 220 50% 8%;
+    --muted-foreground: 160 40% 60%;
     
-    --glass-bg: rgba(5, 5, 5, 0.85);
-    --glass-border: rgba(255, 255, 255, 0.05);
+    --glass-bg: rgba(10, 20, 30, 0.8);
+    --glass-border: rgba(16, 185, 129, 0.2);
+    --gradient-from: #10b981;
+    --gradient-to: #06b6d4;
+  }
+
+  .crystal {
+    --background: 210 100% 98%;
+    --foreground: 220 80% 5%;
+    --card: 0 0% 100%;
+    --card-foreground: 220 80% 5%;
+    --primary: 200 100% 50%;             /* Deep Sky Blue */
+    --primary-foreground: 0 0% 100%;
+    --accent: 180 100% 45%;              /* Aquamarine */
+    --border: 210 40% 92%;
+    
+    --glass-bg: rgba(255, 255, 255, 0.9);
+    --glass-border: rgba(0, 180, 255, 0.15);
+    --gradient-from: #0369a1;
+    --gradient-to: rgba(3, 105, 161, 0.6);
+  }
+
+  .neon {
+    --background: 0 0% 0%;
+    --foreground: 300 100% 97%;
+    --card: 0 0% 2%;
+    --primary: 300 100% 50%;             /* Cyber Pink */
+    --primary-foreground: 0 0% 0%;
+    --accent: 280 100% 60%;              /* Electric Purple */
+    --border: 300 100% 10%;
+    
+    --glass-bg: rgba(0, 0, 0, 0.9);
+    --glass-border: rgba(255, 0, 255, 0.25);
+    --gradient-from: #ff00ff;
+    --gradient-to: #7e22ce;
+  }
+
+  .magma {
+    --background: 10 30% 2%;
+    --foreground: 30 100% 97%;
+    --card: 10 30% 5%;
+    --primary: 20 100% 55%;              /* Intense Orange */
+    --primary-foreground: 10 30% 2%;
+    --accent: 10 100% 50%;               /* Pure Red */
+    --border: 20 50% 12%;
+    
+    --glass-bg: rgba(15, 5, 0, 0.85);
+    --glass-border: rgba(249, 115, 22, 0.2);
+    --gradient-from: #f97316;
+    --gradient-to: #dc2626;
+  }
+
+  .nano {
+    --background: 0 0% 0%;
+    --foreground: 0 0% 100%;
+    --card: 0 0% 4%;
+    --primary: 0 0% 100%;                /* Pure White */
+    --primary-foreground: 0 0% 0%;
+    --accent: 0 0% 80%;
+    --border: 0 0% 15%;
+    
+    --glass-bg: rgba(0, 0, 0, 0.95);
+    --glass-border: rgba(255, 255, 255, 0.1);
     --gradient-from: #ffffff;
     --gradient-to: rgba(255, 255, 255, 0.4);
   }

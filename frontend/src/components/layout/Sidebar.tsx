@@ -71,10 +71,7 @@ export default function Sidebar() {
         })}
       </nav>
 
-      {/* Theme toggle */}
-      <div className="px-4 py-3 border-t ghost-border flex justify-center">
-        <LiquidThemeToggle />
-      </div>
+      {/* Theme toggle removed - redundant with top-right toggle */}
 
       {/* User */}
       {session?.user && (
