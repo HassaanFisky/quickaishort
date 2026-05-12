@@ -389,7 +389,14 @@ export default function BottomDock() {
                 />
               ))
             ) : (
-              {/* Silence markers */}
+              <div className="flex items-center justify-center h-full pointer-events-none">
+                <span className="text-[8px] text-muted-foreground/30 uppercase tracking-widest">
+                  {duration === 0 ? "No video" : "No clips"}
+                </span>
+              </div>
+            )}
+
+            {/* Silence markers */}
             {silenceSegments.map((seg, i) => (
               <div
                 key={`silence-${i}`}
@@ -401,13 +408,6 @@ export default function BottomDock() {
                 title={`Silence: ${seg.start.toFixed(1)}s – ${seg.end.toFixed(1)}s`}
               />
             ))}
-
-            <div className="flex items-center justify-center h-full pointer-events-none">
-                <span className="text-[8px] text-muted-foreground/30 uppercase tracking-widest">
-                  {duration === 0 ? "No video" : "No clips"}
-                </span>
-              </div>
-            )}
 
             {/* Playhead */}
             {duration > 0 && (
