@@ -87,6 +87,11 @@ interface EditorState {
   // Export settings (shared across RightPanel + ExportPanel)
   exportSettings: ExportSettings;
 
+  // History for undo/redo
+  undoStack: Clip[][];
+  redoStack: Clip[][];
+  activeTool: "select" | "trim" | "text" | null;
+
   // Actions
   setCurrentTime: (time: number) => void;
   setIsPlaying: (playing: boolean) => void;
@@ -120,6 +125,10 @@ interface EditorState {
   removeCanvasElement: (id: string) => void;
 
   splitClipAtTime: (time: number) => void;
+  deleteClip: (id: string) => void;
+  undo: () => void;
+  redo: () => void;
+  setActiveTool: (tool: EditorState["activeTool"]) => void;
   reset: () => void;
 }
 
@@ -152,6 +161,10 @@ export const useEditorStore = create<EditorState>()(
       selectedClipId: null,
       canvasElements: [],
       exportSettings: { ...DEFAULT_EXPORT_SETTINGS },
+
+      undoStack: [],
+      redoStack: [],
+      activeTool: "select",
 
       setCurrentTime: (time) => set({ currentTime: time }),
       setIsPlaying: (playing) => set({ isPlaying: playing }),
@@ -232,8 +245,45 @@ export const useEditorStore = create<EditorState>()(
           const next = [...suggestions];
           next.splice(idx, 1, clipA, clipB);
 
-          return { suggestions: next, selectedClipId: idA };
+          return {
+            undoStack: [...state.undoStack.slice(-49), [...suggestions]],
+            redoStack: [],
+            suggestions: next,
+            selectedClipId: idA,
+          };
         }),
+
+      deleteClip: (id) =>
+        set((state) => ({
+          undoStack: [...state.undoStack.slice(-49), [...state.suggestions]],
+          redoStack: [],
+          suggestions: state.suggestions.filter((c) => c.id !== id),
+          selectedClipId: state.selectedClipId === id ? null : state.selectedClipId,
+        })),
+
+      undo: () =>
+        set((state) => {
+          if (state.undoStack.length === 0) return {};
+          const prev = state.undoStack[state.undoStack.length - 1];
+          return {
+            undoStack: state.undoStack.slice(0, -1),
+            redoStack: [...state.redoStack, [...state.suggestions]],
+            suggestions: prev,
+          };
+        }),
+
+      redo: () =>
+        set((state) => {
+          if (state.redoStack.length === 0) return {};
+          const next = state.redoStack[state.redoStack.length - 1];
+          return {
+            redoStack: state.redoStack.slice(0, -1),
+            undoStack: [...state.undoStack, [...state.suggestions]],
+            suggestions: next,
+          };
+        }),
+
+      setActiveTool: (tool) => set({ activeTool: tool }),
 
       setExportSetting: (key, value) =>
         set((state) => ({

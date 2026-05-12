@@ -54,6 +54,74 @@ export default function EditorPage() {
   }, [sourceFile, sourceUrl, analysis, setAudioData]);
 
   useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't intercept when typing in input/textarea/contenteditable
+      const target = e.target as HTMLElement;
+      const tag = target?.tagName;
+      if (
+        tag === "INPUT" ||
+        tag === "TEXTAREA" ||
+        target?.isContentEditable
+      )
+        return;
+
+      const store = useEditorStore.getState();
+
+      if (e.key === " ") {
+        e.preventDefault();
+        store.setIsPlaying(!store.isPlaying);
+      }
+      if (e.key === "s" && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault();
+        if (store.suggestions.length > 0) {
+          store.splitClipAtTime(store.currentTime);
+        }
+      }
+      if (e.key === "Delete" || e.key === "Backspace") {
+        if (store.selectedClipId) {
+          e.preventDefault();
+          store.deleteClip(store.selectedClipId);
+        }
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === "z" && !e.shiftKey) {
+        e.preventDefault();
+        store.undo();
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === "z" && e.shiftKey) {
+        e.preventDefault();
+        store.redo();
+      }
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        const delta = e.shiftKey ? 5 : 1;
+        const newTime = Math.max(0, store.currentTime - delta);
+        store.setPendingSeek(newTime);
+      }
+      if (e.key === "ArrowRight") {
+        e.preventDefault();
+        const delta = e.shiftKey ? 5 : 1;
+        const newTime = Math.min(store.duration, store.currentTime + delta);
+        store.setPendingSeek(newTime);
+      }
+      if (e.key === "t" && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault();
+        store.addCanvasElement({
+          type: "text",
+          content: "NEW TEXT",
+          x: 200,
+          y: 300,
+          scale: 1.5,
+          rotation: 0,
+          style: { className: "text-3xl font-bold text-white" },
+        });
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  useEffect(() => {
     if (analysis.lastMessage?.type === "silence_detected") {
       const segments = analysis.lastMessage.payload.segments;
       if (segments) {

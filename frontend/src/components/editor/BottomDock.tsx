@@ -14,10 +14,14 @@ import {
   Layout,
   SquareSplitHorizontal,
   GripVertical,
+  Undo2,
+  Redo2,
+  Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatTime } from "@/lib/utils/formatTime";
 import { toast } from "sonner";
+import { useMemo } from "react";
 
 // ---- TimelineClip Component with Trim & Drag Support ----
 function TimelineClip({
@@ -142,11 +146,29 @@ export default function BottomDock() {
     addCanvasElement,
     setExportSetting,
     exportSettings,
+    audioData,
+    silenceSegments,
+    undo,
+    redo,
+    deleteClip,
   } = useEditorStore();
 
-  const [visualizerHeights] = useState<number[]>(() =>
-    Array.from({ length: 60 }, () => 10 + Math.random() * 60),
-  );
+  const waveformBars = useMemo(() => {
+    if (!audioData || audioData.length === 0) {
+      return Array(80).fill(4);
+    }
+    const barCount = 80;
+    const step = Math.floor(audioData.length / barCount);
+    return Array.from({ length: barCount }, (_, i) => {
+      let sum = 0;
+      for (let j = i * step; j < (i + 1) * step && j < audioData.length; j++) {
+        sum += Math.abs(audioData[j]);
+      }
+      const avg = sum / step;
+      return Math.max(3, Math.min(60, avg * 400));
+    });
+  }, [audioData]);
+
 
   const stopPlayback = () => {
     setIsPlaying(false);
@@ -223,12 +245,42 @@ export default function BottomDock() {
   }, [exportSettings.voiceoverEnabled, setExportSetting]);
 
   const tools = [
-    { icon: SquareSplitHorizontal, label: "Split", action: handleSplit },
-    { icon: Scissors, label: "Trim", action: () => toast.info("Drag the edges of clips on the timeline to trim.") },
-    { icon: Type, label: "Text", action: handleAddText },
-    { icon: Wand2, label: "FX", action: handleFX },
-    { icon: Layout, label: "Transitions", action: handleTransitions },
-    { icon: Mic, label: "Voiceover", action: handleVoiceover },
+    {
+      icon: SquareSplitHorizontal,
+      label: "Split",
+      action: handleSplit,
+      tooltip: "Split — S — Cut clip at playhead",
+    },
+    {
+      icon: Scissors,
+      label: "Trim",
+      action: () => toast.info("Drag clip edges on the timeline to trim."),
+      tooltip: "Trim — Drag clip edges to resize",
+    },
+    {
+      icon: Type,
+      label: "Text",
+      action: handleAddText,
+      tooltip: "Text — T — Add text overlay to canvas",
+    },
+    {
+      icon: Wand2,
+      label: "FX",
+      action: handleFX,
+      tooltip: `FX — Visual filter (current: ${exportSettings.filter})`,
+    },
+    {
+      icon: Layout,
+      label: "Transitions",
+      action: handleTransitions,
+      tooltip: "Transitions — Toggle crossfade between clips",
+    },
+    {
+      icon: Mic,
+      label: "Voiceover",
+      action: handleVoiceover,
+      tooltip: "Voiceover — Toggle AI voice enhancement",
+    },
   ] as const;
 
   return (
@@ -238,10 +290,32 @@ export default function BottomDock() {
           <Button
             variant="ghost"
             size="icon"
+            onClick={() => undo()}
+            title="Undo — Ctrl+Z"
+            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+          >
+            <Undo2 className="w-4 h-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => redo()}
+            title="Redo — Ctrl+Shift+Z"
+            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+          >
+            <Redo2 className="w-4 h-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
             className="w-8 h-8 text-foreground/60 hover:text-primary transition-colors"
             onClick={() => setIsPlaying(!isPlaying)}
           >
-            {isPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current" />}
+            {isPlaying ? (
+              <Pause className="w-4 h-4 fill-current" />
+            ) : (
+              <Play className="w-4 h-4 fill-current" />
+            )}
           </Button>
           <Button
             variant="ghost"
@@ -257,10 +331,11 @@ export default function BottomDock() {
         </div>
 
         <div className="flex items-center gap-5">
-          {tools.map(({ icon: Icon, label, action }) => (
+          {tools.map(({ icon: Icon, label, action, tooltip }) => (
             <button
               key={label}
               onClick={action}
+              title={tooltip}
               className="flex items-center gap-2 group cursor-pointer focus:outline-none"
             >
               <Icon className="w-4 h-4 text-foreground/40 group-hover:text-primary transition-colors" />
@@ -269,6 +344,23 @@ export default function BottomDock() {
               </span>
             </button>
           ))}
+          {selectedClipId && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                deleteClip(selectedClipId);
+                toast.success("Clip deleted");
+              }}
+              title="Delete — Del/Backspace — Remove selected clip"
+              className="flex items-center gap-2 group cursor-pointer focus:outline-none h-auto py-0 px-0"
+            >
+              <Trash2 className="w-4 h-4 text-red-400/40 group-hover:text-red-400 transition-colors" />
+              <span className="text-[10px] font-black text-red-400/40 uppercase tracking-widest group-hover:text-red-400 transition-colors">
+                Delete
+              </span>
+            </Button>
+          )}
         </div>
       </div>
 
@@ -297,7 +389,20 @@ export default function BottomDock() {
                 />
               ))
             ) : (
-              <div className="flex items-center justify-center h-full pointer-events-none">
+              {/* Silence markers */}
+            {silenceSegments.map((seg, i) => (
+              <div
+                key={`silence-${i}`}
+                className="absolute top-0 bottom-0 bg-red-500/15 border-x border-red-500/30 pointer-events-none z-5"
+                style={{
+                  left: `${(seg.start / duration) * 100}%`,
+                  width: `${((seg.end - seg.start) / duration) * 100}%`,
+                }}
+                title={`Silence: ${seg.start.toFixed(1)}s – ${seg.end.toFixed(1)}s`}
+              />
+            ))}
+
+            <div className="flex items-center justify-center h-full pointer-events-none">
                 <span className="text-[8px] text-muted-foreground/30 uppercase tracking-widest">
                   {duration === 0 ? "No video" : "No clips"}
                 </span>
@@ -322,18 +427,31 @@ export default function BottomDock() {
             Audio
           </span>
           <div className="flex-1 h-7 rounded-lg bg-foreground/5 border border-foreground/5 relative flex gap-1 p-0.5">
-            {transcript ? (
-              <div className="flex-1 h-full bg-emerald-500/10 border border-emerald-500/20 rounded-md flex items-center px-2 gap-1 overflow-hidden">
-                <span className="text-[8px] font-bold text-emerald-400 truncate uppercase">Transcript</span>
-                <div className="flex items-center gap-0.5 h-3 flex-1 overflow-hidden">
-                  {visualizerHeights.slice(0, 20).map((h, i) => (
-                    <div key={i} className="w-0.5 bg-emerald-400/40 rounded-full shrink-0" style={{ height: `${h}%` }} />
-                  ))}
-                </div>
+            {audioData ? (
+              <div className="absolute inset-0 flex items-end gap-[1px] px-1 py-1">
+                {waveformBars.map((h, i) => {
+                  const timePct = i / waveformBars.length;
+                  const time = timePct * duration;
+                  const inSilence = silenceSegments.some(
+                    (seg) => time >= seg.start && time <= seg.end,
+                  );
+                  return (
+                    <div
+                      key={i}
+                      className={cn(
+                        "flex-1 rounded-t-sm transition-colors duration-150",
+                        inSilence ? "bg-red-500/40" : "bg-primary/50",
+                      )}
+                      style={{ height: `${h}%` }}
+                    />
+                  );
+                })}
               </div>
             ) : (
               <div className="flex items-center justify-center flex-1 h-full">
-                <span className="text-[8px] text-muted-foreground/30 uppercase tracking-widest">No audio</span>
+                <span className="text-[8px] text-muted-foreground/30 uppercase tracking-widest">
+                  No audio data
+                </span>
               </div>
             )}
           </div>

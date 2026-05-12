@@ -427,17 +427,67 @@ export default function EditorLayout() {
 
       {/* Floating Macro Controls */}
       <div className="fixed right-10 top-1/2 -translate-y-1/2 flex flex-col gap-5 z-40 hidden 2xl:flex">
-        {[Smartphone, Zap, Sparkles].map((Icon, i) => (
-          <motion.div
-            key={i}
-            whileHover={{ scale: 1.1, x: -5 }}
-            className="w-14 h-14 rounded-2xl glass-surface border-foreground/10 flex items-center justify-center hover:border-primary/50 transition-all cursor-pointer group shadow-2xl overflow-hidden relative"
-          >
-            <div className="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-            <Icon className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors relative z-10" />
-          </motion.div>
-        ))}
+        <FloatingControls />
       </div>
     </div>
+  );
+}
+
+function FloatingControls() {
+  const { exportSettings, setExportSetting } = useEditorStore();
+
+  const cycleAspectRatio = () => {
+    const options = ["9:16", "16:9", "1:1"] as const;
+    const idx = options.indexOf(exportSettings.aspectRatio as any);
+    const next = options[(idx + 1) % options.length];
+    setExportSetting("aspectRatio", next);
+    toast.success(`Aspect ratio: ${next}`);
+  };
+
+  const triggerAutoEnhance = () => {
+    window.dispatchEvent(new Event("trigger-silence-detect"));
+    toast.success("Auto-enhancement triggered");
+  };
+
+  const triggerPreFlight = () => {
+    window.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "P", shiftKey: true }),
+    );
+  };
+
+  const buttons = [
+    {
+      icon: Smartphone,
+      title: `Aspect Ratio — ${exportSettings.aspectRatio}`,
+      action: cycleAspectRatio,
+    },
+    {
+      icon: Zap,
+      title: "Auto-Enhance — Remove silence & boost",
+      action: triggerAutoEnhance,
+    },
+    {
+      icon: Sparkles,
+      title: "AI Pre-Flight — Test with audience",
+      action: triggerPreFlight,
+    },
+  ];
+
+  return (
+    <>
+      {buttons.map(({ icon: Icon, title, action }, i) => (
+        <motion.button
+          key={i}
+          onClick={action}
+          title={title}
+          whileHover={{ scale: 1.1, x: -5 }}
+          whileTap={{ scale: 0.95 }}
+          className="w-14 h-14 rounded-2xl glass-surface border-foreground/10 flex items-center justify-center hover:border-primary/50 transition-all cursor-pointer group shadow-2xl overflow-hidden relative"
+        >
+          <div className="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+          <Icon className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors relative z-10" />
+        </motion.button>
+      ))}
+    </>
   );
 }
