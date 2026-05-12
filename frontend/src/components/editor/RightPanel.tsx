@@ -240,7 +240,7 @@ export default function RightPanel() {
                 <Slider
                   value={[exportSettings.audioBoost]}
                   min={0}
-                  max={100}
+                  max={200}
                   step={1}
                   onValueChange={([v]) => setExportSetting("audioBoost", v)}
                   className="py-1"

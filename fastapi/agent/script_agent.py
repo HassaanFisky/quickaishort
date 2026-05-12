@@ -34,6 +34,33 @@ class ScriptAgent:
         self.search_api_key = os.getenv("GOOGLE_SEARCH_API_KEY")
         self.search_cx = os.getenv("GOOGLE_SEARCH_CX")
 
+    async def enhance_script(self, topic: str) -> str:
+        """Utilizes Gemini to rewrite a topic into a high-engagement, viral-ready script."""
+        prompt = f"""
+        You are the QuickAI Script Agent. Your goal is to rewrite the following topic into a VIRAL short-form video script (9:16 format).
+        
+        Topic: {topic}
+        
+        Requirements:
+        1. Start with a massive HOOK in the first 3 seconds.
+        2. Keep the language simple, punchy, and professional.
+        3. Optimize for high retention by using open loops.
+        4. No hallucinations. Only provide the text of the script.
+        5. The script should be between 100-150 words (approx 60 seconds).
+        
+        Return ONLY the final script text. No markdown, no introduction.
+        """
+        try:
+            response = await asyncio.to_thread(
+                client.models.generate_content,
+                model=DEFAULT_MODEL,
+                contents=prompt
+            )
+            return response.text.strip()
+        except Exception as e:
+            logger.error(f"Script enhancement failed: {e}")
+            return topic
+
     async def segment_script(self, script: str) -> List[Dict[str, Any]]:
         """Breaks script into timed segments with visual cues using Gemini."""
         prompt = f"""

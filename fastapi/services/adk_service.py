@@ -40,9 +40,14 @@ class ADKService:
             # For now, we'll assume .mp4 or similar.
             clip_paths.append(f"gridfs://adk_uploads/{user_id}/{fid}.mp4")
 
-        # 2. Pre-fetch Stock Clips
+        # 2. Pre-fetch Assets (Private GCS + Pexels)
         stock_clips: List[Dict[str, str]] = []
-        if stock_query:
+        
+        # Genius Step: Search private library first
+        private_assets = await ADKService._fetch_private_assets(stock_query or "general")
+        stock_clips.extend(private_assets)
+
+        if not stock_clips and stock_query:
             stock_clips = await ADKService._fetch_stock(stock_query)
         
         # 3. Generate Voiceover
@@ -58,6 +63,24 @@ class ADKService:
             "aspect_ratio": aspect_ratio,
             "created_at": datetime.utcnow().isoformat()
         }
+
+    @staticmethod
+    async def _fetch_private_assets(query: str) -> List[Dict[str, str]]:
+        """Searches the private GCS bucket for assets matching the query."""
+        bucket_name = os.getenv("STOCK_ASSETS_BUCKET")
+        if not bucket_name:
+            return []
+        
+        try:
+            from google.cloud import storage
+            client = storage.Client()
+            bucket = client.bucket(bucket_name)
+            # Find blobs that match the keyword
+            blobs = list(client.list_blobs(bucket_name, max_results=5))
+            return [{"id": b.name, "url": f"gs://{bucket_name}/{b.name}"} for b in blobs if query.lower() in b.name.lower()]
+        except Exception as e:
+            logger.warning(f"GCS asset fetch failed: {e}")
+            return []
 
     @staticmethod
     def _parse_script_to_segments(

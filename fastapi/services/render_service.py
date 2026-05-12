@@ -391,9 +391,31 @@ def render_video(production_plan: dict) -> str:
                 success = storage.download_file(remote_path, local_source, bucket_name=bucket)
                 if not success:
                     logger.error("[render_video] GridFS download failed for %s", clip_source)
-                    # Fallback to black frame to avoid crashing the whole render
-                    clip_source = "BLACK_FRAME"
-                    # Re-run this iteration with BLACK_FRAME
+                    # Fallback to black frame
+                    (
+                        ffmpeg.input(f"color=c=black:s=1080x1920:d={duration}", f="lavfi")
+                        .output(str(target_clip), vcodec="libx264", pix_fmt="yuv420p")
+                        .overwrite_output()
+                        .run(quiet=True)
+                    )
+                else:
+                    (
+                        ffmpeg.input(str(local_source), ss=start, t=duration)
+                        .filter("scale", 1080, 1920, force_original_aspect_ratio="increase")
+                        .filter("crop", 1080, 1920)
+                        .output(str(target_clip), vcodec="libx264", acodec="aac", crf=23, preset="veryfast")
+                        .overwrite_output()
+                        .run(quiet=True)
+                    )
+            elif clip_source.startswith("gs://"):
+                # Genius Step: Handle GCS URIs for private asset library
+                local_source = workdir / f"gcs_src_{i}.mp4"
+                storage = get_storage_service()
+                success = storage.download_gcs_file(clip_source, local_source)
+                
+                if not success:
+                    logger.error("[render_video] GCS download failed for %s", clip_source)
+                    # Fallback to black frame
                     (
                         ffmpeg.input(f"color=c=black:s=1080x1920:d={duration}", f="lavfi")
                         .output(str(target_clip), vcodec="libx264", pix_fmt="yuv420p")

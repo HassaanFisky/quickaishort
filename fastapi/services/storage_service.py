@@ -115,6 +115,30 @@ class StorageService:
         """Sync wrapper for delete_file_async."""
         asyncio.run(self.delete_file_async(remote_path, bucket_name))
 
+    def download_gcs_file(self, gcs_uri: str, local_path: Path) -> bool:
+        """Downloads a file from Google Cloud Storage to local disk."""
+        try:
+            from google.cloud import storage
+            if not gcs_uri.startswith("gs://"):
+                return False
+            
+            # gs://bucket/path
+            parts = gcs_uri[5:].split("/", 1)
+            if len(parts) < 2:
+                return False
+            
+            bucket_name, blob_name = parts
+            client = storage.Client()
+            bucket = client.bucket(bucket_name)
+            blob = bucket.blob(blob_name)
+            
+            logger.info(f"[Storage] Downloading GCS:{gcs_uri} to {local_path}")
+            blob.download_to_filename(str(local_path))
+            return True
+        except Exception as e:
+            logger.error(f"[Storage] GCS download failed for {gcs_uri}: {e}")
+            return False
+
 # Singleton instance
 _storage_service: Optional[StorageService] = None
 

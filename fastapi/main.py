@@ -1376,7 +1376,22 @@ async def adk_stock_search(q: str = Query(..., min_length=1), per_page: int = Qu
         raise HTTPException(status_code=502, detail=str(exc))
 
 
+class ADKEnhanceRequest(BaseModel):
+    topic: str = Field(..., min_length=5, max_length=1000)
+
+@app.post("/api/adk/enhance")
 @limiter.limit("5/minute")
+async def adk_enhance(request: Request, body: ADKEnhanceRequest, _user_id: str = Depends(get_verified_user_id)):
+    """Rewrites a simple topic into a viral script using the ScriptAgent."""
+    try:
+        from agent.script_agent import ScriptAgent
+        agent = ScriptAgent()
+        enhanced_text = await agent.enhance_script(body.topic)
+        return {"enhanced_script": enhanced_text}
+    except Exception as e:
+        logger.error(f"ADK Enhance failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to enhance script")
+
 @app.post("/api/adk/generate")
 async def adk_generate(request: Request, body: ADKGenerateRequest, user_id: str = Depends(get_verified_user_id)):
     # Pillar 1: Overload Guardrail

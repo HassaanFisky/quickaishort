@@ -52,12 +52,21 @@ async def init_db() -> None:
         if _client:
             _db = _client[DB_NAME]
 
-    await _db["UserStats"].create_index("user_id", unique=True)
-    await _db[f"{EXPORTS_BUCKET}.files"].create_index(
-        "metadata.expires_at",
-        expireAfterSeconds=0,
-    )
-    logger.info("MongoDB initialized (db=%s, bucket=%s, uploads=%s).", DB_NAME, EXPORTS_BUCKET, UPLOADS_BUCKET)
+    try:
+        await asyncio.wait_for(
+            _db["UserStats"].create_index("user_id", unique=True),
+            timeout=5.0,
+        )
+        await asyncio.wait_for(
+            _db[f"{EXPORTS_BUCKET}.files"].create_index(
+                "metadata.expires_at",
+                expireAfterSeconds=0,
+            ),
+            timeout=5.0,
+        )
+        logger.info("MongoDB initialized (db=%s, bucket=%s, uploads=%s).", DB_NAME, EXPORTS_BUCKET, UPLOADS_BUCKET)
+    except Exception as exc:
+        logger.warning("MongoDB index creation failed (non-fatal): %s", exc)
 
 
 async def close_db() -> None:

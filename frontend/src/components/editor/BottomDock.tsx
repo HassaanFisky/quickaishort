@@ -396,6 +396,18 @@ export default function BottomDock() {
               </div>
             )}
 
+            {/* AI hook markers — clips with viralAnalysis.score > 70 */}
+            {suggestions
+              .filter((c) => (c.viralAnalysis?.score ?? 0) > 70)
+              .map((clip) => (
+                <div
+                  key={`hook-${clip.id}`}
+                  className="absolute top-0 w-0.5 bg-emerald-400/70 z-20 pointer-events-none"
+                  style={{ left: `${(clip.start / duration) * 100}%`, height: "100%" }}
+                  title={`Hook — Score: ${clip.viralAnalysis?.score}`}
+                />
+              ))}
+
             {/* Silence markers */}
             {silenceSegments.map((seg, i) => (
               <div
