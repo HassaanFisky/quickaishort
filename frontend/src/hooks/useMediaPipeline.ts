@@ -93,11 +93,23 @@ export function useMediaPipeline() {
       clearTimeout(timeoutId);
       const msg = error instanceof Error ? error.message : String(error);
       console.error("Pipeline error:", msg);
+      
+      let displayMsg = "Could not process this video — please try a different YouTube URL";
+      const lowerMsg = msg.toLowerCase();
+      
       if (error instanceof Error && error.name === "AbortError") {
-        toast.error("Audio processing timed out — video may be too long");
-      } else {
-        toast.error(`Processing failed: ${msg.slice(0, 120)}`);
+        displayMsg = "Audio processing timed out — video may be too long";
+      } else if (lowerMsg.includes("504") || lowerMsg.includes("timed out") || lowerMsg.includes("timeout")) {
+        displayMsg = "Video processing timed out — try a shorter clip or try again";
+      } else if (lowerMsg.includes("503") || lowerMsg.includes("busy")) {
+        displayMsg = "Server is busy — please try again in a moment";
+      } else if (lowerMsg.includes("unavailable") || lowerMsg.includes("private")) {
+        displayMsg = "This video is unavailable or private — try a public YouTube video";
+      } else if (lowerMsg.includes("yt-dlp")) {
+        displayMsg = "YouTube is blocking this video. Try adding YouTube cookies in Settings, or try a different video.";
       }
+      
+      toast.error(displayMsg);
       setAgentState("ingestion", { status: "error" });
       setProcessing(false, "idle");
     }

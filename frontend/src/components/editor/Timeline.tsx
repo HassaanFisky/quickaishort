@@ -69,6 +69,23 @@ export default function Timeline() {
       </div>
 
       <div className="relative h-24 bg-muted/20 rounded-xl border-2 border-dashed border-muted-foreground/10 overflow-hidden flex items-center px-4 group transition-colors hover:bg-muted/30">
+        {/* Honest State Overlay */}
+        {!audioData ? (
+          <div className="absolute inset-0 z-40 bg-background/40 backdrop-blur-[1px] flex items-center justify-center pointer-events-none">
+            <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-background/80 border border-border shadow-lg animate-pulse">
+              <div className="w-2 h-2 rounded-full bg-primary animate-ping" />
+              <span className="text-[10px] font-black uppercase tracking-widest text-foreground">Analyzing audio...</span>
+            </div>
+          </div>
+        ) : (
+          <div className="absolute top-2 right-4 z-40 pointer-events-none">
+            <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-emerald-500/10 border border-emerald-500/20">
+              <div className="w-1 h-1 rounded-full bg-emerald-500" />
+              <span className="text-[8px] font-black text-emerald-500 uppercase tracking-tighter">Waveform ready</span>
+            </div>
+          </div>
+        )}
+
         {/* Silence Segments Overlay */}
         {silenceSegments.map((seg, i) => {
           const startPct = (seg.start / duration) * 100;

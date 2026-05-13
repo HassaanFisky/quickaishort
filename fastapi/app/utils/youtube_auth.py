@@ -6,26 +6,17 @@ logger = logging.getLogger(__name__)
 
 _COOKIE_FILE_PATH = None
 
-def get_cookie_file() -> str | None:
-    global _COOKIE_FILE_PATH
-    if _COOKIE_FILE_PATH and os.path.exists(_COOKIE_FILE_PATH):
-        return _COOKIE_FILE_PATH
-
-    # Prioritize the secret mount we created via Cloud Run / Secret Manager
-    cookies_content = os.environ.get("YOUTUBE_COOKIES")
-    if not cookies_content:
+def get_cookie_file():
+    import tempfile, os
+    cookies = os.environ.get("YOUTUBE_COOKIES", "")
+    if not cookies:
         return None
-
     try:
-        # Netscape format files often have \n or \r\n
-        fd, path = tempfile.mkstemp(prefix="yt_cookies_", suffix=".txt")
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            f.write(cookies_content.replace("\\n", "\n"))
-        _COOKIE_FILE_PATH = path
-        logger.info(f"Loaded YouTube cookies to {path}")
-        return path
-    except Exception as e:
-        logger.error(f"Failed to write YouTube cookies to temp file: {e}")
+        f = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
+        f.write(cookies)
+        f.close()
+        return f.name
+    except Exception:
         return None
 
 def inject_ydl_bypass(opts: dict) -> dict:

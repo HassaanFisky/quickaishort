@@ -955,9 +955,152 @@ async def proxy_video(url: str):
 async def get_audio(url: str = Query(...)):
     """Serves the audio stream for a given YouTube URL with 100% reliability fallbacks."""
     if DemoService.is_demo_url(url):
-        # Redirect to a known safe open source video for the demo audio
         return RedirectResponse(url="https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_1MB.mp4")
-    return await VideoService.get_audio_response(url)
+        
+    video_id = VideoService.extract_video_id(url)
+    if not video_id:
+        raise HTTPException(status_code=400, detail="Invalid YouTube URL")
+
+    tmpdir = tempfile.mkdtemp()
+    output_path = Path(tmpdir) / f"{video_id}.m4a"
+    
+    success = False
+    last_error = ""
+
+    # TIER 1 — yt-dlp (hardened mobile/creator clients + cookies)
+    try:
+        ydl_opts = {
+            "format": "bestaudio[ext=m4a]/bestaudio/best",
+            "outtmpl": str(output_path),
+            "quiet": True,
+            "no_warnings": True,
+            "extractor_args": {
+                "youtube": {
+                    "player_client": ["android", "web_creator", "ios"],
+                    "player_skip": ["configs"],
+                }
+            },
+            "http_headers": {
+                "User-Agent": "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
+            },
+            "socket_timeout": 30,
+            "retries": 3,
+        }
+
+        cookie_file = get_cookie_file()
+        if cookie_file:
+            ydl_opts["cookiefile"] = cookie_file
+            
+        ydl_opts = inject_ydl_bypass(ydl_opts)
+
+        loop = asyncio.get_event_loop()
+        def _run_yt():
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([url])
+        await loop.run_in_executor(None, _run_yt)
+        if output_path.exists() and output_path.stat().st_size > 10000:
+            success = True
+    except Exception as e:
+        last_error = f"yt-dlp tier 1 failed: {str(e)}"
+        logger.warning(last_error)
+
+    # TIER 2 — Cobalt API (with retry logic)
+    if not success:
+        try:
+            stream_url = await VideoService._fetch_cobalt(url, mode="audio")
+            if stream_url:
+                async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+                    async with client.stream("GET", stream_url) as r:
+                        r.raise_for_status()
+                        with open(output_path, "wb") as f:
+                            async for chunk in r.aiter_bytes(chunk_size=8192):
+                                f.write(chunk)
+                if output_path.exists() and output_path.stat().st_size > 10000:
+                    success = True
+        except Exception as e:
+            last_error = f"Cobalt tier 2 failed: {str(e)}"
+            logger.warning(last_error)
+
+    # TIER 3 — Piped API
+    if not success:
+        PIPED_INSTANCES = [
+            "https://pipedapi.kavin.rocks",
+            "https://pipedapi.adminforge.de",
+            "https://piped-api.garudalinux.org",
+        ]
+        for instance in PIPED_INSTANCES:
+            try:
+                async with httpx.AsyncClient(timeout=15.0) as client:
+                    r = await client.get(f"{instance}/streams/{video_id}")
+                    if r.status_code != 200:
+                        continue
+                    data = r.json()
+                    audio_streams = data.get("audioStreams", [])
+                    if not audio_streams:
+                        continue
+                    best = max(audio_streams, key=lambda x: x.get("bitrate", 0))
+                    audio_url = best.get("url", "")
+                    if not audio_url:
+                        continue
+                    async with client.stream("GET", audio_url) as stream:
+                        with open(output_path, "wb") as f:
+                            async for chunk in stream.aiter_bytes(8192):
+                                f.write(chunk)
+                    if output_path.exists() and output_path.stat().st_size > 10000:
+                        success = True
+                        break
+            except Exception as e:
+                logger.warning(f"Piped {instance} failed: {e}")
+                continue
+
+    # TIER 4 — Invidious API
+    if not success:
+        INVIDIOUS_INSTANCES = [
+            "https://yewtu.be",
+            "https://invidious.kavin.rocks",
+            "https://vid.priv.au",
+        ]
+        for instance in INVIDIOUS_INSTANCES:
+            try:
+                async with httpx.AsyncClient(timeout=15.0) as client:
+                    r = await client.get(f"{instance}/api/v1/videos/{video_id}")
+                    if r.status_code != 200:
+                        continue
+                    data = r.json()
+                    formats = [f for f in data.get("adaptiveFormats", []) if "audio" in f.get("type", "")]
+                    if not formats:
+                        formats = data.get("formatStreams", [])
+                    if not formats:
+                        continue
+                    best = max(formats, key=lambda x: x.get("bitrate", 0))
+                    url = best.get("url", "")
+                    if not url:
+                        continue
+                    async with client.stream("GET", url) as stream:
+                        with open(output_path, "wb") as f:
+                            async for chunk in stream.aiter_bytes(8192):
+                                f.write(chunk)
+                    if output_path.exists() and output_path.stat().st_size > 10000:
+                        success = True
+                        break
+            except Exception as e:
+                logger.warning(f"Invidious {instance} failed: {e}")
+                continue
+
+    if not success:
+        raise HTTPException(status_code=500, detail="Video unavailable on all sources")
+
+    return FileResponse(
+        path=output_path,
+        media_type="audio/mpeg",
+        background=BackgroundTask(lambda: shutil.rmtree(tmpdir, ignore_errors=True))
+    )
+
+    return FileResponse(
+        path=output_path,
+        media_type="audio/mpeg",
+        background=BackgroundTask(lambda: shutil.rmtree(tmpdir, ignore_errors=True))
+    )
 
 
 # ---- Pre-Flight ---------------------------------------------------------------

@@ -18,6 +18,9 @@ import { cn } from "@/lib/utils";
 
 export default function VideoCanvas() {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const gainNodeRef = useRef<GainNode | null>(null);
+  
   const [isBuffering, setIsBuffering] = useState(false);
   const {
     sourceUrl,
@@ -28,6 +31,7 @@ export default function VideoCanvas() {
     currentTime,
     isPlaying,
     pendingSeek,
+    exportSettings,
     setCurrentTime,
     setIsPlaying,
     setDuration,
@@ -37,6 +41,45 @@ export default function VideoCanvas() {
   const { isReady, reframingData, detect } = useFaceTracker();
 
   const [displayUrl, setDisplayUrl] = useState<string | null>(null);
+
+  // Web Audio API for Live Audio Boost
+  useEffect(() => {
+    if (!videoRef.current) return;
+    
+    const audioBoost = exportSettings.audioBoost;
+    
+    if (!audioContextRef.current) {
+      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const source = audioContextRef.current.createMediaElementSource(videoRef.current);
+      gainNodeRef.current = audioContextRef.current.createGain();
+      source.connect(gainNodeRef.current);
+      gainNodeRef.current.connect(audioContextRef.current.destination);
+    }
+    
+    if (gainNodeRef.current) {
+      // 0-200% -> 0.0-2.0. Base is 85% in store.
+      gainNodeRef.current.gain.value = (audioBoost / 100) * 1.5; 
+    }
+    
+    if (isPlaying && audioContextRef.current.state === "suspended") {
+      audioContextRef.current.resume();
+    }
+  }, [exportSettings.audioBoost, isPlaying]);
+
+  // Live Playback Speed
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.playbackRate = exportSettings.playbackSpeed / 100;
+    }
+  }, [exportSettings.playbackSpeed]);
+
+  const getCssFilter = () => {
+    const filter = exportSettings.filter;
+    if (filter === "Urban") return "contrast(1.2) saturate(0.9)";
+    if (filter === "Retro") return "sepia(0.4) contrast(1.1) brightness(0.95)";
+    if (filter === "Cinematic") return "contrast(1.15) brightness(0.9) saturate(1.1)";
+    return "none";
+  };
 
   useEffect(() => {
     if (!sourceUrl) {
@@ -69,6 +112,9 @@ export default function VideoCanvas() {
     if (!videoRef.current) return;
     if (isPlaying) {
       videoRef.current.play().catch(() => {});
+      if (audioContextRef.current?.state === "suspended") {
+        audioContextRef.current.resume();
+      }
     } else {
       videoRef.current.pause();
     }
@@ -119,25 +165,34 @@ export default function VideoCanvas() {
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-6 h-full animate-in fade-in zoom-in-95 duration-1000">
       <div className="relative aspect-9/16 h-full max-h-[75vh] depth-card glass-surface rounded-[2.5rem] overflow-hidden flex items-center justify-center group w-auto border border-foreground/5 shadow-2xl">
-        {(!isReady || isBuffering) && (
-          <div className="absolute top-6 right-6 z-50">
+        <div className="absolute top-6 right-6 z-50 flex flex-col items-end gap-2">
+          {(!isReady || isBuffering) && (
             <div className="flex items-center gap-2 glass-surface border border-foreground/10 px-3 py-1.5 rounded-full text-[10px] font-black text-muted-foreground uppercase tracking-widest shadow-xl">
               <Loader2 className="w-3 h-3 animate-spin text-primary" />
               {isBuffering ? "Buffering..." : "Vision Active"}
             </div>
-          </div>
-        )}
+          )}
+          {exportSettings.noiseSuppression > 0 && (
+            <div className="flex items-center gap-2 glass-surface border border-primary/20 px-3 py-1.5 rounded-full text-[9px] font-black text-primary uppercase tracking-widest shadow-xl bg-primary/5">
+              Noise reduction: applied on export
+            </div>
+          )}
+        </div>
 
         {sourceUrl ? (
           <>
             <video
               ref={videoRef}
               src={displayUrl || sourceUrl}
+              crossOrigin="anonymous"
               className={cn(
                 "w-full h-full object-cover interactive will-change-[object-position] transition-all duration-500",
                 isBuffering && "blur-md scale-105 opacity-50"
               )}
-              style={{ objectPosition: getObjectPosition() }}
+              style={{ 
+                objectPosition: getObjectPosition(),
+                filter: getCssFilter()
+              }}
               controls={false}
               loop
               onLoadedMetadata={() => {

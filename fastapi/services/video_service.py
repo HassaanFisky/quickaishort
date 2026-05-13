@@ -258,25 +258,35 @@ class VideoService:
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
 
-        try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                payload = {
-                    "url": url,
-                    "downloadMode": mode,
-                }
-                if mode == "audio":
-                    payload["audioFormat"] = "mp3"
-                else:
-                    payload["videoQuality"] = "1080"
+        for attempt in range(3):
+            try:
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    payload = {
+                        "url": url,
+                        "downloadMode": mode,
+                    }
+                    if mode == "audio":
+                        payload["audioFormat"] = "mp3"
+                    else:
+                        payload["videoQuality"] = "1080"
 
-                resp = await client.post(api_url, json=payload, headers=headers)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    return data.get("url")
-                else:
-                    logger.warning(f"[VideoService] Cobalt returned {resp.status_code}: {resp.text}")
-        except Exception as e:
-            logger.warning(f"[VideoService] Cobalt failed: {str(e)}")
+                    resp = await client.post(api_url, json=payload, headers=headers)
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        return data.get("url")
+                    elif resp.status_code == 429:
+                        logger.warning(f"[VideoService] Cobalt rate limited (attempt {attempt+1}/3)")
+                        if attempt < 2:
+                            await asyncio.sleep(2)
+                            continue
+                    else:
+                        logger.warning(f"[VideoService] Cobalt returned {resp.status_code}: {resp.text}")
+                        break
+            except Exception as e:
+                logger.warning(f"[VideoService] Cobalt failed: {str(e)}")
+                if attempt < 2:
+                    await asyncio.sleep(2)
+                    continue
         return None
 
     @classmethod

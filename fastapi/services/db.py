@@ -44,11 +44,8 @@ async def init_db() -> None:
         await asyncio.wait_for(_client.admin.command("ping"), timeout=5.0)
         logger.info("MongoDB ping successful.")
     except Exception as exc:
-        logger.error("MongoDB ping failed — proceeding in degraded mode (readiness may fail): %s", exc)
-        # We do NOT nullify _db here; we allow the app to start.
-        # If the connection is truly broken, subsequent queries will fail normally.
-        # This prevents the entire service from staying in 503 if the whitelist is slow.
-        # CHANGED: Ensure _db is still assigned if it exists
+        logger.error("MongoDB ping failed (cold start or whitelist issue): %s", exc)
+        # We proceed anyway — the app should not fail to boot just because the ping timed out
         if _client:
             _db = _client[DB_NAME]
 

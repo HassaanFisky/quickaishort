@@ -31,6 +31,30 @@ function DraggableElement({
   onUpdate: (updates: Partial<CanvasElement>) => void;
   onRemove: () => void;
 }) {
+  const handleResizeMouseDown = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const startScale = element.scale;
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      const dx = moveEvent.clientX - startX;
+      // Use dx as a proxy for scale change
+      const newScale = Math.max(0.2, Math.min(5, startScale + (dx / 200)));
+      onUpdate({ scale: newScale });
+    };
+
+    const onMouseUp = () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+  };
+
   return (
     <motion.div
       drag
@@ -82,8 +106,11 @@ function DraggableElement({
         )}
       </div>
 
-      {/* Resize Handle (Simplified) */}
-      <div className="absolute -bottom-2 -right-2 w-4 h-4 bg-primary rounded-full border-2 border-white opacity-0 group-hover:opacity-100 transition-opacity cursor-se-resize shadow-lg" />
+      {/* Resize Handle (Implemented) */}
+      <div 
+        onMouseDown={handleResizeMouseDown}
+        className="absolute -bottom-2 -right-2 w-4 h-4 bg-primary rounded-full border-2 border-white opacity-0 group-hover:opacity-100 transition-opacity cursor-se-resize shadow-lg z-50" 
+      />
     </motion.div>
   );
 }
