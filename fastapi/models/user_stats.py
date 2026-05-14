@@ -9,12 +9,14 @@ class UserStats(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     user_id: str
-    credits_balance: int = 5000  # Massive limit: e.g., 500 exports/month
+    credits_balance: int = 5000
     total_projects: int = 0
     total_duration_processed: float = 0.0
     export_count: int = 0
     ai_runs: int = 0
     is_premium: bool = False
+    is_pro: bool = False
+    paddle_subscription_id: str | None = None
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 

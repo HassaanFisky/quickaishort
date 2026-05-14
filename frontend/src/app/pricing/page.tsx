@@ -1,14 +1,22 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useSession, signIn } from "next-auth/react";
 import { motion } from "framer-motion";
-import { Check, Sparkles, Zap, ArrowRight } from "lucide-react";
+import { Check, Sparkles, Zap, ArrowRight, Loader2 } from "lucide-react";
+import { useState } from "react";
 import { GlowButton } from "@/components/ui/GlowButton";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
+import { toast } from "sonner";
+
+const PADDLE_PRICE_ID_PRO =
+  process.env.NEXT_PUBLIC_PADDLE_PRICE_ID_PRO ?? "pri_01krk7sez47kmd25kdtnff1z9t";
 
 const PLANS = [
   {
+    id: "free",
     name: "Free",
     price: "$0",
     period: "forever",
@@ -24,12 +32,14 @@ const PLANS = [
     cta: "Start Free",
     href: "/editor",
     highlight: false,
+    paddle: false,
   },
   {
+    id: "pro",
     name: "Pro",
-    price: "$12",
+    price: "$19",
     period: "per month",
-    description: "Powered by Gemini 2.0 Flash. Elite viral intelligence.",
+    description: "Powered by Gemini 2.5 Flash. Elite viral intelligence.",
     features: [
       "Everything in Free",
       "Elite Viral Intelligence scoring",
@@ -40,11 +50,13 @@ const PLANS = [
       "Caption style presets",
       "Watermark removal",
     ],
-    cta: "Coming Soon",
+    cta: "Upgrade to Pro",
     href: "#",
     highlight: true,
+    paddle: true,
   },
   {
+    id: "agency",
     name: "Agency",
     price: "$49",
     period: "per month",
@@ -60,10 +72,50 @@ const PLANS = [
     cta: "Coming Soon",
     href: "#",
     highlight: false,
+    paddle: false,
   },
 ];
 
 export default function PricingPage() {
+  const { data: session } = useSession();
+  const router = useRouter();
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+
+  const handleCheckout = async () => {
+    if (!session?.user) {
+      signIn("google", { callbackUrl: "/pricing" });
+      return;
+    }
+
+    if (!window.Paddle) {
+      toast.error("Payment system not ready. Please refresh and try again.");
+      return;
+    }
+
+    const userId = (session.user as { id?: string }).id ?? session.user.email ?? "";
+    if (!userId) {
+      toast.error("Could not identify your account. Please sign in again.");
+      return;
+    }
+
+    setCheckoutLoading(true);
+    try {
+      window.Paddle.Checkout.open({
+        items: [{ priceId: PADDLE_PRICE_ID_PRO, quantity: 1 }],
+        customData: { userId },
+        settings: {
+          displayMode: "overlay",
+          theme: "dark",
+        },
+      });
+    } catch (err) {
+      toast.error("Could not open checkout. Please try again.");
+      console.error("Paddle checkout error:", err);
+    } finally {
+      setCheckoutLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background text-foreground overflow-x-hidden">
       <Navbar />
@@ -136,21 +188,42 @@ export default function PricingPage() {
                   ))}
                 </ul>
 
-                <GlowButton
-                  variant={plan.highlight ? "premium" : "glass"}
-                  className="w-full h-12 rounded-2xl font-bold group"
-                  asChild={plan.href !== "#"}
-                  disabled={plan.href === "#"}
-                >
-                  {plan.href !== "#" ? (
+                {plan.paddle ? (
+                  <GlowButton
+                    variant="premium"
+                    className="w-full h-12 rounded-2xl font-bold group"
+                    onClick={handleCheckout}
+                    disabled={checkoutLoading}
+                  >
+                    {checkoutLoading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <>
+                        {session?.user ? plan.cta : "Sign in to Upgrade"}
+                        <ArrowRight className="ml-2 w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                      </>
+                    )}
+                  </GlowButton>
+                ) : plan.href !== "#" ? (
+                  <GlowButton
+                    variant="glass"
+                    className="w-full h-12 rounded-2xl font-bold group"
+                    asChild
+                  >
                     <Link href={plan.href}>
                       {plan.cta}
                       <ArrowRight className="ml-2 w-4 h-4 group-hover:translate-x-1 transition-transform" />
                     </Link>
-                  ) : (
-                    <span>{plan.cta}</span>
-                  )}
-                </GlowButton>
+                  </GlowButton>
+                ) : (
+                  <GlowButton
+                    variant="glass"
+                    className="w-full h-12 rounded-2xl font-bold"
+                    disabled
+                  >
+                    {plan.cta}
+                  </GlowButton>
+                )}
               </motion.div>
             ))}
           </div>
@@ -162,7 +235,7 @@ export default function PricingPage() {
             transition={{ duration: 0.5, delay: 0.5 }}
             className="text-center text-muted-foreground text-sm mt-16"
           >
-            All plans include full client-side processing. Your videos never leave your browser.
+            Payments secured by Paddle. Cancel anytime. All plans include full client-side processing.
           </motion.p>
         </div>
       </main>

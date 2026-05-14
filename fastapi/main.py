@@ -233,8 +233,10 @@ async def lifespan(_app: FastAPI):
     logger.info("lifespan_starting")
     await init_db()
     from services.diagnostics import run_startup_checks
+    from routers.billing import _ensure_indexes as _billing_ensure_indexes
     try:
         await run_startup_checks()
+        await _billing_ensure_indexes()
         global _STARTUP_COMPLETE
         _STARTUP_COMPLETE = True
     except Exception as e:
@@ -252,6 +254,9 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+
+from routers.billing import router as billing_router
+app.include_router(billing_router)
 
 limiter = Limiter(key_func=get_remote_address, default_limits=["200/minute"])
 app.state.limiter = limiter

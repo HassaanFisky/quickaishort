@@ -4,6 +4,7 @@ import "./globals.css";
 
 import { AppProviders } from "@/components/shared/AppProviders";
 import { CommandPalette } from "@/components/layout/CommandPalette";
+import { PaddleProvider } from "@/components/shared/PaddleProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -70,6 +71,7 @@ export default function RootLayout({
       >
         <div className="living-water-bg" />
         <AppProviders>
+          <PaddleProvider />
           {children}
           <CommandPalette />
         </AppProviders>
