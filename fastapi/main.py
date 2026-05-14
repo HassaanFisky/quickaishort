@@ -1171,7 +1171,10 @@ async def run_preflight(request: Request, body: PreflightRequest, verified_user_
     is_premium_active = await is_user_premium(user_id)
 
     if not await deduct_credits(user_id, 50):
-        logger.warning("Low credits for %s on /api/preflight — continuing free", user_id)
+        raise HTTPException(
+            status_code=402,
+            detail="Insufficient credits. Please upgrade your plan to continue.",
+        )
 
     # --- Pillar 4: Safe Demo Bypass ---
     if DemoService.is_demo_url(body.youtube_url):
@@ -1289,7 +1292,10 @@ async def run_director(request: Request, body: DirectRequest, verified_user_id: 
 
     try:
         if not await deduct_credits(user_id, 30):
-            logger.warning("Low credits for %s on /api/direct — continuing free", user_id)
+            raise HTTPException(
+                status_code=402,
+                detail="Insufficient credits. Please upgrade your plan to continue.",
+            )
 
         result = await asyncio.wait_for(
             run_director_pipeline(
