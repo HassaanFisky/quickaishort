@@ -4,6 +4,7 @@ import Footer from "@/components/layout/Footer";
 
 export const metadata: Metadata = {
   title: "Privacy Policy — Quick AI Shorts",
+  description: "How we collect, use, and protect your data at QuickAI Shorts.",
 };
 
 export default function PrivacyPage() {
@@ -18,7 +19,7 @@ export default function PrivacyPage() {
           Privacy Policy
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Last updated: April 29, 2026
+          Last updated: May 14, 2026
         </p>
         <div className="mt-8 space-y-6 text-muted-foreground leading-relaxed">
           <section>

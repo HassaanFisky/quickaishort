@@ -51,10 +51,10 @@ export default function Navbar() {
               Features
             </Link>
             <Link
-              href="/#features"
+              href="/pricing"
               className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors px-3 py-2"
             >
-              Features
+              Pricing
             </Link>
           </div>
         </div>

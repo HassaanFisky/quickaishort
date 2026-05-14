@@ -15,18 +15,36 @@ export default function Footer() {
             </p>
           </div>
 
-          <nav className="flex items-center gap-8">
+          <nav className="flex flex-wrap items-center justify-center md:justify-end gap-x-8 gap-y-4">
             <Link
               href="/editor"
-              className="text-sm font-medium text-muted-foreground hover:text-foreground interactive"
+              className="text-sm font-medium text-muted-foreground hover:text-foreground interactive transition-colors"
             >
               Editor
             </Link>
             <Link
               href="/#features"
-              className="text-sm font-medium text-muted-foreground hover:text-foreground interactive"
+              className="text-sm font-medium text-muted-foreground hover:text-foreground interactive transition-colors"
             >
               Features
+            </Link>
+            <Link
+              href="/privacy"
+              className="text-sm font-medium text-muted-foreground hover:text-foreground interactive transition-colors"
+            >
+              Privacy
+            </Link>
+            <Link
+              href="/terms"
+              className="text-sm font-medium text-muted-foreground hover:text-foreground interactive transition-colors"
+            >
+              Terms
+            </Link>
+            <Link
+              href="/refund-policy"
+              className="text-sm font-medium text-muted-foreground hover:text-foreground interactive transition-colors"
+            >
+              Refunds
             </Link>
           </nav>
         </div>
