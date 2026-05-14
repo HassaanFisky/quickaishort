@@ -8,6 +8,7 @@ listener in main.py routes back here.
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime, timezone
 from typing import Any
@@ -17,10 +18,12 @@ from pymongo import ReturnDocument
 from models.user_stats import UserStats
 from services.db import get_db, is_ready
 from services.realtime import emit_stats_updated
+from services.queue_service import async_redis_conn
 
 logger = logging.getLogger(__name__)
 
 COLLECTION = "UserStats"
+STATS_CACHE_TTL = 300  # 5 minutes
 
 
 def _empty(user_id: str) -> dict[str, Any]:
@@ -67,6 +70,12 @@ async def increment_stats(
         return_document=ReturnDocument.AFTER,
     )
     payload = _serialize(doc, user_id)
+
+    try:
+        await async_redis_conn.delete(f"stats:{user_id}")
+    except Exception:
+        pass
+
     try:
         await emit_stats_updated(user_id, payload)
     except Exception as exc:
@@ -75,42 +84,35 @@ async def increment_stats(
 
 
 async def deduct_credits(user_id: str, amount: int) -> bool:
-    """Atomically deduct credits if sufficient balance exists. Returns True if successful."""
+    """Atomic single-operation credit deduction. No race condition — single MongoDB op with $gte guard."""
     if not user_id or user_id == "anonymous":
         return False
     if not is_ready():
         return False
 
     db = get_db()
-    
-    # Check if user exists. If not, they have the default 5000 credits.
-    # We use find_one_and_update with a condition to ensure they don't go negative.
-    
-    # First, ensure the document exists with the default 5000 credits if it's missing.
-    # This is a bit tricky with atomic operations, so we'll do an upsert with $setOnInsert first.
-    await db[COLLECTION].update_one(
-        {"user_id": user_id},
-        {"$setOnInsert": {"user_id": user_id, "credits_balance": 5000}},
-        upsert=True
-    )
-    
-    # Now atomically decrement ONLY IF balance >= amount
     doc = await db[COLLECTION].find_one_and_update(
         {"user_id": user_id, "credits_balance": {"$gte": amount}},
         {
             "$inc": {"credits_balance": -amount},
-            "$set": {"updated_at": datetime.now(timezone.utc)}
+            "$set": {"updated_at": datetime.now(timezone.utc)},
         },
+        upsert=False,
         return_document=ReturnDocument.AFTER,
     )
-    
+
     if doc is None:
-        return False  # Insufficient credits
-        
+        logger.warning("credit_deduction_failed user_id=%s amount=%d", user_id, amount)
+        return False
+
     payload = _serialize(doc, user_id)
     try:
+        await async_redis_conn.delete(f"stats:{user_id}")
+    except Exception:
+        pass
+    try:
         await emit_stats_updated(user_id, payload)
-    except Exception as exc:
+    except Exception:
         pass
     return True
 
@@ -118,25 +120,83 @@ async def deduct_credits(user_id: str, amount: int) -> bool:
 async def get_user_stats(user_id: str) -> dict[str, Any]:
     if not is_ready():
         return _empty(user_id)
+
+    try:
+        cached = await async_redis_conn.get(f"stats:{user_id}")
+        if cached:
+            return json.loads(cached)
+    except Exception:
+        pass
+
     doc = await get_db()[COLLECTION].find_one({"user_id": user_id})
     if doc is None:
         return _empty(user_id)
-    return _serialize(doc, user_id)
+
+    payload = _serialize(doc, user_id)
+
+    try:
+        await async_redis_conn.setex(f"stats:{user_id}", STATS_CACHE_TTL, json.dumps(payload))
+    except Exception:
+        pass
+
+    return payload
 
 
 async def is_user_premium(user_id: str) -> bool:
-    """Helper to check if a user is currently on a Pro/Premium plan."""
+    """Redis-cached premium check with 5-minute TTL."""
+    cache_key = f"premium:{user_id}"
+    try:
+        cached = await async_redis_conn.get(cache_key)
+        if cached is not None:
+            return cached == b"1"
+    except Exception as _err:
+        logger.warning("Redis premium cache read failed: %s", _err)
+
     stats = await get_user_stats(user_id)
-    return stats.get("is_premium", False)
+    is_premium = stats.get("is_premium", False)
+
+    try:
+        await async_redis_conn.setex(cache_key, 300, b"1" if is_premium else b"0")
+    except Exception as _err:
+        logger.warning("Redis premium cache write failed: %s", _err)
+
+    return is_premium
+
+
+async def provision_credits(user_id: str, amount: int = 100) -> None:
+    """Create user stats doc on first login. $setOnInsert never overwrites existing users."""
+    if not is_ready():
+        return
+    db = get_db()
+    await db[COLLECTION].update_one(
+        {"user_id": user_id},
+        {
+            "$setOnInsert": {
+                "user_id": user_id,
+                "credits_balance": amount,
+                "is_premium": False,
+                "created_at": datetime.now(timezone.utc),
+                "updated_at": datetime.now(timezone.utc),
+            }
+        },
+        upsert=True,
+    )
+
+
+async def invalidate_premium_cache(user_id: str) -> None:
+    """Invalidate Redis premium cache after subscription change."""
+    try:
+        await async_redis_conn.delete(f"premium:{user_id}")
+    except Exception:
+        pass
 
 
 async def recalculate_user_stats(user_id: str) -> dict[str, Any]:
     """Recalculate stats from scratch using aggregation on the exports collection."""
     if not is_ready():
         return _empty(user_id)
-    
+
     db = get_db()
-    # exports are in GridFS, metadata is in exports.files
     pipeline = [
         {"$match": {"metadata.user_id": user_id}},
         {
@@ -147,32 +207,31 @@ async def recalculate_user_stats(user_id: str) -> dict[str, Any]:
             }
         },
     ]
-    
+
     cursor = db["exports.files"].aggregate(pipeline)
     result = await cursor.to_list(length=1)
-    
+
     if not result:
-        return await increment_stats(user_id)  # Returns default/empty
-        
+        return await increment_stats(user_id)
+
     agg = result[0]
     duration = float(agg.get("total_duration", 0.0))
     count = int(agg.get("export_count", 0))
-    
-    # Sync the UserStats document
+
     doc = await db[COLLECTION].find_one_and_update(
         {"user_id": user_id},
         {
             "$set": {
                 "total_duration_processed": duration,
                 "export_count": count,
-                "updated_at": datetime.now(timezone.utc)
+                "updated_at": datetime.now(timezone.utc),
             },
-            "$setOnInsert": {"user_id": user_id, "credits_balance": 5000}
+            "$setOnInsert": {"user_id": user_id, "credits_balance": 5000},
         },
         upsert=True,
         return_document=ReturnDocument.AFTER,
     )
-    
+
     payload = _serialize(doc, user_id)
     await emit_stats_updated(user_id, payload)
     return payload

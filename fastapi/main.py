@@ -74,7 +74,7 @@ from services.realtime import emit_export_event, ws_manager
 from services.auth import get_verified_user_id
 from services.signing import sign, verify
 from services.logging import log_metric
-from services.stats_service import get_user_stats, increment_stats, deduct_credits, recalculate_user_stats, is_user_premium
+from services.stats_service import get_user_stats, increment_stats, deduct_credits, recalculate_user_stats, is_user_premium, provision_credits
 from services.video_service import VideoService
 from services.project_service import get_project_service
 from services.demo_service import DemoService
@@ -512,7 +512,10 @@ async def analyze_video(request: Request, body: AnalyzeRequest, verified_user_id
     try:
         user_id = verified_user_id or body.userId or "anonymous"
         if not await deduct_credits(user_id, 10):
-            logger.warning("Low credits for %s on /api/analyze — continuing free", user_id)
+            raise HTTPException(
+                status_code=402,
+                detail="Insufficient credits. Please upgrade your plan to continue.",
+            )
 
         agent = get_viral_agent()
         transcript_text = " ".join(c.text for c in body.transcript)
@@ -554,7 +557,10 @@ async def export_video(request: ExportRequest, verified_user_id: str = Depends(g
         raise HTTPException(status_code=400, detail="Export duration exceeds maximum limit of 180 seconds.")
 
     if not await deduct_credits(user_id, 20):
-        logger.warning("Low credits for %s on /api/process-video — continuing free", user_id)
+        raise HTTPException(
+            status_code=402,
+            detail="Insufficient credits. Please upgrade your plan to continue.",
+        )
 
     # --- Pillar 4: Safe Demo Bypass ---
     if DemoService.is_demo_url(request.videoId):
@@ -722,6 +728,7 @@ async def stats_endpoint(
     sync: bool = False,
 ):
     """Returns stats for the authenticated user only."""
+    await provision_credits(verified_user_id, amount=100)
     if sync:
         return await recalculate_user_stats(verified_user_id)
     return await get_user_stats(verified_user_id)
@@ -1318,11 +1325,7 @@ async def create_video(request: CreateVideoRequest, verified_user_id: str = Depe
         agent = ScriptAgent()
         production_plan = await agent.run(request.script, request.clip_paths)
 
-        import hashlib
-        plan_hash = hashlib.sha256(
-            json.dumps({"script": request.script, "clips": request.clip_paths}, sort_keys=True).encode()
-        ).hexdigest()
-        job_id = f"gen-{plan_hash[:16]}"
+        job_id = f"gen-{uuid.uuid4().hex}"
 
         viral_score = 0
         persona_votes = []
@@ -1657,38 +1660,32 @@ async def agent_trace(
     if svc is None:
         raise HTTPException(status_code=503, detail="Session service unavailable — ADK not initialised")
 
-    # Direct Firestore document read (session_id == doc ID)
     try:
-        doc = await svc.db.collection(svc.collection_name).document(session_id).get()
-    except Exception as exc:
-        logger.error("agent_trace firestore error: %s", exc)
-        raise HTTPException(status_code=500, detail="Firestore read failed")
-
-    if not doc.exists:
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    data = doc.to_dict() or {}
-    if data.get("user_id") != verified_user_id:
-        raise HTTPException(status_code=403, detail="Forbidden")
-
-    state = data.get("state", {})
-    return {
-        "session_id": session_id,
-        "app_name": data.get("app_name"),
-        "user_id": verified_user_id,
-        "created_at": data.get("created_at"),
-        "updated_at": data.get("updated_at"),
-        # Key agent outputs surfaced for readability
-        "summary": {
-            "recommendation": state.get("recommendation"),
-            "consensus_score": state.get("consensus_score"),
-            "loop_iteration": state.get("loop_iteration"),
-            "preflight_done": state.get("preflight_done"),
-            "trend_keywords": state.get("trend_keywords"),
-        },
-        # Full raw state for deep inspection
-        "state": state,
-    }
+        session = await svc.get_session(
+            app_name="QuickAIShort_PreFlight",
+            user_id=verified_user_id,
+            session_id=session_id,
+        )
+        if session is None:
+            raise HTTPException(status_code=404, detail="Session not found.")
+        state = session.state if hasattr(session, "state") else {}
+        return {
+            "session_id": session_id,
+            "state": state,
+            "events": [e.model_dump() for e in session.events] if hasattr(session, "events") else [],
+            "summary": {
+                "recommendation": state.get("recommendation"),
+                "consensus_score": state.get("consensus_score"),
+                "loop_iteration": state.get("loop_iteration"),
+                "preflight_done": state.get("preflight_done"),
+                "trend_keywords": state.get("trend_keywords"),
+            },
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Trace fetch error session %s: %s", session_id, e)
+        raise HTTPException(status_code=500, detail="Could not retrieve session trace.")
 
 # ---- Music Endpoints ---------------------------------------------------------
 
