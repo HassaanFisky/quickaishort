@@ -16,9 +16,11 @@ import {
 import { useDashboardStats } from "@/hooks/useDashboardStats";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
+import { GlowButton } from "@/components/ui/GlowButton";
 import { CreditsLowBanner } from "@/components/shared/CreditsLowBanner";
 import { InlineError } from "@/components/shared/InlineError";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { spring } from "@/lib/animations";
 
 const CREDITS_LOW_THRESHOLD = 10;
 
@@ -47,39 +49,35 @@ function StatCard({
   label: string;
   value: string | number;
   loading: boolean;
-  icon: any;
+  icon: React.ElementType;
   color: string;
 }) {
   return (
     <motion.article
-      whileHover={{ y: -4 }}
+      whileHover={{ y: -3 }}
+      transition={spring.smooth}
       aria-label={`${label}: ${loading ? "loading" : value}`}
       aria-busy={loading}
-      className="relative group rounded-3xl border border-foreground/5 bg-secondary/20 p-6 backdrop-blur-xl overflow-hidden"
+      className="relative group rounded-2xl border border-white/[0.06] bg-[#0c0c10]/80 p-5 overflow-hidden spring-hover"
     >
-      <div className={cn("absolute -top-12 -right-12 w-32 h-32 blur-[80px] opacity-20 rounded-full transition-colors", color)} aria-hidden="true" />
+      <div className={cn("absolute -top-10 -right-10 w-28 h-28 blur-[70px] opacity-[0.18] rounded-full pointer-events-none", color)} aria-hidden="true" />
 
-      <div className="flex items-center gap-3 mb-4">
-        <div className="p-2 rounded-xl bg-foreground/5 border border-foreground/5 text-muted-foreground group-hover:text-foreground transition-colors">
-          <Icon className="w-4 h-4" aria-hidden="true" />
+      <div className="flex items-center gap-2.5 mb-4">
+        <div className="p-1.5 rounded-lg bg-white/[0.04] border border-white/[0.06] text-muted-foreground group-hover:text-foreground transition-colors duration-[160ms]">
+          <Icon className="w-3.5 h-3.5" aria-hidden="true" />
         </div>
-        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground group-hover:text-foreground/80 transition-colors">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
           {label}
         </span>
       </div>
 
-      <div>
-        {loading ? (
-          <div className="h-9 w-24 rounded-lg bg-foreground/10 animate-pulse" aria-hidden="true" />
-        ) : (
-          <span
-            className="text-3xl font-black tracking-tighter tabular-nums"
-            style={{ fontVariantNumeric: "tabular-nums" }}
-          >
-            {value}
-          </span>
-        )}
-      </div>
+      {loading ? (
+        <div className="h-8 w-20 rounded-lg bg-white/[0.06] animate-pulse" aria-hidden="true" />
+      ) : (
+        <span className="text-[2rem] font-black tracking-tight font-mono tabular-nums leading-none">
+          {value}
+        </span>
+      )}
     </motion.article>
   );
 }
@@ -99,7 +97,7 @@ function ProjectCard({ project, index }: { project: ProjectRecord; index: number
     >
       <Link
         href={`/editor?project=${project._id}`}
-        className="group block relative rounded-3xl border border-foreground/5 bg-secondary/30 overflow-hidden transition-all duration-300 hover:border-primary/30 hover:bg-secondary/50 shadow-sm hover:shadow-2xl hover:shadow-primary/5"
+        className="group block relative rounded-2xl border border-white/[0.06] bg-[#0c0c10]/60 overflow-hidden spring-hover hover:border-primary/20"
       >
         <div
           className="aspect-video w-full relative overflow-hidden bg-zinc-900"
@@ -115,10 +113,12 @@ function ProjectCard({ project, index }: { project: ProjectRecord; index: number
           
           {typeof score === "number" && (
             <div className={cn(
-              "absolute top-4 right-4 rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest border",
-              score >= 90 ? "bg-gradient-to-r from-pink-500 to-purple-500 text-white border-transparent" : viralScoreColor(score)
+              "absolute top-3 right-3 rounded-full px-2.5 py-1 text-[9px] font-black uppercase tracking-wider border",
+              score >= 90
+                ? "bg-gradient-to-r from-pink-500 to-purple-500 text-white border-transparent shadow-[0_4px_16px_rgba(236,72,153,0.35)]"
+                : viralScoreColor(score)
             )}>
-              {score} Score
+              {score}
             </div>
           )}
         </div>
@@ -200,37 +200,32 @@ export default function DashboardPage() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-12 py-8 px-4">
-      {/* Premium Header */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="space-y-1">
-          <div className="flex items-center gap-2 mb-2">
-            <Sparkles className="w-4 h-4 text-primary animate-pulse" />
-            <span className="text-[10px] font-black uppercase tracking-[0.3em] text-primary">Creator Intelligence</span>
+          <div className="flex items-center gap-2 mb-1">
+            <Sparkles className="w-3.5 h-3.5 text-primary" />
+            <span className="text-[10px] font-semibold uppercase tracking-[0.22em] text-primary">Studio</span>
           </div>
-          <h1 className="text-5xl font-black tracking-tighter leading-none flex items-center gap-4">
-            Welcome back, <span className="premium-gradient-text">{session?.user?.name?.split(' ')[0] ?? 'Creator'}</span>
+          <h1 className="text-3xl md:text-4xl font-black tracking-tight leading-tight flex items-baseline gap-3 flex-wrap">
+            Welcome back,{" "}
+            <span className="brand-gradient-text">{session?.user?.name?.split(" ")[0] ?? "Creator"}</span>
             {session?.user?.isPro && (
-              <span className="bg-primary/10 text-primary text-xs font-black px-2 py-1 rounded-md border border-primary/20 shadow-[0_0_10px_rgba(33,150,243,0.2)]">
+              <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20">
                 PRO
               </span>
             )}
           </h1>
-          <p className="text-muted-foreground font-medium">Your studio is optimized and ready for deployment.</p>
+          <p className="text-[13px] text-muted-foreground">Your studio is ready.</p>
         </div>
         
         <div className="flex items-center gap-3">
-           <Link
-            href="/editor"
-            id="new-project-btn"
-            className="inline-flex h-14 items-center rounded-2xl px-8 text-sm font-black text-white transition hover:scale-[1.02] active:scale-[0.98] shadow-2xl shadow-primary/20"
-            style={{
-              background: "linear-gradient(135deg, #3b82f6 0%, #a855f7 60%, #ec4899 100%)",
-              transitionDuration: "var(--motion-2)",
-            }}
-          >
-            <Plus className="w-5 h-5 mr-3" aria-hidden="true" />
-            New Project
-          </Link>
+          <GlowButton variant="gradient" size="lg" asChild className="h-12 px-7 rounded-2xl text-sm font-bold">
+            <Link href="/editor">
+              <Plus className="w-4 h-4 mr-2" aria-hidden="true" />
+              New Project
+            </Link>
+          </GlowButton>
         </div>
       </div>
 
@@ -282,20 +277,16 @@ export default function DashboardPage() {
       {/* Recent projects */}
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-             <div className="p-2 rounded-lg bg-secondary/40">
-                <Clock className="w-4 h-4 text-muted-foreground" />
-             </div>
-             <h2 className="text-lg font-black uppercase tracking-widest text-foreground/90">
-               Recent Intelligence
-             </h2>
-          </div>
-          <Link
-            href="/history"
-            className="group flex items-center gap-2 text-xs font-black uppercase tracking-widest text-primary hover:text-primary/80 transition-colors"
-          >
-            Studio History <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-          </Link>
+          <div className="flex items-center gap-2.5">
+          <Clock className="w-4 h-4 text-muted-foreground" />
+          <h2 className="text-base font-bold text-foreground/80">Recent Projects</h2>
+        </div>
+        <Link
+          href="/history"
+          className="group flex items-center gap-1.5 text-[12px] font-semibold text-muted-foreground hover:text-foreground transition-colors duration-[160ms]"
+        >
+          All history <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform duration-[160ms]" />
+        </Link>
         </div>
 
         {projectsLoading ? (

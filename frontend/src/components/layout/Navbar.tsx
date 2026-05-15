@@ -36,27 +36,30 @@ export default function Navbar() {
       <nav
         aria-label="Primary"
         className={cn(
-          "w-full max-w-7xl h-16 px-6 flex items-center justify-between rounded-2xl transition-all duration-300",
+          "w-full max-w-6xl h-14 px-5 flex items-center justify-between rounded-2xl",
+          "transition-[background-color,border-color,box-shadow,transform] duration-[280ms] ease-[cubic-bezier(0.22,1,0.36,1)]",
           isScrolled
-            ? "nano-glass shadow-2xl scale-[0.98] border-white/10"
-            : "bg-transparent border-transparent",
+            ? "bg-[#08080a]/80 backdrop-blur-2xl border border-white/[0.07] shadow-[0_8px_32px_-8px_rgba(0,0,0,0.5)] scale-[0.99]"
+            : "bg-transparent border border-transparent",
         )}
       >
         <div className="flex items-center gap-8">
           <Logo />
-          <div className="hidden md:flex items-center gap-1">
-            <Link
-              href="/#features"
-              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors px-3 py-2"
-            >
-              Features
-            </Link>
-            <Link
-              href="/pricing"
-              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors px-3 py-2"
-            >
-              Pricing
-            </Link>
+          <div className="hidden md:flex items-center gap-0.5">
+            {[["/#features", "Features"], ["/pricing", "Pricing"]].map(([href, label]) => (
+              <Link
+                key={href}
+                href={href}
+                className={cn(
+                  "text-[13px] font-medium text-muted-foreground hover:text-foreground px-3 py-2 rounded-lg",
+                  "transition-[color,background-color] duration-[160ms] ease-[cubic-bezier(0.22,1,0.36,1)]",
+                  "hover:bg-white/[0.04]",
+                  "focus-visible:outline-none focus-visible:[box-shadow:0_0_0_2px_#020203,_0_0_0_4px_rgba(168,85,247,0.6)]",
+                )}
+              >
+                {label}
+              </Link>
+            ))}
           </div>
         </div>
 
@@ -173,19 +176,15 @@ export default function Navbar() {
               </DropdownMenu>
             </>
           ) : (
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               <Button
                 variant="ghost"
                 asChild
-                className="text-sm font-bold hover:bg-white/5 rounded-xl h-10 px-5"
+                className="text-[13px] font-semibold text-muted-foreground hover:text-foreground hover:bg-white/[0.04] rounded-xl h-9 px-4"
               >
                 <Link href="/signin">Sign In</Link>
               </Button>
-              <GlowButton
-                asChild
-                size="sm"
-                className="h-10 px-6 rounded-xl"
-              >
+              <GlowButton asChild size="sm" variant="gradient" className="h-9 px-5 rounded-xl text-[13px]">
                 <Link href="/signup">Get Started</Link>
               </GlowButton>
             </div>

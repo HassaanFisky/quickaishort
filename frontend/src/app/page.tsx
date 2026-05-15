@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { GlowButton } from "@/components/ui/GlowButton";
 import { cn } from "@/lib/utils";
+import { spring, containerVariants, itemVariants, staggerFast } from "@/lib/animations";
 
 function useAnimatedCounter(target: number, duration = 2000, start = false) {
   const [value, setValue] = useState(0);
@@ -184,48 +185,48 @@ export default function LandingPage() {
 
             <div className="max-w-6xl mx-auto w-full flex flex-col items-center text-center relative z-10">
               <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.8, ease: "easeOut" }}
+                variants={containerVariants}
+                initial="hidden"
+                animate="visible"
                 className="flex flex-col items-center"
               >
-                <div className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-primary mb-8 fade-up shadow-[0_0_20px_rgba(168,85,247,0.2)]">
-                  <Shield className="w-4 h-4" />
+                <motion.div variants={itemVariants} className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-primary mb-8 shadow-[0_0_20px_rgba(168,85,247,0.2)]">
+                  <Shield className="w-3.5 h-3.5" />
                   Built for Google AI Agents Challenge 2026
-                </div>
+                </motion.div>
 
-                <h1 className="text-5xl md:text-7xl lg:text-8xl font-black leading-[1.1] tracking-tighter mb-6 fade-up" style={{ animationDelay: '0.1s' }}>
+                <motion.h1 variants={itemVariants} className="text-5xl md:text-7xl lg:text-[5.5rem] font-black leading-[1.05] tracking-tighter mb-6 text-center">
                   Know your clip <br className="hidden md:block" />
-                  <span className="premium-gradient-text block mt-2">
+                  <span className="brand-gradient-text">
                     will go viral.
                   </span>
-                </h1>
+                </motion.h1>
 
-                <p className="text-lg md:text-2xl text-muted-foreground mb-10 max-w-2xl leading-relaxed fade-up" style={{ animationDelay: '0.2s' }}>
-                  Simulate real audience retention before you post. Stop guessing and let AI personas guarantee your next hit.
-                </p>
+                <motion.p variants={itemVariants} className="text-lg md:text-xl text-muted-foreground mb-10 max-w-xl leading-relaxed text-center">
+                  Run your short through a panel of 6 AI audience personas before you post. Stop guessing — start knowing.
+                </motion.p>
 
-                <div className="flex flex-col sm:flex-row items-center gap-4 fade-up w-full sm:w-auto" style={{ animationDelay: '0.3s' }}>
-                  <GlowButton size="lg" className="w-full sm:w-auto h-14 px-10 rounded-2xl text-lg font-bold interactive" asChild>
+                <motion.div variants={itemVariants} className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+                  <GlowButton size="lg" variant="gradient" className="w-full sm:w-auto h-14 px-10 rounded-2xl text-base font-bold" asChild>
                     <Link href="/editor">
                       Start Creating <ArrowRight className="ml-2 w-5 h-5" />
                     </Link>
                   </GlowButton>
-                  <Link href="#how" className="w-full sm:w-auto h-14 px-10 rounded-2xl text-lg font-bold border border-white/10 hover:bg-white/5 flex items-center justify-center gap-2 interactive">
-                    See How It Works
-                  </Link>
-                </div>
+                  <GlowButton size="lg" variant="outline" className="w-full sm:w-auto h-14 px-10 rounded-2xl text-base font-bold" asChild>
+                    <Link href="#how">See How It Works</Link>
+                  </GlowButton>
+                </motion.div>
               </motion.div>
             </div>
             
             {/* Social Proof Ticker */}
-            <div className="absolute bottom-10 w-full overflow-hidden fade-up" style={{ animationDelay: '0.6s' }}>
-              <div className="flex items-center gap-8 marquee-track opacity-50 grayscale hover:grayscale-0 transition-all duration-500">
+            <div className="absolute bottom-10 w-full overflow-hidden">
+              <div className="flex items-center gap-8 marquee-track opacity-40 hover:opacity-70 transition-opacity duration-500">
                 {[...Array(2)].map((_, i) => (
                   <React.Fragment key={i}>
-                    {["Powered by Gemini 2.5 Flash", "Next.js 14", "Framer Motion", "Google Cloud", "TailwindCSS"].map((tech) => (
-                      <div key={tech} className="flex items-center gap-2 text-sm font-bold uppercase tracking-widest px-8">
-                        <Zap className="w-4 h-4 text-primary" /> {tech}
+                    {["Gemini 2.5 Flash", "Google ADK v1", "Next.js 14", "Framer Motion", "Google Cloud Run", "Tailwind v4"].map((tech) => (
+                      <div key={tech} className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.15em] px-8 text-muted-foreground whitespace-nowrap">
+                        <Zap className="w-3 h-3 text-primary/60" /> {tech}
                       </div>
                     ))}
                   </React.Fragment>
@@ -235,41 +236,48 @@ export default function LandingPage() {
           </section>
 
           {/* HOW IT WORKS / PIPELINE SECTION */}
-          <section id="how" className="py-32 px-6 relative border-y ghost-border bg-black/40">
-            <div className="max-w-6xl mx-auto">
-              <div className="text-center mb-20 fade-up">
-                <h2 className="text-4xl md:text-6xl font-black mb-6 tracking-tight">The 3-Step Pre-Flight Pipeline</h2>
-                <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+          <section id="how" className="py-32 px-6 relative border-y ghost-border bg-black/30">
+            <div className="max-w-5xl mx-auto">
+              <motion.div
+                initial={{ opacity: 0, y: 16 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-80px" }}
+                transition={{ ...spring.smooth }}
+                className="text-center mb-20"
+              >
+                <h2 className="text-4xl md:text-5xl font-black mb-4 tracking-tight">
+                  The 3-Step <span className="brand-gradient-text">Pre-Flight</span> Pipeline
+                </h2>
+                <p className="text-lg text-muted-foreground max-w-xl mx-auto">
                   From raw YouTube link to a validated, high-retention short in seconds.
                 </p>
-              </div>
+              </motion.div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-8 relative">
-                {/* Connecting Line (Desktop) */}
-                <div className="hidden md:block absolute top-[50px] left-[15%] right-[15%] h-1 bg-gradient-to-r from-primary/10 via-primary/50 to-accent/10 -z-10" />
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative">
+                <div className="hidden md:block absolute top-[52px] left-[20%] right-[20%] h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent -z-10" />
 
                 {[
                   { step: "01", icon: Video, title: "Paste URL", desc: "Drop any YouTube link. We instantly extract and process the video." },
                   { step: "02", icon: Brain, title: "AI Analyzes", desc: "A panel of 6 AI personas watches the clip, grading hook and retention." },
                   { step: "03", icon: Target, title: "Get Viral Clips", desc: "Receive actionable edits or export the proven clip immediately." }
                 ].map((item, i) => (
-                  <motion.div 
+                  <motion.div
                     key={item.step}
-                    initial={{ opacity: 0, y: 30 }}
+                    initial={{ opacity: 0, y: 24 }}
                     whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true }}
-                    transition={{ delay: i * 0.2 }}
+                    viewport={{ once: true, margin: "-60px" }}
+                    transition={{ ...spring.smooth, delay: i * 0.1 }}
                     className="flex flex-col items-center text-center group"
                   >
-                    <div className="w-24 h-24 rounded-full nano-glass flex items-center justify-center mb-6 relative border border-white/10 group-hover:border-primary/50 transition-colors interactive">
-                      <div className="absolute inset-0 bg-primary/20 rounded-full blur-xl opacity-0 group-hover:opacity-100 transition-opacity" />
-                      <item.icon className="w-10 h-10 text-primary" />
-                      <div className="absolute -top-2 -right-2 w-8 h-8 rounded-full bg-background border border-white/10 flex items-center justify-center font-black text-xs text-muted-foreground shadow-xl">
+                    <div className="w-[104px] h-[104px] rounded-2xl nano-glass flex items-center justify-center mb-6 relative border border-white/8 group-hover:border-primary/40 spring-hover">
+                      <div className="absolute inset-0 bg-primary/10 rounded-2xl blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                      <item.icon className="w-9 h-9 text-primary relative z-10" />
+                      <div className="absolute -top-3 -right-3 w-7 h-7 rounded-full bg-[#0c0c10] border border-white/10 flex items-center justify-center font-black text-[10px] text-muted-foreground tracking-wider shadow-lg">
                         {item.step}
                       </div>
                     </div>
-                    <h3 className="text-2xl font-black mb-3">{item.title}</h3>
-                    <p className="text-muted-foreground leading-relaxed px-4">{item.desc}</p>
+                    <h3 className="text-xl font-black mb-2 tracking-tight">{item.title}</h3>
+                    <p className="text-sm text-muted-foreground leading-relaxed px-4 max-w-[200px]">{item.desc}</p>
                   </motion.div>
                 ))}
               </div>
@@ -277,27 +285,36 @@ export default function LandingPage() {
           </section>
 
           {/* BENTO GRID FEATURES */}
-          <section className="py-32 px-6 bg-white/[0.01]">
-            <div className="max-w-6xl mx-auto">
-              <div className="text-center mb-20">
+          <section className="py-32 px-6">
+            <div className="max-w-5xl mx-auto">
+              <motion.div
+                initial={{ opacity: 0, y: 16 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-80px" }}
+                transition={{ ...spring.smooth }}
+                className="text-center mb-16"
+              >
                 <h2 className="text-4xl md:text-5xl font-black tracking-tight mb-4">Everything you need to go viral</h2>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <p className="text-muted-foreground text-lg max-w-md mx-auto">One tool. Every insight.</p>
+              </motion.div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {FEATURES.map((feature, i) => (
                   <motion.div
                     key={feature.title}
                     initial={{ opacity: 0, y: 20 }}
                     whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true }}
-                    transition={{ delay: i * 0.1 }}
+                    viewport={{ once: true, margin: "-40px" }}
+                    transition={{ ...spring.smooth, delay: i * 0.07 }}
                     className={cn(
-                      "liquid-panel p-8 group relative overflow-hidden interactive",
+                      "liquid-panel p-7 group relative overflow-hidden spring-hover rounded-2xl",
                       feature.className
                     )}
                   >
-                    <feature.icon className="w-10 h-10 text-primary mb-6" />
-                    <h3 className="text-2xl font-black mb-3 tracking-tight">{feature.title}</h3>
-                    <p className="text-muted-foreground leading-relaxed">{feature.body}</p>
+                    <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center mb-5 group-hover:bg-primary/15 transition-colors duration-200">
+                      <feature.icon className="w-5 h-5 text-primary" />
+                    </div>
+                    <h3 className="text-xl font-black mb-2 tracking-tight">{feature.title}</h3>
+                    <p className="text-sm text-muted-foreground leading-relaxed">{feature.body}</p>
                   </motion.div>
                 ))}
               </div>
@@ -305,46 +322,79 @@ export default function LandingPage() {
           </section>
 
           {/* PERSONA SHOWCASE */}
-          <section className="py-32 px-6 relative overflow-hidden">
-            <div className="max-w-7xl mx-auto">
-              <div className="text-center mb-20">
-                <h2 className="text-4xl md:text-6xl font-black mb-6 tracking-tight">The AI Persona Panel</h2>
-                <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+          <section className="py-32 px-6 relative overflow-hidden border-t ghost-border bg-black/20">
+            <div className="max-w-5xl mx-auto">
+              <motion.div
+                initial={{ opacity: 0, y: 16 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-80px" }}
+                transition={{ ...spring.smooth }}
+                className="text-center mb-16"
+              >
+                <h2 className="text-4xl md:text-5xl font-black mb-4 tracking-tight">The AI Persona Panel</h2>
+                <p className="text-lg text-muted-foreground max-w-xl mx-auto">
                   Test your content against simulated audiences before you post.
                 </p>
-              </div>
+              </motion.div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 {PERSONAS.map((persona, i) => (
                   <motion.div
                     key={persona.id}
-                    initial={{ opacity: 0, y: 24 }}
+                    initial={{ opacity: 0, y: 20 }}
                     whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true }}
-                    transition={{ delay: i * 0.1 }}
-                    className={cn("group relative p-6 rounded-2xl nano-glass border interactive", persona.borderColor)}
+                    viewport={{ once: true, margin: "-40px" }}
+                    transition={{ ...spring.smooth, delay: i * 0.08 }}
+                    className={cn(
+                      "group relative p-5 rounded-2xl nano-glass border spring-hover overflow-hidden",
+                      persona.borderColor
+                    )}
                   >
-                    <div className={cn("absolute top-0 right-0 w-40 h-40 blur-3xl opacity-10 -z-10 bg-gradient-to-br", persona.color)} />
-                    <div className="flex items-center justify-between mb-5">
-                      <div className="flex items-center gap-3">
-                        <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center bg-gradient-to-br text-2xl shadow-lg", persona.color)}>
-                          {persona.emoji}
-                        </div>
-                        <div>
-                          <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Agent</p>
-                          <p className="text-base font-black">{persona.title}</p>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="mb-4">
-                      <span className={cn(
-                        "text-[10px] font-black uppercase tracking-widest",
-                        persona.hook === "strong" ? "text-emerald-400" : persona.hook === "moderate" ? "text-amber-400" : "text-red-400"
+                    <div className={cn("absolute -top-6 -right-6 w-28 h-28 blur-3xl opacity-[0.12] bg-gradient-to-br pointer-events-none", persona.color)} />
+
+                    {/* Verdict badge */}
+                    <div className="flex items-center justify-between mb-4">
+                      <div className={cn(
+                        "w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br text-xl shadow-md shrink-0",
+                        persona.color
                       )}>
-                        Hook: {persona.hook}
+                        {persona.emoji}
+                      </div>
+                      <span className={cn(
+                        "text-[9px] font-black uppercase tracking-[0.12em] px-2 py-1 rounded-full border",
+                        persona.verdict === "WATCHES"
+                          ? "text-emerald-400 border-emerald-500/30 bg-emerald-500/10"
+                          : persona.verdict === "SCROLLS"
+                          ? "text-red-400 border-red-500/30 bg-red-500/10"
+                          : "text-amber-400 border-amber-500/30 bg-amber-500/10"
+                      )}>
+                        {persona.verdict}
                       </span>
                     </div>
-                    <p className="text-sm text-muted-foreground/80 font-medium leading-relaxed italic border-l-2 border-white/10 pl-3">
+
+                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-0.5">Persona</p>
+                    <p className="text-sm font-black mb-3">{persona.title}</p>
+
+                    {/* Hook meter */}
+                    <div className="mb-3">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Hook</span>
+                        <span className={cn(
+                          "text-[9px] font-black uppercase tracking-wider",
+                          persona.hook === "strong" ? "text-emerald-400" : persona.hook === "moderate" ? "text-amber-400" : "text-red-400"
+                        )}>{persona.hook}</span>
+                      </div>
+                      <div className="h-1 rounded-full bg-white/5 overflow-hidden">
+                        <div className={cn(
+                          "h-full rounded-full bg-gradient-to-r transition-all",
+                          persona.hook === "strong" ? "w-[85%] from-emerald-500 to-teal-400" :
+                          persona.hook === "moderate" ? "w-[55%] from-amber-500 to-yellow-400" :
+                          "w-[25%] from-red-500 to-orange-400"
+                        )} />
+                      </div>
+                    </div>
+
+                    <p className="text-xs text-muted-foreground/80 leading-relaxed border-l-2 border-white/10 pl-2.5 italic">
                       &ldquo;{persona.reason}&rdquo;
                     </p>
                   </motion.div>
@@ -354,35 +404,46 @@ export default function LandingPage() {
           </section>
 
           {/* TESTIMONIALS */}
-          <section className="py-32 px-6 border-y ghost-border bg-black/20">
-            <div className="max-w-6xl mx-auto">
-              <div className="text-center mb-16">
+          <section className="py-32 px-6 border-y ghost-border">
+            <div className="max-w-5xl mx-auto">
+              <motion.div
+                initial={{ opacity: 0, y: 16 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-80px" }}
+                transition={{ ...spring.smooth }}
+                className="text-center mb-16"
+              >
                 <h2 className="text-4xl md:text-5xl font-black mb-4 tracking-tight">Creators who stopped guessing</h2>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              </motion.div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {TESTIMONIALS.map((t, i) => (
                   <motion.div
                     key={t.name}
-                    initial={{ opacity: 0, y: 24 }}
+                    initial={{ opacity: 0, y: 20 }}
                     whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true }}
-                    transition={{ delay: i * 0.15 }}
-                    className="p-8 rounded-2xl nano-glass border-white/5 flex flex-col gap-5 relative interactive"
+                    viewport={{ once: true, margin: "-40px" }}
+                    transition={{ ...spring.smooth, delay: i * 0.1 }}
+                    className="p-7 rounded-2xl nano-glass border border-white/5 flex flex-col gap-5 relative spring-hover"
                   >
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-0.5">
                       {[...Array(5)].map((_, j) => (
-                        <Star key={j} className="w-4 h-4 fill-amber-400 text-amber-400" />
+                        <Star key={j} className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
                       ))}
                     </div>
-                    <p className="text-base font-medium text-foreground/90 leading-relaxed flex-1">&ldquo;{t.quote}&rdquo;</p>
+                    <p className="text-sm font-medium text-foreground/85 leading-relaxed flex-1">&ldquo;{t.quote}&rdquo;</p>
                     <div className="flex items-center justify-between pt-4 border-t border-white/5">
                       <div>
-                        <p className="text-base font-black">{t.name}</p>
+                        <p className="text-sm font-black">{t.name}</p>
                         <p className="text-xs text-muted-foreground font-medium">{t.role}</p>
                       </div>
-                      <div className="flex flex-col items-end">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Pre-Flight</span>
-                        <span className="text-xl font-black text-primary">{t.score}</span>
+                      <div className="flex flex-col items-end gap-0.5">
+                        <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">Pre-Flight</span>
+                        <span className={cn(
+                          "text-2xl font-black font-mono",
+                          t.score >= 90 ? "score-viral" :
+                          t.score >= 71 ? "score-strong" :
+                          t.score >= 41 ? "score-moderate" : "score-weak"
+                        )}>{t.score}</span>
                       </div>
                     </div>
                   </motion.div>
@@ -393,22 +454,27 @@ export default function LandingPage() {
 
           {/* CTA SECTION */}
           <section className="py-40 px-6 relative overflow-hidden">
-            <div className="max-w-4xl mx-auto text-center">
+            <div className="max-w-3xl mx-auto text-center">
               <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                whileInView={{ opacity: 1, scale: 1 }}
-                viewport={{ once: true }}
-                className="gradient-border p-[1px] rounded-[48px] shadow-2xl shadow-primary/20"
+                initial={{ opacity: 0, y: 20, scale: 0.97 }}
+                whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                viewport={{ once: true, margin: "-60px" }}
+                transition={{ ...spring.smooth }}
+                className="gradient-border p-[1px] rounded-[40px] shadow-2xl shadow-primary/20"
               >
-                <div className="p-16 rounded-[48px] glass-surface relative overflow-hidden bg-background/80">
-                  <div className="absolute inset-0 -z-10 bg-gradient-to-tr from-primary/20 via-transparent to-accent/20" />
-                  <h2 className="text-5xl md:text-7xl font-black mb-8 tracking-tight">Stop publishing <br /> in the dark.</h2>
-                  <p className="text-xl text-muted-foreground mb-12 max-w-xl mx-auto leading-relaxed">
+                <div className="p-14 md:p-20 rounded-[39px] glass-strong relative overflow-hidden">
+                  <div className="absolute inset-0 -z-10 bg-gradient-to-tr from-primary/15 via-transparent to-[#ec4899]/10" />
+                  <div className="absolute -bottom-20 left-1/2 -translate-x-1/2 w-[400px] h-[200px] bg-primary/20 blur-[80px] -z-10 rounded-full" />
+                  <h2 className="text-4xl md:text-6xl font-black mb-6 tracking-tight leading-[1.1]">
+                    Stop publishing<br />
+                    <span className="brand-gradient-text">in the dark.</span>
+                  </h2>
+                  <p className="text-base text-muted-foreground mb-10 max-w-sm mx-auto leading-relaxed">
                     Test your content before you post. Get actionable AI feedback to guarantee your next viral hit.
                   </p>
-                  <GlowButton size="lg" className="h-16 px-12 rounded-2xl text-xl font-black interactive" asChild>
+                  <GlowButton size="lg" variant="gradient" className="h-14 px-10 rounded-2xl text-base font-bold" asChild>
                     <Link href="/editor">
-                      Run Your First Pre-Flight <ArrowRight className="ml-3 w-6 h-6" />
+                      Run Your First Pre-Flight <ArrowRight className="ml-2.5 w-5 h-5" />
                     </Link>
                   </GlowButton>
                 </div>
