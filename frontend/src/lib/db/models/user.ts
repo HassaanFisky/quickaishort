@@ -39,6 +39,8 @@ const UserSchema = new Schema({
     totalExports: { type: Number, default: 0 },
     totalProcessingTimeMs: { type: Number, default: 0 },
   },
+  resetToken:       { type: String, select: false },
+  resetTokenExpiry: { type: Date,   select: false },
 });
 
 const User = models.User || model("User", UserSchema);

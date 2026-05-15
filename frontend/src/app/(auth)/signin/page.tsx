@@ -135,7 +135,7 @@ export default function SignInPage() {
                   <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" aria-hidden />
                   <span>Encrypted connection</span>
                 </div>
-                <Link href="#" className="text-[12px] font-medium text-primary hover:text-primary/80 transition-colors duration-[160ms]">
+                <Link href="/forgot-password" className="text-[12px] font-medium text-primary hover:text-primary/80 transition-colors duration-[160ms]">
                   Forgot password?
                 </Link>
               </div>
