@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useDropzone } from "react-dropzone";
 import { Upload, Youtube, FileVideo, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -9,10 +9,12 @@ import { Input } from "@/components/ui/input";
 import { useEditorStore } from "@/stores/editorStore";
 import { toast } from "sonner";
 import { useMediaPipeline } from "@/hooks/useMediaPipeline";
+import { InlineError } from "@/components/shared/InlineError";
 
 export default function AcquirePanel() {
   const [url, setUrl] = useState("");
   const [isImporting, setIsImporting] = useState(false);
+  const [urlValidationError, setUrlValidationError] = useState<string | null>(null);
   const setSourceUrl = useEditorStore((state) => state.setSourceUrl);
   const setSourceFile = useEditorStore((state) => state.setSourceFile);
   const sourceFile = useEditorStore((state) => state.sourceFile);
@@ -41,31 +43,46 @@ export default function AcquirePanel() {
   const YT_PATTERN =
     /^https?:\/\/(www\.)?(youtube\.com\/watch\?.*v=|youtu\.be\/)[A-Za-z0-9_-]{11}/;
 
+  // Derived state: is the current URL a well-formed YouTube link?
+  // Used to render the right-edge validation icon and to gate submission.
+  const urlIsValid = useMemo(() => {
+    if (!url.trim()) return false;
+    return YT_PATTERN.test(url.trim());
+  }, [url]);
+
+  const handleUrlChange = (next: string) => {
+    setUrl(next);
+    // Clear any stale validation error as soon as the user edits the field.
+    if (urlValidationError) setUrlValidationError(null);
+  };
+
   const handleUrlSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!url) return;
 
-    if (!YT_PATTERN.test(url.trim())) {
-      toast.error(
-        "Please paste a YouTube URL — e.g. youtube.com/watch?v=... or youtu.be/...",
+    if (!urlIsValid) {
+      setUrlValidationError(
+        "That doesn't look like a YouTube link. Try the full URL from your browser address bar — for example youtube.com/watch?v=... or youtu.be/...",
       );
       return;
     }
 
+    setUrlValidationError(null);
+
     try {
       setIsImporting(true);
       toast.loading("Fetching video metadata...", { id: "import-video" });
-      
+
       const { getVideoInfo, getProxyUrl } = await import("@/lib/api");
       const info = await getVideoInfo(url);
-      
+
       if (info) {
         setSourceUrl(url); // Store original URL
         // We use the proxy URL for the video element to avoid CORS issues
         const proxyUrl = getProxyUrl(url);
-        
+
         // Update store with metadata
-        useEditorStore.setState({ 
+        useEditorStore.setState({
           duration: info.duration,
           // We can't set sourceFile for URLs, but the store handles sourceUrl
         });
@@ -136,20 +153,51 @@ export default function AcquirePanel() {
         </div>
       </div>
 
-      <form onSubmit={handleUrlSubmit} className="flex gap-2">
-        <div className="relative flex-1">
-          <Youtube className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder="Paste YouTube or Video URL"
-            className="pl-10"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            disabled={isImporting}
-          />
+      <form
+        onSubmit={handleUrlSubmit}
+        className="space-y-2"
+        aria-describedby={urlValidationError ? "acquire-url-error" : undefined}
+        noValidate
+      >
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Youtube
+              className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground"
+              aria-hidden="true"
+            />
+            <Input
+              placeholder="Paste YouTube or Video URL"
+              className={cn(
+                "pl-10",
+                urlIsValid && "pr-10",
+                urlValidationError && "border-destructive/60 focus-visible:ring-destructive/40",
+              )}
+              value={url}
+              onChange={(e) => handleUrlChange(e.target.value)}
+              disabled={isImporting}
+              aria-invalid={Boolean(urlValidationError)}
+              aria-label="YouTube video URL"
+            />
+            {urlIsValid && !urlValidationError && (
+              <CheckCircle2
+                aria-hidden="true"
+                className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-500"
+                style={{
+                  transitionDuration: "var(--motion-2)",
+                  transitionProperty: "opacity, transform",
+                }}
+              />
+            )}
+          </div>
+          <Button type="submit" disabled={isImporting || !url}>
+            {isImporting ? "Importing..." : "Import"}
+          </Button>
         </div>
-        <Button type="submit" disabled={isImporting || !url}>
-          {isImporting ? "Importing..." : "Import"}
-        </Button>
+        {urlValidationError && (
+          <div id="acquire-url-error">
+            <InlineError title="Check that URL" body={urlValidationError} />
+          </div>
+        )}
       </form>
 
       {sourceFile && (

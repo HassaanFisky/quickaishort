@@ -5,11 +5,12 @@ import { useRouter } from "next/navigation";
 import { useSession, signIn } from "next-auth/react";
 import { motion } from "framer-motion";
 import { Check, Sparkles, Zap, ArrowRight, Loader2 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { GlowButton } from "@/components/ui/GlowButton";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import { toast } from "sonner";
+import { ActivationCard } from "@/components/shared/ActivationCard";
 
 const PADDLE_PRICE_ID_PRO =
   process.env.NEXT_PUBLIC_PADDLE_PRICE_ID_PRO ?? "pri_01krk7sez47kmd25kdtnff1z9t";
@@ -80,6 +81,23 @@ export default function PricingPage() {
   const { data: session } = useSession();
   const router = useRouter();
   const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [activationInProgress, setActivationInProgress] = useState(false);
+
+  const userId =
+    (session?.user as { id?: string } | undefined)?.id ?? session?.user?.email ?? "";
+
+  // Subscribe to the global Paddle event bridge from PaddleProvider.
+  // On checkout.completed, mount the ActivationCard so the user has a
+  // continuous status surface from "paid" through "Pro is active".
+  useEffect(() => {
+    const onCompleted = () => {
+      if (userId) setActivationInProgress(true);
+    };
+    window.addEventListener("paddle:checkout-completed", onCompleted);
+    return () => {
+      window.removeEventListener("paddle:checkout-completed", onCompleted);
+    };
+  }, [userId]);
 
   const handleCheckout = async () => {
     if (!session?.user) {
@@ -120,8 +138,16 @@ export default function PricingPage() {
     <div className="min-h-screen bg-background text-foreground overflow-x-hidden">
       <Navbar />
 
-      <main className="pt-32 pb-24">
+      <section aria-label="Pricing" className="pt-32 pb-24">
         <div className="container mx-auto px-6 max-w-6xl">
+          {/* Activation status — mounts immediately on checkout.completed and
+              polls for is_pro: true while running NextAuth.update(). */}
+          {activationInProgress && userId && (
+            <div className="mb-12">
+              <ActivationCard userId={userId} />
+            </div>
+          )}
+
           {/* Header */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -238,7 +264,7 @@ export default function PricingPage() {
             Payments secured by Paddle. Cancel anytime. All plans include full client-side processing.
           </motion.p>
         </div>
-      </main>
+      </section>
 
       <Footer />
     </div>

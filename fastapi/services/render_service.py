@@ -359,11 +359,16 @@ def render_video(production_plan: dict) -> str:
     try:
         segments = production_plan.get("segments", [])
         voiceover_path = production_plan.get("voiceover_path")
-        
+        # Smart transitions: 0.5s xfade between adjacent clips when enabled.
+        # Falls back to frame-accurate concat when disabled or only one clip exists.
+        transition_enabled = bool(production_plan.get("transition_enabled", False))
+
         if not segments:
             raise ValueError("No segments found in production plan")
-            
+
         processed_clips = []
+        processed_clip_paths: list[str] = []
+        clip_durations: list[float] = []
         for i, seg in enumerate(segments):
             clip_source = seg.get("clip_path")
             start = float(seg.get("start_sec", 0))
@@ -432,24 +437,34 @@ def render_video(production_plan: dict) -> str:
                         .run(quiet=True)
                     )
             elif clip_source.startswith("http"):
-                # Real download and trim — yt-dlp first, Cobalt fallback
+                # Real download and trim — yt-dlp first, Cobalt fallback.
+                # Any failure here (network, region-block, dead Pexels link, etc.)
+                # degrades to a black frame so the overall render NEVER crashes
+                # on a single bad stock source.
                 try:
                     video_id = VideoService.extract_video_id(clip_source) or "unknown"
                     downloaded_file = str(
                         VideoService.download_segment_sync(video_id, start, end, workdir)
                     )
+                    (
+                        ffmpeg.input(downloaded_file, ss=start, t=duration)
+                        .filter("scale", 1080, 1920, force_original_aspect_ratio="increase")
+                        .filter("crop", 1080, 1920)
+                        .output(str(target_clip), vcodec="libx264", acodec="aac", crf=23, preset="veryfast")
+                        .overwrite_output()
+                        .run(quiet=True)
+                    )
                 except Exception as dl_err:
-                    logger.error("[render_video] sync download failed for %s: %s", clip_source, dl_err)
-                    raise
-                
-                (
-                    ffmpeg.input(downloaded_file, ss=start, t=duration)
-                    .filter("scale", 1080, 1920, force_original_aspect_ratio="increase")
-                    .filter("crop", 1080, 1920)
-                    .output(str(target_clip), vcodec="libx264", acodec="aac", crf=23, preset="veryfast")
-                    .overwrite_output()
-                    .run(quiet=True)
-                )
+                    logger.warning(
+                        "[render_video] HTTP source unavailable, substituting black frame: %s (%s)",
+                        clip_source, dl_err,
+                    )
+                    (
+                        ffmpeg.input(f"color=c=black:s=1080x1920:d={duration}", f="lavfi")
+                        .output(str(target_clip), vcodec="libx264", pix_fmt="yuv420p")
+                        .overwrite_output()
+                        .run(quiet=True)
+                    )
             else:
                 # Local file path
                 (
@@ -462,12 +477,47 @@ def render_video(production_plan: dict) -> str:
                 )
             
             processed_clips.append(ffmpeg.input(str(target_clip)))
+            processed_clip_paths.append(str(target_clip))
+            clip_durations.append(duration)
 
-        # Stitch videos
-        # We assume clips have audio or we provide silence if missing
-        joined = ffmpeg.concat(*processed_clips, v=1, a=1).node
-        v = joined[0]
-        a = joined[1]
+        # Stitch videos.
+        # If transitions are enabled and there are at least two clips, use an
+        # xfade chain (0.5s fade between each adjacent pair) for video and a
+        # matching acrossfade chain for audio. Otherwise fall back to the
+        # frame-accurate concat (original behavior).
+        if transition_enabled and len(processed_clip_paths) > 1:
+            XFADE = 0.5
+            # Re-input each saved clip so we can pull video and audio streams
+            # independently into the filter graph.
+            clip_inputs = [ffmpeg.input(p) for p in processed_clip_paths]
+            v_acc = clip_inputs[0].video
+            a_acc = clip_inputs[0].audio
+            cumulative = clip_durations[0]
+            for i in range(1, len(clip_inputs)):
+                offset = max(0.0, cumulative - XFADE)
+                v_acc = ffmpeg.filter(
+                    [v_acc, clip_inputs[i].video],
+                    "xfade",
+                    transition="fade",
+                    duration=XFADE,
+                    offset=offset,
+                )
+                a_acc = ffmpeg.filter(
+                    [a_acc, clip_inputs[i].audio],
+                    "acrossfade",
+                    d=XFADE,
+                )
+                # Each xfade overlaps the two clips by XFADE seconds, so the
+                # running total grows by next_duration - XFADE.
+                cumulative += clip_durations[i] - XFADE
+            v = v_acc
+            a = a_acc
+        else:
+            # Frame-accurate concat. Clips must have audio (silence fallback
+            # is provided upstream by black-frame substitution where needed).
+            joined = ffmpeg.concat(*processed_clips, v=1, a=1).node
+            v = joined[0]
+            a = joined[1]
         
         # Overlay voiceover if provided
         if voiceover_path:

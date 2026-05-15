@@ -25,6 +25,11 @@ logger = logging.getLogger(__name__)
 COLLECTION = "UserStats"
 STATS_CACHE_TTL = 300  # 5 minutes
 
+# Canonical starter-credit grant for new users. Mirrors the default in
+# provision_credits() and matches billing.PRO_MONTHLY_CREDITS so a free user
+# never has more headroom than a paying Pro subscriber.
+STARTER_CREDITS = 100
+
 
 def _empty(user_id: str) -> dict[str, Any]:
     return UserStats(user_id=user_id).model_dump(mode="json")
@@ -163,7 +168,7 @@ async def is_user_premium(user_id: str) -> bool:
     return is_premium
 
 
-async def provision_credits(user_id: str, amount: int = 100) -> None:
+async def provision_credits(user_id: str, amount: int = STARTER_CREDITS) -> None:
     """Create user stats doc on first login. $setOnInsert never overwrites existing users."""
     if not is_ready():
         return
@@ -226,7 +231,7 @@ async def recalculate_user_stats(user_id: str) -> dict[str, Any]:
                 "export_count": count,
                 "updated_at": datetime.now(timezone.utc),
             },
-            "$setOnInsert": {"user_id": user_id, "credits_balance": 5000},
+            "$setOnInsert": {"user_id": user_id, "credits_balance": STARTER_CREDITS},
         },
         upsert=True,
         return_document=ReturnDocument.AFTER,
@@ -242,11 +247,12 @@ def _serialize(doc: dict[str, Any] | None, user_id: str) -> dict[str, Any]:
         return _empty(user_id)
     return UserStats(
         user_id=doc.get("user_id", user_id),
-        credits_balance=int(doc.get("credits_balance", 5000)),
+        credits_balance=int(doc.get("credits_balance", STARTER_CREDITS)),
         total_projects=int(doc.get("total_projects", 0)),
         total_duration_processed=float(doc.get("total_duration_processed", 0.0)),
         export_count=int(doc.get("export_count", 0)),
         ai_runs=int(doc.get("ai_runs", 0)),
         is_premium=bool(doc.get("is_premium", False)),
+        is_pro=bool(doc.get("is_pro", False)),
         updated_at=doc.get("updated_at") or datetime.now(timezone.utc),
     ).model_dump(mode="json")

@@ -38,6 +38,7 @@ export const authOptions: NextAuthOptions = {
           email: user.email,
           name: user.name,
           image: user.image,
+          isPro: user.isPro || user.isPremium || false,
         };
       }
     })
@@ -75,6 +76,7 @@ export const authOptions: NextAuthOptions = {
         const dbUser = await User.findOne({ email: session.user.email });
         if (dbUser) {
           session.user.id = dbUser._id.toString();
+          session.user.isPro = dbUser.isPro || dbUser.isPremium || false;
           session.user.settings = dbUser.settings;
         }
       }

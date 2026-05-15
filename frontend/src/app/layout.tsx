@@ -5,6 +5,10 @@ import "./globals.css";
 import { AppProviders } from "@/components/shared/AppProviders";
 import { CommandPalette } from "@/components/layout/CommandPalette";
 import { PaddleProvider } from "@/components/shared/PaddleProvider";
+import { SkipLink } from "@/components/shared/SkipLink";
+import { BottomTabBar } from "@/components/layout/BottomTabBar";
+import { RouteFade } from "@/components/shared/RouteFade";
+import { OfflineNotice } from "@/components/shared/OfflineNotice";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -69,10 +73,15 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${montserrat.variable} antialiased`}
       >
+        <SkipLink />
         <div className="living-water-bg" />
         <AppProviders>
           <PaddleProvider />
-          {children}
+          <OfflineNotice />
+          <main id="main" tabIndex={-1}>
+            <RouteFade>{children}</RouteFade>
+          </main>
+          <BottomTabBar />
           <CommandPalette />
         </AppProviders>
       </body>

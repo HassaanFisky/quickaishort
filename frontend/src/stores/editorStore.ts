@@ -128,6 +128,8 @@ interface EditorState {
   deleteClip: (id: string) => void;
   undo: () => void;
   redo: () => void;
+  scriptPrompt: string;
+  setScriptPrompt: (prompt: string) => void;
   setActiveTool: (tool: EditorState["activeTool"]) => void;
   reset: () => void;
 }
@@ -162,9 +164,12 @@ export const useEditorStore = create<EditorState>()(
       canvasElements: [],
       exportSettings: { ...DEFAULT_EXPORT_SETTINGS },
 
+      scriptPrompt: "Write a high-engagement, viral-ready script for this clip.",
       undoStack: [],
       redoStack: [],
       activeTool: "select",
+
+      setScriptPrompt: (prompt) => set({ scriptPrompt: prompt }),
 
       setCurrentTime: (time) => set({ currentTime: time }),
       setIsPlaying: (playing) => set({ isPlaying: playing }),

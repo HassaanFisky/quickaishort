@@ -9,7 +9,10 @@ class UserStats(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     user_id: str
-    credits_balance: int = 5000
+    # Default mirrors services.stats_service.STARTER_CREDITS (100). Kept as a
+    # literal here to avoid a services -> models reverse-import. If either
+    # value changes, both must be updated together.
+    credits_balance: int = 100
     total_projects: int = 0
     total_duration_processed: float = 0.0
     export_count: int = 0

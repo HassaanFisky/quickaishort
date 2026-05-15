@@ -34,8 +34,9 @@ export default function Navbar() {
   return (
     <header className="fixed top-0 left-0 right-0 z-50 flex justify-center p-4">
       <nav
+        aria-label="Primary"
         className={cn(
-          "w-full max-w-7xl h-16 px-6 flex items-center justify-between rounded-2xl transition-all duration-500",
+          "w-full max-w-7xl h-16 px-6 flex items-center justify-between rounded-2xl transition-all duration-300",
           isScrolled
             ? "nano-glass shadow-2xl scale-[0.98] border-white/10"
             : "bg-transparent border-transparent",
@@ -94,15 +95,36 @@ export default function Navbar() {
                     variant="ghost"
                     className="relative h-9 w-9 rounded-full ring-1 ring-white/10 hover:ring-primary/40 interactive p-0 overflow-hidden"
                   >
-                    <Avatar className="h-full w-full">
-                      <AvatarImage
-                        src={session.user?.image || ""}
-                        alt={session.user?.name || ""}
-                      />
-                      <AvatarFallback className="bg-primary/20 text-primary text-xs font-bold">
-                        {session.user?.name?.[0]}
-                      </AvatarFallback>
-                    </Avatar>
+                    <div
+                      className="relative group"
+                      aria-label={
+                        session.user.isPro
+                          ? `${session.user?.name ?? "Account"} (Pro subscriber)`
+                          : session.user?.name ?? "Account"
+                      }
+                    >
+                      <Avatar className={cn(
+                        "h-full w-full transition-transform duration-300 group-hover:scale-105",
+                        session.user.isPro && "ring-2 ring-primary ring-offset-2 ring-offset-background shadow-[0_0_15px_rgba(33,150,243,0.5)]"
+                      )}>
+                        <AvatarImage
+                          src={session.user?.image || ""}
+                          alt=""
+                        />
+                        <AvatarFallback className="bg-primary/20 text-primary text-xs font-bold">
+                          {session.user?.name?.[0]}
+                        </AvatarFallback>
+                      </Avatar>
+
+                      {session.user.isPro && (
+                        <div
+                          aria-hidden="true"
+                          className="absolute -top-1 -right-1 bg-primary text-primary-foreground text-[8px] font-black px-1 rounded-sm shadow-lg border border-background"
+                        >
+                          PRO
+                        </div>
+                      )}
+                    </div>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent

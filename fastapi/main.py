@@ -414,17 +414,31 @@ def read_root():
 
 @app.get("/health")
 def health_check():
+    """Service health snapshot.
+
+    Returns both the legacy boolean fields (`mongo`, `redis`, `adk`) for any
+    existing external monitors and a richer v2 shape (`*_status`,
+    `agent_ready_state`) suitable for dashboards. Top-level `status` remains
+    "ok" for liveness; dependency state is exposed alongside it.
+    """
+    mongo_ok = db_is_ready()
     redis_ok = False
     try:
         redis_conn.ping()
         redis_ok = True
     except Exception:
         pass
+
     return {
         "status": "ok",
-        "mongo": db_is_ready(),
+        # Legacy boolean fields — kept for backward compatibility.
+        "mongo": mongo_ok,
         "redis": redis_ok,
         "adk": _ADK_AVAILABLE,
+        # Detailed v2 fields.
+        "mongo_status": "connected" if mongo_ok else "disconnected",
+        "redis_status": "ready" if redis_ok else "unreachable",
+        "agent_ready_state": "ready" if _ADK_AVAILABLE else "unavailable",
     }
 
 

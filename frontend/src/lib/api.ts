@@ -8,7 +8,7 @@ import type {
 import type { UserStats } from "@/types/stats";
 
 // Hardcoded production URL to bypass Vercel environment variable bugs
-export const API_URL = "https://quickaishort-api-946316698978.us-central1.run.app";
+export const API_URL = "https://quickaishort-api-rqmhzhsxua-uc.a.run.app";
 if (!API_URL && typeof window !== "undefined") {
   console.warn("NEXT_PUBLIC_API_URL is not defined. API calls may fail.");
 }

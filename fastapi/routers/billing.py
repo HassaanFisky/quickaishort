@@ -20,6 +20,7 @@ from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from fastapi import APIRouter, HTTPException, Request
 from pymongo import ASCENDING
+from bson import ObjectId
 
 from services.db import get_db, is_ready
 
@@ -145,7 +146,19 @@ async def _grant_pro(user_id: str, subscription_id: str) -> None:
         result.modified_count,
     )
 
-    # Invalidate Redis premium and stats caches so next API call re-reads from DB
+    # 2. Sync with NextAuth users collection for frontend session
+    try:
+        # Check if user_id is a valid ObjectId, if not use it as email
+        query = {"_id": ObjectId(user_id)} if ObjectId.is_valid(user_id) else {"email": user_id}
+        await db["users"].update_one(
+            query,
+            {"$set": {"isPro": True, "isPremium": True, "updatedAt": datetime.now(timezone.utc)}}
+        )
+        logger.info("paddle_grant_pro: synced with users collection for %s", user_id)
+    except Exception as exc:
+        logger.warning("paddle_grant_pro: users sync failed: %s", exc)
+
+    # 3. Invalidate Redis premium and stats caches so next API call re-reads from DB
     try:
         from services.stats_service import invalidate_premium_cache
         from services.queue_service import async_redis_conn
@@ -172,6 +185,18 @@ async def _revoke_pro(user_id: str, subscription_id: str) -> None:
         },
     )
     logger.info("paddle_revoke_pro user=%s sub=%s", user_id, subscription_id)
+
+    # 2. Sync with NextAuth users collection for frontend session
+    try:
+        query = {"_id": ObjectId(user_id)} if ObjectId.is_valid(user_id) else {"email": user_id}
+        await db["users"].update_one(
+            query,
+            {"$set": {"isPro": False, "isPremium": False, "updatedAt": datetime.now(timezone.utc)}}
+        )
+        logger.info("paddle_revoke_pro: synced with users collection for %s", user_id)
+    except Exception as exc:
+        logger.warning("paddle_revoke_pro: users sync failed: %s", exc)
+
     try:
         from services.stats_service import invalidate_premium_cache
         from services.queue_service import async_redis_conn

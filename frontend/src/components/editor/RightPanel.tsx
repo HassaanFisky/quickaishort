@@ -19,6 +19,8 @@ import {
   Clock3,
   Sparkles,
   Zap,
+  MessageSquareQuote,
+  Wand2,
 } from "lucide-react";
 import { useEditorStore } from "@/stores/editorStore";
 import { useServerExport } from "@/hooks/useServerExport";
@@ -32,6 +34,7 @@ import React, { useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import type { PreflightResult, PersonaVote, Recommendation } from "@/types/preflight";
 import { motion, AnimatePresence } from "framer-motion";
+import { InlinePaywallCard } from "@/components/shared/InlinePaywallCard";
 
 function useAnimatedCounter(target: number, duration = 1500) {
   const [value, setValue] = React.useState(0);
@@ -63,6 +66,8 @@ export default function RightPanel() {
     updateClip,
     exportSettings,
     setExportSetting,
+    scriptPrompt,
+    setScriptPrompt,
   } = useEditorStore();
 
   const { data: session } = useSession();
@@ -312,6 +317,66 @@ export default function RightPanel() {
             </div>
           </div>
 
+          {/* AI Voiceover Toggle */}
+          <div className="flex items-center justify-between p-4 rounded-lg bg-secondary/40 border border-border group">
+            <div className="flex flex-col gap-0.5">
+              <span className="text-[11px] font-black uppercase tracking-widest text-foreground">
+                AI Voiceover
+              </span>
+              <span className="text-[9px] font-medium text-muted-foreground">
+                Synthetic narration enhancement
+              </span>
+            </div>
+            <button
+              onClick={() => setExportSetting("voiceoverEnabled", !exportSettings.voiceoverEnabled)}
+              className={cn(
+                "relative w-12 h-6 rounded-full transition-all duration-500 overflow-hidden",
+                exportSettings.voiceoverEnabled
+                  ? "bg-primary shadow-[0_0_15px_hsl(var(--primary)/0.3)]"
+                  : "bg-foreground/10",
+              )}
+            >
+              <div
+                className={cn(
+                  "absolute top-1 left-1 w-4 h-4 rounded-full bg-white shadow-lg transition-all duration-500",
+                  exportSettings.voiceoverEnabled
+                    ? "translate-x-6 scale-110"
+                    : "scale-90 opacity-40",
+                )}
+              />
+            </button>
+          </div>
+
+          {/* Smart Transitions Toggle */}
+          <div className="flex items-center justify-between p-4 rounded-lg bg-secondary/40 border border-border group">
+            <div className="flex flex-col gap-0.5">
+              <span className="text-[11px] font-black uppercase tracking-widest text-foreground">
+                Smart Transitions
+              </span>
+              <span className="text-[9px] font-medium text-muted-foreground">
+                Fade & motion smoothing
+              </span>
+            </div>
+            <button
+              onClick={() => setExportSetting("transitionEnabled", !exportSettings.transitionEnabled)}
+              className={cn(
+                "relative w-12 h-6 rounded-full transition-all duration-500 overflow-hidden",
+                exportSettings.transitionEnabled
+                  ? "bg-primary shadow-[0_0_15px_hsl(var(--primary)/0.3)]"
+                  : "bg-foreground/10",
+              )}
+            >
+              <div
+                className={cn(
+                  "absolute top-1 left-1 w-4 h-4 rounded-full bg-white shadow-lg transition-all duration-500",
+                  exportSettings.transitionEnabled
+                    ? "translate-x-6 scale-110"
+                    : "scale-90 opacity-40",
+                )}
+              />
+            </button>
+          </div>
+
           {/* Auto Subtitles Toggle */}
           <div className="flex items-center justify-between p-4 rounded-lg bg-secondary/40 border border-border group">
             <div className="flex flex-col gap-0.5">
@@ -340,6 +405,31 @@ export default function RightPanel() {
                 )}
               />
             </button>
+          </div>
+
+          {/* AI Creative Direction */}
+          <div className="flex flex-col gap-3 p-4 rounded-xl bg-secondary/40 border border-border mt-2">
+            <div className="flex items-center gap-2">
+              <MessageSquareQuote className="w-3 h-3 text-primary" />
+              <span className="text-[11px] font-black uppercase tracking-[0.2em] text-foreground">
+                AI Creative Direction
+              </span>
+            </div>
+            <textarea
+              value={scriptPrompt}
+              onChange={(e) => setScriptPrompt(e.target.value)}
+              placeholder="e.g. Make it sound high-energy and focus on the technical details..."
+              className="w-full h-24 bg-black/40 rounded-lg p-3 text-[11px] font-medium text-foreground border border-white/5 focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition-all resize-none custom-scrollbar"
+            />
+            <div className="flex items-center gap-2">
+              <div className="flex-1 h-px bg-white/5" />
+              <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-primary/10 border border-primary/20">
+                <Sparkles className="w-2.5 h-2.5 text-primary" />
+                <span className="text-[8px] font-black uppercase tracking-widest text-primary">
+                  Script Gen Active
+                </span>
+              </div>
+            </div>
           </div>
 
           {/* Visual Style */}
@@ -453,7 +543,7 @@ export default function RightPanel() {
               )}
 
               {/* Error State */}
-              {preflightError && !isPreflightRunning && (
+              {preflightError && !isPreflightRunning && !isPremiumGated && (
                 <div className="p-6 rounded-lg bg-destructive/10 border border-destructive/30 flex flex-col items-center gap-4">
                   <p className="text-[10px] font-black text-destructive uppercase tracking-widest text-center">
                     {preflightError}
@@ -465,6 +555,16 @@ export default function RightPanel() {
                     Try Again
                   </button>
                 </div>
+              )}
+
+              {/* Premium-Gated State (HTTP 402) */}
+              {isPremiumGated && !isPreflightRunning && (
+                <InlinePaywallCard
+                  feature="Audience Pre-Flight"
+                  body="Run multi-persona simulations on every clip before you publish. Pro unlocks all six audience personas, refined-clip suggestions, and trend grounding."
+                  ctaLabel="Upgrade to Pro"
+                  footnote="Your clip selection stays here while you decide."
+                />
               )}
 
               {/* Loading State */}
@@ -537,10 +637,12 @@ function RecommendationBadge({ rec }: { rec: Recommendation }) {
 }
 
 const PERSONA_LABELS: Record<string, { name: string; emoji: string }> = {
-  genz:       { name: "Gen Z",       emoji: "⚡" },
-  millennial: { name: "Millennial",  emoji: "💼" },
-  sports:     { name: "Sports Fan",  emoji: "🏆" },
-  tech:       { name: "Tech Nerd",   emoji: "🖥️" },
+  genz:          { name: "Gen Z",         emoji: "⚡" },
+  millennial:    { name: "Millennial",    emoji: "💼" },
+  sports:        { name: "Sports Fan",    emoji: "🏆" },
+  tech:          { name: "Tech Nerd",     emoji: "🖥️" },
+  entertainment: { name: "Entertainment", emoji: "🎬" },
+  news:          { name: "News Reader",   emoji: "📰" },
 };
 
 function PersonaCard({ vote, index }: { vote: PersonaVote; index: number }) {

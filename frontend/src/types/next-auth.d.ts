@@ -4,12 +4,14 @@ import "next-auth/jwt";
 declare module "next-auth" {
   interface User {
     id: string;
+    isPro: boolean;
     settings?: UserSettings;
   }
 
   interface Session {
     user: {
       id: string;
+      isPro: boolean;
       name?: string | null;
       email?: string | null;
       image?: string | null;

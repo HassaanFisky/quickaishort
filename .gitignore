@@ -41,6 +41,13 @@ dist/
 fastapi/.env
 fastapi/*.yaml
 frontend/.env.local
+# Local rotation checklists — must NEVER be committed even if reintroduced
+secrets-to-purge.txt
+secrets-to-rotate.txt
+
+# Local agent scratch (Claude / Antigravity rules + skills directories)
+.agents/
+.antigravity/
 
 # YouTube Cookies (CRITICAL)
 cookies.txt

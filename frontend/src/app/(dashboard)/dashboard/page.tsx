@@ -3,21 +3,24 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import { 
-  Plus, 
-  FolderOpen, 
-  Zap, 
-  TrendingUp, 
-  Clock, 
-  BarChart3, 
+import {
+  Plus,
+  FolderOpen,
+  Zap,
+  TrendingUp,
+  Clock,
   ChevronRight,
   Sparkles,
-  Search,
-  LayoutGrid
+  LayoutGrid,
 } from "lucide-react";
 import { useDashboardStats } from "@/hooks/useDashboardStats";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
+import { CreditsLowBanner } from "@/components/shared/CreditsLowBanner";
+import { InlineError } from "@/components/shared/InlineError";
+import { EmptyState } from "@/components/shared/EmptyState";
+
+const CREDITS_LOW_THRESHOLD = 10;
 
 interface ProjectRecord {
   _id: string;
@@ -48,32 +51,36 @@ function StatCard({
   color: string;
 }) {
   return (
-    <motion.div 
+    <motion.article
       whileHover={{ y: -4 }}
+      aria-label={`${label}: ${loading ? "loading" : value}`}
+      aria-busy={loading}
       className="relative group rounded-3xl border border-foreground/5 bg-secondary/20 p-6 backdrop-blur-xl overflow-hidden"
     >
-      <div className={cn("absolute -top-12 -right-12 w-32 h-32 blur-[80px] opacity-20 rounded-full transition-colors", color)} />
-      
+      <div className={cn("absolute -top-12 -right-12 w-32 h-32 blur-[80px] opacity-20 rounded-full transition-colors", color)} aria-hidden="true" />
+
       <div className="flex items-center gap-3 mb-4">
-        <div className={cn("p-2 rounded-xl bg-foreground/5 border border-foreground/5 text-muted-foreground group-hover:text-foreground transition-colors")}>
-          <Icon className="w-4 h-4" />
+        <div className="p-2 rounded-xl bg-foreground/5 border border-foreground/5 text-muted-foreground group-hover:text-foreground transition-colors">
+          <Icon className="w-4 h-4" aria-hidden="true" />
         </div>
         <span className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground group-hover:text-foreground/80 transition-colors">
           {label}
         </span>
       </div>
 
-      <div className="flex items-end justify-between">
+      <div>
         {loading ? (
-          <div className="h-9 w-24 rounded-lg bg-foreground/10 animate-pulse" />
+          <div className="h-9 w-24 rounded-lg bg-foreground/10 animate-pulse" aria-hidden="true" />
         ) : (
-          <span className="text-3xl font-black tracking-tighter">{value}</span>
+          <span
+            className="text-3xl font-black tracking-tighter tabular-nums"
+            style={{ fontVariantNumeric: "tabular-nums" }}
+          >
+            {value}
+          </span>
         )}
-        <div className="text-[10px] font-bold text-muted-foreground/40 bg-foreground/5 px-2 py-1 rounded-md">
-          +12%
-        </div>
       </div>
-    </motion.div>
+    </motion.article>
   );
 }
 
@@ -135,33 +142,22 @@ function ProjectCard({ project, index }: { project: ProjectRecord; index: number
   );
 }
 
-function EmptyState() {
+function DashboardEmptyState() {
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
-      className="rounded-[2.5rem] border border-dashed border-foreground/10 bg-secondary/10 p-20 text-center relative overflow-hidden"
     >
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,hsl(var(--primary)/0.03),transparent_70%)]" />
-      <div className="relative z-10">
-        <div className="w-20 h-20 rounded-3xl bg-secondary/40 border border-foreground/5 flex items-center justify-center mx-auto mb-6 shadow-2xl">
-          <FolderOpen className="w-8 h-8 text-muted-foreground/40" />
-        </div>
-        <h3 className="text-2xl font-black tracking-tight mb-2">No projects active</h3>
-        <p className="text-sm text-muted-foreground max-w-sm mx-auto mb-8">
-          The studio is quiet. Drop a YouTube URL into the intelligent editor to start your first viral sequence.
-        </p>
-        <Link
-          href="/editor"
-          className="inline-flex h-14 items-center rounded-2xl px-8 text-sm font-black text-white transition hover:brightness-110 shadow-xl"
-          style={{
-            background: "linear-gradient(135deg, #3b82f6 0%, #a855f7 60%, #ec4899 100%)",
-          }}
-        >
-          <Plus className="w-5 h-5 mr-3" />
-          Create First Project
-        </Link>
-      </div>
+      <EmptyState
+        icon={FolderOpen}
+        title="No projects active"
+        body="The studio is quiet. Drop a YouTube URL into the intelligent editor to start your first viral sequence."
+        actionLabel="Create First Project"
+        actionHref="/editor"
+        actionIcon={<Plus className="w-5 h-5" aria-hidden="true" />}
+        tone="gradient"
+        size="lg"
+      />
     </motion.div>
   );
 }
@@ -170,7 +166,7 @@ export default function DashboardPage() {
   const { data: session } = useSession();
   const userId = session?.user?.id ?? session?.user?.email ?? null;
 
-  const { stats, isReady } = useDashboardStats({ userId });
+  const { stats, isReady, error } = useDashboardStats({ userId });
 
   const [projects, setProjects] = useState<ProjectRecord[] | null>(null);
   const [exportCount, setExportCount] = useState<number | null>(null);
@@ -211,33 +207,35 @@ export default function DashboardPage() {
             <Sparkles className="w-4 h-4 text-primary animate-pulse" />
             <span className="text-[10px] font-black uppercase tracking-[0.3em] text-primary">Creator Intelligence</span>
           </div>
-          <h1 className="text-5xl font-black tracking-tighter leading-none">
+          <h1 className="text-5xl font-black tracking-tighter leading-none flex items-center gap-4">
             Welcome back, <span className="premium-gradient-text">{session?.user?.name?.split(' ')[0] ?? 'Creator'}</span>
+            {session?.user?.isPro && (
+              <span className="bg-primary/10 text-primary text-xs font-black px-2 py-1 rounded-md border border-primary/20 shadow-[0_0_10px_rgba(33,150,243,0.2)]">
+                PRO
+              </span>
+            )}
           </h1>
           <p className="text-muted-foreground font-medium">Your studio is optimized and ready for deployment.</p>
         </div>
         
         <div className="flex items-center gap-3">
-           <div className="hidden lg:flex items-center gap-2 px-4 py-2 rounded-2xl bg-secondary/40 border border-foreground/5">
-              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">ADK Pipeline Active</span>
-           </div>
            <Link
             href="/editor"
             id="new-project-btn"
             className="inline-flex h-14 items-center rounded-2xl px-8 text-sm font-black text-white transition hover:scale-[1.02] active:scale-[0.98] shadow-2xl shadow-primary/20"
             style={{
               background: "linear-gradient(135deg, #3b82f6 0%, #a855f7 60%, #ec4899 100%)",
+              transitionDuration: "var(--motion-2)",
             }}
           >
-            <Plus className="w-5 h-5 mr-3" />
+            <Plus className="w-5 h-5 mr-3" aria-hidden="true" />
             New Project
           </Link>
         </div>
       </div>
 
       {/* Stats row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      <section aria-label="Account summary" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
           label="Total Projects"
           value={projects?.length ?? stats.total_projects}
@@ -253,20 +251,33 @@ export default function DashboardPage() {
           color="bg-purple-500"
         />
         <StatCard
-          label="High-Res Exports"
+          label="Exports"
           value={exportCount ?? stats.export_count}
           loading={projectsLoading && !isReady}
           icon={TrendingUp}
           color="bg-pink-500"
         />
         <StatCard
-          label="AI Credits Used"
-          value={stats.ai_runs * 30}
+          label="Credits"
+          value={stats.credits_balance}
           loading={!isReady}
-          icon={BarChart3}
+          icon={Zap}
           color="bg-emerald-500"
         />
-      </div>
+      </section>
+
+      {/* Credits-low banner — appears only after stats are ready and balance is at-or-below threshold */}
+      {isReady && stats.credits_balance <= CREDITS_LOW_THRESHOLD && (
+        <CreditsLowBanner credits={stats.credits_balance} />
+      )}
+
+      {/* Non-blocking stats-sync error — surfaced when the hook reports an error reaching the stats service */}
+      {isReady && error && (
+        <InlineError
+          title="Stats are catching up"
+          body="We couldn't reach the stats service. Your projects are still here, and values will update automatically."
+        />
+      )}
 
       {/* Recent projects */}
       <div className="space-y-6">
@@ -294,7 +305,7 @@ export default function DashboardPage() {
             ))}
           </div>
         ) : projects.length === 0 ? (
-          <EmptyState />
+          <DashboardEmptyState />
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {projects.slice(0, 6).map((p, i) => (

@@ -249,6 +249,63 @@ async def _async_process_render_task(
             log_metric("render_idempotency_hit", 1, user_id=user_id, metadata={"job_id": job_id})
             return payload
 
+        # ---------------------------------------------------------------
+        # Studio Voiceover Synthesis (ADK Studio path only)
+        #
+        # Triggered when the Studio UI sends `voiceover_enabled: true` and
+        # `script_prompt: <text>` in the export options. We synthesize the
+        # voiceover via ScriptAgent.generate_voiceover (Google Cloud TTS,
+        # blocking — run in a thread to avoid the event loop), then inject
+        # the local mp3 path into production_plan["voiceover_path"] so the
+        # existing render_video pipeline blends it via the amix filter.
+        #
+        # Safe-fail: any synthesis failure logs and proceeds without a
+        # voiceover overlay. The render itself is never blocked by TTS.
+        #
+        # Standard (single-clip) renders do not currently accept a separate
+        # voiceover track — RenderJob exposes `voiceover_enabled` only for
+        # vocal-band audio EQ. If the Studio toggle is ever extended to the
+        # standard path, RenderService.run() will need its own integration.
+        # ---------------------------------------------------------------
+        if (
+            production_plan is not None
+            and options.get("voiceover_enabled")
+            and options.get("script_prompt")
+            and not production_plan.get("voiceover_path")
+        ):
+            try:
+                from agent.script_agent import ScriptAgent
+                script_prompt = str(options["script_prompt"])
+                progress("Synthesizing voiceover...", 3)
+                voiceover_local_path = await asyncio.to_thread(
+                    ScriptAgent().generate_voiceover, script_prompt
+                )
+                if voiceover_local_path:
+                    production_plan["voiceover_path"] = voiceover_local_path
+                    logger.info(
+                        "voiceover_synthesized",
+                        job_id=job_id,
+                        path=voiceover_local_path,
+                    )
+            except Exception as exc:
+                # Degrade gracefully — render proceeds without the voiceover.
+                logger.warning(
+                    "voiceover_generation_failed",
+                    job_id=job_id,
+                    error=str(exc),
+                )
+
+        # Forward Smart Transitions toggle into the production_plan so
+        # render_video() can switch from frame-accurate concat to a 0.5s
+        # xfade chain between adjacent clips. Mirrors how voiceover_path is
+        # injected above; no-op if the plan has already set its own value.
+        if (
+            production_plan is not None
+            and options.get("transition_enabled")
+            and "transition_enabled" not in production_plan
+        ):
+            production_plan["transition_enabled"] = True
+
         if production_plan:
             from services.render_service import render_video
             progress("Starting production render...", 5)
