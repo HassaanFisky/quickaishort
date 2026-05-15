@@ -325,23 +325,30 @@ function VoiceStep() {
         {VOICES.map((v) => {
           const active = voiceId === v.id;
           return (
-            <button
+            <motion.button
               key={v.id}
+              whileHover={{ y: -2, transition: { type: "spring", stiffness: 380, damping: 28 } }}
+              whileTap={{ scale: 0.97 }}
               onClick={() => setVoiceId(v.id)}
               className={cn(
-                "relative rounded-2xl border p-5 text-left transition-all",
+                "relative rounded-2xl border p-5 text-left transition-[border-color,background-color,box-shadow] duration-[160ms]",
                 active
                   ? "border-primary bg-primary/10 shadow-lg shadow-primary/10"
                   : "border-foreground/8 bg-secondary/20 hover:border-primary/30 hover:bg-secondary/40",
               )}
             >
               {active && (
-                <span className="absolute top-3 right-3 p-1 rounded-full bg-primary">
+                <motion.span
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 20 }}
+                  className="absolute top-3 right-3 p-1 rounded-full bg-primary"
+                >
                   <Check className="w-2.5 h-2.5 text-white" />
-                </span>
+                </motion.span>
               )}
               <div className="flex items-center gap-3 mb-3">
-                <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center text-sm font-black",
+                <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center text-sm font-black transition-colors duration-[160ms]",
                   active ? "bg-primary text-white" : "bg-secondary text-muted-foreground"
                 )}>
                   {v.gender}
@@ -352,7 +359,7 @@ function VoiceStep() {
                 </div>
               </div>
               <p className="text-[10px] font-mono text-muted-foreground/40 truncate">{v.id}</p>
-            </button>
+            </motion.button>
           );
         })}
       </div>
@@ -420,11 +427,13 @@ function RenderStep({
         <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Quality</p>
         <div className="grid grid-cols-3 gap-3">
           {QUALITY_OPTIONS.map((q) => (
-            <button
+            <motion.button
               key={q.id}
+              whileHover={{ y: -2, transition: { type: "spring", stiffness: 380, damping: 28 } }}
+              whileTap={{ scale: 0.96 }}
               onClick={() => setQuality(q.id as typeof quality)}
               className={cn(
-                "rounded-xl border p-3 text-left transition-all",
+                "rounded-xl border p-3 text-left transition-[border-color,background-color] duration-[160ms]",
                 quality === q.id
                   ? "border-primary bg-primary/10"
                   : "border-foreground/8 bg-secondary/20 hover:border-primary/30",
@@ -432,7 +441,7 @@ function RenderStep({
             >
               <p className="text-sm font-black">{q.label}</p>
               <p className="text-[11px] text-muted-foreground/60">{q.desc}</p>
-            </button>
+            </motion.button>
           ))}
         </div>
       </div>
@@ -442,18 +451,20 @@ function RenderStep({
         <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Aspect Ratio</p>
         <div className="flex gap-3">
           {(["9:16", "1:1"] as const).map((r) => (
-            <button
+            <motion.button
               key={r}
+              whileHover={{ y: -2, transition: { type: "spring", stiffness: 380, damping: 28 } }}
+              whileTap={{ scale: 0.96 }}
               onClick={() => setAspect(r)}
               className={cn(
-                "rounded-xl border px-5 py-3 text-sm font-black transition-all",
+                "rounded-xl border px-5 py-3 text-sm font-black transition-[border-color,background-color,color] duration-[160ms]",
                 aspect === r
                   ? "border-primary bg-primary/10 text-primary"
                   : "border-foreground/8 bg-secondary/20 hover:border-primary/30",
               )}
             >
               {r}
-            </button>
+            </motion.button>
           ))}
         </div>
       </div>

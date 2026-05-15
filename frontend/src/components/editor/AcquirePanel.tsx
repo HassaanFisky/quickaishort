@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useMemo } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { useDropzone } from "react-dropzone";
 import { Upload, Youtube, FileVideo, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -112,20 +113,28 @@ export default function AcquirePanel() {
       >
         <input {...getInputProps()} />
         <div className="flex flex-col items-center text-center gap-4">
-          <div
+          <motion.div
+            animate={isDragActive ? { scale: 1.15 } : { scale: 1 }}
+            transition={{ type: "spring", stiffness: 360, damping: 24 }}
             className={cn(
-              "w-16 h-16 rounded-full flex items-center justify-center transition-transform duration-300 group-hover:scale-110",
+              "w-16 h-16 rounded-full flex items-center justify-center",
               sourceFile
                 ? "bg-green-500/10 text-green-500"
                 : "bg-primary/10 text-primary",
             )}
           >
-            {sourceFile ? (
-              <CheckCircle2 className="w-8 h-8" />
-            ) : (
-              <Upload className="w-8 h-8" />
-            )}
-          </div>
+            <AnimatePresence mode="wait">
+              {sourceFile ? (
+                <motion.div key="check" initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 400, damping: 20 }}>
+                  <CheckCircle2 className="w-8 h-8" />
+                </motion.div>
+              ) : (
+                <motion.div key="upload" initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 400, damping: 20 }}>
+                  <Upload className="w-8 h-8" />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </motion.div>
           <div>
             <p className="font-semibold text-lg">
               {sourceFile
@@ -178,16 +187,19 @@ export default function AcquirePanel() {
               aria-invalid={Boolean(urlValidationError)}
               aria-label="YouTube video URL"
             />
-            {urlIsValid && !urlValidationError && (
-              <CheckCircle2
-                aria-hidden="true"
-                className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-500"
-                style={{
-                  transitionDuration: "var(--motion-2)",
-                  transitionProperty: "opacity, transform",
-                }}
-              />
-            )}
+            <AnimatePresence>
+              {urlIsValid && !urlValidationError && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.5 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.5 }}
+                  transition={{ type: "spring", stiffness: 420, damping: 24 }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2"
+                >
+                  <CheckCircle2 aria-hidden="true" className="w-4 h-4 text-emerald-500" />
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
           <Button type="submit" disabled={isImporting || !url}>
             {isImporting ? "Importing..." : "Import"}

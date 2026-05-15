@@ -1,5 +1,6 @@
 "use client";
 
+import { motion } from "framer-motion";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Play, Star, CheckCircle2, Clock } from "lucide-react";
@@ -30,9 +31,13 @@ export default function ClipCard({ clip }: ClipCardProps) {
   };
 
   return (
+    <motion.div
+      whileHover={{ y: -3, transition: { type: "spring", stiffness: 360, damping: 28 } }}
+      whileTap={{ scale: 0.97 }}
+    >
     <Card
       className={cn(
-        "cursor-pointer transition-all duration-300 overflow-hidden group border-2",
+        "cursor-pointer overflow-hidden group border-2 transition-[border-color,box-shadow] duration-[160ms]",
         isSelected
           ? "border-primary bg-primary/5 ring-4 ring-primary/10"
           : "hover:border-primary/50",
@@ -83,5 +88,6 @@ export default function ClipCard({ clip }: ClipCardProps) {
         </div>
       </CardContent>
     </Card>
+    </motion.div>
   );
 }

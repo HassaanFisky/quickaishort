@@ -1,60 +1,33 @@
 "use client";
 
-import React, { useRef, useState, useEffect } from "react";
+import React, { useRef } from "react";
 import { useTheme } from "next-themes";
-import { motion, AnimatePresence } from "framer-motion";
-import { Palette, Droplets, Zap, Flame, Snowflake } from "lucide-react";
+import { motion } from "framer-motion";
+import { Moon, Sun } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-// Theme definitions matching our CSS variables
 const THEMES = [
   {
     id: "dark",
-    name: "Deep Ocean",
-    color: "#4f46e5", // Indigo
-    icon: Droplets,
-    description: "Bio-luminescent Depth",
+    name: "Midnight",
+    color: "#a855f7",
+    icon: Moon,
   },
   {
-    id: "crystal",
-    name: "Pure Crystal",
-    color: "#3b82f6", // Sky Blue
-    icon: Snowflake, // Using Snowflake as proxy for Crystal
-    description: "Optical Clarity",
+    id: "light",
+    name: "Pearl",
+    color: "#6366f1",
+    icon: Sun,
   },
-  {
-    id: "neon",
-    name: "Neon Flow",
-    color: "#d946ef", // Fuchsia
-    icon: Zap,
-    description: "Cyberpunk High-Vis",
-  },
-  {
-    id: "magma",
-    name: "Obsidian Magma",
-    color: "#f97316", // Orange
-    icon: Flame,
-    description: "Volcanic Intensity",
-  },
-  {
-    id: "nano",
-    name: "Nano Black",
-    color: "#ffffff", // White/High Contrast
-    icon: Palette,
-    description: "Sleek Minimalism",
-  },
-];
+] as const;
 
 export function LiquidThemeToggle() {
   const { theme, setTheme } = useTheme();
   const containerRef = useRef<HTMLDivElement>(null);
 
   const handleThemeChange = async (event: React.MouseEvent) => {
-    // Cycle to next theme
-    const currentIndex = THEMES.findIndex((t) => t.id === theme);
-    const nextIndex = (currentIndex + 1) % THEMES.length;
-    const nextTheme = THEMES[nextIndex];
+    const nextTheme = theme === "dark" ? THEMES[1] : THEMES[0];
 
     // 1. Check for View Transition API support (Visionary Performance)
     if (
@@ -118,7 +91,7 @@ export function LiquidThemeToggle() {
           "w-12 h-12 rounded-2xl flex items-center justify-center relative",
           "liquid-panel border-white/20 hover:border-white/40 interactive group overflow-hidden shadow-xl",
         )}
-        title={`Cycle Theme (Current: ${currentThemeConfig.name})`}
+        title={`Switch to ${theme === "dark" ? "Pearl" : "Midnight"} theme`}
       >
         <CurrentIcon className="w-5 h-5 text-foreground/80 group-hover:text-primary transition-colors relative z-10" />
         {/* Glow effect matching current theme */}

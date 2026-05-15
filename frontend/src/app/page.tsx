@@ -269,13 +269,16 @@ export default function LandingPage() {
                     transition={{ ...spring.smooth, delay: i * 0.1 }}
                     className="flex flex-col items-center text-center group"
                   >
-                    <div className="w-[104px] h-[104px] rounded-2xl nano-glass flex items-center justify-center mb-6 relative border border-white/8 group-hover:border-primary/40 spring-hover">
+                    <motion.div
+                      whileHover={{ scale: 1.08, transition: spring.snappy }}
+                      className="w-[104px] h-[104px] rounded-2xl nano-glass flex items-center justify-center mb-6 relative border border-white/8 group-hover:border-primary/40"
+                    >
                       <div className="absolute inset-0 bg-primary/10 rounded-2xl blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                       <item.icon className="w-9 h-9 text-primary relative z-10" />
                       <div className="absolute -top-3 -right-3 w-7 h-7 rounded-full bg-[#0c0c10] border border-white/10 flex items-center justify-center font-black text-[10px] text-muted-foreground tracking-wider shadow-lg">
                         {item.step}
                       </div>
-                    </div>
+                    </motion.div>
                     <h3 className="text-xl font-black mb-2 tracking-tight">{item.title}</h3>
                     <p className="text-sm text-muted-foreground leading-relaxed px-4 max-w-[200px]">{item.desc}</p>
                   </motion.div>
@@ -303,10 +306,12 @@ export default function LandingPage() {
                     key={feature.title}
                     initial={{ opacity: 0, y: 20 }}
                     whileInView={{ opacity: 1, y: 0 }}
+                    whileHover={{ y: -5, transition: spring.smooth }}
+                    whileTap={{ scale: 0.98 }}
                     viewport={{ once: true, margin: "-40px" }}
                     transition={{ ...spring.smooth, delay: i * 0.07 }}
                     className={cn(
-                      "liquid-panel p-7 group relative overflow-hidden spring-hover rounded-2xl",
+                      "liquid-panel p-7 group relative overflow-hidden rounded-2xl cursor-pointer",
                       feature.className
                     )}
                   >
@@ -343,10 +348,12 @@ export default function LandingPage() {
                     key={persona.id}
                     initial={{ opacity: 0, y: 20 }}
                     whileInView={{ opacity: 1, y: 0 }}
+                    whileHover={{ y: -6, scale: 1.02, transition: spring.smooth }}
+                    whileTap={{ scale: 0.97 }}
                     viewport={{ once: true, margin: "-40px" }}
                     transition={{ ...spring.smooth, delay: i * 0.08 }}
                     className={cn(
-                      "group relative p-5 rounded-2xl nano-glass border spring-hover overflow-hidden",
+                      "group relative p-5 rounded-2xl nano-glass border overflow-hidden cursor-pointer",
                       persona.borderColor
                     )}
                   >
@@ -421,9 +428,10 @@ export default function LandingPage() {
                     key={t.name}
                     initial={{ opacity: 0, y: 20 }}
                     whileInView={{ opacity: 1, y: 0 }}
+                    whileHover={{ y: -5, transition: spring.smooth }}
                     viewport={{ once: true, margin: "-40px" }}
                     transition={{ ...spring.smooth, delay: i * 0.1 }}
-                    className="p-7 rounded-2xl nano-glass border border-white/5 flex flex-col gap-5 relative spring-hover"
+                    className="p-7 rounded-2xl nano-glass border border-white/5 flex flex-col gap-5 relative cursor-pointer"
                   >
                     <div className="flex items-center gap-0.5">
                       {[...Array(5)].map((_, j) => (
