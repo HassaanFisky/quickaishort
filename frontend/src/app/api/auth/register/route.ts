@@ -14,6 +14,13 @@ export async function POST(req: Request) {
       );
     }
 
+    if (password.length < 8) {
+      return Response.json(
+        { message: "Password must be at least 8 characters." },
+        { status: 400 }
+      );
+    }
+
     await connectDB();
 
     const existingUser = await User.findOne({ email });
@@ -36,10 +43,10 @@ export async function POST(req: Request) {
       { message: "User registered successfully", userId: user._id },
       { status: 201 }
     );
-  } catch (error: any) {
-    console.error("Error in registration:", error);
+  } catch (error) {
+    console.error("[register]", error);
     return Response.json(
-      { message: error.message || "Something went wrong" },
+      { message: "Registration failed. Please try again." },
       { status: 500 }
     );
   }

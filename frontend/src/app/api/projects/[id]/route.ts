@@ -45,9 +45,17 @@ export async function PATCH(
     const body = await req.json();
     await connectDB();
 
+    // Allowlist prevents overwriting restricted fields (userId, _id, etc.)
+    const { title, status, source, thumbnail, tags, metadata } = body;
+    const allowed = Object.fromEntries(
+      Object.entries({ title, status, source, thumbnail, tags, metadata }).filter(
+        ([, v]) => v !== undefined,
+      ),
+    );
+
     const project = await Project.findOneAndUpdate(
       { _id: id, userId: (session.user as unknown as { id: string }).id },
-      { ...body, updatedAt: new Date() },
+      { ...allowed, updatedAt: new Date() },
       { new: true },
     );
 

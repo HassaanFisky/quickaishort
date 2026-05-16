@@ -122,9 +122,19 @@ export default function Sidebar() {
               </Avatar>
               <div className="flex-1 min-w-0 text-left">
                 <p className="text-[13px] font-semibold truncate text-[#f4f4f5]">{session.user.name}</p>
-                <p className="text-[10px] text-[#52525b] truncate font-medium uppercase tracking-widest">
-                  Founder
-                </p>
+                <motion.p
+                  initial={{ opacity: 0, scale: 0.85 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ type: "spring", stiffness: 380, damping: 28, delay: 0.1 }}
+                  className={cn(
+                    "text-[10px] truncate font-bold uppercase tracking-widest",
+                    (session.user as unknown as { isPro?: boolean }).isPro
+                      ? "text-primary"
+                      : "text-[#52525b]",
+                  )}
+                >
+                  {(session.user as unknown as { isPro?: boolean }).isPro ? "Pro" : "Free"}
+                </motion.p>
               </div>
             </div>
             <ChevronUp

@@ -34,9 +34,14 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     await connectDB();
 
+    const VALID_STATUSES = ["queued", "processing", "done", "failed"];
+    const safeStatus = VALID_STATUSES.includes(body.status) ? body.status : "queued";
+    const safeProcessingMs = Math.max(0, Number(body.metrics?.processingTimeMs) || 0);
+
     const exportRecord = await Export.create({
       userId: (session.user as unknown as { id: string }).id,
       ...body,
+      status: safeStatus,
     });
 
     // Update user stats
@@ -45,7 +50,7 @@ export async function POST(req: NextRequest) {
       {
         $inc: {
           "stats.totalExports": 1,
-          "stats.totalProcessingTimeMs": body.metrics?.processingTimeMs || 0,
+          "stats.totalProcessingTimeMs": safeProcessingMs,
         },
       },
     );

@@ -9,9 +9,9 @@ import type { UserStats } from "@/types/stats";
 
 // Hardcoded production URL to bypass Vercel environment variable bugs
 export const API_URL = "https://quickaishort-api-rqmhzhsxua-uc.a.run.app";
-if (!API_URL && typeof window !== "undefined") {
-  console.warn("NEXT_PUBLIC_API_URL is not defined. API calls may fail.");
-}
+
+// Default timeout: 30 s. Long-running inference calls override per-request.
+axios.defaults.timeout = 30_000;
 
 // Attach NextAuth session JWT to every request so FastAPI can verify user identity
 if (typeof window !== "undefined") {
@@ -32,7 +32,8 @@ if (typeof window !== "undefined") {
         const sessionCookie = cookies
           .map((c) => c.trim())
           .find((c) => c.startsWith(`${cookieName}=`));
-        const token = sessionCookie ? sessionCookie.split("=").slice(1).join("=") : "";
+        // Use slice instead of split("=") to correctly handle base64url tokens with "=" padding
+        const token = sessionCookie ? sessionCookie.slice(cookieName.length + 1) : "";
         if (token) {
           config.headers = config.headers || {};
           config.headers["Authorization"] = `Bearer ${token}`;

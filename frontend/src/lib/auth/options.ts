@@ -23,15 +23,12 @@ export const authOptions: NextAuthOptions = {
         }
         await connectDB();
         const user = await User.findOne({ email: credentials.email }).select("+password");
-        if (!user) {
-          throw new Error("No user found with this email");
-        }
-        if (!user.password) {
-          throw new Error("This account uses Google Sign-In");
+        if (!user || !user.password) {
+          throw new Error("Invalid email or password");
         }
         const isPasswordValid = await bcrypt.compare(credentials.password, user.password);
         if (!isPasswordValid) {
-          throw new Error("Invalid password");
+          throw new Error("Invalid email or password");
         }
         return {
           id: user._id.toString(),
@@ -70,15 +67,50 @@ export const authOptions: NextAuthOptions = {
       }
       return true;
     },
-    async session({ session }) {
-      if (session.user) {
-        await connectDB();
-        const dbUser = await User.findOne({ email: session.user.email });
-        if (dbUser) {
-          session.user.id = dbUser._id.toString();
-          session.user.isPro = dbUser.isPro || dbUser.isPremium || false;
-          session.user.settings = dbUser.settings;
+
+    async jwt({ token, user, trigger }) {
+      // First sign-in: user object is present; hydrate token from DB to avoid
+      // a DB round-trip on every session() call.
+      if (user) {
+        token.id = (user as unknown as { id?: string }).id ?? token.sub;
+        token.isPro = (user as unknown as { isPro?: boolean }).isPro ?? false;
+      }
+
+      // Google users don't carry id/isPro from authorize(); fetch once and cache.
+      if (!token.id) {
+        try {
+          await connectDB();
+          const dbUser = await User.findOne({ email: token.email }).select("_id isPro isPremium");
+          if (dbUser) {
+            token.id = dbUser._id.toString();
+            token.isPro = dbUser.isPro || dbUser.isPremium || false;
+          }
+        } catch (err) {
+          console.error("[jwt] DB lookup failed:", err);
         }
+      }
+
+      // Explicit update() call (e.g., after Paddle activation): refresh isPro from DB.
+      if (trigger === "update") {
+        try {
+          await connectDB();
+          const dbUser = await User.findById(token.id).select("isPro isPremium settings");
+          if (dbUser) {
+            token.isPro = dbUser.isPro || dbUser.isPremium || false;
+            token.settings = dbUser.settings;
+          }
+        } catch (err) {
+          console.error("[jwt] refresh failed:", err);
+        }
+      }
+
+      return token;
+    },
+
+    async session({ session, token }) {
+      if (session.user) {
+        session.user.id = token.id as string;
+        session.user.isPro = (token.isPro as boolean) ?? false;
       }
       return session;
     },

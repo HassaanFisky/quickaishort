@@ -556,7 +556,7 @@ async def analyze_video(request: Request, body: AnalyzeRequest, verified_user_id
         }
     except Exception as exc:
         logger.exception("/api/analyze failed: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail="Analysis failed. Please try again.")
 
 
 # ---- Export / Process ---------------------------------------------------------
@@ -974,7 +974,8 @@ async def proxy_video(url: str):
             },
         )
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        logger.exception("/api/proxy stream error: %s", exc)
+        raise HTTPException(status_code=500, detail="Stream unavailable. Please try again.")
 
 
 @app.get("/api/audio")
@@ -1336,7 +1337,7 @@ async def run_director(request: Request, body: DirectRequest, verified_user_id: 
         )
     except Exception as exc:
         logger.error("POST /api/direct failed: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail="Storyboard generation failed. Please try again.")
 
 
 @app.post("/api/create-video")
@@ -1416,7 +1417,7 @@ async def create_video(request: CreateVideoRequest, verified_user_id: str = Depe
         }
     except Exception as exc:
         logger.exception("Video creation pipeline failed: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail="Video creation failed. Please try again.")
 
 
 # ---- ADK Studio ---------------------------------------------------------------
@@ -1544,7 +1545,7 @@ async def adk_stock_search(q: str = Query(..., min_length=1), per_page: int = Qu
         return {"videos": videos}
     except Exception as exc:
         logger.exception("Pexels search failed: %s", exc)
-        raise HTTPException(status_code=502, detail=str(exc))
+        raise HTTPException(status_code=502, detail="Stock video search unavailable. Please try again.")
 
 
 class ADKEnhanceRequest(BaseModel):

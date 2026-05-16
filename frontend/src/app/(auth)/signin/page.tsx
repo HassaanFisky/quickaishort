@@ -18,6 +18,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, ShieldCheck, Mail, Lock } from "lucide-react";
 import { GlowButton } from "@/components/ui/GlowButton";
+import { mapAuthError } from "@/lib/errors";
 
 export default function SignInPage() {
   const router = useRouter();
@@ -39,7 +40,7 @@ export default function SignInPage() {
       });
 
       if (res?.error) {
-        setError(res.error);
+        setError(mapAuthError(res.error));
         setLoading(false);
       } else {
         router.push("/dashboard");

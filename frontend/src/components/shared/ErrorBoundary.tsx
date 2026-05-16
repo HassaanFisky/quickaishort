@@ -60,12 +60,10 @@ export class ErrorBoundary extends Component<Props, State> {
               The studio encountered an unexpected error. Your session data is safe.
             </p>
 
-            {/* Technical detail */}
-            {this.state.error?.message && (
-              <p className="text-[10px] font-mono text-destructive/70 bg-destructive/5 border border-destructive/10 rounded-xl px-4 py-2 mb-8 text-left break-all">
-                {this.state.error.message}
-              </p>
-            )}
+            {/* Non-technical hint — internal detail never exposed to users */}
+            <p className="text-[10px] font-mono text-destructive/50 bg-destructive/5 border border-destructive/10 rounded-xl px-4 py-2 mb-8">
+              If this keeps happening, please refresh the page or return to the dashboard.
+            </p>
 
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <button

@@ -169,17 +169,28 @@ export default function DashboardPage() {
   const { stats, isReady, error } = useDashboardStats({ userId });
 
   const [projects, setProjects] = useState<ProjectRecord[] | null>(null);
+  const [projectsError, setProjectsError] = useState(false);
   const [exportCount, setExportCount] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
+
     fetch("/api/projects")
-      .then((r) => (r.ok ? r.json() : []))
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
       .then((data: ProjectRecord[]) => {
-        if (!cancelled) setProjects(Array.isArray(data) ? data : []);
+        if (!cancelled) {
+          setProjects(Array.isArray(data) ? data : []);
+          setProjectsError(false);
+        }
       })
       .catch(() => {
-        if (!cancelled) setProjects([]);
+        if (!cancelled) {
+          setProjects([]);
+          setProjectsError(true);
+        }
       });
 
     fetch("/api/exports")
@@ -295,6 +306,11 @@ export default function DashboardPage() {
               <div key={i} className="rounded-[2.5rem] border border-foreground/5 bg-secondary/20 overflow-hidden h-[240px] animate-pulse" />
             ))}
           </div>
+        ) : projectsError ? (
+          <InlineError
+            title="Couldn't load projects"
+            body="There was a problem reaching the projects service. Please refresh the page to try again."
+          />
         ) : projects.length === 0 ? (
           <DashboardEmptyState />
         ) : (
