@@ -52,6 +52,7 @@ interface EditorState {
   // Source Video
   sourceFile: File | null;
   sourceUrl: string | null;
+  thumbnailUrl: string | null;
   duration: number;
   resolution: { width: number; height: number } | null;
 
@@ -100,6 +101,7 @@ interface EditorState {
   clearPendingSeek: () => void;
   setSourceFile: (file: File, url?: string) => void;
   setSourceUrl: (url: string) => void;
+  setThumbnailUrl: (url: string | null) => void;
   setProcessing: (
     isProcessing: boolean,
     stage?: EditorState["currentStage"],
@@ -139,6 +141,7 @@ export const useEditorStore = create<EditorState>()(
     (set) => ({
       sourceFile: null,
       sourceUrl: null,
+      thumbnailUrl: null,
       duration: 0,
       resolution: null,
       isProcessing: false,
@@ -189,6 +192,8 @@ export const useEditorStore = create<EditorState>()(
           sourceUrl: url,
           currentStage: "loading",
         }),
+
+      setThumbnailUrl: (url) => set({ thumbnailUrl: url }),
 
       setProcessing: (isProcessing, stage) =>
         set((state) => ({
@@ -319,6 +324,7 @@ export const useEditorStore = create<EditorState>()(
         set({
           sourceFile: null,
           sourceUrl: null,
+          thumbnailUrl: null,
           duration: 0,
           resolution: null,
           isProcessing: false,

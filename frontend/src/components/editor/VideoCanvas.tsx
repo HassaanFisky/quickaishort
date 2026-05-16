@@ -8,6 +8,7 @@ import {
   SkipForward,
   PlayCircle,
   Loader2,
+  AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useEditorStore } from "@/stores/editorStore";
@@ -22,8 +23,10 @@ export default function VideoCanvas() {
   const gainNodeRef = useRef<GainNode | null>(null);
   
   const [isBuffering, setIsBuffering] = useState(false);
+  const [videoError, setVideoError] = useState(false);
   const {
     sourceUrl,
+    thumbnailUrl,
     selectedClipId,
     suggestions,
     transcript,
@@ -84,9 +87,10 @@ export default function VideoCanvas() {
   useEffect(() => {
     if (!sourceUrl) {
       setDisplayUrl(null);
+      setVideoError(false);
       return;
     }
-    
+    setVideoError(false);
     if (sourceUrl.includes("youtube.com") || sourceUrl.includes("youtu.be")) {
       import("@/lib/api").then(({ getProxyUrl }) => {
         setDisplayUrl(getProxyUrl(sourceUrl));
@@ -181,35 +185,63 @@ export default function VideoCanvas() {
 
         {sourceUrl ? (
           <>
-            <video
-              ref={videoRef}
-              src={displayUrl || sourceUrl}
-              crossOrigin="anonymous"
-              className={cn(
-                "w-full h-full object-cover interactive will-change-[object-position] transition-all duration-500",
-                isBuffering && "blur-md scale-105 opacity-50"
-              )}
-              style={{ 
-                objectPosition: getObjectPosition(),
-                filter: getCssFilter()
-              }}
-              controls={false}
-              loop
-              onLoadedMetadata={() => {
-                if (videoRef.current) setDuration(videoRef.current.duration);
-              }}
-              onWaiting={() => setIsBuffering(true)}
-              onCanPlay={() => setIsBuffering(false)}
-              onPlay={() => setIsPlaying(true)}
-              onPause={() => setIsPlaying(false)}
-              onTimeUpdate={() => {
-                if (videoRef.current) setCurrentTime(videoRef.current.currentTime);
-              }}
-            />
-            {isBuffering && (
-              <div className="absolute inset-0 flex items-center justify-center z-10">
-                <Loader2 className="w-12 h-12 animate-spin text-primary opacity-50" strokeWidth={1} />
+            {videoError ? (
+              /* Thumbnail fallback — shown when the video stream is unavailable */
+              <div className="relative w-full h-full flex items-center justify-center">
+                {thumbnailUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={thumbnailUrl}
+                    alt="Video thumbnail"
+                    className="absolute inset-0 w-full h-full object-cover opacity-40"
+                  />
+                )}
+                <div className="relative z-10 flex flex-col items-center gap-3 px-6 text-center">
+                  <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500/20 border border-amber-500/30">
+                    <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                    <span className="text-[10px] font-black text-amber-400 uppercase tracking-widest">
+                      Preview unavailable
+                    </span>
+                  </div>
+                  <p className="text-[9px] text-muted-foreground font-bold uppercase tracking-widest">
+                    AI analysis continues in background
+                  </p>
+                </div>
               </div>
+            ) : (
+              <>
+                <video
+                  ref={videoRef}
+                  src={displayUrl || sourceUrl}
+                  crossOrigin="anonymous"
+                  className={cn(
+                    "w-full h-full object-cover interactive will-change-[object-position] transition-all duration-500",
+                    isBuffering && "blur-md scale-105 opacity-50"
+                  )}
+                  style={{
+                    objectPosition: getObjectPosition(),
+                    filter: getCssFilter()
+                  }}
+                  controls={false}
+                  loop
+                  onLoadedMetadata={() => {
+                    if (videoRef.current) setDuration(videoRef.current.duration);
+                  }}
+                  onWaiting={() => setIsBuffering(true)}
+                  onCanPlay={() => setIsBuffering(false)}
+                  onPlay={() => setIsPlaying(true)}
+                  onPause={() => setIsPlaying(false)}
+                  onTimeUpdate={() => {
+                    if (videoRef.current) setCurrentTime(videoRef.current.currentTime);
+                  }}
+                  onError={() => setVideoError(true)}
+                />
+                {isBuffering && (
+                  <div className="absolute inset-0 flex items-center justify-center z-10">
+                    <Loader2 className="w-12 h-12 animate-spin text-primary opacity-50" strokeWidth={1} />
+                  </div>
+                )}
+              </>
             )}
           </>
         ) : (
@@ -231,7 +263,7 @@ export default function VideoCanvas() {
         <CaptionOverlay videoRef={videoRef} transcript={transcript || undefined} />
         <CanvasLayer />
 
-        {sourceUrl && !isBuffering && (
+        {sourceUrl && !isBuffering && !videoError && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-500 interactive">
             <Button
               variant="ghost"
@@ -249,7 +281,7 @@ export default function VideoCanvas() {
         )}
       </div>
 
-      {sourceUrl && (
+      {sourceUrl && !videoError && (
         <div className="mt-8 flex items-center gap-6 glass-surface p-2.5 px-6 rounded-full border border-foreground/5 shadow-2xl">
           <Button
             variant="ghost"

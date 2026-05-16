@@ -904,82 +904,39 @@ async def proxy_video(url: str):
         info = await loop.run_in_executor(None, _extract)
         stream_url = info.get("url")
     except Exception as exc:
-        logger.warning(f"yt-dlp failed in proxy, falling back to Cobalt API v10: {exc}")
-        try:
-            cobalt_headers = {
-                "Accept": "application/json",
-                "Content-Type": "application/json",
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-            }
-            cobalt_api_key = os.environ.get("COBALT_API_KEY")
-            if cobalt_api_key:
-                cobalt_headers["Authorization"] = f"Api-Key {cobalt_api_key}"
-
-            async with httpx.AsyncClient(timeout=40.0, follow_redirects=True) as client:
-                cobalt_response = await client.post(
-                    os.getenv("COBALT_API_URL", "https://api.cobalt.tools/"),
-                    json={
-                        "url": url,
-                        "downloadMode": "audio", # Get audio directly for analysis
-                        "audioFormat": "mp3",
-                    },
-                    headers=cobalt_headers,
-                )
-                cobalt_response.raise_for_status()
-                cobalt_data = cobalt_response.json()
-                
-                status = cobalt_data.get("status")
-                if status in ("tunnel", "redirect"):
-                    stream_url = cobalt_data.get("url")
-                    media_type = "audio/mpeg" # Cobalt returns mp3 for audio mode
-                elif status == "picker":
-                    picker_items = cobalt_data.get("picker", [])
-                    if picker_items:
-                        # Prefer audio, then video
-                        audio_items = [p for p in picker_items if "audio" in p.get("type", "")]
-                        if audio_items:
-                            stream_url = audio_items[0].get("url")
-                            media_type = "audio/mpeg"
-                        else:
-                            stream_url = picker_items[0].get("url")
-                            media_type = "video/mp4"
-                
-                if not stream_url:
-                    raise RuntimeError(f"Cobalt bad status: {status}")
-        except Exception as cobalt_exc:
-            logger.warning(f"Cobalt fallback failed: {cobalt_exc}. Trying Invidious tier 3.")
-            video_id_match = re.search(r'(?:v=|\/)([0-9A-Za-z_-]{11})', url)
-            v_id = video_id_match.group(1) if video_id_match else None
-            if v_id:
-                for instance in ["yewtu.be", "invidious.kavin.rocks", "vid.priv.au"]:
-                    try:
-                        async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
-                            inv_resp = await client.get(
-                                f"https://{instance}/api/v1/videos/{v_id}",
-                                params={"fields": "adaptiveFormats,formatStreams"},
-                            )
-                            inv_resp.raise_for_status()
-                            inv_data = inv_resp.json()
-                            for fmt in inv_data.get("formatStreams", []):
-                                if fmt.get("itag") == "18":
-                                    stream_url = fmt.get("url")
-                                    media_type = "video/mp4"
-                                    break
-                            if not stream_url:
-                                audio_fmts = [f for f in inv_data.get("adaptiveFormats", [])
-                                              if "audio" in f.get("type", "")]
-                                if audio_fmts:
-                                    best = max(audio_fmts, key=lambda x: int(x.get("bitrate", 0)))
-                                    stream_url = best.get("url")
-                                    media_type = "audio/mp4"
-                            if stream_url:
-                                logger.info(f"Invidious fallback succeeded via {instance}")
+        logger.warning(f"yt-dlp failed in proxy, trying Invidious fallback: {exc}")
+        video_id_match = re.search(r'(?:v=|\/)([0-9A-Za-z_-]{11})', url)
+        v_id = video_id_match.group(1) if video_id_match else None
+        if v_id:
+            for instance in ["yewtu.be", "invidious.kavin.rocks", "vid.priv.au"]:
+                try:
+                    async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as client:
+                        inv_resp = await client.get(
+                            f"https://{instance}/api/v1/videos/{v_id}",
+                            params={"fields": "adaptiveFormats,formatStreams"},
+                        )
+                        inv_resp.raise_for_status()
+                        inv_data = inv_resp.json()
+                        for fmt in inv_data.get("formatStreams", []):
+                            if fmt.get("itag") == "18":
+                                stream_url = fmt.get("url")
+                                media_type = "video/mp4"
                                 break
-                    except Exception as inv_exc:
-                        logger.warning(f"Invidious {instance} failed: {inv_exc}")
-                        continue
-            if not stream_url:
-                raise HTTPException(status_code=503, detail="Video stream unavailable. Please try again later.")
+                        if not stream_url:
+                            audio_fmts = [f for f in inv_data.get("adaptiveFormats", [])
+                                          if "audio" in f.get("type", "")]
+                            if audio_fmts:
+                                best = max(audio_fmts, key=lambda x: int(x.get("bitrate", 0)))
+                                stream_url = best.get("url")
+                                media_type = "audio/mp4"
+                        if stream_url:
+                            logger.info(f"Invidious fallback succeeded via {instance}")
+                            break
+                except Exception as inv_exc:
+                    logger.warning(f"Invidious {instance} failed: {inv_exc}")
+                    continue
+        if not stream_url:
+            raise HTTPException(status_code=503, detail="Video stream unavailable. Please try again later.")
 
     if not stream_url:
         raise HTTPException(status_code=404, detail="Could not retrieve stream URL")

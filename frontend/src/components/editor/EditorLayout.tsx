@@ -45,7 +45,7 @@ function getYTThumbnail(videoId: string): string {
 }
 
 export default function EditorLayout() {
-  const { setSourceFile, setProcessing, isProcessing, currentStage, sourceUrl } =
+  const { setSourceFile, setProcessing, isProcessing, currentStage, sourceUrl, setThumbnailUrl: storeThumbnail } =
     useEditorStore();
   const { runPipeline, cancelPipeline, status } = useMediaPipeline();
   const [urlInput, setUrlInput] = useState("");
@@ -90,6 +90,8 @@ export default function EditorLayout() {
       const info = await getVideoInfo(url);
 
       toast.success(`Found: ${info.title}`);
+
+      if (info.thumbnail) storeThumbnail(info.thumbnail);
 
       const proxyUrl = `${API_URL}/api/proxy?url=${encodeURIComponent(url)}`;
 
