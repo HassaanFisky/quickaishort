@@ -101,8 +101,8 @@ export function useMediaPipeline() {
         displayMsg = "Audio processing timed out — video may be too long";
       } else if (lowerMsg.includes("504") || lowerMsg.includes("timed out") || lowerMsg.includes("timeout")) {
         displayMsg = "Video processing timed out — try a shorter clip or try again";
-      } else if (lowerMsg.includes("503") || lowerMsg.includes("busy")) {
-        displayMsg = "Server is busy — please try again in a moment";
+      } else if (lowerMsg.includes("503") || lowerMsg.includes("unavailable")) {
+        displayMsg = "YouTube is blocking video access from our servers. The AI analysis couldn't complete — try adding YouTube cookies in Settings.";
       } else if (lowerMsg.includes("unavailable") || lowerMsg.includes("private")) {
         displayMsg = "This video is unavailable or private — try a public YouTube video";
       } else if (lowerMsg.includes("yt-dlp")) {
