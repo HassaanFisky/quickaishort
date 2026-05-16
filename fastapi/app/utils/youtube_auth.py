@@ -31,8 +31,8 @@ def inject_ydl_bypass(opts: dict) -> dict:
     existing_yt_args = new_opts["extractor_args"].get("youtube", {})
     existing_clients = existing_yt_args.get("player_client", [])
     
-    # Standard hardened list
-    hardened_clients = ["web_creator", "mweb", "ios", "android", "android_music", "tv_embedded"]
+    # tv_embedded and ios first — most reliable in server/CI environments
+    hardened_clients = ["tv_embedded", "ios", "android", "android_music", "web_creator", "mweb"]
     
     # Union of both
     unique_clients = list(dict.fromkeys(existing_clients + hardened_clients))
