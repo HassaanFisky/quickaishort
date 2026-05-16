@@ -45,7 +45,7 @@ function getYTThumbnail(videoId: string): string {
 }
 
 export default function EditorLayout() {
-  const { setSourceFile, setProcessing, isProcessing, currentStage } =
+  const { setSourceFile, setProcessing, isProcessing, currentStage, sourceUrl } =
     useEditorStore();
   const { runPipeline, cancelPipeline, status } = useMediaPipeline();
   const [urlInput, setUrlInput] = useState("");
@@ -233,8 +233,11 @@ export default function EditorLayout() {
                 <div className="relative glass-surface rounded-[1.5rem] p-2 flex flex-col gap-1 shadow-[0_0_50px_rgba(0,0,0,0.2)] border border-white/10 backdrop-blur-3xl overflow-hidden">
                   <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
 
-                  <div className="text-[9px] font-black text-center text-primary/50 uppercase tracking-[0.25em] pt-2 pb-1">
-                    Import Your Video
+                  <div className="text-[9px] font-black text-center uppercase tracking-[0.25em] pt-2 pb-1 transition-colors duration-300">
+                    {urlValid === true
+                      ? <span className="text-emerald-400">Video Ready — Hit Generate</span>
+                      : <span className="text-primary/50">Import Your Video</span>
+                    }
                   </div>
 
                   {/* Thumbnail preview strip — only shown when URL is valid */}
@@ -251,7 +254,7 @@ export default function EditorLayout() {
                           <img
                             src={thumbnailUrl}
                             alt="YouTube thumbnail"
-                            className="w-full h-20 object-cover opacity-80"
+                            className="w-full h-28 object-cover opacity-80"
                           />
                           <div className="absolute inset-0 bg-gradient-to-r from-background/60 to-transparent" />
                           <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
@@ -392,8 +395,8 @@ export default function EditorLayout() {
                 )}
               </AnimatePresence>
 
-              {/* Contextual HUD Overlay */}
-              {!isAnalysing && (
+              {/* Contextual HUD Overlay — only when a video is actually loaded */}
+              {!isAnalysing && sourceUrl && (
                 <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-6 px-8 py-4 glass-surface rounded-2xl border-foreground/10 opacity-0 group-hover:opacity-100 translate-y-4 group-hover:translate-y-0 transition-all duration-500 shadow-2xl">
                   <div className="flex items-center gap-2 border-r border-foreground/10 pr-6">
                     <Zap className="w-4 h-4 text-primary fill-primary" />

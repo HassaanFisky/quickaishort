@@ -4,7 +4,6 @@ import { Resend } from "resend";
 import connectDB from "@/lib/db/mongodb";
 import User from "@/lib/db/models/user";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
 const FROM = process.env.RESEND_FROM_EMAIL ?? "noreply@quickaishort.online";
 const APP_URL = process.env.NEXTAUTH_URL ?? "https://www.quickaishort.online";
 const EXPIRY_MS = 60 * 60 * 1000; // 1 hour
@@ -31,6 +30,7 @@ export async function POST(req: Request) {
 
     const resetUrl = `${APP_URL}/reset-password?token=${token}`;
 
+    const resend = new Resend(process.env.RESEND_API_KEY);
     await resend.emails.send({
       from: FROM,
       to: email,

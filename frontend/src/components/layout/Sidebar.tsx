@@ -14,7 +14,7 @@ import {
   LogOut,
   ChevronUp,
 } from "lucide-react";
-import QSLogo from "@/components/shared/QSLogo";
+import Image from "next/image";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 
@@ -54,7 +54,17 @@ export default function Sidebar() {
           className="inline-flex items-center rounded-lg focus-visible:outline-none focus-visible:[box-shadow:0_0_0_2px_#020203,_0_0_0_4px_rgba(168,85,247,0.6)]"
           aria-label="QuickAI Short — home"
         >
-          <QSLogo variant="full" size="sm" />
+          <Image
+            src="/qs-logo-optimized.png"
+            alt="QuickAI Shorts"
+            width={28}
+            height={28}
+            className="rounded-md shrink-0"
+            priority
+          />
+          <span className="ml-2 text-[13px] font-black tracking-tight text-foreground/90">
+            Quick<span className="premium-gradient-text">AI</span> Shorts
+          </span>
         </Link>
       </div>
 

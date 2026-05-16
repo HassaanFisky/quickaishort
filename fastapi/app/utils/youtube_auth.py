@@ -39,7 +39,7 @@ def inject_ydl_bypass(opts: dict) -> dict:
     
     new_opts["extractor_args"]["youtube"] = {
         "player_client": unique_clients,
-        "skip": [] # CRITICAL: DASH/HLS are needed for audio-only extractions
+        "player_skip": ["webpage", "configs"],
     }
     
     new_opts["nocheckcertificate"] = True

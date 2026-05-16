@@ -272,8 +272,8 @@ export default function DashboardPage() {
         />
       </section>
 
-      {/* Credits-low banner — appears only after stats are ready and balance is at-or-below threshold */}
-      {isReady && stats.credits_balance <= CREDITS_LOW_THRESHOLD && (
+      {/* Credits-low banner — only after stats load without error and balance is actually low */}
+      {isReady && !error && stats.credits_balance <= CREDITS_LOW_THRESHOLD && stats.credits_balance > 0 && (
         <CreditsLowBanner credits={stats.credits_balance} />
       )}
 
