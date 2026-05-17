@@ -368,8 +368,6 @@ export default function VideoCanvas() {
                 )}
               </>
             )}
-            </>
-          )}
           </>
         ) : (
           <div className="text-muted-foreground text-sm flex flex-col items-center gap-6">
