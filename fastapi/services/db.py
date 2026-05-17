@@ -34,7 +34,15 @@ async def init_db() -> None:
         logger.warning("MONGODB_URI not set — Mongo features disabled.")
         return
 
-    _client = AsyncIOMotorClient(uri, serverSelectionTimeoutMS=10000, tlsCAFile=certifi.where())
+    _client = AsyncIOMotorClient(
+        uri,
+        serverSelectionTimeoutMS=10000,
+        connectTimeoutMS=5000,
+        socketTimeoutMS=30000,
+        maxPoolSize=20,      # limit per-instance to prevent exhausting MongoDB Atlas limits
+        minPoolSize=2,
+        tlsCAFile=certifi.where(),
+    )
     _db = _client[DB_NAME]
     _exports_bucket = AsyncIOMotorGridFSBucket(_db, bucket_name=EXPORTS_BUCKET)
     _uploads_bucket = AsyncIOMotorGridFSBucket(_db, bucket_name=UPLOADS_BUCKET)

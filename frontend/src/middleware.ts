@@ -22,13 +22,25 @@ export async function middleware(req: NextRequest) {
   if (token && AUTH_REDIRECT_FROM.includes(pathname)) {
     const url = req.nextUrl.clone();
     const fromParam = req.nextUrl.searchParams.get("from");
+    let decodedFrom = "";
+    if (fromParam) {
+      try {
+        decodedFrom = decodeURIComponent(fromParam);
+      } catch {
+        decodedFrom = fromParam;
+      }
+    }
+    
+    // Ensure the path is strictly relative (starts with single '/') and prevents backslash/slash protocol bypasses
+    const isRelative = /^\/[^\/\\]/.test(decodedFrom) || decodedFrom === "/";
+
     // Validate the redirect target against the known protected prefixes to prevent open-redirect
-    const isSafe = fromParam
+    const isSafe = isRelative && decodedFrom
       ? PROTECTED_PREFIXES.some(
-          (p) => fromParam === p || fromParam.startsWith(`${p}/`),
+          (p) => decodedFrom === p || decodedFrom.startsWith(`${p}/`),
         )
       : false;
-    url.pathname = isSafe ? fromParam! : "/dashboard";
+    url.pathname = isSafe ? decodedFrom : "/dashboard";
     url.search = "";
     return NextResponse.redirect(url);
   }

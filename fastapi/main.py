@@ -261,7 +261,18 @@ app.include_router(billing_router)
 from routers.youtube import router as youtube_router
 app.include_router(youtube_router)
 
-limiter = Limiter(key_func=get_remote_address, default_limits=["200/minute"])
+def get_real_ip(request: Request) -> str:
+    """
+    Extract the real client IP from X-Forwarded-For (Cloud Run LB/Vercel injects this).
+    Falls back to direct remote address for local development.
+    """
+    xff = request.headers.get("X-Forwarded-For", "")
+    if xff:
+        # X-Forwarded-For: client, proxy1, proxy2 — take the leftmost (first) address
+        return xff.split(",")[0].strip()
+    return request.client.host if request.client else "127.0.0.1"
+
+limiter = Limiter(key_func=get_real_ip, default_limits=["200/minute"])
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -295,6 +306,14 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["X-XSS-Protection"] = "1; mode=block"
+        # M4 Fix: Content-Security-Policy (CSP) for secure API execution and Swagger UI support
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+            "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+            "img-src 'self' data: https://fastapi.tiangolo.com; "
+            "frame-ancestors 'none';"
+        )
         return response
 
 app.add_middleware(SecurityHeadersMiddleware)

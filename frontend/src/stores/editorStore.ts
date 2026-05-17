@@ -314,7 +314,12 @@ export const useEditorStore = create<EditorState>()(
         set((state) => ({
           canvasElements: [
             ...state.canvasElements,
-            { ...element, id: Math.random().toString(36).substr(2, 9) },
+            { 
+              ...element, 
+              id: typeof crypto !== "undefined" && crypto.randomUUID 
+                ? crypto.randomUUID() 
+                : Math.random().toString(36).substring(2, 15) 
+            },
           ],
         })),
 
@@ -359,6 +364,13 @@ export const useEditorStore = create<EditorState>()(
           exportSettings: { ...DEFAULT_EXPORT_SETTINGS },
         }),
     }),
-    { name: "EditorStore" },
+    { 
+      name: "EditorStore",
+      // Sanitizer to prevent large Float32Arrays from being serialized to DevTools
+      stateSanitizer: (state: any) => 
+        state.audioData 
+          ? { ...state, audioData: `<<Float32Array(${state.audioData.length})>>` } 
+          : state
+    },
   ),
 );

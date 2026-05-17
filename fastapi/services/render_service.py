@@ -29,10 +29,107 @@ from app.utils.youtube_auth import inject_ydl_bypass
 from services.video_service import VideoService
 from services.storage_service import get_storage_service
 
-
-
-
 logger = logging.getLogger(__name__)
+
+# ── FFmpeg timeout constants (env-overridable) ─────────────────────────────────
+# Per-segment: single clip trim/scale. 120s is generous for a 3-minute clip.
+_FFMPEG_SEGMENT_TIMEOUT: int = int(os.environ.get("FFMPEG_SEGMENT_TIMEOUT_S", "120"))
+# Final concat/stitch pass: scales with number of clips.
+_FFMPEG_FINAL_TIMEOUT: int = int(os.environ.get("FFMPEG_FINAL_TIMEOUT_S", "300"))
+
+
+def _run_ffmpeg(stream, *, timeout: int = _FFMPEG_SEGMENT_TIMEOUT) -> None:
+    """
+    Execute an ffmpeg-python stream graph with a hard wall-clock timeout.
+
+    Uses ``subprocess.run`` directly so Python can kill the process on timeout
+    rather than relying on the RQ job-level 600s watchdog. A hung FFmpeg
+    (corrupted input, impossible filter, stalled network read) will raise
+    ``RuntimeError`` within ``timeout`` seconds and free the worker immediately.
+
+    Args:
+        stream: A compiled ffmpeg-python output node (result of .overwrite_output()).
+        timeout: Wall-clock seconds before the process is killed. Defaults to
+            _FFMPEG_SEGMENT_TIMEOUT (120s). Pass _FFMPEG_FINAL_TIMEOUT (300s)
+            for the final multi-clip stitch pass.
+
+    Raises:
+        RuntimeError: On timeout or non-zero exit code.
+    """
+    cmd = stream.compile()
+    try:
+        result = subprocess.run(
+            cmd,
+            timeout=timeout,
+            capture_output=True,
+        )
+    except subprocess.TimeoutExpired as exc:
+        logger.error(
+            "ffmpeg_timeout cmd_prefix=%s timeout_s=%d",
+            " ".join(cmd[:6]),
+            timeout,
+        )
+        raise RuntimeError(
+            f"ffmpeg timed out after {timeout}s — cmd: {' '.join(cmd[:8])}"
+        ) from exc
+
+    if result.returncode != 0:
+        stderr = (result.stderr or b"").decode("utf-8", errors="replace")
+        logger.error("ffmpeg_nonzero_exit code=%d stderr_tail=%s", result.returncode, stderr[-500:])
+        raise RuntimeError(f"ffmpeg exited {result.returncode}: {stderr[-2000:]}")  # noqa: EM102
+
+def _validate_background_music(url_or_path: str) -> bool:
+    """
+    Validate that the background music input is safe.
+    Prevents SSRF and local file traversal vulnerabilities.
+    """
+    if not url_or_path:
+        return False
+
+    # 1. If it's a URL
+    if url_or_path.startswith(("http://", "https://")):
+        from urllib.parse import urlparse
+        try:
+            parsed = urlparse(url_or_path)
+            hostname = parsed.hostname.lower() if parsed.hostname else ""
+
+            # Prevent private IP addresses, localhost, and metadata servers
+            if any(h in hostname for h in ["localhost", "127.0.0.1", "169.254.169.254", "metadata"]):
+                return False
+
+            # Clean allowlist check - allow Pixabay, local storage, googleapis, and public CDNs
+            allowed_domains = [
+                "pixabay.com", "googleapis.com", "quickaishort.online",
+                "storage.googleapis.com", "cdn.pixabay.com"
+            ]
+            if any(hostname == domain or hostname.endswith("." + domain) for domain in allowed_domains):
+                return True
+
+            # Check dynamic origin from env variables
+            public_url = os.environ.get("PUBLIC_API_URL", "")
+            if public_url:
+                pub_host = urlparse(public_url).hostname
+                if pub_host and hostname == pub_host.lower():
+                    return True
+            return False
+        except Exception:
+            return False
+
+    # 2. If it's a local file path, prevent directory traversal outside of allowed directories
+    path = Path(url_or_path)
+    try:
+        resolved = path.resolve()
+        # Allow if it's an asset or temp file
+        allowed_prefixes = [
+            Path(tempfile.gettempdir()).resolve(),
+            Path(os.getcwd()).resolve()
+        ]
+        if any(resolved.as_posix().startswith(prefix.as_posix()) for prefix in allowed_prefixes):
+            return True
+        return False
+    except Exception:
+        return False
+
 
 AspectRatio = Literal["9:16", "1:1"]
 Quality = Literal["low", "medium", "high"]
@@ -214,7 +311,9 @@ class RenderService:
             
             # zoompan: z=zoom, d=duration(frames), s=output_size
             # Note: zoompan happens at 30fps by default
-            video = video.filter("zoompan", z=zoom_expr, d=1, s="1080x1920", fps=30)
+            # H4 Fix: Dynamically set size based on job aspect ratio to prevent double scaling overhead
+            zoompan_size = "1080x1080" if job.aspect_ratio == "1:1" else "1080x1920"
+            video = video.filter("zoompan", z=zoom_expr, d=1, s=zoompan_size, fps=30)
 
         if job.watermark.enabled and job.watermark.image_path is not None:
             wm = ffmpeg.input(str(job.watermark.image_path)).filter(
@@ -292,12 +391,18 @@ class RenderService:
             )
 
         if job.background_music:
-            try:
-                music = ffmpeg.input(job.background_music, stream_loop=-1)
-                # Volume filter: primary 1.0, music 0.15 (ambient)
-                audio = ffmpeg.filter([audio, music.audio.filter("volume", 0.15)], "amix", duration="first")
-            except Exception as exc:
-                logger.warning("Background music mix failed: %s — falling back to original audio", exc)
+            if not _validate_background_music(job.background_music):
+                logger.warning(
+                    "Background music validation failed for source '%s' (SSRF/path traversal risk blocked) — skipping ambient mix",
+                    job.background_music
+                )
+            else:
+                try:
+                    music = ffmpeg.input(job.background_music, stream_loop=-1)
+                    # Volume filter: primary 1.0, music 0.15 (ambient)
+                    audio = ffmpeg.filter([audio, music.audio.filter("volume", 0.15)], "amix", duration="first")
+                except Exception as exc:
+                    logger.warning("Background music mix failed: %s — falling back to original audio", exc)
 
         preset = QUALITY_PRESETS[job.quality]
         out = ffmpeg.output(
@@ -312,14 +417,9 @@ class RenderService:
             movflags="+faststart",
         ).overwrite_output()
 
-        try:
-            out.run(quiet=True)
-        except ffmpeg.Error as exc:
-            stderr = (exc.stderr or b"").decode("utf-8", errors="replace")
-            logger.error("ffmpeg failed: %s", stderr)
-            raise RuntimeError(f"ffmpeg failed: {stderr[-2000:]}") from exc
-        except subprocess.CalledProcessError as exc:
-            raise RuntimeError(f"ffmpeg subprocess failed: {exc}") from exc
+        # _run_ffmpeg enforces a hard timeout and raises RuntimeError on failure.
+        # The legacy ffmpeg.Error / CalledProcessError paths are subsumed by it.
+        _run_ffmpeg(out, timeout=_FFMPEG_SEGMENT_TIMEOUT)
 
         return output
 
@@ -373,16 +473,24 @@ def render_video(production_plan: dict) -> str:
             clip_source = seg.get("clip_path")
             start = float(seg.get("start_sec", 0))
             end = float(seg.get("end_sec", 5))
+            
+            # M5 Fix: Validate that start_sec < end_sec to avoid zero-duration sub-clips.
+            if start >= end:
+                logger.warning(
+                    "[render_video] Segment %d has invalid timings (start_sec=%.2f >= end_sec=%.2f). Adjusting end_sec to start_sec + 1.0.",
+                    i, start, end
+                )
+                end = start + 1.0
+            
             duration = end - start
             
             target_clip = workdir / f"seg_{i}.mp4"
             
             if not clip_source or clip_source == "BLACK_FRAME":
-                (
+                _run_ffmpeg(
                     ffmpeg.input(f"color=c=black:s=1080x1920:d={duration}", f="lavfi")
                     .output(str(target_clip), vcodec="libx264", pix_fmt="yuv420p")
                     .overwrite_output()
-                    .run(quiet=True)
                 )
             elif clip_source.startswith("gridfs://"):
                 # Handle GridFS URIs (used for ADK uploads)
@@ -397,20 +505,18 @@ def render_video(production_plan: dict) -> str:
                 if not success:
                     logger.error("[render_video] GridFS download failed for %s", clip_source)
                     # Fallback to black frame
-                    (
+                    _run_ffmpeg(
                         ffmpeg.input(f"color=c=black:s=1080x1920:d={duration}", f="lavfi")
                         .output(str(target_clip), vcodec="libx264", pix_fmt="yuv420p")
                         .overwrite_output()
-                        .run(quiet=True)
                     )
                 else:
-                    (
+                    _run_ffmpeg(
                         ffmpeg.input(str(local_source), ss=start, t=duration)
                         .filter("scale", 1080, 1920, force_original_aspect_ratio="increase")
                         .filter("crop", 1080, 1920)
                         .output(str(target_clip), vcodec="libx264", acodec="aac", crf=23, preset="veryfast")
                         .overwrite_output()
-                        .run(quiet=True)
                     )
             elif clip_source.startswith("gs://"):
                 # Genius Step: Handle GCS URIs for private asset library
@@ -421,20 +527,18 @@ def render_video(production_plan: dict) -> str:
                 if not success:
                     logger.error("[render_video] GCS download failed for %s", clip_source)
                     # Fallback to black frame
-                    (
+                    _run_ffmpeg(
                         ffmpeg.input(f"color=c=black:s=1080x1920:d={duration}", f="lavfi")
                         .output(str(target_clip), vcodec="libx264", pix_fmt="yuv420p")
                         .overwrite_output()
-                        .run(quiet=True)
                     )
                 else:
-                    (
+                    _run_ffmpeg(
                         ffmpeg.input(str(local_source), ss=start, t=duration)
                         .filter("scale", 1080, 1920, force_original_aspect_ratio="increase")
                         .filter("crop", 1080, 1920)
                         .output(str(target_clip), vcodec="libx264", acodec="aac", crf=23, preset="veryfast")
                         .overwrite_output()
-                        .run(quiet=True)
                     )
             elif clip_source.startswith("http"):
                 # Real download and trim — yt-dlp first, Cobalt fallback.
@@ -446,34 +550,31 @@ def render_video(production_plan: dict) -> str:
                     downloaded_file = str(
                         VideoService.download_segment_sync(video_id, start, end, workdir)
                     )
-                    (
+                    _run_ffmpeg(
                         ffmpeg.input(downloaded_file, ss=start, t=duration)
                         .filter("scale", 1080, 1920, force_original_aspect_ratio="increase")
                         .filter("crop", 1080, 1920)
                         .output(str(target_clip), vcodec="libx264", acodec="aac", crf=23, preset="veryfast")
                         .overwrite_output()
-                        .run(quiet=True)
                     )
                 except Exception as dl_err:
                     logger.warning(
                         "[render_video] HTTP source unavailable, substituting black frame: %s (%s)",
                         clip_source, dl_err,
                     )
-                    (
+                    _run_ffmpeg(
                         ffmpeg.input(f"color=c=black:s=1080x1920:d={duration}", f="lavfi")
                         .output(str(target_clip), vcodec="libx264", pix_fmt="yuv420p")
                         .overwrite_output()
-                        .run(quiet=True)
                     )
             else:
                 # Local file path
-                (
+                _run_ffmpeg(
                     ffmpeg.input(clip_source, ss=start, t=duration)
                     .filter("scale", 1080, 1920, force_original_aspect_ratio="increase")
                     .filter("crop", 1080, 1920)
                     .output(str(target_clip), vcodec="libx264", acodec="aac", crf=23, preset="veryfast")
                     .overwrite_output()
-                    .run(quiet=True)
                 )
             
             processed_clips.append(ffmpeg.input(str(target_clip)))
@@ -486,7 +587,9 @@ def render_video(production_plan: dict) -> str:
         # matching acrossfade chain for audio. Otherwise fall back to the
         # frame-accurate concat (original behavior).
         if transition_enabled and len(processed_clip_paths) > 1:
-            XFADE = 0.5
+            # H5 Fix: Clamp xfade duration to never exceed 40% of the shortest clip's duration
+            # to prevent negative/invalid offsets on short sub-clips.
+            XFADE = max(0.1, min(0.5, min(clip_durations) * 0.4))
             # Re-input each saved clip so we can pull video and audio streams
             # independently into the filter graph.
             clip_inputs = [ffmpeg.input(p) for p in processed_clip_paths]
@@ -535,15 +638,15 @@ def render_video(production_plan: dict) -> str:
                 a = ffmpeg.filter([a_ambient, a_voice], "amix", inputs=2, duration="first")
             
         output_path = workdir / "final_output.mp4"
-        (
+        # Use the longer final-concat timeout — number of clips scales the work.
+        _run_ffmpeg(
             ffmpeg.output(
                 v, a, str(output_path),
                 vcodec="libx264", acodec="aac",
                 crf=21, preset="medium",
-                movflags="faststart"
-            )
-            .overwrite_output()
-            .run(quiet=True)
+                movflags="faststart",
+            ).overwrite_output(),
+            timeout=_FFMPEG_FINAL_TIMEOUT,
         )
         
         final_dest = Path(tempfile.gettempdir()) / f"qai_final_{uuid.uuid4().hex}.mp4"

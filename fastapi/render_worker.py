@@ -98,12 +98,15 @@ def run_health_server():
         httpd.serve_forever()
 
 # --- Signal Handling for Preemption Safety ---
+_worker_ref = None
+
 def handle_preemption(signum, frame):
     """Gracefully handle SIGTERM from Cloud Run."""
     logger.warning("preemption_signal_received", signal=signum)
-    # The worker will finish the current job if possible within the grace period (10s on Cloud Run)
-    # RQ's Worker handles this partially, but we log it here for observability.
-    # No os._exit(0) yet, let RQ finish current job if it can.
+    global _worker_ref
+    if _worker_ref:
+        logger.info("triggering_rq_worker_warm_shutdown")
+        _worker_ref.request_stop(signum, frame)
 
 signal.signal(signal.SIGTERM, handle_preemption)
 
@@ -210,11 +213,15 @@ async def _async_process_render_task(
     started_at = time.time()
     options = options or {}
     production_plan = options.get("production_plan")
-    
-    # Initialize DB for THIS loop
-    from services.db import init_db, is_ready
-    if not is_ready():
-        await init_db()
+
+    # C2 fix: Motor's AsyncIOMotorClient is bound to the event loop it was
+    # created in. RQ calls asyncio.run() for each job, which creates a *new*
+    # event loop. We must close and re-initialize the Motor client on every
+    # invocation; otherwise, jobs #2+ will get "Event loop is closed" on all
+    # DB operations because _client was created in the previous loop.
+    from services.db import init_db, close_db
+    await close_db()   # no-op if already None; releases the old closed-loop client
+    await init_db()
 
     logger.info("processing_render_task_start", job_id=job_id, user_id=user_id)
 
@@ -229,6 +236,10 @@ async def _async_process_render_task(
             "progress": progress_val,
             "mem_usage_mb": round(mem, 2)
         })
+
+    # C4 fix: Declare before try so finally always has a safe reference,
+    # even if an exception is raised before the variable is first assigned.
+    result_path: Optional[Path] = None
 
     try:
         # Pillar 5: Idempotency Check
@@ -381,10 +392,16 @@ async def _async_process_render_task(
 
 
     finally:
-        if 'result_path' in locals() and result_path.exists():
+        # C4 fix: safe cleanup regardless of where in the try block we failed
+        if result_path is not None:
             try:
-                result_path.unlink()
-                if "qais-" in str(result_path.parent):
+                if result_path.exists():
+                    result_path.unlink(missing_ok=True)
+                # render_video moves output out of workdir to a bare /tmp file;
+                # its own workdir is cleaned in render_video's finally block.
+                # For the single-clip RenderService path the workdir carries a
+                # "qais-export-" prefix; clean the whole directory.
+                if result_path.parent != Path(tempfile.gettempdir()) and "qais-" in str(result_path.parent):
                     shutil.rmtree(result_path.parent, ignore_errors=True)
             except Exception:
                 pass
@@ -408,6 +425,7 @@ if __name__ == "__main__":
     
     try:
         worker = Worker([render_queue], connection=redis_conn)
+        _worker_ref = worker
         worker.work(with_scheduler=True)
     except Exception as e:
         logger.error("worker_fatal_crash", error=str(e))
