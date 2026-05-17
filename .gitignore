@@ -87,3 +87,6 @@ setup_infrastructure.sh
 scratch/
 *.pdf
 QAI_Shorts_Antigravity_Prompt.md.pdf
+
+.vercel
+.env*.local

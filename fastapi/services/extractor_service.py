@@ -638,8 +638,8 @@ class ExtractorService:
     move circuit state to Redis).
     """
 
-    def __init__(self, redis_conn: Any) -> None:
-        self.cache = ExtractionCache(redis_conn)
+    def __init__(self, redis_conn: Any, async_redis_conn: Any = None) -> None:
+        self.cache = ExtractionCache(async_redis_conn or redis_conn)
         # Use Redis-backed circuit breakers so state is shared across all
         # Cloud Run instances. Falls back to in-process if Redis is down.
         try:
@@ -856,8 +856,8 @@ def get_extractor_service() -> ExtractorService:
     """
     global _service_instance
     if _service_instance is None:
-        from services.queue_service import async_redis_conn  # noqa: PLC0415
-        _service_instance = ExtractorService(async_redis_conn)
+        from services.queue_service import async_redis_conn, redis_conn  # noqa: PLC0415
+        _service_instance = ExtractorService(redis_conn=redis_conn, async_redis_conn=async_redis_conn)
     return _service_instance
 
 

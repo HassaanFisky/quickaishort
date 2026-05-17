@@ -20,7 +20,7 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import Optional, Set
+from typing import Any, Optional, Set
 
 logger = logging.getLogger(__name__)
 
@@ -155,14 +155,20 @@ class RedisCircuitBreaker:
     def _get(self) -> dict:
         """Read state hash from Redis. Returns {} on any error."""
         try:
-            return self._r.hgetall(self._key) or {}
+            d = self._r.hgetall(self._key) or {}
+            return {
+                (k.decode("utf-8") if isinstance(k, bytes) else k):
+                (v.decode("utf-8") if isinstance(v, bytes) else v)
+                for k, v in d.items()
+            }
         except Exception:
             return {}
 
     def _set(self, mapping: dict) -> None:
         """Write state fields and refresh TTL. Silently ignores Redis errors."""
         try:
-            self._r.hset(self._key, mapping=mapping)
+            string_mapping = {str(k): str(v) for k, v in mapping.items()}
+            self._r.hset(self._key, mapping=string_mapping)
             self._r.expire(self._key, self._KEY_TTL)
         except Exception as exc:
             logger.warning("circuit[%s] Redis write error: %s", self.tier_name, exc)
