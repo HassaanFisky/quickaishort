@@ -27,6 +27,7 @@ declare global {
         elementId: string,
         options: {
           videoId: string;
+          host?: string;
           playerVars?: Record<string, number | string>;
           events?: {
             onReady?: (e: { target: YTPlayer }) => void;
@@ -159,6 +160,7 @@ export default function VideoCanvas() {
       ytPlayerRef.current?.destroy();
       ytPlayerRef.current = new window.YT.Player("yt-player-frame", {
         videoId: ytVideoId,
+        host: "https://www.youtube-nocookie.com",
         playerVars: {
           autoplay: 0,
           controls: 1,

@@ -9,6 +9,7 @@ import { SkipLink } from "@/components/shared/SkipLink";
 import { BottomTabBar } from "@/components/layout/BottomTabBar";
 import { RouteFade } from "@/components/shared/RouteFade";
 import { OfflineNotice } from "@/components/shared/OfflineNotice";
+import { CookieConsent } from "@/components/shared/CookieConsent";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -83,6 +84,7 @@ export default function RootLayout({
           </main>
           <BottomTabBar />
           <CommandPalette />
+          <CookieConsent />
         </AppProviders>
       </body>
     </html>
