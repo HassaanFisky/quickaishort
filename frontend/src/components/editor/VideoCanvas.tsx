@@ -9,6 +9,8 @@ import {
   PlayCircle,
   Loader2,
   AlertCircle,
+  Scissors,
+  Flag,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useEditorStore } from "@/stores/editorStore";
@@ -17,6 +19,39 @@ import { CaptionOverlay } from "./CaptionOverlay";
 import { CanvasLayer } from "./CanvasLayer";
 import { cn } from "@/lib/utils";
 
+// Minimal ambient type for YouTube IFrame Player API (auto-loaded from YT CDN).
+declare global {
+  interface Window {
+    YT?: {
+      Player: new (
+        elementId: string,
+        options: {
+          videoId: string;
+          playerVars?: Record<string, number | string>;
+          events?: {
+            onReady?: (e: { target: YTPlayer }) => void;
+          };
+        }
+      ) => YTPlayer;
+      loaded?: number;
+    };
+    onYouTubeIframeAPIReady?: () => void;
+  }
+}
+
+interface YTPlayer {
+  getCurrentTime(): number;
+  destroy(): void;
+}
+
+/** Extract 11-char video ID from any recognised YouTube URL format. */
+function extractYtVideoId(url: string): string | null {
+  const m = url.match(
+    /(?:youtube\.com\/(?:watch\?.*v=|shorts\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/
+  );
+  return m ? m[1] : null;
+}
+
 export default function VideoCanvas() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -24,6 +59,11 @@ export default function VideoCanvas() {
   
   const [isBuffering, setIsBuffering] = useState(false);
   const [videoError, setVideoError] = useState(false);
+
+  // YouTube IFrame mode — activated when sourceUrl is a YouTube URL.
+  const [ytVideoId, setYtVideoId] = useState<string | null>(null);
+  const ytPlayerRef = useRef<YTPlayer | null>(null);
+
   const {
     sourceUrl,
     thumbnailUrl,
@@ -88,17 +128,75 @@ export default function VideoCanvas() {
     if (!sourceUrl) {
       setDisplayUrl(null);
       setVideoError(false);
+      setYtVideoId(null);
       return;
     }
     setVideoError(false);
-    if (sourceUrl.includes("youtube.com") || sourceUrl.includes("youtu.be")) {
-      import("@/lib/api").then(({ getProxyUrl }) => {
-        setDisplayUrl(getProxyUrl(sourceUrl));
-      });
+    const ytId = extractYtVideoId(sourceUrl);
+    if (ytId) {
+      // YouTube URL detected — switch to IFrame mode.
+      // Store the video ID locally and in the editor store.
+      setYtVideoId(ytId);
+      setDisplayUrl(null);
+      useEditorStore.setState({ ytVideoId: ytId });
     } else {
+      setYtVideoId(null);
       setDisplayUrl(sourceUrl);
     }
   }, [sourceUrl]);
+
+  // Load the YouTube IFrame Player API script once and create a player
+  // instance when a YouTube video ID is available.
+  useEffect(() => {
+    if (!ytVideoId) {
+      ytPlayerRef.current?.destroy();
+      ytPlayerRef.current = null;
+      return;
+    }
+
+    const createPlayer = () => {
+      if (!window.YT?.Player) return;
+      ytPlayerRef.current?.destroy();
+      ytPlayerRef.current = new window.YT.Player("yt-player-frame", {
+        videoId: ytVideoId,
+        playerVars: {
+          autoplay: 0,
+          controls: 1,
+          modestbranding: 1,
+          rel: 0,
+          enablejsapi: 1,
+          origin: typeof window !== "undefined" ? window.location.origin : "",
+        },
+      });
+    };
+
+    if (window.YT?.loaded) {
+      createPlayer();
+    } else {
+      // API not yet loaded — inject the script and register the callback.
+      window.onYouTubeIframeAPIReady = createPlayer;
+      if (!document.querySelector('script[src*="youtube.com/iframe_api"]')) {
+        const tag = document.createElement("script");
+        tag.src = "https://www.youtube.com/iframe_api";
+        document.head.appendChild(tag);
+      }
+    }
+
+    return () => {
+      ytPlayerRef.current?.destroy();
+      ytPlayerRef.current = null;
+    };
+  }, [ytVideoId]);
+
+  const handleMarkStart = useCallback(() => {
+    const t = ytPlayerRef.current?.getCurrentTime() ?? 0;
+    useEditorStore.setState({ clipStartTime: t });
+  }, []);
+
+  const handleMarkEnd = useCallback(() => {
+    const t = ytPlayerRef.current?.getCurrentTime() ?? 0;
+    useEditorStore.setState({ clipEndTime: t });
+  }, []);
 
   // Seek to clip start when selection changes
   useEffect(() => {
@@ -185,8 +283,35 @@ export default function VideoCanvas() {
 
         {sourceUrl ? (
           <>
-            {videoError ? (
-              /* Thumbnail fallback — shown when the video stream is unavailable */
+            {ytVideoId ? (
+              /* YouTube IFrame mode — ToS-compliant preview with clip marking.
+                 Face tracking and audio boost are unavailable in IFrame mode
+                 due to cross-origin restrictions; they apply post-extraction. */
+              <div className="relative w-full h-full flex flex-col">
+                <div id="yt-player-frame" className="w-full flex-1" />
+                <div className="flex items-center justify-center gap-3 py-3 px-4 bg-background/80 backdrop-blur-sm border-t border-foreground/10">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-9 gap-2 text-[10px] font-black uppercase tracking-widest text-primary hover:bg-primary/10 border border-primary/20"
+                    onClick={handleMarkStart}
+                  >
+                    <Flag className="w-3.5 h-3.5" />
+                    Mark Start
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-9 gap-2 text-[10px] font-black uppercase tracking-widest text-primary hover:bg-primary/10 border border-primary/20"
+                    onClick={handleMarkEnd}
+                  >
+                    <Scissors className="w-3.5 h-3.5" />
+                    Mark End
+                  </Button>
+                </div>
+              </div>
+            ) : videoError ? (
+              /* Non-YouTube source failed — show thumbnail fallback */
               <div className="relative w-full h-full flex items-center justify-center">
                 {thumbnailUrl && (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -243,6 +368,8 @@ export default function VideoCanvas() {
                 )}
               </>
             )}
+            </>
+          )}
           </>
         ) : (
           <div className="text-muted-foreground text-sm flex flex-col items-center gap-6">

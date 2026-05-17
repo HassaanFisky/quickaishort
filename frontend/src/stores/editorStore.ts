@@ -53,6 +53,13 @@ interface EditorState {
   sourceFile: File | null;
   sourceUrl: string | null;
   thumbnailUrl: string | null;
+
+  // YouTube IFrame clip selection (Tier-3/4 flow).
+  // Set when user marks a clip range in the IFrame player.
+  // Consumed by the backend /api/youtube/clip endpoint.
+  ytVideoId: string | null;
+  clipStartTime: number;
+  clipEndTime: number;
   duration: number;
   resolution: { width: number; height: number } | null;
 
@@ -142,6 +149,9 @@ export const useEditorStore = create<EditorState>()(
       sourceFile: null,
       sourceUrl: null,
       thumbnailUrl: null,
+      ytVideoId: null,
+      clipStartTime: 0,
+      clipEndTime: 0,
       duration: 0,
       resolution: null,
       isProcessing: false,
