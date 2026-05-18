@@ -1,8 +1,9 @@
 "use client";
 
 import { useEditorStore, CanvasElement } from "@/stores/editorStore";
-import { motion } from "framer-motion";
-import { X, GripHorizontal, RotateCcw } from "lucide-react";
+import { useEffect } from "react";
+import { motion, useMotionValue } from "framer-motion";
+import { X, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function CanvasLayer() {
@@ -31,18 +32,25 @@ function DraggableElement({
   onUpdate: (updates: Partial<CanvasElement>) => void;
   onRemove: () => void;
 }) {
+  const x = useMotionValue(element.x);
+  const y = useMotionValue(element.y);
+
+  // Sync store coordinates into motion values when the store updates
+  // (e.g. after a reset or programmatic move). During an active drag,
+  // Framer Motion owns the values so these writes are no-ops in practice.
+  useEffect(() => { x.set(element.x); }, [element.x, x]);
+  useEffect(() => { y.set(element.y); }, [element.y, y]);
+
   const handleResizeMouseDown = (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
-    
+
     const startX = e.clientX;
-    const startY = e.clientY;
     const startScale = element.scale;
 
     const onMouseMove = (moveEvent: MouseEvent) => {
       const dx = moveEvent.clientX - startX;
-      // Use dx as a proxy for scale change
-      const newScale = Math.max(0.2, Math.min(5, startScale + (dx / 200)));
+      const newScale = Math.max(0.2, Math.min(5, startScale + dx / 200));
       onUpdate({ scale: newScale });
     };
 
@@ -59,12 +67,12 @@ function DraggableElement({
     <motion.div
       drag
       dragMomentum={false}
-      initial={{ x: element.x, y: element.y, scale: 0.8, opacity: 0 }}
-      animate={{ x: element.x, y: element.y, scale: element.scale, opacity: 1 }}
-      onDragEnd={(_, info) => {
-        onUpdate({ x: element.x + info.offset.x, y: element.y + info.offset.y });
+      style={{ x, y, rotate: element.rotation }}
+      animate={{ scale: element.scale, opacity: 1 }}
+      initial={{ scale: 0.8, opacity: 0 }}
+      onDragEnd={() => {
+        onUpdate({ x: x.get(), y: y.get() });
       }}
-      style={{ rotate: element.rotation }}
       className="absolute pointer-events-auto group cursor-move touch-none"
     >
       {/* Controls */}
@@ -85,7 +93,7 @@ function DraggableElement({
       </div>
 
       {/* Content */}
-      <div 
+      <div
         className={cn(
           "relative select-none",
           element.type === "text" ? "px-4 py-2" : "p-2",
@@ -93,7 +101,7 @@ function DraggableElement({
         )}
       >
         {element.type === "text" ? (
-          <span 
+          <span
             className={cn("text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]", element.style?.className)}
             contentEditable
             suppressContentEditableWarning
@@ -106,10 +114,10 @@ function DraggableElement({
         )}
       </div>
 
-      {/* Resize Handle (Implemented) */}
-      <div 
+      {/* Resize Handle */}
+      <div
         onMouseDown={handleResizeMouseDown}
-        className="absolute -bottom-2 -right-2 w-4 h-4 bg-primary rounded-full border-2 border-white opacity-0 group-hover:opacity-100 transition-opacity cursor-se-resize shadow-lg z-50" 
+        className="absolute -bottom-2 -right-2 w-4 h-4 bg-primary rounded-full border-2 border-white opacity-0 group-hover:opacity-100 transition-opacity cursor-se-resize shadow-lg z-50"
       />
     </motion.div>
   );

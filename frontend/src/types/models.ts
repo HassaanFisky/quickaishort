@@ -1,8 +1,10 @@
 export interface ExportRecord {
   _id: string;
   userId: string;
-  projectId: string;
+  projectId?: string;
   clipId: string;
+  jobId?: string;
+  downloadUrl?: string;
   settings: {
     aspectRatio: "9:16" | "1:1";
     quality: "low" | "medium" | "high";

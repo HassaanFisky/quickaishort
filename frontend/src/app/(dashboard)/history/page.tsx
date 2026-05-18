@@ -1,21 +1,24 @@
 "use client";
 
 import Link from "next/link";
-import { History, Video, Calendar, Download, Trash2, ArrowLeft, ExternalLink, Sparkles } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { History, Video, Calendar, Download, Trash2, Sparkles } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import LoadingSpinner from "@/components/shared/LoadingSpinner";
 import axios from "axios";
 import { format } from "date-fns";
-import { motion, Variants } from "framer-motion";
+import { motion } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
 
 import { ExportRecord } from "@/types/models";
-
+import { buildExportDownloadUrl } from "@/lib/api";
 import { containerVariants, itemVariants, scaleUpVariants } from "@/lib/animations";
 
 export default function HistoryPage() {
+  const queryClient = useQueryClient();
+
   const { data: exports, isLoading } = useQuery<ExportRecord[]>({
     queryKey: ["exports"],
     queryFn: async () => {
@@ -23,6 +26,37 @@ export default function HistoryPage() {
       return res.data;
     },
   });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await axios.delete(`/api/exports/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["exports"] });
+      toast.success("Export deleted.");
+    },
+    onError: () => {
+      toast.error("Failed to delete export.");
+    },
+  });
+
+  const handleDownload = (exp: ExportRecord) => {
+    const url = exp.downloadUrl
+      ? buildExportDownloadUrl(exp.downloadUrl)
+      : null;
+    if (!url) {
+      toast.error("Download link unavailable. Re-export the clip to generate a new one.");
+      return;
+    }
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = exp.output?.filename ?? `quickai-short-${exp._id}.mp4`;
+    a.target = "_blank";
+    a.rel = "noopener";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  };
 
   if (isLoading)
     return (
@@ -100,10 +134,13 @@ export default function HistoryPage() {
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="h-11 gap-2 border-foreground/10 bg-foreground/5 hover:bg-primary hover:text-white hover:border-primary transition-all duration-300 font-bold rounded-xl"
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-11 gap-2 border-foreground/10 bg-foreground/5 hover:bg-primary hover:text-white hover:border-primary transition-all duration-300 font-bold rounded-xl disabled:opacity-40"
+                        onClick={() => handleDownload(exp)}
+                        disabled={!exp.downloadUrl}
+                        title={exp.downloadUrl ? "Download export" : "Re-export to generate a download link"}
                       >
                         <Download className="w-4 h-4" /> Download
                       </Button>
@@ -111,6 +148,8 @@ export default function HistoryPage() {
                         variant="ghost"
                         size="sm"
                         className="h-11 gap-2 text-muted-foreground hover:text-destructive hover:bg-destructive/5 transition-all duration-300 font-bold rounded-xl"
+                        onClick={() => deleteMutation.mutate(exp._id)}
+                        disabled={deleteMutation.isPending}
                       >
                         <Trash2 className="w-4 h-4" /> Delete
                       </Button>

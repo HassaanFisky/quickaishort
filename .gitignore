@@ -90,3 +90,9 @@ QAI_Shorts_Antigravity_Prompt.md.pdf
 
 .vercel
 .env*.local
+
+# Raw testing and instruction assets (strictly local)
+test_video.mp4
+test_upload.txt
+quickaishort LOGO.PNG.png
+innocollab/

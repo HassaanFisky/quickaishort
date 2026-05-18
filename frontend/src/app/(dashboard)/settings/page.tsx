@@ -19,7 +19,6 @@ import {
   Shield,
   Bell,
   User,
-  Cpu,
   Save,
   Palette,
   Download,
@@ -28,8 +27,6 @@ import {
   Zap,
   Flame,
   Snowflake,
-  Circle,
-  Sparkles,
   Sun,
   Waves,
   Keyboard,
@@ -59,7 +56,7 @@ const THEMES = [
   { id: "neon", name: "Neon", description: "Electric green", icon: Zap, color: "#39ff14", bg: "#030305" },
   { id: "crystal", name: "Crystal", description: "Sky blue", icon: Snowflake, color: "#38bdf8", bg: "#f0f9ff" },
   { id: "magma", name: "Magma", description: "Orange-red", icon: Flame, color: "#ff4500", bg: "#0a0604" },
-  { id: "aurora", name: "Aurora", description: "Teal-green", icon: Waves, color: "#06d6a0", bg: "#061418" },
+  { id: "nano", name: "Nano", description: "Minimal white", icon: Waves, color: "#06d6a0", bg: "#f4f4f5" },
 ];
 
 const SHORTCUTS = [
@@ -99,10 +96,19 @@ export default function SettingsPage() {
 
   const [activeTab, setActiveTab] = useState<Tab>("profile");
 
+  const [displayName, setDisplayName] = useState(session?.user?.name ?? "");
+  // Sync display name from session on first load
+  useEffect(() => {
+    if (session?.user?.name) setDisplayName(session.user.name);
+  }, [session?.user?.name]);
+
   const [defaultQuality, setDefaultQuality] = useLocalSetting<Quality>("qai_quality", "medium");
   const [defaultAspect, setDefaultAspect] = useLocalSetting<Aspect>("qai_aspect", "9:16");
   const [showTelemetry, setShowTelemetry] = useLocalSetting<boolean>("qai_telemetry", true);
   const [autoPlayOnSelect, setAutoPlayOnSelect] = useLocalSetting<boolean>("qai_autoplay", true);
+  const [notifyCompletion, setNotifyCompletion] = useLocalSetting<boolean>("qai_notify_completion", true);
+  const [notifyAnalysis, setNotifyAnalysis] = useLocalSetting<boolean>("qai_notify_analysis", true);
+  const [notifyCritical, setNotifyCritical] = useLocalSetting<boolean>("qai_notify_critical", true);
 
   return (
     <div className="container mx-auto px-6 py-12 max-w-6xl space-y-12">
@@ -183,23 +189,27 @@ export default function SettingsPage() {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                         <div className="space-y-3">
                           <Label className="text-xs font-black uppercase tracking-widest opacity-60">Display Name</Label>
-                          <Input 
-                            defaultValue={session?.user?.name || ""} 
+                          <Input
+                            value={displayName}
+                            onChange={(e) => setDisplayName(e.target.value)}
                             className="h-12 rounded-xl bg-foreground/[0.03] border-foreground/5 focus:border-primary/50 transition-all font-bold"
                           />
                         </div>
                         <div className="space-y-3">
                           <Label className="text-xs font-black uppercase tracking-widest opacity-60">System ID</Label>
-                          <Input 
-                            defaultValue={session?.user?.email || ""} 
-                            disabled 
+                          <Input
+                            value={session?.user?.email || ""}
+                            readOnly
                             className="h-12 rounded-xl bg-foreground/[0.01] border-foreground/5 font-mono text-xs opacity-50"
                           />
                         </div>
                       </div>
                     </CardContent>
                   </Card>
-                  <SaveRow />
+                  <SaveRow
+                    onSave={() => toast.success("Profile updated.")}
+                    onReset={() => setDisplayName(session?.user?.name ?? "")}
+                  />
                 </>
               )}
 
@@ -323,7 +333,10 @@ export default function SettingsPage() {
                       />
                     </CardContent>
                   </Card>
-                  <SaveRow onSave={() => toast.success("Export defaults updated.")} />
+                  <SaveRow
+                    onSave={() => toast.success("Export defaults updated.")}
+                    onReset={() => { setDefaultQuality("medium"); setDefaultAspect("9:16"); setCaptionsEnabled(true); }}
+                  />
                 </>
               )}
 
@@ -351,7 +364,10 @@ export default function SettingsPage() {
                       />
                     </CardContent>
                   </Card>
-                  <SaveRow onSave={() => toast.success("Studio preferences synchronized.")} />
+                  <SaveRow
+                    onSave={() => toast.success("Studio preferences synchronized.")}
+                    onReset={() => { setShowTelemetry(true); setAutoPlayOnSelect(true); }}
+                  />
                 </>
               )}
 
@@ -408,12 +424,15 @@ export default function SettingsPage() {
                       <CardDescription className="text-base font-medium">Manage production event notifications and status updates.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-8">
-                      <ToggleRow label="Session Completion" description="Notify when high-fidelity renders are ready for download." checked={true} />
-                      <ToggleRow label="Analysis Intelligence" description="Alert when viral mapping and face detection is complete." checked={true} border />
-                      <ToggleRow label="Critical Overlays" description="Always display essential system status and hardware alerts." checked={true} border />
+                      <ToggleRow label="Session Completion" description="Notify when high-fidelity renders are ready for download." checked={notifyCompletion} onCheckedChange={setNotifyCompletion} />
+                      <ToggleRow label="Analysis Intelligence" description="Alert when viral mapping and face detection is complete." checked={notifyAnalysis} onCheckedChange={setNotifyAnalysis} border />
+                      <ToggleRow label="Critical Overlays" description="Always display essential system status and hardware alerts." checked={notifyCritical} onCheckedChange={setNotifyCritical} border />
                     </CardContent>
                   </Card>
-                  <SaveRow />
+                  <SaveRow
+                    onSave={() => toast.success("Notification preferences saved.")}
+                    onReset={() => { setNotifyCompletion(true); setNotifyAnalysis(true); setNotifyCritical(true); }}
+                  />
                 </>
               )}
 
@@ -493,14 +512,19 @@ function ToggleRow({
   );
 }
 
-function SaveRow({ onSave }: { onSave?: () => void }) {
+function SaveRow({ onSave, onReset }: { onSave?: () => void; onReset?: () => void }) {
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       className="flex justify-end gap-4 mt-8"
     >
-      <Button variant="outline" className="h-14 px-10 rounded-2xl font-black uppercase tracking-widest text-[10px] border-foreground/10 hover:bg-foreground/5">
+      <Button
+        variant="outline"
+        className="h-14 px-10 rounded-2xl font-black uppercase tracking-widest text-[10px] border-foreground/10 hover:bg-foreground/5"
+        onClick={onReset}
+        disabled={!onReset}
+      >
         Reset
       </Button>
       <Button

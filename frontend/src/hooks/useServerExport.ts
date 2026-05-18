@@ -79,6 +79,30 @@ export function useServerExport({ userId }: UseServerExportArgs) {
       const absolute = buildExportDownloadUrl(downloadUrl);
       triggerDownload(absolute, `quickai-short-${jobId}.mp4`);
       toast.success("Export ready — downloading.");
+
+      // Persist record so history page has a working download link.
+      const { selectedClipId, suggestions, exportSettings, captionsEnabled } =
+        useEditorStore.getState();
+      const clip = selectedClipId
+        ? suggestions.find((c) => c.id === selectedClipId)
+        : suggestions[0];
+      if (clip) {
+        axios
+          .post("/api/exports", {
+            clipId: clip.id,
+            jobId,
+            downloadUrl,
+            settings: {
+              aspectRatio: exportSettings.aspectRatio,
+              quality: exportSettings.quality,
+              captionsEnabled,
+            },
+            output: { filename: `quickai-short-${jobId}.mp4` },
+          })
+          .catch(() => {
+            // Non-critical — history entry is a nice-to-have, not blocking
+          });
+      }
     },
     [cleanup, triggerDownload],
   );

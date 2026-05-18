@@ -5,11 +5,16 @@ import { useEditorStore } from "@/stores/editorStore";
 import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
 import { formatTime } from "@/lib/utils/formatTime";
+import type { Clip } from "@/types/pipeline";
 
 
 export default function Timeline() {
-  const { audioData, silenceSegments, duration, currentTime, setPendingSeek } = useEditorStore();
+  const { audioData, silenceSegments, duration, currentTime, setPendingSeek, exportSettings, suggestions, selectedClipId } = useEditorStore();
   const numBars = 120; // Matches visually with the design
+
+  const selectedClip: Clip | undefined = selectedClipId
+    ? suggestions.find((c) => c.id === selectedClipId)
+    : suggestions[0];
 
   // Generate waveform levels from actual audio data or fallback to random
   const waveLevels = useMemo(() => {
@@ -46,24 +51,22 @@ export default function Timeline() {
       <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">
         <div className="flex gap-4">
           <span className="tabular-nums">{formatTime(currentTime)}</span>
-          <span className="text-primary/40">In: {formatTime(currentTime)}</span>
+          {selectedClip && (
+            <span className="text-primary/40">In: {formatTime(selectedClip.start)}</span>
+          )}
         </div>
         <div className="flex gap-2">
           <Badge
             variant="outline"
             className="font-mono text-[10px] bg-background"
           >
-            9:16
-          </Badge>
-          <Badge
-            variant="outline"
-            className="font-mono text-[10px] bg-background"
-          >
-            30.00 FPS
+            {exportSettings.aspectRatio}
           </Badge>
         </div>
         <div className="flex gap-4">
-          <span className="text-primary/40">Out: {formatTime(duration)}</span>
+          {selectedClip && (
+            <span className="text-primary/40">Out: {formatTime(selectedClip.end)}</span>
+          )}
           <span className="tabular-nums">{formatTime(duration)}</span>
         </div>
       </div>

@@ -62,7 +62,8 @@ export default function VideoCanvas() {
   const [videoError, setVideoError] = useState(false);
 
   // YouTube IFrame mode — activated when sourceUrl is a YouTube URL.
-  const [ytVideoId, setYtVideoId] = useState<string | null>(null);
+  // Local state drives the IFrame player; store state is synced for clip marking.
+  const [localYtId, setLocalYtId] = useState<string | null>(null);
   const ytPlayerRef = useRef<YTPlayer | null>(null);
 
   const {
@@ -71,6 +72,7 @@ export default function VideoCanvas() {
     selectedClipId,
     suggestions,
     transcript,
+    captionsEnabled,
     duration,
     currentTime,
     isPlaying,
@@ -80,6 +82,8 @@ export default function VideoCanvas() {
     setIsPlaying,
     setDuration,
     clearPendingSeek,
+    setYtVideoId,
+    setClipRange,
   } = useEditorStore();
 
   const { isReady, reframingData, detect } = useFaceTracker();
@@ -93,7 +97,10 @@ export default function VideoCanvas() {
     const audioBoost = exportSettings.audioBoost;
     
     if (!audioContextRef.current) {
-      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const AudioCtx =
+        window.AudioContext ??
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      audioContextRef.current = new AudioCtx();
       const source = audioContextRef.current.createMediaElementSource(videoRef.current);
       gainNodeRef.current = audioContextRef.current.createGain();
       source.connect(gainNodeRef.current);
@@ -136,11 +143,11 @@ export default function VideoCanvas() {
     const ytId = extractYtVideoId(sourceUrl);
     if (ytId) {
       // YouTube URL detected — switch to IFrame mode.
-      // Store the video ID locally and in the editor store.
-      setYtVideoId(ytId);
+      setLocalYtId(ytId);      // drives the IFrame player
+      setYtVideoId(ytId);      // syncs to store for clip marking
       setDisplayUrl(null);
-      useEditorStore.setState({ ytVideoId: ytId });
     } else {
+      setLocalYtId(null);
       setYtVideoId(null);
       setDisplayUrl(sourceUrl);
     }
@@ -149,7 +156,7 @@ export default function VideoCanvas() {
   // Load the YouTube IFrame Player API script once and create a player
   // instance when a YouTube video ID is available.
   useEffect(() => {
-    if (!ytVideoId) {
+    if (!localYtId) {
       ytPlayerRef.current?.destroy();
       ytPlayerRef.current = null;
       return;
@@ -159,7 +166,7 @@ export default function VideoCanvas() {
       if (!window.YT?.Player) return;
       ytPlayerRef.current?.destroy();
       ytPlayerRef.current = new window.YT.Player("yt-player-frame", {
-        videoId: ytVideoId,
+        videoId: localYtId,
         host: "https://www.youtube-nocookie.com",
         playerVars: {
           autoplay: 0,
@@ -188,17 +195,17 @@ export default function VideoCanvas() {
       ytPlayerRef.current?.destroy();
       ytPlayerRef.current = null;
     };
-  }, [ytVideoId]);
+  }, [localYtId]);
 
   const handleMarkStart = useCallback(() => {
     const t = ytPlayerRef.current?.getCurrentTime() ?? 0;
-    useEditorStore.setState({ clipStartTime: t });
-  }, []);
+    setClipRange(t, useEditorStore.getState().clipEndTime);
+  }, [setClipRange]);
 
   const handleMarkEnd = useCallback(() => {
     const t = ytPlayerRef.current?.getCurrentTime() ?? 0;
-    useEditorStore.setState({ clipEndTime: t });
-  }, []);
+    setClipRange(useEditorStore.getState().clipStartTime, t);
+  }, [setClipRange]);
 
   // Seek to clip start when selection changes
   useEffect(() => {
@@ -285,7 +292,7 @@ export default function VideoCanvas() {
 
         {sourceUrl ? (
           <>
-            {ytVideoId ? (
+            {localYtId ? (
               /* YouTube IFrame mode — ToS-compliant preview with clip marking.
                  Face tracking and audio boost are unavailable in IFrame mode
                  due to cross-origin restrictions; they apply post-extraction. */
@@ -387,10 +394,10 @@ export default function VideoCanvas() {
           </div>
         )}
 
-        <CaptionOverlay videoRef={videoRef} transcript={transcript || undefined} />
+        <CaptionOverlay videoRef={videoRef} transcript={captionsEnabled && transcript ? transcript : undefined} />
         <CanvasLayer />
 
-        {sourceUrl && !isBuffering && !videoError && (
+        {sourceUrl && !localYtId && !isBuffering && !videoError && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-500 interactive">
             <Button
               variant="ghost"
@@ -408,7 +415,7 @@ export default function VideoCanvas() {
         )}
       </div>
 
-      {sourceUrl && !videoError && (
+      {sourceUrl && !localYtId && !videoError && (
         <div className="mt-8 flex items-center gap-6 glass-surface p-2.5 px-6 rounded-full border border-foreground/5 shadow-2xl">
           <Button
             variant="ghost"

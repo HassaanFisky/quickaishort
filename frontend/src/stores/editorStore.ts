@@ -25,6 +25,14 @@ export interface ExportSettings {
   voiceoverEnabled: boolean;
 }
 
+export interface CanvasElementStyle {
+  className?: string;
+  color?: string;
+  fontSize?: string;
+  fontWeight?: string;
+  opacity?: number;
+}
+
 export interface CanvasElement {
   id: string;
   type: "text" | "image" | "sticker";
@@ -33,7 +41,7 @@ export interface CanvasElement {
   y: number;
   scale: number;
   rotation: number;
-  style?: any;
+  style?: CanvasElementStyle;
 }
 
 const DEFAULT_EXPORT_SETTINGS: ExportSettings = {
@@ -123,8 +131,9 @@ interface EditorState {
   setSilenceSegments: (segments: CutSegment[]) => void;
   setAudioData: (data: Float32Array | null) => void;
   setCaptionsEnabled: (enabled: boolean) => void;
-  setSelectedClip: (id: string | null) => void;
   selectClip: (id: string | null) => void;
+  setYtVideoId: (id: string | null) => void;
+  setClipRange: (startTime: number, endTime: number) => void;
   updateClip: (id: string, updates: Partial<Clip>) => void;
   setExportSetting: <K extends keyof ExportSettings>(key: K, value: ExportSettings[K]) => void;
   
@@ -227,8 +236,9 @@ export const useEditorStore = create<EditorState>()(
       setSilenceSegments: (segments) => set({ silenceSegments: segments }),
       setAudioData: (data) => set({ audioData: data }),
       setCaptionsEnabled: (enabled) => set({ captionsEnabled: enabled }),
-      setSelectedClip: (id) => set({ selectedClipId: id }),
       selectClip: (id) => set({ selectedClipId: id }),
+      setYtVideoId: (id) => set({ ytVideoId: id }),
+      setClipRange: (startTime, endTime) => set({ clipStartTime: startTime, clipEndTime: endTime }),
 
       updateClip: (id, updates) =>
         set((state) => ({

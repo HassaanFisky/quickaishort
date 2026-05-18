@@ -6,7 +6,11 @@ import {
 } from "@mediapipe/tasks-vision";
 import { WorkerMessage } from "@/types/pipeline";
 
-const ctx: Worker = self as any;
+interface WorkerGlobal {
+  postMessage(message: unknown, transfer?: Transferable[]): void;
+  addEventListener(type: "message", listener: (ev: MessageEvent) => void): void;
+}
+const workerCtx = self as unknown as WorkerGlobal;
 
 let faceDetector: FaceDetector | null = null;
 let isBusy = false;
@@ -14,7 +18,7 @@ let isBusy = false;
 // Initialize MediaPipe Face Detector
 const initializeFaceDetector = async () => {
   try {
-    postMessage({
+    sendMessage({
       type: "status",
       stage: "init",
       payload: { message: "Loading Face Detection Model..." },
@@ -33,14 +37,14 @@ const initializeFaceDetector = async () => {
       runningMode: "VIDEO",
     });
 
-    postMessage({
+    sendMessage({
       type: "status",
       stage: "ready",
       payload: { message: "Face Detector Ready" },
       timestamp: Date.now(),
     });
   } catch (error) {
-    postMessage({
+    sendMessage({
       type: "error",
       stage: "init",
       payload: { message: "Failed to load Face Detector", error },
@@ -49,14 +53,14 @@ const initializeFaceDetector = async () => {
   }
 };
 
-ctx.addEventListener("message", async (event) => {
+workerCtx.addEventListener("message", async (event) => {
   if (event.data.type === "init") {
     await initializeFaceDetector();
     return;
   }
 
   if (event.data.type === "detect" && faceDetector) {
-    if (isBusy) return; // Drop frame if busy
+    if (isBusy) return;
     isBusy = true;
 
     try {
@@ -67,11 +71,10 @@ ctx.addEventListener("message", async (event) => {
       );
 
       if (result.detections.length > 0) {
-        // Get the most confident face
         const bestFace = result.detections[0];
         const box = bestFace.boundingBox;
 
-        postMessage({
+        sendMessage({
           type: "face_detected",
           stage: "detect",
           payload: {
@@ -87,6 +90,14 @@ ctx.addEventListener("message", async (event) => {
           },
           timestamp: Date.now(),
         });
+      } else {
+        // No face in this frame — notify tracker so stale reframing is cleared
+        sendMessage({
+          type: "face_detected",
+          stage: "detect",
+          payload: { face: null },
+          timestamp: Date.now(),
+        });
       }
     } catch (e) {
       console.error("Face Detection Error:", e);
@@ -96,6 +107,6 @@ ctx.addEventListener("message", async (event) => {
   }
 });
 
-function postMessage(msg: WorkerMessage) {
-  ctx.postMessage(msg);
+function sendMessage(msg: WorkerMessage) {
+  workerCtx.postMessage(msg);
 }

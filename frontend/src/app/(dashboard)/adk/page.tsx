@@ -288,6 +288,7 @@ function MediaStep() {
                     selected ? "border-primary" : "border-transparent",
                   )}
                 >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={clip.thumbnail} alt={clip.title} className="w-full aspect-video object-cover" />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
                   {selected && (
@@ -380,12 +381,10 @@ function RenderStep({
 }) {
   const {
     script, uploadedFiles, selectedStockClips, voiceId, status, progress, downloadUrl, errorMessage,
-    step, setStep,
+    step, setStep, reset,
   } = useADKStore();
   const [quality, setQuality] = useState<"low" | "medium" | "high">("medium");
   const [aspect, setAspect] = useState<"9:16" | "1:1">("9:16");
-
-  const store = useADKStore();
 
   const wordCount = script.trim().split(/\s+/).filter(Boolean).length;
   const selectedVoice = VOICES.find((v) => v.id === voiceId);
@@ -401,6 +400,7 @@ function RenderStep({
     a.href = abs;
     a.download = `quickai-adk-short.mp4`;
     a.target = "_blank";
+    a.rel = "noopener";
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -526,7 +526,7 @@ function RenderStep({
 
       {isDone && (
         <button
-          onClick={() => store.reset()}
+          onClick={() => reset()}
           className="w-full flex items-center justify-center gap-2 rounded-2xl py-3 text-sm font-bold text-muted-foreground border border-foreground/8 hover:bg-secondary/40 transition-colors"
         >
           <RefreshCw className="w-4 h-4" />

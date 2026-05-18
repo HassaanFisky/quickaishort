@@ -138,12 +138,10 @@ export default function Sidebar() {
                   transition={{ type: "spring", stiffness: 380, damping: 28, delay: 0.1 }}
                   className={cn(
                     "text-[10px] truncate font-bold uppercase tracking-widest",
-                    (session.user as unknown as { isPro?: boolean }).isPro
-                      ? "text-primary"
-                      : "text-[#52525b]",
+                    session.user.isPro ? "text-primary" : "text-[#52525b]",
                   )}
                 >
-                  {(session.user as unknown as { isPro?: boolean }).isPro ? "Pro" : "Free"}
+                  {session.user.isPro ? "Pro" : "Free"}
                 </motion.p>
               </div>
             </div>

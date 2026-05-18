@@ -20,7 +20,7 @@ interface ClipCardProps {
 
 export default function ClipCard({ clip }: ClipCardProps) {
   const selectedClipId = useEditorStore((state) => state.selectedClipId);
-  const setSelectedClip = useEditorStore((state) => state.setSelectedClip);
+  const selectClip = useEditorStore((state) => state.selectClip);
 
   const isSelected = selectedClipId === clip.id;
 
@@ -42,7 +42,7 @@ export default function ClipCard({ clip }: ClipCardProps) {
           ? "border-primary bg-primary/5 ring-4 ring-primary/10"
           : "hover:border-primary/50",
       )}
-      onClick={() => setSelectedClip(clip.id)}
+      onClick={() => selectClip(clip.id)}
     >
       <CardContent className="p-0">
         <div className="relative aspect-video bg-muted flex items-center justify-center overflow-hidden">

@@ -35,22 +35,7 @@ import { toast } from "sonner";
 import type { PreflightResult, PersonaVote, Recommendation } from "@/types/preflight";
 import { motion, AnimatePresence } from "framer-motion";
 import { InlinePaywallCard } from "@/components/shared/InlinePaywallCard";
-
-function useAnimatedCounter(target: number, duration = 1500) {
-  const [value, setValue] = React.useState(0);
-  React.useEffect(() => {
-    let startTime: number | null = null;
-    const step = (timestamp: number) => {
-      if (!startTime) startTime = timestamp;
-      const progress = Math.min((timestamp - startTime) / duration, 1);
-      const eased = 1 - Math.pow(1 - progress, 3);
-      setValue(Math.floor(eased * target));
-      if (progress < 1) requestAnimationFrame(step);
-    };
-    requestAnimationFrame(step);
-  }, [target, duration]);
-  return value;
-}
+import { useAnimatedCounter } from "@/hooks/useAnimatedCounter";
 
 const QUALITY_OPTIONS = ["low", "medium", "high"] as const;
 const FILTER_OPTIONS = ["None", "Urban", "Retro", "Cinematic"] as const;
@@ -58,6 +43,7 @@ const FILTER_OPTIONS = ["None", "Urban", "Retro", "Cinematic"] as const;
 export default function RightPanel() {
   const {
     sourceFile,
+    sourceUrl,
     selectedClipId,
     suggestions,
     captionsEnabled,
@@ -464,12 +450,12 @@ export default function RightPanel() {
             <button
               className={cn(
                 "w-full h-12 rounded-lg relative overflow-hidden transition-all duration-150",
-                isExporting || !selectedClip || (!sourceFile && !useEditorStore.getState().sourceUrl)
+                isExporting || !selectedClip || (!sourceFile && !sourceUrl)
                   ? "opacity-50 cursor-not-allowed"
                   : "hover:brightness-110",
               )}
               onClick={handleExport}
-              disabled={isExporting || !selectedClip || (!sourceFile && !useEditorStore.getState().sourceUrl)}
+              disabled={isExporting || !selectedClip || (!sourceFile && !sourceUrl)}
             >
               <div className="absolute inset-0 bg-gradient-to-r from-primary via-primary/80 to-accent animate-gradient-x" />
               <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-500" />

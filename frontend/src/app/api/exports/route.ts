@@ -13,7 +13,7 @@ export async function GET() {
 
     await connectDB();
     const exports = await Export.find({
-      userId: (session.user as unknown as { id: string }).id,
+      userId: session.user.id,
     }).sort({ createdAt: -1 });
 
     return NextResponse.json(exports);
@@ -39,14 +39,14 @@ export async function POST(req: NextRequest) {
     const safeProcessingMs = Math.max(0, Number(body.metrics?.processingTimeMs) || 0);
 
     const exportRecord = await Export.create({
-      userId: (session.user as unknown as { id: string }).id,
+      userId: session.user.id,
       ...body,
       status: safeStatus,
     });
 
     // Update user stats
     await User.findByIdAndUpdate(
-      (session.user as unknown as { id: string }).id,
+      session.user.id,
       {
         $inc: {
           "stats.totalExports": 1,

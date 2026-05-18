@@ -13,10 +13,12 @@ export function CaptionOverlay({ videoRef, transcript }: CaptionOverlayProps) {
   const requestRef = useRef<number>(0);
 
   useEffect(() => {
+    if (!transcript) return;
+
     const render = () => {
       const canvas = canvasRef.current;
       const video = videoRef.current;
-      if (!canvas || !video || !transcript) {
+      if (!canvas || !video) {
         requestRef.current = requestAnimationFrame(render);
         return;
       }

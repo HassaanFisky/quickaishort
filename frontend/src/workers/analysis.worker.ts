@@ -186,9 +186,12 @@ function generateViralReasoning(scores: {
     explanation += "a balanced mix of engagement factors optimized for the algorithm.";
   }
 
-  const selectedHooks = hooks
-    .sort(() => 0.5 - Math.random())
-    .slice(0, 2);
+  const shuffled = [...hooks];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  const selectedHooks = shuffled.slice(0, 2);
 
   return {
     explanation,
@@ -216,14 +219,9 @@ function detectSilence(
   let silenceStart = 0;
 
   // Create windows for analysis (e.g., 100ms) to smooth out instant drops
-  const windowSize = Math.floor(sampleRate / 10);
-  const windows = Math.floor(audioData.length / windowSize);
-
   let currentStart = 0;
 
-  // We will iterate sample by sample or window by window?
-  // Window by window is faster and sufficient for "Jump Cut".
-  // Let's use a smaller window like 10ms for precision (sampleRate / 100)
+  // 10ms windows give per-frame precision without excessive iteration cost
   const preciseWindow = Math.floor(sampleRate / 100);
 
   for (let i = 0; i < audioData.length; i += preciseWindow) {

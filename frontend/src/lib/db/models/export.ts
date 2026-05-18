@@ -2,8 +2,10 @@ import { Schema, model, models } from "mongoose";
 
 const ExportSchema = new Schema({
   userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
-  projectId: { type: Schema.Types.ObjectId, ref: "Project", required: true },
+  projectId: { type: Schema.Types.ObjectId, ref: "Project" },
   clipId: { type: String, required: true },
+  jobId: { type: String },
+  downloadUrl: { type: String },
 
   settings: {
     aspectRatio: { type: String, enum: ["9:16", "1:1"] },

@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { API_URL, getVideoInfo } from "@/lib/api";
+import { getVideoInfo, getProxyUrl } from "@/lib/api";
 
 // Components
 import LeftPanel from "./LeftPanel";
@@ -45,7 +45,7 @@ function getYTThumbnail(videoId: string): string {
 }
 
 export default function EditorLayout() {
-  const { setSourceFile, setProcessing, isProcessing, currentStage, sourceUrl, setThumbnailUrl: storeThumbnail } =
+  const { setSourceFile, setSourceUrl, setProcessing, isProcessing, currentStage, sourceUrl, setThumbnailUrl: storeThumbnail } =
     useEditorStore();
   const { runPipeline, cancelPipeline, status } = useMediaPipeline();
   const [urlInput, setUrlInput] = useState("");
@@ -93,15 +93,8 @@ export default function EditorLayout() {
 
       if (info.thumbnail) storeThumbnail(info.thumbnail);
 
-      const proxyUrl = `${API_URL}/api/proxy?url=${encodeURIComponent(url)}`;
-
-      useEditorStore.setState({
-        sourceUrl: proxyUrl,
-        sourceFile: null,
-        currentStage: "loading",
-      });
-
-      // REMOVED: setSourceUrl(url) was overwriting the working proxyUrl with a raw YouTube link
+      // Use the API helper to build the proxy URL — avoids duplicating the URL format
+      setSourceUrl(getProxyUrl(url));
       await runPipeline();
     } catch (error: any) {
       console.error(error);
@@ -441,10 +434,12 @@ export default function EditorLayout() {
 function FloatingControls() {
   const { exportSettings, setExportSetting } = useEditorStore();
 
+  const ASPECT_CYCLE = ["9:16", "16:9", "1:1"] as const;
+  type AspectOption = typeof ASPECT_CYCLE[number];
+
   const cycleAspectRatio = () => {
-    const options = ["9:16", "16:9", "1:1"] as const;
-    const idx = options.indexOf(exportSettings.aspectRatio as any);
-    const next = options[(idx + 1) % options.length];
+    const idx = ASPECT_CYCLE.indexOf(exportSettings.aspectRatio as AspectOption);
+    const next = ASPECT_CYCLE[(idx + 1) % ASPECT_CYCLE.length];
     setExportSetting("aspectRatio", next);
     toast.success(`Aspect ratio: ${next}`);
   };

@@ -69,7 +69,7 @@ self.onmessage = async (e: MessageEvent) => {
         });
         break;
 
-      case "transcribe":
+      case "transcribe": {
         const result = await transcribe(payload.audioData);
         self.postMessage({
           type: "complete",
@@ -77,6 +77,7 @@ self.onmessage = async (e: MessageEvent) => {
           payload: { transcript: result },
         });
         break;
+      }
     }
   } catch (error) {
     self.postMessage({

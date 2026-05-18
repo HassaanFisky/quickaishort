@@ -72,8 +72,8 @@ export const authOptions: NextAuthOptions = {
       // First sign-in: user object is present; hydrate token from DB to avoid
       // a DB round-trip on every session() call.
       if (user) {
-        token.id = (user as unknown as { id?: string }).id ?? token.sub;
-        token.isPro = (user as unknown as { isPro?: boolean }).isPro ?? false;
+        token.id = user.id ?? token.sub;
+        token.isPro = user.isPro ?? false;
       }
 
       // Google users don't carry id/isPro from authorize(); fetch once and cache.
@@ -109,8 +109,8 @@ export const authOptions: NextAuthOptions = {
 
     async session({ session, token }) {
       if (session.user) {
-        session.user.id = token.id as string;
-        session.user.isPro = (token.isPro as boolean) ?? false;
+        session.user.id = token.id ?? "";
+        session.user.isPro = token.isPro ?? false;
       }
       return session;
     },

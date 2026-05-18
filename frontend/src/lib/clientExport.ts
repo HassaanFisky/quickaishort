@@ -54,16 +54,22 @@ export async function exportLocalClip(
     recorder.onstop = () => {
       const blob = new Blob(chunks, { type: mime });
       const ext = mime.startsWith("video/mp4") ? "mp4" : "webm";
+      const blobUrl = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
+      a.href = blobUrl;
       a.download = filename.replace(/\.[^.]+$/, `.${ext}`);
       document.body.appendChild(a);
       a.click();
       a.remove();
+      // Revoke both URLs now that the download is queued
+      URL.revokeObjectURL(blobUrl);
       URL.revokeObjectURL(objectUrl);
       resolve();
     };
-    recorder.onerror = (e) => reject(new Error(String(e)));
+    recorder.onerror = (e: Event) => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error((e as ErrorEvent).message ?? "MediaRecorder error"));
+    };
 
     recorder.start(200);
     video.play().catch(reject);

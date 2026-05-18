@@ -1,8 +1,9 @@
 "use client";
 
-import { useRef, useState, useCallback, useEffect } from "react";
+import { useRef, useState, useCallback, useEffect, useMemo } from "react";
 import { useEditorStore } from "@/stores/editorStore";
 import { Button } from "@/components/ui/button";
+import type { Clip } from "@/types/pipeline";
 import {
   Play,
   Pause,
@@ -21,7 +22,6 @@ import {
 import { cn } from "@/lib/utils";
 import { formatTime } from "@/lib/utils/formatTime";
 import { toast } from "sonner";
-import { useMemo } from "react";
 
 // ---- TimelineClip Component with Trim & Drag Support ----
 function TimelineClip({
@@ -30,7 +30,7 @@ function TimelineClip({
   isSelected,
   onSelect,
 }: {
-  clip: any;
+  clip: Clip;
   duration: number;
   isSelected: boolean;
   onSelect: () => void;
@@ -221,10 +221,12 @@ export default function BottomDock() {
     toast.success("Text added to canvas.");
   }, [addCanvasElement]);
 
+  const FILTER_CYCLE = ["None", "Urban", "Retro", "Cinematic"] as const;
+  type FilterOption = typeof FILTER_CYCLE[number];
+
   const handleFX = useCallback(() => {
-    const filters = ["None", "Urban", "Retro", "Cinematic"] as const;
-    const currentIdx = filters.indexOf(exportSettings.filter as any);
-    const nextFilter = filters[(currentIdx + 1) % filters.length];
+    const currentIdx = FILTER_CYCLE.indexOf(exportSettings.filter as FilterOption);
+    const nextFilter = FILTER_CYCLE[(currentIdx + 1) % FILTER_CYCLE.length];
     setExportSetting("filter", nextFilter);
     toast.success(`FX changed to: ${nextFilter}`);
   }, [exportSettings.filter, setExportSetting]);
@@ -379,7 +381,7 @@ export default function BottomDock() {
             className="flex-1 h-8 rounded-lg bg-foreground/5 border border-foreground/5 relative overflow-hidden cursor-crosshair"
           >
             {duration > 0 && suggestions.length > 0 ? (
-              suggestions.map((clip: any) => (
+              suggestions.map((clip) => (
                 <TimelineClip
                   key={clip.id}
                   clip={clip}

@@ -8,6 +8,7 @@ import { extractAudioData } from "@/lib/utils/audioExtractor";
 import { toast } from "sonner";
 import { API_URL, getAudioUrl } from "@/lib/api";
 import { useSession } from "next-auth/react";
+import type { Clip, Transcript } from "@/types/pipeline";
 
 export function useMediaPipeline() {
   const { data: session } = useSession();
@@ -134,35 +135,49 @@ export function useMediaPipeline() {
 
       const { sourceUrl } = useEditorStore.getState();
       
+      interface AnalysisResponse {
+        suggestedClips?: Partial<Clip>[];
+      }
+      interface AnalysisError {
+        response?: { data?: { detail?: string; message?: string } };
+        message?: string;
+      }
+
       analysis.analyzeWithBackend({
         videoId: sourceUrl || "local-video",
-        transcript: transcript.chunks || transcript,
+        transcript: transcript.chunks,
         duration: useEditorStore.getState().duration || 0,
         user_id: userId,
-      }).then((response: any) => {
+      }).then((response: AnalysisResponse) => {
         if (response.suggestedClips) {
           setAgentState("viralAnalysis", { status: "done", progress: 100 });
           setAgentState("reframing", { status: "working", progress: 50 });
 
           setSuggestions(
-            response.suggestedClips.map((s: any) => ({
+            response.suggestedClips.map((s) => ({
               ...s,
-              aspectRatio: "9:16",
+              aspectRatio: "9:16" as const,
               captionsEnabled: true,
-              status: "ready",
+              status: "ready" as const,
+              id: s.id ?? crypto.randomUUID(),
+              start: s.start ?? 0,
+              end: s.end ?? 0,
+              confidence: s.confidence ?? 0,
+              reason: s.reason ?? "",
             })),
           );
-          
+
           setAgentState("reframing", { status: "done", progress: 100 });
           setProcessing(false, "ready");
           setProgress(100);
           toast.success("AI Analysis complete! Suggestions ready.");
         }
-      }).catch((err: unknown) => {
+      }).catch((err: AnalysisError) => {
         const msg =
-          (err as { response?: { data?: { detail?: string; message?: string } } })?.response?.data?.detail ||
-          (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-          (err instanceof Error ? err.message : "Analysis failed");
+          err?.response?.data?.detail ||
+          err?.response?.data?.message ||
+          err?.message ||
+          "Analysis failed";
         toast.error(typeof msg === "string" ? msg : "Analysis failed. Please try again.");
         setAgentState("viralAnalysis", { status: "error" });
         setProcessing(false, "idle");
@@ -194,11 +209,11 @@ export function useMediaPipeline() {
       setAgentState("reframing", { status: "working", progress: 80 });
 
       setSuggestions(
-        suggestions.map((s: any) => ({
+        suggestions.map((s) => ({
           ...s,
-          aspectRatio: "9:16",
+          aspectRatio: "9:16" as const,
           captionsEnabled: true,
-          status: "ready",
+          status: "ready" as const,
         })),
       );
 

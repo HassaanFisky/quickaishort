@@ -23,6 +23,12 @@ export function useFaceTracker() {
         setIsReady(true);
       }
 
+      if (msg.type === "face_detected" && msg.payload.face === null) {
+        smoothBox.current = null;
+        setReframingData((prev) => prev ? { ...prev, faceDetected: false } : null);
+        return;
+      }
+
       if (msg.type === "face_detected" && msg.payload.face) {
         const rawBox = msg.payload.face.box;
         const dims = videoDims.current;
@@ -60,10 +66,15 @@ export function useFaceTracker() {
       }
     };
 
+    workerRef.current.onerror = (e) => {
+      console.error("[FaceTracker] Worker error:", e.message);
+    };
+
     workerRef.current.postMessage({ type: "init" });
 
     return () => {
       workerRef.current?.terminate();
+      workerRef.current = null;
     };
   }, []);
 
