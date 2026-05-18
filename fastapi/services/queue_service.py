@@ -20,6 +20,7 @@ redis_conn = redis.Redis.from_url(redis_url)
 
 # Async connection for ExtractorService and other async paths
 import redis.asyncio as async_redis
+
 async_redis_conn = async_redis.from_url(redis_url)
 
 render_queue = Queue(
@@ -28,22 +29,26 @@ render_queue = Queue(
     default_timeout=JOB_TIMEOUT_SECONDS,
 )
 
+
 def is_overloaded() -> bool:
     """Returns True if the system is too busy or in safe mode."""
     if SAFE_MODE:
         logger.warning("safe_mode_active_rejecting_tasks")
         return True
-        
+
     try:
         depth = len(render_queue)
         if depth >= MAX_QUEUE_DEPTH:
-            logger.warning("queue_depth_threshold_reached", depth=depth, limit=MAX_QUEUE_DEPTH)
+            logger.warning(
+                "queue_depth_threshold_reached", depth=depth, limit=MAX_QUEUE_DEPTH
+            )
             return True
         return False
     except Exception as e:
         logger.error("queue_health_check_failed", error=str(e))
         # Default to overloaded if we can't talk to Redis (Degraded mode)
         return True
+
 
 def get_job_cost_est(duration_sec: float) -> float:
     """Estimate compute cost for a job (heuristic)."""

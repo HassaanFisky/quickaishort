@@ -61,8 +61,12 @@ try:
         "Times a circuit breaker opened per tier",
         ["tier"],
     )
-    _METRIC_CACHE_HITS = Counter("cache_hits_total", "Cache hits on extraction requests")
-    _METRIC_CACHE_MISSES = Counter("cache_misses_total", "Cache misses on extraction requests")
+    _METRIC_CACHE_HITS = Counter(
+        "cache_hits_total", "Cache hits on extraction requests"
+    )
+    _METRIC_CACHE_MISSES = Counter(
+        "cache_misses_total", "Cache misses on extraction requests"
+    )
     _METRIC_EXHAUSTION = Counter(
         "extraction_exhausted_total",
         "Requests where every tier failed",
@@ -75,7 +79,7 @@ try:
     METRICS_AVAILABLE = True
 except ImportError:
     METRICS_AVAILABLE = False
-    generate_latest = None        # type: ignore[assignment]
+    generate_latest = None  # type: ignore[assignment]
     CONTENT_TYPE_LATEST = "text/plain"
 
 
@@ -83,15 +87,16 @@ except ImportError:
 # Error taxonomy
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 class TierError(Enum):
-    TRANSIENT        = "transient"         # timeout, network blip → retry
-    RATE_LIMITED     = "rate_limited"      # 429 → backoff + retry; no circuit open
-    BLOCKED          = "blocked"           # 403 / IP block → next tier; open circuit
-    AUTH_REQUIRED    = "auth_required"     # 401 / sign-in required → skip tier
-    FORMAT_UNAVAIL   = "format_unavail"    # yt-dlp "format not available" → next tier
-    INVALID_OUTPUT   = "invalid_output"    # validation failed → next tier
-    PROVIDER_DOWN    = "provider_down"     # DNS fail / connection refused → open circuit
-    TIMEOUT          = "timeout"           # asyncio.TimeoutError → retry once
+    TRANSIENT = "transient"  # timeout, network blip → retry
+    RATE_LIMITED = "rate_limited"  # 429 → backoff + retry; no circuit open
+    BLOCKED = "blocked"  # 403 / IP block → next tier; open circuit
+    AUTH_REQUIRED = "auth_required"  # 401 / sign-in required → skip tier
+    FORMAT_UNAVAIL = "format_unavail"  # yt-dlp "format not available" → next tier
+    INVALID_OUTPUT = "invalid_output"  # validation failed → next tier
+    PROVIDER_DOWN = "provider_down"  # DNS fail / connection refused → open circuit
+    TIMEOUT = "timeout"  # asyncio.TimeoutError → retry once
 
 
 class ExtractionError(Exception):
@@ -115,6 +120,7 @@ class ValidationError(Exception):
 # Error classifier
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 def classify_error(
     exc: Exception,
     stderr: str = "",
@@ -132,10 +138,14 @@ def classify_error(
     if status_code == 429 or "rate limit" in s or "too many requests" in s:
         return TierError.RATE_LIMITED
 
-    if status_code == 403 or any(k in s for k in ("bot", "blocked", "forbidden", "access denied")):
+    if status_code == 403 or any(
+        k in s for k in ("bot", "blocked", "forbidden", "access denied")
+    ):
         return TierError.BLOCKED
 
-    if status_code == 401 or any(k in s for k in ("sign in", "login required", "auth.jwt", "authentication")):
+    if status_code == 401 or any(
+        k in s for k in ("sign in", "login required", "auth.jwt", "authentication")
+    ):
         return TierError.AUTH_REQUIRED
 
     if "format is not available" in s or "no video formats found" in s:
@@ -146,7 +156,10 @@ def classify_error(
 
     # OSError errno -2 / -3 are DNS failures
     exc_str = str(exc).lower()
-    if any(k in exc_str for k in ("name or service not known", "temporary failure in name resolution")):
+    if any(
+        k in exc_str
+        for k in ("name or service not known", "temporary failure in name resolution")
+    ):
         return TierError.PROVIDER_DOWN
 
     return TierError.TRANSIENT
@@ -155,6 +168,7 @@ def classify_error(
 # ──────────────────────────────────────────────────────────────────────────────
 # Retry: exponential backoff with full jitter
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 async def with_retries(
     fn: Callable[[], Awaitable[Any]],
@@ -182,7 +196,7 @@ async def with_retries(
             last_exc = exc
             if exc.error_class not in retry_on or attempt == max_retries:
                 raise
-            cap = min(max_delay, base_delay * (2 ** attempt))
+            cap = min(max_delay, base_delay * (2**attempt))
             delay = random.uniform(0, cap)
             logger.info(
                 "[extractor] retry attempt=%d delay=%.2fs tier=%s error=%s",
@@ -200,9 +214,9 @@ async def with_retries(
 # Output validation
 # ──────────────────────────────────────────────────────────────────────────────
 
-_MIN_AUDIO_BYTES = 50_000       # 50 KB — anything smaller is truncated/corrupt
-_MIN_DURATION_S  = 1.0
-_MAX_DURATION_S  = 7_200.0      # 2 hours upper bound
+_MIN_AUDIO_BYTES = 50_000  # 50 KB — anything smaller is truncated/corrupt
+_MIN_DURATION_S = 1.0
+_MAX_DURATION_S = 7_200.0  # 2 hours upper bound
 
 
 async def validate_output(path: Path, request_id: str) -> None:
@@ -224,8 +238,10 @@ async def validate_output(path: Path, request_id: str) -> None:
     try:
         proc = await asyncio.create_subprocess_exec(
             "ffprobe",
-            "-v", "quiet",
-            "-print_format", "json",
+            "-v",
+            "quiet",
+            "-print_format",
+            "json",
             "-show_format",
             str(path),
             stdout=asyncio.subprocess.PIPE,
@@ -236,7 +252,9 @@ async def validate_output(path: Path, request_id: str) -> None:
         raise ValidationError(f"[{request_id}] ffprobe timed out after 10s")
 
     if proc.returncode != 0:
-        raise ValidationError(f"[{request_id}] ffprobe returned non-zero — file is corrupt")
+        raise ValidationError(
+            f"[{request_id}] ffprobe returned non-zero — file is corrupt"
+        )
 
     try:
         info = json.loads(stdout)
@@ -254,6 +272,7 @@ async def validate_output(path: Path, request_id: str) -> None:
 # ──────────────────────────────────────────────────────────────────────────────
 # Cache layer
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 class ExtractionCache:
     """
@@ -292,7 +311,9 @@ class ExtractionCache:
         """NX lock. Returns True if acquired, False if already held."""
         try:
             return bool(
-                await self._r.set(self._lock_key(url), "1", nx=True, ex=self._LOCK_TTL_S)
+                await self._r.set(
+                    self._lock_key(url), "1", nx=True, ex=self._LOCK_TTL_S
+                )
             )
         except Exception:
             return True  # Redis unavailable → proceed without lock
@@ -307,6 +328,7 @@ class ExtractionCache:
 # ──────────────────────────────────────────────────────────────────────────────
 # yt-dlp subprocess helper
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 async def _run_ytdlp(cmd: List[str], tmpdir: str, tier_name: str) -> str:
     """
@@ -323,7 +345,9 @@ async def _run_ytdlp(cmd: List[str], tmpdir: str, tier_name: str) -> str:
         )
         _, stderr_bytes = await asyncio.wait_for(proc.communicate(), timeout=65)
     except asyncio.TimeoutError:
-        raise ExtractionError("yt-dlp timed out after 65s", TierError.TIMEOUT, tier_name)
+        raise ExtractionError(
+            "yt-dlp timed out after 65s", TierError.TIMEOUT, tier_name
+        )
 
     stderr = stderr_bytes.decode("utf-8", errors="replace")
 
@@ -350,6 +374,7 @@ async def _run_ytdlp(cmd: List[str], tmpdir: str, tier_name: str) -> str:
 # They must not swallow exceptions — the caller classifies and logs them.
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 async def tier_piped(url: str, tmpdir: str) -> str:
     """
     Tier 1: Piped API.
@@ -357,6 +382,7 @@ async def tier_piped(url: str, tmpdir: str) -> str:
     which we then stream to a local file.
     """
     from services.video_service import VideoService
+
     video_id = VideoService.extract_video_id(url)
     if not video_id:
         raise ExtractionError("Invalid YouTube URL", TierError.INVALID_OUTPUT, "piped")
@@ -372,11 +398,17 @@ async def tier_piped(url: str, tmpdir: str) -> str:
                     data = resp.json()
                     audio_streams = data.get("audioStreams", [])
                     if audio_streams:
-                        sorted_streams = sorted(audio_streams, key=lambda x: x.get("bitrate", 0), reverse=True)
+                        sorted_streams = sorted(
+                            audio_streams,
+                            key=lambda x: x.get("bitrate", 0),
+                            reverse=True,
+                        )
                         stream_url = sorted_streams[0].get("url")
-                        
+
                         out_path = os.path.join(tmpdir, "piped_audio.mp3")
-                        async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as dl:
+                        async with httpx.AsyncClient(
+                            timeout=60.0, follow_redirects=True
+                        ) as dl:
                             async with dl.stream("GET", stream_url) as r:
                                 r.raise_for_status()
                                 with open(out_path, "wb") as f:
@@ -387,7 +419,9 @@ async def tier_piped(url: str, tmpdir: str) -> str:
             logger.debug(f"[extractor] piped instance {instance} failed: {e}")
             continue
 
-    raise ExtractionError("All Piped instances failed", TierError.PROVIDER_DOWN, "piped")
+    raise ExtractionError(
+        "All Piped instances failed", TierError.PROVIDER_DOWN, "piped"
+    )
 
 
 async def tier_invidious(url: str, tmpdir: str) -> str:
@@ -395,9 +429,12 @@ async def tier_invidious(url: str, tmpdir: str) -> str:
     Tier 5: Invidious API (Public fallback).
     """
     from services.video_service import VideoService
+
     video_id = VideoService.extract_video_id(url)
     if not video_id:
-        raise ExtractionError("Invalid YouTube URL", TierError.INVALID_OUTPUT, "invidious")
+        raise ExtractionError(
+            "Invalid YouTube URL", TierError.INVALID_OUTPUT, "invidious"
+        )
 
     instances = VideoService.INVIDIOUS_INSTANCES.copy()
     random.shuffle(instances)
@@ -413,7 +450,9 @@ async def tier_invidious(url: str, tmpdir: str) -> str:
                     if audio_only:
                         stream_url = audio_only[0].get("url")
                         out_path = os.path.join(tmpdir, "invidious_audio.mp3")
-                        async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as dl:
+                        async with httpx.AsyncClient(
+                            timeout=60.0, follow_redirects=True
+                        ) as dl:
                             async with dl.stream("GET", stream_url) as r:
                                 r.raise_for_status()
                                 with open(out_path, "wb") as f:
@@ -423,7 +462,10 @@ async def tier_invidious(url: str, tmpdir: str) -> str:
         except Exception:
             continue
 
-    raise ExtractionError("All Invidious instances failed", TierError.PROVIDER_DOWN, "invidious")
+    raise ExtractionError(
+        "All Invidious instances failed", TierError.PROVIDER_DOWN, "invidious"
+    )
+
 
 async def tier_android_music(url: str, tmpdir: str) -> str:
     """
@@ -440,11 +482,14 @@ async def tier_android_music(url: str, tmpdir: str) -> str:
 
     cmd = [
         "yt-dlp",
-        "--format", "bestaudio/best",
-        "--output", out_tmpl,
+        "--format",
+        "bestaudio/best",
+        "--output",
+        out_tmpl,
         "--no-playlist",
         "--no-warnings",
-        "--extractor-args", "youtube:player_client=android_music,android",
+        "--extractor-args",
+        "youtube:player_client=android_music,android",
     ]
     if proxy:
         cmd += ["--proxy", proxy]
@@ -478,11 +523,14 @@ async def tier_web_cookies(url: str, tmpdir: str) -> str:
 
     cmd = [
         "yt-dlp",
-        "--format", "bestaudio/best",
-        "--output", out_tmpl,
+        "--format",
+        "bestaudio/best",
+        "--output",
+        out_tmpl,
         "--no-playlist",
         "--no-warnings",
-        "--cookies", cookie_path,
+        "--cookies",
+        cookie_path,
     ]
     if proxy:
         cmd += ["--proxy", proxy]
@@ -577,7 +625,7 @@ TIER_CONFIG: List[Dict[str, Any]] = [
         "max_retries": 1,
         "retry_on": [TierError.TRANSIENT, TierError.TIMEOUT],
         "circuit_ignore_errors": {"rate_limited"},
-        "circuit_failure_threshold": 8, # Higher threshold as public instances are often flaky
+        "circuit_failure_threshold": 8,  # Higher threshold as public instances are often flaky
         "circuit_open_duration_s": 60.0,
         "circuit_success_threshold": 1,
     },
@@ -628,6 +676,7 @@ TIER_CONFIG: List[Dict[str, Any]] = [
 # ExtractorService  (singleton — one instance shared across all requests)
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 class ExtractorService:
     """
     Orchestrates the full extraction chain:
@@ -673,9 +722,7 @@ class ExtractorService:
 
     # ── Public API ────────────────────────────────────────────────────────────
 
-    async def extract_audio(
-        self, url: str, request_id: Optional[str] = None
-    ) -> bytes:
+    async def extract_audio(self, url: str, request_id: Optional[str] = None) -> bytes:
         """
         Extract audio from url and return MP3 bytes.
 
@@ -710,14 +757,16 @@ class ExtractorService:
                 if cb.is_open():
                     logger.info(
                         "[extractor] tier.skipped request_id=%s tier=%s reason=circuit_open",
-                        request_id, tier_name,
+                        request_id,
+                        tier_name,
                     )
                     continue
 
                 attempted.append(tier_name)
                 logger.info(
                     "[extractor] tier.attempt request_id=%s tier=%s",
-                    request_id, tier_name,
+                    request_id,
+                    tier_name,
                 )
                 t_start = time.monotonic()
 
@@ -733,9 +782,15 @@ class ExtractorService:
                     # ── 4. Normalise to MP3 via ffmpeg ────────────────────────
                     mp3_path = Path(tmpdir) / "final.mp3"
                     conv = await asyncio.create_subprocess_exec(
-                        "ffmpeg", "-y", "-i", str(raw_path),
-                        "-vn", "-b:a", "128k",
-                        "-ar", "44100",         # normalise sample rate
+                        "ffmpeg",
+                        "-y",
+                        "-i",
+                        str(raw_path),
+                        "-vn",
+                        "-b:a",
+                        "128k",
+                        "-ar",
+                        "44100",  # normalise sample rate
                         str(mp3_path),
                         stdout=asyncio.subprocess.PIPE,
                         stderr=asyncio.subprocess.PIPE,
@@ -751,24 +806,40 @@ class ExtractorService:
                     cb.record_success()
 
                     if METRICS_AVAILABLE:
-                        _METRIC_DURATION.labels(tier=tier_name, status="success").observe(duration_s)
+                        _METRIC_DURATION.labels(
+                            tier=tier_name, status="success"
+                        ).observe(duration_s)
                         _METRIC_SUCCESS.labels(tier=tier_name).inc()
 
                     result_bytes = final_path.read_bytes()
                     await self.cache.set(url, result_bytes)
 
-                    log_metric("extraction_success", 1, metadata={"tier": tier_name, "request_id": request_id, "duration_ms": int(duration_s * 1000)})
+                    log_metric(
+                        "extraction_success",
+                        1,
+                        metadata={
+                            "tier": tier_name,
+                            "request_id": request_id,
+                            "duration_ms": int(duration_s * 1000),
+                        },
+                    )
 
                     logger.info(
                         "[extractor] tier.success request_id=%s tier=%s "
                         "duration_ms=%d size_bytes=%d",
-                        request_id, tier_name,
+                        request_id,
+                        tier_name,
                         int(duration_s * 1000),
                         len(result_bytes),
                     )
                     return result_bytes
 
-                except (ExtractionError, ValidationError, asyncio.TimeoutError, Exception) as exc:
+                except (
+                    ExtractionError,
+                    ValidationError,
+                    asyncio.TimeoutError,
+                    Exception,
+                ) as exc:
                     # ── 7. Classify, record, and log every failure ────────────
                     duration_s = time.monotonic() - t_start
 
@@ -790,20 +861,34 @@ class ExtractorService:
                     # Emit circuit-open metric here (avoids circular import in
                     # circuit_breaker.py)
                     if cb.state == "OPEN":
-                        log_metric("circuit_open", 1, metadata={"tier": tier_name, "request_id": request_id})
+                        log_metric(
+                            "circuit_open",
+                            1,
+                            metadata={"tier": tier_name, "request_id": request_id},
+                        )
                         if METRICS_AVAILABLE:
                             _METRIC_CIRCUIT_OPENS.labels(tier=tier_name).inc()
                             _METRIC_DURATION.labels(
                                 tier=tier_name, status="failure"
                             ).observe(duration_s)
 
-                    log_metric("extraction_failure", 1, metadata={"tier": tier_name, "error_class": ec.value, "request_id": request_id, "duration_ms": int(duration_s * 1000)})
+                    log_metric(
+                        "extraction_failure",
+                        1,
+                        metadata={
+                            "tier": tier_name,
+                            "error_class": ec.value,
+                            "request_id": request_id,
+                            "duration_ms": int(duration_s * 1000),
+                        },
+                    )
 
                     logger.warning(
                         "[extractor] tier.failure request_id=%s tier=%s "
                         "error_class=%s duration_ms=%d circuit=%s msg=%s "
                         "recovery=next_tier",
-                        request_id, tier_name,
+                        request_id,
+                        tier_name,
                         ec.value,
                         int(duration_s * 1000),
                         cb.state,
@@ -818,7 +903,9 @@ class ExtractorService:
             logger.error(
                 "[extractor] extraction.exhausted request_id=%s "
                 "tiers_attempted=%s total_ms=%d recovery=return_503",
-                request_id, attempted, total_ms,
+                request_id,
+                attempted,
+                total_ms,
             )
             raise AllTiersExhaustedError(
                 f"All extraction tiers failed after {total_ms}ms. "
@@ -856,13 +943,17 @@ def get_extractor_service() -> ExtractorService:
     global _service_instance
     if _service_instance is None:
         from services.queue_service import async_redis_conn, redis_conn  # noqa: PLC0415
-        _service_instance = ExtractorService(redis_conn=redis_conn, async_redis_conn=async_redis_conn)
+
+        _service_instance = ExtractorService(
+            redis_conn=redis_conn, async_redis_conn=async_redis_conn
+        )
     return _service_instance
 
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Worker watchdog
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 class WorkerWatchdog:
     """
@@ -905,7 +996,9 @@ class WorkerWatchdog:
                 logger.warning(
                     "[watchdog] missed heartbeat tier_name=worker missed=%d "
                     "elapsed_s=%.1f max_missed=%d",
-                    self._missed, elapsed, self._max_missed,
+                    self._missed,
+                    elapsed,
+                    self._max_missed,
                 )
 
                 if self._missed >= self._max_missed:

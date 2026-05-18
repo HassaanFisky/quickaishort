@@ -10,8 +10,6 @@ All Gemini calls go through services.gemini_client.call_gemini, which wraps
 them in tenacity retry on 429 / 5xx / deadline exceeded.
 """
 
-
-
 import json
 import logging
 import re
@@ -39,15 +37,34 @@ logger = logging.getLogger(__name__)
 
 class ViralAnalysis(BaseModel):
     score: int = Field(..., description="Viral score from 0-100")
-    hookStrength: float = Field(..., description="Score 0.0-1.0 for the first 3 seconds")
+    hookStrength: float = Field(
+        ..., description="Score 0.0-1.0 for the first 3 seconds"
+    )
     retentionPotential: float = Field(..., description="Predicted retention 0.0-1.0")
-    visualEnergy: float = Field(default=0.5, description="0.0-1.0 visual action / energy from frames")
-    cameraMovement: float = Field(default=0.5, description="0.0-1.0 camera dynamism from frames")
-    salientCenterX: float = Field(default=0.5, description="Predicted horizontal center of interest (0.0-1.0) for 9:16 cropping")
-    hookOverlay: str = Field(default="", description="Punchy 1-5 word text to overlay at the start")
-    emotionalPeaks: List[float] = Field(default_factory=list, description="Timestamps within the clip where an 'Emotional Peak' occurs for cinematic effects")
-    cinematicStyle: str = Field(default="Impact", description="Editing style suggestion: 'Impact', 'Minimal', 'Dynamic'")
-    emotionalTriggers: List[str] = Field(default_factory=list, description="E.g. 'Curiosity', 'Shock'")
+    visualEnergy: float = Field(
+        default=0.5, description="0.0-1.0 visual action / energy from frames"
+    )
+    cameraMovement: float = Field(
+        default=0.5, description="0.0-1.0 camera dynamism from frames"
+    )
+    salientCenterX: float = Field(
+        default=0.5,
+        description="Predicted horizontal center of interest (0.0-1.0) for 9:16 cropping",
+    )
+    hookOverlay: str = Field(
+        default="", description="Punchy 1-5 word text to overlay at the start"
+    )
+    emotionalPeaks: List[float] = Field(
+        default_factory=list,
+        description="Timestamps within the clip where an 'Emotional Peak' occurs for cinematic effects",
+    )
+    cinematicStyle: str = Field(
+        default="Impact",
+        description="Editing style suggestion: 'Impact', 'Minimal', 'Dynamic'",
+    )
+    emotionalTriggers: List[str] = Field(
+        default_factory=list, description="E.g. 'Curiosity', 'Shock'"
+    )
     reasoning: str = Field(..., description="Why this segment will perform well")
 
 
@@ -75,7 +92,9 @@ try:
 
     _ADK_OK = True
 except ImportError:
-    logger.warning("google-adk not installed — using direct Gemini fallback for viral agent.")
+    logger.warning(
+        "google-adk not installed — using direct Gemini fallback for viral agent."
+    )
     _ADK_OK = False
     Agent = SequentialAgent = Runner = InMemorySessionService = FunctionTool = None  # type: ignore[assignment]
     genai_types = None  # type: ignore[assignment]
@@ -98,6 +117,7 @@ def get_viral_score_cache(video_id: str) -> dict:
     """
     try:
         from services.queue_service import redis_conn
+
         data = redis_conn.hgetall(f"viral:cache:{video_id}")
         if data:
             return {
@@ -189,12 +209,14 @@ def _build_viral_pipeline():
     )
 
     from agent.firestore_session import FirestoreSessionService
+
     try:
         session_service = FirestoreSessionService()
         logger.info("Viral agent using Firestore session service")
     except Exception as fs_err:
         logger.warning(
-            "Firestore unavailable (%s) — falling back to InMemorySessionService", fs_err
+            "Firestore unavailable (%s) — falling back to InMemorySessionService",
+            fs_err,
         )
         session_service = InMemorySessionService()
     return Runner(
@@ -206,15 +228,16 @@ def _build_viral_pipeline():
 
 _viral_runner_cache: Optional[Runner] = None
 
+
 def get_viral_runner() -> Optional[Runner]:
     """Lazy initializer for the Viral runner."""
     global _viral_runner_cache
     if _viral_runner_cache is not None:
         return _viral_runner_cache
-    
+
     if not _ADK_OK:
         return None
-        
+
     try:
         runner = _build_viral_pipeline()
         _viral_runner_cache = runner
@@ -301,9 +324,7 @@ async def _direct_gemini_pipeline(
     if frames_by_segment and genai_types is not None:
         contents = [genai_types.Part(text=score_parts[0])]
         for idx, frames in frames_by_segment.items():
-            contents.append(
-                genai_types.Part(text=f"Frames for segment index {idx}:")
-            )
+            contents.append(genai_types.Part(text=f"Frames for segment index {idx}:"))
             for frame_bytes in frames:
                 contents.append(
                     genai_types.Part(
@@ -339,8 +360,7 @@ async def _rescore_with_vision(
 ) -> list[ClipSuggestion]:
     """Escalates existing suggestions to vision-grounded scoring."""
     raw_segments = [
-        {"start": s.start, "end": s.end, "reason": s.reason}
-        for s in suggestions
+        {"start": s.start, "end": s.end, "reason": s.reason} for s in suggestions
     ]
     logger.info("Performing vision re-score for %d segments", len(raw_segments))
     return await _direct_gemini_pipeline(
@@ -356,13 +376,17 @@ def _coerce_suggestions(raw: str) -> list[ClipSuggestion]:
         cleaned = raw.strip()
         if cleaned.startswith("```"):
             # Remove ```json ... ``` or ``` ... ```
-            cleaned = re.sub(r"^```(?:json)?\n?|\n?```$", "", cleaned, flags=re.MULTILINE)
-        
+            cleaned = re.sub(
+                r"^```(?:json)?\n?|\n?```$", "", cleaned, flags=re.MULTILINE
+            )
+
         data = json.loads(cleaned)
     except Exception as exc:
-        logger.warning("Could not parse scoring response: %r. Error: %s", raw[:200], exc)
+        logger.warning(
+            "Could not parse scoring response: %r. Error: %s", raw[:200], exc
+        )
         return []
-    
+
     items = data if isinstance(data, list) else data.get("clips", [])
     out: list[ClipSuggestion] = []
     for item in items or []:
@@ -382,6 +406,7 @@ def _coerce_suggestions(raw: str) -> list[ClipSuggestion]:
 
 import re
 
+
 async def run_viral_pipeline(
     transcript_text: str,
     duration: float,
@@ -391,7 +416,9 @@ async def run_viral_pipeline(
     """Run the multi-agent ADK pipeline. Falls back to direct Gemini when ADK is missing."""
     runner = get_viral_runner()
     if not _ADK_OK or runner is None or genai_types is None:
-        logger.info("Falling back to direct Gemini pipeline (ADK unavailable or failed to init)")
+        logger.info(
+            "Falling back to direct Gemini pipeline (ADK unavailable or failed to init)"
+        )
         return await _direct_gemini_pipeline(transcript_text, duration, video_id)
 
     session_id = str(uuid.uuid4())
@@ -410,12 +437,14 @@ async def run_viral_pipeline(
     # Silently no-ops when no history exists or Redis is unavailable.
     try:
         from services.learning_service import LearningService
+
         ctx = LearningService.get_scoring_context(user_id)
         if ctx:
             initial_state["user_scoring_context"] = ctx
             logger.info(
                 "learning_context_injected user=%s context_len=%d",
-                user_id, len(ctx),
+                user_id,
+                len(ctx),
             )
     except Exception:
         pass
@@ -458,7 +487,9 @@ async def run_viral_pipeline(
         # as ADK doesn't natively support image parts in the session state yet.
         if video_id and suggestions:
             try:
-                logger.info("Escalating to vision-grounded re-scoring for video %s", video_id)
+                logger.info(
+                    "Escalating to vision-grounded re-scoring for video %s", video_id
+                )
                 rescored = await _rescore_with_vision(
                     suggestions, video_id, transcript_text, duration
                 )
@@ -468,47 +499,55 @@ async def run_viral_pipeline(
                 logger.warning("Vision rescore skipped: %s", exc)
 
         # Cache the viral data and saliency mapping for this video.
-        # This allows the render worker to recover salient center coordinates 
+        # This allows the render worker to recover salient center coordinates
         # even if the frontend doesn't pass them back in the export request.
         if video_id and suggestions:
             try:
                 import time as _time
                 from services.queue_service import redis_conn as _rc
-                
+
                 # 1. Store top score for grounding
                 top = max(suggestions, key=lambda s: s.viralAnalysis.score)
-                _rc.hset(f"viral:cache:{video_id}", mapping={
-                    "score": str(top.viralAnalysis.score),
-                    "cached_at": str(int(_time.time())),
-                })
-                
+                _rc.hset(
+                    f"viral:cache:{video_id}",
+                    mapping={
+                        "score": str(top.viralAnalysis.score),
+                        "cached_at": str(int(_time.time())),
+                    },
+                )
+
                 # 2. Store saliency, hook & peaks map (start:end -> {cx, hook, peaks, style})
                 data_map = {}
                 for s in suggestions:
                     key = f"{s.start:.2f}:{s.end:.2f}"
-                    data_map[key] = json.dumps({
-                        "cx": s.viralAnalysis.salientCenterX,
-                        "hook": s.viralAnalysis.hookOverlay,
-                        "peaks": s.viralAnalysis.emotionalPeaks,
-                        "style": s.viralAnalysis.cinematicStyle
-                    })
-                
+                    data_map[key] = json.dumps(
+                        {
+                            "cx": s.viralAnalysis.salientCenterX,
+                            "hook": s.viralAnalysis.hookOverlay,
+                            "peaks": s.viralAnalysis.emotionalPeaks,
+                            "style": s.viralAnalysis.cinematicStyle,
+                        }
+                    )
+
                 if data_map:
                     _rc.hset(f"segment:metadata:{video_id}", mapping=data_map)
                     _rc.expire(f"segment:metadata:{video_id}", 86400)
-                
+
                 _rc.expire(f"viral:cache:{video_id}", 86400)  # 24h TTL
             except Exception as e:
                 logger.debug("Failed to cache saliency: %s", e)
 
         # Level 5 Learning Loop Enforcement: Deterministic post-processing.
-        # Apply the user's historical action boundary to guarantee the 
+        # Apply the user's historical action boundary to guarantee the
         # learning signal alters the decision function.
         if suggestions and user_id and user_id != "anonymous":
             try:
                 from services.learning_service import LearningService
+
                 raw_dicts = [s.model_dump() for s in suggestions]
-                adjusted_dicts = LearningService.apply_learned_decision_boundary(user_id, raw_dicts)
+                adjusted_dicts = LearningService.apply_learned_decision_boundary(
+                    user_id, raw_dicts
+                )
                 suggestions = [ClipSuggestion(**d) for d in adjusted_dicts]
             except Exception as exc:
                 logger.warning("Failed to apply learned boundary: %s", exc)

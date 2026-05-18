@@ -42,7 +42,9 @@ def get_verified_user_id(
 
     if not _NEXTAUTH_SECRET:
         # Secret not configured — refuse all requests to prevent silent data leaks.
-        logger.error("NEXTAUTH_SECRET not set but AUTH_DISABLED is false. Rejecting request.")
+        logger.error(
+            "NEXTAUTH_SECRET not set but AUTH_DISABLED is false. Rejecting request."
+        )
         raise HTTPException(
             status_code=503,
             detail="Authentication service misconfigured. Contact support.",

@@ -42,6 +42,7 @@ def _cobalt_get_stream_url(url: str) -> str:
         return stream_url
     raise RuntimeError(f"Cobalt bad status: {data.get('status')}")
 
+
 logger = logging.getLogger(__name__)
 
 FRAMES_PER_CLIP_DEFAULT = 5
@@ -146,30 +147,35 @@ def extract_clip_frames(
 
 def _download_segment(video_id: str, start: float, end: float, workdir: Path) -> Path:
     template = str(workdir / f"src_{video_id}.%(ext)s")
-    ydl_opts = inject_ydl_bypass({
-        # Lowest reasonable quality — we only need frames for vision scoring.
-        "format": "worstvideo[ext=mp4]+worstaudio[ext=m4a]/worst[ext=mp4]/worst",
-        "download_ranges": yt_dlp.utils.download_range_func(None, [(start, end)]),
-        "outtmpl": template,
-        "quiet": True,
-        "no_warnings": True,
-        "force_keyframes_at_cuts": True,
-        "merge_output_format": "mp4",
-    })
+    ydl_opts = inject_ydl_bypass(
+        {
+            # Lowest reasonable quality — we only need frames for vision scoring.
+            "format": "worstvideo[ext=mp4]+worstaudio[ext=m4a]/worst[ext=mp4]/worst",
+            "download_ranges": yt_dlp.utils.download_range_func(None, [(start, end)]),
+            "outtmpl": template,
+            "quiet": True,
+            "no_warnings": True,
+            "force_keyframes_at_cuts": True,
+            "merge_output_format": "mp4",
+        }
+    )
     youtube_url = f"https://www.youtube.com/watch?v={video_id}"
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(youtube_url, download=True)
             path = Path(ydl.prepare_filename(info))
     except Exception as ydl_err:
-        logger.warning(f"[frame] yt-dlp failed ({ydl_err}), using Cobalt fallback for frames...")
+        logger.warning(
+            f"[frame] yt-dlp failed ({ydl_err}), using Cobalt fallback for frames..."
+        )
         cobalt_url = _cobalt_get_stream_url(youtube_url)
         cobalt_out = str(workdir / f"cobalt_frames_{video_id}.mp4")
         # Grab just the needed segment via ffmpeg from the Cobalt stream URL
         (
-            ffmpeg
-            .input(cobalt_url, ss=start, t=(end - start))
-            .output(cobalt_out, vcodec="libx264", acodec="aac", crf=28, preset="ultrafast")
+            ffmpeg.input(cobalt_url, ss=start, t=(end - start))
+            .output(
+                cobalt_out, vcodec="libx264", acodec="aac", crf=28, preset="ultrafast"
+            )
             .overwrite_output()
             .run(quiet=True)
         )

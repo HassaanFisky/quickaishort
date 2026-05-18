@@ -157,8 +157,9 @@ class RedisCircuitBreaker:
         try:
             d = self._r.hgetall(self._key) or {}
             return {
-                (k.decode("utf-8") if isinstance(k, bytes) else k):
-                (v.decode("utf-8") if isinstance(v, bytes) else v)
+                (k.decode("utf-8") if isinstance(k, bytes) else k): (
+                    v.decode("utf-8") if isinstance(v, bytes) else v
+                )
                 for k, v in d.items()
             }
         except Exception:
@@ -219,10 +220,14 @@ class RedisCircuitBreaker:
             try:
                 count = self._r.hincrby(self._key, "success_count", 1)
                 if int(count) >= self.success_threshold:
-                    self._set({"state": "CLOSED", "failure_count": "0", "opened_at": ""})
+                    self._set(
+                        {"state": "CLOSED", "failure_count": "0", "opened_at": ""}
+                    )
                     logger.info("circuit[%s] → CLOSED (recovered)", self.tier_name)
             except Exception as exc:
-                logger.warning("circuit[%s] Redis success error: %s", self.tier_name, exc)
+                logger.warning(
+                    "circuit[%s] Redis success error: %s", self.tier_name, exc
+                )
         elif state == "CLOSED":
             try:
                 count = int(d.get("failure_count", 0))
@@ -237,7 +242,9 @@ class RedisCircuitBreaker:
         d = self._get()
         opened_at_raw = d.get("opened_at", "")
         try:
-            opened_at_f: Optional[float] = float(opened_at_raw) if opened_at_raw else None
+            opened_at_f: Optional[float] = (
+                float(opened_at_raw) if opened_at_raw else None
+            )
         except (TypeError, ValueError):
             opened_at_f = None
         return {
@@ -246,20 +253,20 @@ class RedisCircuitBreaker:
             "success_count": int(d.get("success_count", 0)),
             "open_duration_s": self.open_duration_s,
             "open_since_s": (
-                round(time.time() - opened_at_f, 1)
-                if opened_at_f is not None
-                else None
+                round(time.time() - opened_at_f, 1) if opened_at_f is not None else None
             ),
         }
 
     # ── Internal ──────────────────────────────────────────────────────────────
 
     def _open(self) -> None:
-        self._set({
-            "state": "OPEN",
-            "opened_at": str(time.time()),
-            "failure_count": "0",
-        })
+        self._set(
+            {
+                "state": "OPEN",
+                "opened_at": str(time.time()),
+                "failure_count": "0",
+            }
+        )
         logger.warning(
             "circuit[%s] → OPEN for %.0fs (threshold=%d)",
             self.tier_name,

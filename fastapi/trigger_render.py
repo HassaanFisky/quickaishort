@@ -10,7 +10,7 @@ payload = {
     "aspect_ratio": "9:16",
     "quality": "low",
     "captions": {"enabled": False},
-    "watermark_enabled": False
+    "watermark_enabled": False,
 }
 
 print(f"Triggering render at {url}...")

@@ -37,7 +37,9 @@ PRO_MONTHLY_CREDITS = 100
 # ---------------------------------------------------------------------------
 
 
-def _verify_paddle_signature(raw_body: bytes, signature_header: str, secret: str) -> bool:
+def _verify_paddle_signature(
+    raw_body: bytes, signature_header: str, secret: str
+) -> bool:
     """
     Verify Paddle Billing ed25519 webhook signature.
 
@@ -67,7 +69,9 @@ def _verify_paddle_signature(raw_body: bytes, signature_header: str, secret: str
         return True
 
     except InvalidSignature:
-        logger.warning("paddle_sig: signature mismatch — possible forgery or wrong secret")
+        logger.warning(
+            "paddle_sig: signature mismatch — possible forgery or wrong secret"
+        )
         return False
     except Exception as exc:
         logger.error("paddle_sig: verification error: %s", exc)
@@ -84,7 +88,9 @@ async def _is_event_processed(event_id: str) -> bool:
     if not is_ready():
         return False
     db = get_db()
-    return bool(await db[PADDLE_WEBHOOK_EVENTS_COLLECTION].find_one({"event_id": event_id}))
+    return bool(
+        await db[PADDLE_WEBHOOK_EVENTS_COLLECTION].find_one({"event_id": event_id})
+    )
 
 
 async def _mark_event_processed(event_id: str, event_type: str) -> None:
@@ -149,10 +155,20 @@ async def _grant_pro(user_id: str, subscription_id: str) -> None:
     # 2. Sync with NextAuth users collection for frontend session
     try:
         # Check if user_id is a valid ObjectId, if not use it as email
-        query = {"_id": ObjectId(user_id)} if ObjectId.is_valid(user_id) else {"email": user_id}
+        query = (
+            {"_id": ObjectId(user_id)}
+            if ObjectId.is_valid(user_id)
+            else {"email": user_id}
+        )
         await db["users"].update_one(
             query,
-            {"$set": {"isPro": True, "isPremium": True, "updatedAt": datetime.now(timezone.utc)}}
+            {
+                "$set": {
+                    "isPro": True,
+                    "isPremium": True,
+                    "updatedAt": datetime.now(timezone.utc),
+                }
+            },
         )
         logger.info("paddle_grant_pro: synced with users collection for %s", user_id)
     except Exception as exc:
@@ -162,6 +178,7 @@ async def _grant_pro(user_id: str, subscription_id: str) -> None:
     try:
         from services.stats_service import invalidate_premium_cache
         from services.queue_service import async_redis_conn
+
         await invalidate_premium_cache(user_id)
         await async_redis_conn.delete(f"stats:{user_id}")
     except Exception as exc:
@@ -188,10 +205,20 @@ async def _revoke_pro(user_id: str, subscription_id: str) -> None:
 
     # 2. Sync with NextAuth users collection for frontend session
     try:
-        query = {"_id": ObjectId(user_id)} if ObjectId.is_valid(user_id) else {"email": user_id}
+        query = (
+            {"_id": ObjectId(user_id)}
+            if ObjectId.is_valid(user_id)
+            else {"email": user_id}
+        )
         await db["users"].update_one(
             query,
-            {"$set": {"isPro": False, "isPremium": False, "updatedAt": datetime.now(timezone.utc)}}
+            {
+                "$set": {
+                    "isPro": False,
+                    "isPremium": False,
+                    "updatedAt": datetime.now(timezone.utc),
+                }
+            },
         )
         logger.info("paddle_revoke_pro: synced with users collection for %s", user_id)
     except Exception as exc:
@@ -200,6 +227,7 @@ async def _revoke_pro(user_id: str, subscription_id: str) -> None:
     try:
         from services.stats_service import invalidate_premium_cache
         from services.queue_service import async_redis_conn
+
         await invalidate_premium_cache(user_id)
         await async_redis_conn.delete(f"stats:{user_id}")
     except Exception as exc:
@@ -241,6 +269,7 @@ async def paddle_webhook(request: Request):
     # ---- 2. Parse event ---------------------------------------------------
     try:
         import json
+
         payload = json.loads(raw_body)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid JSON payload")

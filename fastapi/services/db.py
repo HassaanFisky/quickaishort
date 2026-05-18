@@ -11,7 +11,11 @@ from datetime import datetime, timezone
 from typing import Optional
 
 import certifi
-from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase, AsyncIOMotorGridFSBucket
+from motor.motor_asyncio import (
+    AsyncIOMotorClient,
+    AsyncIOMotorDatabase,
+    AsyncIOMotorGridFSBucket,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +43,7 @@ async def init_db() -> None:
         serverSelectionTimeoutMS=10000,
         connectTimeoutMS=5000,
         socketTimeoutMS=30000,
-        maxPoolSize=20,      # limit per-instance to prevent exhausting MongoDB Atlas limits
+        maxPoolSize=20,  # limit per-instance to prevent exhausting MongoDB Atlas limits
         minPoolSize=2,
         tlsCAFile=certifi.where(),
     )
@@ -69,7 +73,12 @@ async def init_db() -> None:
             ),
             timeout=5.0,
         )
-        logger.info("MongoDB initialized (db=%s, bucket=%s, uploads=%s).", DB_NAME, EXPORTS_BUCKET, UPLOADS_BUCKET)
+        logger.info(
+            "MongoDB initialized (db=%s, bucket=%s, uploads=%s).",
+            DB_NAME,
+            EXPORTS_BUCKET,
+            UPLOADS_BUCKET,
+        )
     except Exception as exc:
         logger.warning("MongoDB index creation failed (non-fatal): %s", exc)
 

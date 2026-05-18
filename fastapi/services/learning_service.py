@@ -24,12 +24,13 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 _OUTCOME_KEY_PREFIX = "learn:outcomes:"
-_MAX_OUTCOMES = 20       # Sliding window per user
+_MAX_OUTCOMES = 20  # Sliding window per user
 _TTL_SECONDS = 30 * 86400  # 30 days
 
 
 def _redis():
     from services.queue_service import redis_conn
+
     return redis_conn
 
 
@@ -56,19 +57,23 @@ class LearningService:
             score_raw = r.hget(f"viral:cache:{video_id}", "score")
             viral_score = int(score_raw) if score_raw else None
 
-            record = json.dumps({
-                "video_id": video_id,
-                "job_id": job_id,
-                "viral_score": viral_score,
-                "exported_at": int(time.time()),
-            })
+            record = json.dumps(
+                {
+                    "video_id": video_id,
+                    "job_id": job_id,
+                    "viral_score": viral_score,
+                    "exported_at": int(time.time()),
+                }
+            )
             key = f"{_OUTCOME_KEY_PREFIX}{user_id}"
             r.lpush(key, record)
-            r.ltrim(key, 0, _MAX_OUTCOMES - 1)   # Keep last 20
+            r.ltrim(key, 0, _MAX_OUTCOMES - 1)  # Keep last 20
             r.expire(key, _TTL_SECONDS)
             logger.info(
                 "learning_outcome_recorded user=%s video=%s score=%s",
-                user_id, video_id, viral_score,
+                user_id,
+                video_id,
+                viral_score,
             )
         except Exception as exc:
             logger.debug("learning_service.record_outcome skipped: %s", exc)
@@ -98,9 +103,7 @@ class LearningService:
                     continue
 
             scores = [
-                o["viral_score"]
-                for o in outcomes
-                if o.get("viral_score") is not None
+                o["viral_score"] for o in outcomes if o.get("viral_score") is not None
             ]
             if not scores:
                 return ""
@@ -122,12 +125,14 @@ class LearningService:
             return ""
 
     @staticmethod
-    def apply_learned_decision_boundary(user_id: str, raw_scores: list[dict]) -> list[dict]:
+    def apply_learned_decision_boundary(
+        user_id: str, raw_scores: list[dict]
+    ) -> list[dict]:
         """
         Deterministic decision-function update (Level 5 requirement).
         Reads the user's actual export threshold, and structurally enforces it
         on the LLM's outputs. This guarantees the learned signal changes behavior.
-        
+
         raw_scores: list of ClipSuggestion objects as dicts
         """
         if not user_id or user_id == "anonymous":
@@ -158,7 +163,7 @@ class LearningService:
                 if not va:
                     continue
                 score = va.get("score", 50)
-                
+
                 # If the LLM scored it below the user's known action boundary,
                 # apply a deterministic penalty. This enforces the learning loop.
                 if score < action_boundary:
@@ -166,8 +171,8 @@ class LearningService:
                     penalty = (action_boundary - score) // 2
                     va["score"] = max(0, score - penalty)
                     va["reasoning"] = (
-                        va.get("reasoning", "") + 
-                        f" [System auto-penalized: score below user historical threshold of {action_boundary}]"
+                        va.get("reasoning", "")
+                        + f" [System auto-penalized: score below user historical threshold of {action_boundary}]"
                     ).strip()
 
             return raw_scores

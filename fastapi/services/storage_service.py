@@ -10,7 +10,9 @@ logger = logging.getLogger(__name__)
 
 BucketType = Literal["exports", "uploads"]
 
-_sync_executor = _cf.ThreadPoolExecutor(max_workers=4, thread_name_prefix="storage_sync")
+_sync_executor = _cf.ThreadPoolExecutor(
+    max_workers=4, thread_name_prefix="storage_sync"
+)
 
 
 def _run_in_new_loop(coro):
@@ -58,7 +60,12 @@ class StorageService:
             raise RuntimeError("Database not initialized")
 
         bucket = self._get_bucket(bucket_name)
-        logger.info("[Storage] Uploading %s to GridFS:%s:%s", local_path, bucket_name, remote_path)
+        logger.info(
+            "[Storage] Uploading %s to GridFS:%s:%s",
+            local_path,
+            bucket_name,
+            remote_path,
+        )
 
         with open(local_path, "rb") as f:
             await bucket.upload_from_stream(
@@ -77,7 +84,9 @@ class StorageService:
         bucket_name: BucketType = "exports",
     ) -> str:
         """Sync wrapper for upload_file_async."""
-        return _run_sync(self.upload_file_async(local_path, remote_path, content_type, bucket_name))
+        return _run_sync(
+            self.upload_file_async(local_path, remote_path, content_type, bucket_name)
+        )
 
     async def download_file_async(
         self,
@@ -90,12 +99,19 @@ class StorageService:
             raise RuntimeError("Database not initialized")
 
         bucket = self._get_bucket(bucket_name)
-        logger.info("[Storage] Downloading GridFS:%s:%s to %s", bucket_name, remote_path, local_path)
+        logger.info(
+            "[Storage] Downloading GridFS:%s:%s to %s",
+            bucket_name,
+            remote_path,
+            local_path,
+        )
 
         cursor = bucket.find({"filename": remote_path})
         files = await cursor.to_list(length=1)
         if not files:
-            logger.error("[Storage] File not found in GridFS:%s:%s", bucket_name, remote_path)
+            logger.error(
+                "[Storage] File not found in GridFS:%s:%s", bucket_name, remote_path
+            )
             return False
 
         with open(local_path, "wb") as f:
@@ -111,7 +127,9 @@ class StorageService:
         """Sync wrapper for download_file_async."""
         return _run_sync(self.download_file_async(remote_path, local_path, bucket_name))
 
-    async def exists_async(self, remote_path: str, bucket_name: BucketType = "exports") -> bool:
+    async def exists_async(
+        self, remote_path: str, bucket_name: BucketType = "exports"
+    ) -> bool:
         """Checks if a file exists in GridFS."""
         if not is_ready():
             return False
@@ -124,11 +142,15 @@ class StorageService:
         """Sync wrapper for exists_async."""
         return _run_sync(self.exists_async(remote_path, bucket_name))
 
-    def generate_signed_url(self, remote_path: str, _expiration_hours: int = 24) -> Optional[str]:
+    def generate_signed_url(
+        self, remote_path: str, _expiration_hours: int = 24
+    ) -> Optional[str]:
         """Legacy placeholder. URLs are now signed via services.signing and served by /api/download."""
         return remote_path
 
-    async def delete_file_async(self, remote_path: str, bucket_name: BucketType = "exports"):
+    async def delete_file_async(
+        self, remote_path: str, bucket_name: BucketType = "exports"
+    ):
         """Deletes a file from GridFS."""
         if not is_ready():
             return
@@ -146,6 +168,7 @@ class StorageService:
         """Downloads a file from Google Cloud Storage to local disk."""
         try:
             from google.cloud import storage
+
             if not gcs_uri.startswith("gs://"):
                 return False
 

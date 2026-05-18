@@ -6,6 +6,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 if current_dir not in sys.path:
     sys.path.insert(0, current_dir)
 
+
 def validate_env():
     _REQUIRED = ["MONGODB_URI", "REDIS_URL", "GEMINI_API_KEY"]
     _missing = [k for k in _REQUIRED if not os.environ.get(k)]
@@ -15,8 +16,12 @@ def validate_env():
     for k in _REQUIRED:
         v = os.environ[k]
         if v.startswith(("redis://localhost", "redis://127")):
-            print(f"[FATAL] {k} is localhost — not valid in Cloud Run. Fix Cloud Run env vars.", file=sys.stderr)
+            print(
+                f"[FATAL] {k} is localhost — not valid in Cloud Run. Fix Cloud Run env vars.",
+                file=sys.stderr,
+            )
             sys.exit(1)
+
 
 import logging
 import os
@@ -54,6 +59,7 @@ from services.job_persistence import persist_failed_job
 
 logger = get_logger("render_worker")
 
+
 def get_mem_usage_mb() -> float:
     """Heuristic for memory pressure (Linux/Cloud Run only)."""
     try:
@@ -64,6 +70,7 @@ def get_mem_usage_mb() -> float:
     except Exception:
         return 0.0
 
+
 def check_memory_pressure():
     """Warn if memory usage is > 80% of typical 8GB limit."""
     mem = get_mem_usage_mb()
@@ -71,14 +78,15 @@ def check_memory_pressure():
         logger.warning("memory_pressure_high", mem_mb=round(mem, 2))
     return mem
 
+
 # --- Health Check Server for Cloud Run ---
 class HealthCheckHandler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
-        if self.path in ('/', '/health', '/health/live'):
+        if self.path in ("/", "/health", "/health/live"):
             self.send_response(200)
             self.end_headers()
             self.wfile.write(b'{"status": "alive"}')
-        elif self.path == '/health/ready':
+        elif self.path == "/health/ready":
             # Basic readiness check: can we talk to Redis?
             try:
                 redis_conn.ping()
@@ -93,14 +101,17 @@ class HealthCheckHandler(http.server.SimpleHTTPRequestHandler):
             self.send_response(404)
             self.end_headers()
 
+
 def run_health_server():
     port = int(os.environ.get("PORT", 8080))
     logger.info("starting_health_server", port=port)
     with socketserver.TCPServer(("", port), HealthCheckHandler) as httpd:
         httpd.serve_forever()
 
+
 # --- Signal Handling for Preemption Safety ---
 _worker_ref = None
+
 
 def handle_preemption(signum, frame):
     """Gracefully handle SIGTERM from Cloud Run."""
@@ -110,7 +121,9 @@ def handle_preemption(signum, frame):
         logger.info("triggering_rq_worker_warm_shutdown")
         _worker_ref.request_stop(signum, frame)
 
+
 signal.signal(signal.SIGTERM, handle_preemption)
+
 
 def _build_job(
     video_id: str,
@@ -130,9 +143,7 @@ def _build_job(
     elif "salient_center_x" in options:
         # CHANGED: Added autonomous reframing fallback from viral agent analysis
         reframing = Reframing(
-            center_x=float(options["salient_center_x"]),
-            center_y=0.5,
-            scale=1.0
+            center_x=float(options["salient_center_x"]), center_y=0.5, scale=1.0
         )
 
     captions = CaptionsConfig(
@@ -143,9 +154,9 @@ def _build_job(
 
     watermark = WatermarkConfig(
         enabled=bool(options.get("watermark_enabled", False)),
-        image_path=Path(options["watermark_path"])
-        if options.get("watermark_path")
-        else None,
+        image_path=(
+            Path(options["watermark_path"]) if options.get("watermark_path") else None
+        ),
     )
 
     job = RenderJob(
@@ -183,12 +194,14 @@ def _build_job(
     music_id = options.get("music_id")
     if music_id:
         from services.music_service import get_music_service
+
         music_svc = get_music_service()
         track = music_svc.get_track(music_id)
         if track:
             job.background_music = track.url
 
     return job
+
 
 def process_render_task(
     job_id: str,
@@ -199,9 +212,12 @@ def process_render_task(
     options: dict,
 ) -> dict:
     """Entry point invoked by RQ."""
-    return asyncio.run(_async_process_render_task(
-        job_id, video_id, start_sec, end_sec, user_id, options
-    ))
+    return asyncio.run(
+        _async_process_render_task(
+            job_id, video_id, start_sec, end_sec, user_id, options
+        )
+    )
+
 
 async def _async_process_render_task(
     job_id: str,
@@ -222,7 +238,8 @@ async def _async_process_render_task(
     # invocation; otherwise, jobs #2+ will get "Event loop is closed" on all
     # DB operations because _client was created in the previous loop.
     from services.db import init_db, close_db
-    await close_db()   # no-op if already None; releases the old closed-loop client
+
+    await close_db()  # no-op if already None; releases the old closed-loop client
     await init_db()
 
     logger.info("processing_render_task_start", job_id=job_id, user_id=user_id)
@@ -231,13 +248,17 @@ async def _async_process_render_task(
         # Monitor memory at every progress update
         mem = check_memory_pressure()
         from services.events import CHANNEL_EXPORT_PROGRESS
-        publish(CHANNEL_EXPORT_PROGRESS, {
-            "job_id": job_id, 
-            "user_id": user_id, 
-            "status": status, 
-            "progress": progress_val,
-            "mem_usage_mb": round(mem, 2)
-        })
+
+        publish(
+            CHANNEL_EXPORT_PROGRESS,
+            {
+                "job_id": job_id,
+                "user_id": user_id,
+                "status": status,
+                "progress": progress_val,
+                "mem_usage_mb": round(mem, 2),
+            },
+        )
 
     # C4 fix: Declare before try so finally always has a safe reference,
     # even if an exception is raised before the variable is first assigned.
@@ -247,7 +268,7 @@ async def _async_process_render_task(
         # Pillar 5: Idempotency Check
         storage = get_storage_service()
         remote_filename = f"exports/{user_id}/{job_id}.mp4"
-        
+
         # Check if this job was already successfully processed (e.g. retry of a successful job)
         if await storage.exists_async(remote_filename):
             logger.info("render_job_idempotency_hit", job_id=job_id)
@@ -256,10 +277,15 @@ async def _async_process_render_task(
                 "user_id": user_id,
                 "storage_path": remote_filename,
                 "status": "success",
-                "idempotency_hit": True
+                "idempotency_hit": True,
             }
             publish(CHANNEL_EXPORT_COMPLETE, payload)
-            log_metric("render_idempotency_hit", 1, user_id=user_id, metadata={"job_id": job_id})
+            log_metric(
+                "render_idempotency_hit",
+                1,
+                user_id=user_id,
+                metadata={"job_id": job_id},
+            )
             return payload
 
         # ---------------------------------------------------------------
@@ -288,6 +314,7 @@ async def _async_process_render_task(
         ):
             try:
                 from agent.script_agent import ScriptAgent
+
                 script_prompt = str(options["script_prompt"])
                 progress("Synthesizing voiceover...", 3)
                 voiceover_local_path = await asyncio.to_thread(
@@ -321,12 +348,13 @@ async def _async_process_render_task(
 
         if production_plan:
             from services.render_service import render_video
+
             progress("Starting production render...", 5)
             # render_video is sync because it calls ffmpeg.run() which is blocking
             # This is fine; we are in a worker thread/process.
             result_path = Path(render_video(production_plan))
             duration_sec = sum(
-                (float(s.get("end_sec", 0)) - float(s.get("start_sec", 0))) 
+                (float(s.get("end_sec", 0)) - float(s.get("start_sec", 0)))
                 for s in production_plan.get("segments", [])
             )
         else:
@@ -336,7 +364,9 @@ async def _async_process_render_task(
 
             service = RenderService()
             job = _build_job(video_id, start_sec, end_sec, options)
-            render_result = service.run(job, progress_callback=lambda s: progress(s, 30))
+            render_result = service.run(
+                job, progress_callback=lambda s: progress(s, 30)
+            )
             result_path = render_result.output_path
             duration_sec = render_result.duration_sec
 
@@ -344,11 +374,11 @@ async def _async_process_render_task(
         progress("Finalizing export...", 90)
         storage = get_storage_service()
         remote_filename = f"exports/{user_id}/{job_id}.mp4"
-        
+
         gcs_uri = await storage.upload_file_async(
             local_path=result_path,
             remote_path=remote_filename,
-            content_type="video/mp4"
+            content_type="video/mp4",
         )
 
         payload = {
@@ -358,13 +388,17 @@ async def _async_process_render_task(
             "duration_sec": duration_sec,
             "elapsed_sec": time.time() - started_at,
         }
-        
+
         publish(CHANNEL_EXPORT_COMPLETE, payload)
-        publish(CHANNEL_STATS_INCREMENT, {"user_id": user_id, "export_delta": 1, "duration_delta": duration_sec})
-        
+        publish(
+            CHANNEL_STATS_INCREMENT,
+            {"user_id": user_id, "export_delta": 1, "duration_delta": duration_sec},
+        )
+
         # Learning loop — write side.
         try:
             from services.learning_service import LearningService
+
             LearningService.record_outcome(
                 user_id=user_id,
                 video_id=video_id,
@@ -374,24 +408,39 @@ async def _async_process_render_task(
             pass  # never block the render path
 
         # Trace cost in logs
-        log_workload("render", payload['elapsed_sec'], user_id, {"job_id": job_id})
-        log_metric("render_success", 1, user_id=user_id, metadata={"job_id": job_id, "duration_sec": duration_sec, "elapsed_sec": payload['elapsed_sec']})
-        
+        log_workload("render", payload["elapsed_sec"], user_id, {"job_id": job_id})
+        log_metric(
+            "render_success",
+            1,
+            user_id=user_id,
+            metadata={
+                "job_id": job_id,
+                "duration_sec": duration_sec,
+                "elapsed_sec": payload["elapsed_sec"],
+            },
+        )
+
         return {"status": "success", **payload}
 
     except Exception as exc:
         logger.exception("render_job_failed", job_id=job_id, error=str(exc))
-        publish(CHANNEL_EXPORT_FAILED, {"job_id": job_id, "user_id": user_id, "error": str(exc)})
-        
-        # Dead Letter Persistence (Atomic Recovery)
-        await persist_failed_job(job_id, user_id, str(exc), {
-            "video_id": video_id,
-            "options": options
-        })
-        log_metric("render_failure", 1, user_id=user_id, metadata={"job_id": job_id, "error": str(exc)[:200]})
-        
-        return {"status": "error", "job_id": job_id, "error": str(exc)}
+        publish(
+            CHANNEL_EXPORT_FAILED,
+            {"job_id": job_id, "user_id": user_id, "error": str(exc)},
+        )
 
+        # Dead Letter Persistence (Atomic Recovery)
+        await persist_failed_job(
+            job_id, user_id, str(exc), {"video_id": video_id, "options": options}
+        )
+        log_metric(
+            "render_failure",
+            1,
+            user_id=user_id,
+            metadata={"job_id": job_id, "error": str(exc)[:200]},
+        )
+
+        return {"status": "error", "job_id": job_id, "error": str(exc)}
 
     finally:
         # C4 fix: safe cleanup regardless of where in the try block we failed
@@ -403,13 +452,17 @@ async def _async_process_render_task(
                 # its own workdir is cleaned in render_video's finally block.
                 # For the single-clip RenderService path the workdir carries a
                 # "qais-export-" prefix; clean the whole directory.
-                if result_path.parent != Path(tempfile.gettempdir()) and "qais-" in str(result_path.parent):
+                if result_path.parent != Path(tempfile.gettempdir()) and "qais-" in str(
+                    result_path.parent
+                ):
                     shutil.rmtree(result_path.parent, ignore_errors=True)
             except Exception:
                 pass
 
+
 if __name__ == "__main__":
     import sys
+
     # Force line-buffered output for Cloud Logging
     sys.stdout.reconfigure(line_buffering=True)
     sys.stderr.reconfigure(line_buffering=True)
@@ -419,12 +472,11 @@ if __name__ == "__main__":
     # to avoid "Event loop is closed" errors.
     logger.info("mongodb_init_deferred_to_task_lifecycle")
 
-
     logger.info("worker_starting_production_lifecycle", queue=render_queue.name)
-    
+
     # Start health server in background
     threading.Thread(target=run_health_server, daemon=True).start()
-    
+
     try:
         worker = Worker([render_queue], connection=redis_conn)
         _worker_ref = worker

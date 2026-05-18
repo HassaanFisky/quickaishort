@@ -26,6 +26,7 @@ from typing import Any, AsyncIterator, Literal, Optional
 from pydantic import BaseModel
 
 from services.gemini_client import DEFAULT_MODEL
+
 MODEL = DEFAULT_MODEL
 
 logger = logging.getLogger(__name__)
@@ -143,7 +144,9 @@ try:
 
     _ADK_OK = True
 except ImportError as _adk_err:
-    logger.warning("google-adk not installed (%s) — preflight pipeline unavailable", _adk_err)
+    logger.warning(
+        "google-adk not installed (%s) — preflight pipeline unavailable", _adk_err
+    )
     _ADK_OK = False
     Agent = BaseAgent = LoopAgent = ParallelAgent = SequentialAgent = None  # type: ignore[assignment]
     Event = EventActions = Runner = InMemorySessionService = None  # type: ignore[assignment]
@@ -156,9 +159,12 @@ MCPToolset = StdioServerParams = None  # type: ignore[assignment]
 if _ADK_OK:
     try:
         from google.adk.tools.mcp_tool.mcp_toolset import MCPToolset, StdioServerParams  # type: ignore[assignment]
+
         _MCP_OK = True
     except ImportError:
-        logger.warning("google-adk MCPToolset not available — Supabase MCP agent disabled")
+        logger.warning(
+            "google-adk MCPToolset not available — Supabase MCP agent disabled"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -275,7 +281,9 @@ def _parse_persona_vote(raw: Any, persona_id: str) -> Optional[PersonaVote]:
             text = str(raw).strip()
             if text.startswith("```"):
                 lines = text.split("\n")
-                text = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
+                text = "\n".join(
+                    lines[1:-1] if lines[-1].strip() == "```" else lines[1:]
+                )
             data = json.loads(text)
         data["persona_id"] = persona_id
         return PersonaVote(**data)
@@ -335,13 +343,15 @@ class _TrendAgent(BaseAgent if _ADK_OK else object):
         state = ctx.session.state if hasattr(ctx, "session") else {}
         transcript = state.get("current_clip_transcript", "")
         keywords = " ".join(transcript.split()[:5]) or "viral shorts"
-        
+
         trend_context = await fetch_trend_context(keywords)
         trend_keywords: list[str] = []
         try:
             trend_data = trend_context.get("data", {})
             if isinstance(trend_data, dict):
-                for entry in trend_data.get("interest_over_time", {}).get("timeline_data", [])[:5]:
+                for entry in trend_data.get("interest_over_time", {}).get(
+                    "timeline_data", []
+                )[:5]:
                     if isinstance(entry, dict) and "query" in entry:
                         trend_keywords.append(str(entry["query"]))
         except Exception:
@@ -358,7 +368,9 @@ class _TrendAgent(BaseAgent if _ADK_OK else object):
             actions=actions,
             content=genai_types.Content(
                 role="model",
-                parts=[genai_types.Part(text=f"TRENDS: keywords={len(trend_keywords)}")]
+                parts=[
+                    genai_types.Part(text=f"TRENDS: keywords={len(trend_keywords)}")
+                ],
             ),
         )
 
@@ -376,18 +388,20 @@ class _AnalyticsAgent(BaseAgent if _ADK_OK else object):
     async def _run_async_impl(self, ctx) -> AsyncIterator["Event"]:
         state = ctx.session.state if hasattr(ctx, "session") else {}
         youtube_url = state.get("youtube_url", "")
-        
+
         analytics_baseline = await fetch_youtube_analytics(youtube_url)
-        
-        actions = EventActions(
-            state_delta={"analytics_baseline": analytics_baseline}
-        )
+
+        actions = EventActions(state_delta={"analytics_baseline": analytics_baseline})
         yield Event(
             author=self.name,
             actions=actions,
             content=genai_types.Content(
                 role="model",
-                parts=[genai_types.Part(text=f"ANALYTICS: source={analytics_baseline.get('source')}")]
+                parts=[
+                    genai_types.Part(
+                        text=f"ANALYTICS: source={analytics_baseline.get('source')}"
+                    )
+                ],
             ),
         )
 
@@ -504,7 +518,9 @@ def _build_pipeline() -> tuple[Any, Any]:
         return None, None
 
     threshold = int(os.environ.get("PREFLIGHT_THRESHOLD", THRESHOLD_DEFAULT))
-    max_iterations = int(os.environ.get("PREFLIGHT_MAX_ITERATIONS", MAX_ITERATIONS_DEFAULT))
+    max_iterations = int(
+        os.environ.get("PREFLIGHT_MAX_ITERATIONS", MAX_ITERATIONS_DEFAULT)
+    )
     model = MODEL
 
     # Configure retry options for Gemini API (429/5xx protection)
@@ -572,7 +588,12 @@ def _build_pipeline() -> tuple[Any, Any]:
 
     audience_panel_loop = LoopAgent(
         name="AudiencePanelLoop",
-        sub_agents=[persona_panel, vote_aggregator, quality_gate, clip_refinement_agent],
+        sub_agents=[
+            persona_panel,
+            vote_aggregator,
+            quality_gate,
+            clip_refinement_agent,
+        ],
         max_iterations=max_iterations,
     )
 
@@ -613,7 +634,9 @@ def _build_pipeline() -> tuple[Any, Any]:
                 ),
                 output_key="historical_baseline",
             )
-            logger.info("Supabase MCP agent initialised (channel history grounding active)")
+            logger.info(
+                "Supabase MCP agent initialised (channel history grounding active)"
+            )
         except Exception as _mcp_err:
             logger.warning("Supabase MCP agent init failed: %s", _mcp_err)
             supabase_mcp_agent = None
@@ -642,12 +665,14 @@ def _build_pipeline() -> tuple[Any, Any]:
     )
 
     from agent.firestore_session import FirestoreSessionService
+
     try:
         session_service = FirestoreSessionService()
         logger.info("Pre-Flight using Firestore session service")
     except Exception as fs_err:
         logger.warning(
-            "Firestore unavailable (%s) — falling back to InMemorySessionService (dev mode)", fs_err
+            "Firestore unavailable (%s) — falling back to InMemorySessionService (dev mode)",
+            fs_err,
         )
         session_service = InMemorySessionService()
     runner = Runner(
@@ -658,19 +683,22 @@ def _build_pipeline() -> tuple[Any, Any]:
 
     logger.info(
         "Pre-Flight ADK pipeline initialised (model=%s, threshold=%d, max_iter=%d)",
-        model, threshold, max_iterations,
+        model,
+        threshold,
+        max_iterations,
     )
     return root_agent, runner
 
 
 _preflight_runner_cache: Optional[Runner] = None
 
+
 def get_preflight_runner() -> Optional[Runner]:
     """Lazy initializer for the ADK pipeline to speed up app boot."""
     global _preflight_runner_cache
     if _preflight_runner_cache is not None:
         return _preflight_runner_cache
-    
+
     try:
         _, runner = _build_pipeline()
         _preflight_runner_cache = runner
@@ -693,7 +721,9 @@ async def run_preflight_pipeline(
 ) -> PreflightResult:
     runner = get_preflight_runner()
     if not _ADK_OK or runner is None:
-        raise RuntimeError("google-adk not installed or failed to init — cannot run Pre-Flight pipeline")
+        raise RuntimeError(
+            "google-adk not installed or failed to init — cannot run Pre-Flight pipeline"
+        )
 
     clip = clip_candidates[0]
     session_id = str(uuid.uuid4())
@@ -702,7 +732,6 @@ async def run_preflight_pipeline(
     trend_keywords: list[str] = []
     trend_context = {}
     analytics_baseline = {}
-
 
     initial_state: dict[str, Any] = {
         "youtube_url": youtube_url,
@@ -744,9 +773,13 @@ async def run_preflight_pipeline(
         session_id=session_id,
         new_message=message,
     ):
-        logger.info("Pipeline event: author=%s, content=%s", event.author, getattr(event, 'content', 'N/A'))
+        logger.info(
+            "Pipeline event: author=%s, content=%s",
+            event.author,
+            getattr(event, "content", "N/A"),
+        )
         if event.is_final_response():
-            # Check if we actually have some results in state before breaking, 
+            # Check if we actually have some results in state before breaking,
             # as is_final_response might trigger on intermediate sequential steps in some ADK versions.
             session = await runner.session_service.get_session(
                 app_name="QuickAIShort_PreFlight",
@@ -763,7 +796,7 @@ async def run_preflight_pipeline(
         session_id=session_id,
     )
     state = session.state
-    
+
     # Extract grounding data that was populated by TrendAgent and AnalyticsAgent
     trend_context = state.get("trend_context", {})
     trend_keywords = state.get("trend_keywords", [])
@@ -792,9 +825,9 @@ async def run_preflight_pipeline(
 
     raw_rec = state.get("recommendation", "REFINE_FIRST")
     recommendation: Literal["PUBLISH", "REFINE_FIRST", "DISCARD"] = (
-        "PUBLISH" if raw_rec == "PUBLISH"
-        else "DISCARD" if raw_rec == "DISCARD"
-        else "REFINE_FIRST"
+        "PUBLISH"
+        if raw_rec == "PUBLISH"
+        else "DISCARD" if raw_rec == "DISCARD" else "REFINE_FIRST"
     )
 
     refined_clip: Optional[ClipCandidate] = None
@@ -810,7 +843,10 @@ async def run_preflight_pipeline(
             logger.warning("Could not parse refined_clip: %s", exc)
 
     bigquery_insight: Optional[str] = None
-    if isinstance(analytics_baseline, dict) and analytics_baseline.get("source") == "youtube_analytics":
+    if (
+        isinstance(analytics_baseline, dict)
+        and analytics_baseline.get("source") == "youtube_analytics"
+    ):
         bigquery_insight = (
             "Based on your channel's history: "
             f"avg retention {analytics_baseline.get('avg_retention_pct', 55):.0f}% · "

@@ -11,12 +11,14 @@ from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
+
 class MusicTrack(BaseModel):
     id: str
     name: str
     url: str
     mood: str
     genre: str
+
 
 # In production, this would be a database or a remote bucket index.
 DEFAULT_TRACKS = [
@@ -25,23 +27,24 @@ DEFAULT_TRACKS = [
         "name": "Chill Lofi",
         "url": "https://storage.googleapis.com/qai-assets/music/chill-lofi.mp3",
         "mood": "relaxing",
-        "genre": "Lofi"
+        "genre": "Lofi",
     },
     {
         "id": "energetic-synth-1",
         "name": "Power Up",
         "url": "https://storage.googleapis.com/qai-assets/music/power-up.mp3",
         "mood": "energetic",
-        "genre": "Synthwave"
+        "genre": "Synthwave",
     },
     {
         "id": "suspense-drone-1",
         "name": "The Mystery",
         "url": "https://storage.googleapis.com/qai-assets/music/mystery.mp3",
         "mood": "suspenseful",
-        "genre": "Ambient"
-    }
+        "genre": "Ambient",
+    },
 ]
+
 
 class MusicService:
     def __init__(self):
@@ -53,7 +56,9 @@ class MusicService:
     def get_track(self, track_id: str) -> Optional[MusicTrack]:
         return next((t for t in self.tracks if t.id == track_id), None)
 
+
 _music_service: Optional[MusicService] = None
+
 
 def get_music_service() -> MusicService:
     global _music_service

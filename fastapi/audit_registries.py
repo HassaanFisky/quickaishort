@@ -10,7 +10,9 @@ workers = Worker.all(connection=r)
 print(f"Active Workers: {len(workers)}")
 for w in workers:
     job = w.get_current_job()
-    print(f" - Worker: {w.name} | State: {w.get_state()} | Current Job: {job.id if job else 'None'}")
+    print(
+        f" - Worker: {w.name} | State: {w.get_state()} | Current Job: {job.id if job else 'None'}"
+    )
 
 # Also check for registry counts
 q = Queue("render_queue", connection=r)
@@ -19,7 +21,7 @@ registries = {
     "Finished": q.finished_job_registry,
     "Failed": q.failed_job_registry,
     "Deferred": q.deferred_job_registry,
-    "Scheduled": q.scheduled_job_registry
+    "Scheduled": q.scheduled_job_registry,
 }
 
 for name, reg in registries.items():

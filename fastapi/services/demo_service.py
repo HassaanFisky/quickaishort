@@ -11,6 +11,7 @@ from typing import Optional, Dict, Any
 SAFE_DEMO_URL = "https://www.youtube.com/watch?v=P6FORh8U0Og"
 SAFE_DEMO_VIDEO_ID = "P6FORh8U0Og"
 
+
 class DemoService:
     @staticmethod
     def is_demo_url(url: str) -> bool:
@@ -32,13 +33,10 @@ class DemoService:
                     "score": 0.98,
                     "transcript": "Artificial intelligence is no longer a future concept. It is here, evolving our daily lives...",
                     "reasoning": "Strong opening hook with clear central theme. High viral potential due to trending topic.",
-                    "reframing": {"center": {"x": 0.5, "y": 0.5}, "scale": 1.0}
+                    "reframing": {"center": {"x": 0.5, "y": 0.5}, "scale": 1.0},
                 }
             ],
-            "metadata": {
-                "demo_mode": True,
-                "cached": True
-            }
+            "metadata": {"demo_mode": True, "cached": True},
         }
 
     @staticmethod
@@ -53,6 +51,6 @@ class DemoService:
             "meta": {
                 "duration_sec": 40.0,
                 "elapsed_sec": 0.5,
-                "file_size_bytes": 1024 * 1024 * 5
-            }
+                "file_size_bytes": 1024 * 1024 * 5,
+            },
         }

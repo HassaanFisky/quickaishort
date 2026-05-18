@@ -45,7 +45,9 @@ def get_proxy_url() -> str | None:
     endpoint = os.environ.get("DECODO_ENDPOINT", "gate.decodo.com")
     port = os.environ.get("DECODO_PORT", "7000")
     if not username or not password:
-        logger.warning("DECODO credentials not set; proxy disabled for YouTube extraction")
+        logger.warning(
+            "DECODO credentials not set; proxy disabled for YouTube extraction"
+        )
         return None
     return f"http://{username}:{password}@{endpoint}:{port}"
 

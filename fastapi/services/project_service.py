@@ -15,12 +15,14 @@ from services.db import get_db
 
 logger = logging.getLogger(__name__)
 
+
 class ProjectSegment(BaseModel):
     id: str = Field(default_factory=lambda: uuid4().hex)
     clip_path: str
     start_sec: float
     end_sec: float
     text: str
+
 
 class Project(BaseModel):
     id: str = Field(alias="_id")
@@ -35,6 +37,7 @@ class Project(BaseModel):
     job_id: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
 
 class ProjectService:
     def __init__(self, db: AsyncIOMotorDatabase):
@@ -67,17 +70,21 @@ class ProjectService:
         docs = await cursor.to_list(length=100)
         return [Project(**doc) for doc in docs]
 
-    async def update_project(self, project_id: str, user_id: str, updates: dict) -> bool:
+    async def update_project(
+        self, project_id: str, user_id: str, updates: dict
+    ) -> bool:
         updates["updated_at"] = datetime.now(timezone.utc)
         result = await self.collection.update_one(
-            {"_id": project_id, "user_id": user_id},
-            {"$set": updates}
+            {"_id": project_id, "user_id": user_id}, {"$set": updates}
         )
         return result.modified_count > 0
 
     async def delete_project(self, project_id: str, user_id: str) -> bool:
-        result = await self.collection.delete_one({"_id": project_id, "user_id": user_id})
+        result = await self.collection.delete_one(
+            {"_id": project_id, "user_id": user_id}
+        )
         return result.deleted_count > 0
+
 
 # Instance provider
 def get_project_service() -> ProjectService:

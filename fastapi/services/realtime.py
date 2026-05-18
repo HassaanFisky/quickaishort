@@ -32,6 +32,7 @@ def _init_pusher():
         return None
     try:
         import pusher
+
         _pusher_client = pusher.Pusher(
             app_id=app_id,
             key=key,
@@ -63,7 +64,9 @@ class WSConnectionManager:
             if not self._connections[user_id]:
                 self._connections.pop(user_id, None)
 
-    async def broadcast(self, user_id: str, event: str, payload: dict[str, Any]) -> None:
+    async def broadcast(
+        self, user_id: str, event: str, payload: dict[str, Any]
+    ) -> None:
         async with self._lock:
             sockets = list(self._connections.get(user_id, ()))
         if not sockets:

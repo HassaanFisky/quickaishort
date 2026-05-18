@@ -16,6 +16,7 @@ from pydantic import BaseModel
 import google.genai.types as genai_types
 
 from services.gemini_client import DEFAULT_MODEL
+
 MODEL = DEFAULT_MODEL
 
 logger = logging.getLogger(__name__)
@@ -25,11 +26,13 @@ try:
     from google.adk.agents import Agent
     from google.adk.runners import Runner
     from google.adk.sessions import InMemorySessionService
+
     _ADK_OK = True
 except ImportError:
     logger.warning("google-adk not installed — Director Agent will be unavailable")
-    Agent = object # Placeholder for type hints
+    Agent = object  # Placeholder for type hints
     _ADK_OK = False
+
 
 class StoryboardScene(BaseModel):
     timestamp: str
@@ -38,17 +41,15 @@ class StoryboardScene(BaseModel):
     caption: str
     energy_level: str
 
+
 class DirectorResult(BaseModel):
     title: str
     storyboard: List[StoryboardScene]
     clip_candidates: List[dict]
 
+
 class DirectorAgent(Agent if _ADK_OK else object):
-    def __init__(
-        self, 
-        name: str = "DirectorAgent", 
-        model: str = MODEL
-    ):
+    def __init__(self, name: str = "DirectorAgent", model: str = MODEL):
         if not _ADK_OK:
             return
 
@@ -72,47 +73,54 @@ class DirectorAgent(Agent if _ADK_OK else object):
             description="Converts input into storyboard and clip candidates.",
             instruction=instruction,
             output_key="director_storyboard",
-            generate_content_config={"response_mime_type": "application/json"}
+            generate_content_config={"response_mime_type": "application/json"},
         )
 
+
 _director_runner_cache: Optional[Runner] = None
+
 
 def get_director_runner() -> Optional[Runner]:
     """Lazy initializer for the Director runner."""
     global _director_runner_cache
     if _director_runner_cache is not None:
         return _director_runner_cache
-    
+
     if not _ADK_OK:
         return None
-    
+
     try:
         from agent.firestore_session import FirestoreSessionService
+
         try:
             _session_service = FirestoreSessionService()
             logger.info("Director agent using Firestore session service")
         except Exception as _fs_err:
             logger.warning(
-                "Firestore unavailable (%s) — falling back to InMemorySessionService", _fs_err
+                "Firestore unavailable (%s) — falling back to InMemorySessionService",
+                _fs_err,
             )
             _session_service = InMemorySessionService()
-        
+
         agent = DirectorAgent()
         _director_runner_cache = Runner(
             agent=agent,
             session_service=_session_service,
-            app_name="QuickAIShort_Director"
+            app_name="QuickAIShort_Director",
         )
         return _director_runner_cache
     except Exception as exc:
         logger.error("Lazy director runner init failed: %s", exc)
         return None
 
+
 async def run_director_pipeline(input_text: str, user_id: str) -> dict:
     """High-level async entry point for the Director Agent."""
     runner = get_director_runner()
     if not _ADK_OK or not runner:
-        raise RuntimeError("Director pipeline unavailable — google-adk not installed or failed to init")
+        raise RuntimeError(
+            "Director pipeline unavailable — google-adk not installed or failed to init"
+        )
 
     session_id = f"dir-{uuid.uuid4()}"
 
@@ -120,32 +128,28 @@ async def run_director_pipeline(input_text: str, user_id: str) -> dict:
         app_name="QuickAIShort_Director",
         user_id=user_id,
         session_id=session_id,
-        state={}
+        state={},
     )
 
     message = genai_types.Content(
         role="user",
-        parts=[genai_types.Part(text=f"Create storyboard for: {input_text}")]
+        parts=[genai_types.Part(text=f"Create storyboard for: {input_text}")],
     )
 
     async for event in runner.run_async(
-        user_id=user_id,
-        session_id=session_id,
-        new_message=message
+        user_id=user_id, session_id=session_id, new_message=message
     ):
         if event.is_final_response():
             break
 
     session = await runner.session_service.get_session(
-        app_name="QuickAIShort_Director",
-        user_id=user_id,
-        session_id=session_id
+        app_name="QuickAIShort_Director", user_id=user_id, session_id=session_id
     )
-    
+
     raw_result = session.state.get("director_storyboard")
     if not raw_result:
         return {}
-        
+
     try:
         data = json.loads(raw_result) if isinstance(raw_result, str) else raw_result
         # Validate against schema to ensure downstream reliability

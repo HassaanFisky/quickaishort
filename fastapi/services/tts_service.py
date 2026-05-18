@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 Provider = Literal["google", "elevenlabs"]
 
+
 class TTSService:
     def __init__(self):
         self.google_api_key = os.getenv("GOOGLE_TTS_API_KEY")
@@ -25,17 +26,17 @@ class TTSService:
         return f"tts_cache/{hash_key}.mp3"
 
     async def generate(
-        self, 
-        text: str, 
-        voice_id: str = "en-US-Neural2-D", 
-        provider: Provider = "google"
+        self,
+        text: str,
+        voice_id: str = "en-US-Neural2-D",
+        provider: Provider = "google",
     ) -> Optional[str]:
         """Generates audio from text. Returns gridfs:// URI."""
         if not text:
             return None
 
         remote_path = self._get_cache_key(text, voice_id, provider)
-        
+
         # Check GridFS cache
         if await self.storage.exists_async(remote_path, bucket_name="uploads"):
             logger.info(f"[TTS] Cache hit in GridFS for {voice_id}")
@@ -44,20 +45,20 @@ class TTSService:
         # If not in cache, generate and upload
         with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp:
             tmp_path = Path(tmp.name)
-            
+
         try:
             if provider == "elevenlabs" and self.eleven_api_key:
                 success_path = await self._generate_elevenlabs(text, voice_id, tmp_path)
             else:
                 success_path = await self._generate_google(text, voice_id, tmp_path)
-            
+
             if success_path:
                 # Upload to GridFS
                 gridfs_uri = await self.storage.upload_file_async(
-                    tmp_path, 
-                    remote_path, 
-                    content_type="audio/mpeg", 
-                    bucket_name="uploads"
+                    tmp_path,
+                    remote_path,
+                    content_type="audio/mpeg",
+                    bucket_name="uploads",
                 )
                 return gridfs_uri
             return None
@@ -65,7 +66,9 @@ class TTSService:
             if tmp_path.exists():
                 os.remove(tmp_path)
 
-    async def _generate_google(self, text: str, voice_id: str, cache_path: Path) -> Optional[str]:
+    async def _generate_google(
+        self, text: str, voice_id: str, cache_path: Path
+    ) -> Optional[str]:
         if not self.google_api_key:
             logger.warning("GOOGLE_TTS_API_KEY not set")
             return None
@@ -87,7 +90,7 @@ class TTSService:
                 audio_b64 = resp.json().get("audioContent", "")
                 if not audio_b64:
                     return None
-                
+
                 audio_bytes = base64.b64decode(audio_b64)
                 cache_path.write_bytes(audio_bytes)
                 return str(cache_path)
@@ -95,7 +98,9 @@ class TTSService:
             logger.error(f"Google TTS failed: {e}")
             return None
 
-    async def _generate_elevenlabs(self, text: str, voice_id: str, cache_path: Path) -> Optional[str]:
+    async def _generate_elevenlabs(
+        self, text: str, voice_id: str, cache_path: Path
+    ) -> Optional[str]:
         if not self.eleven_api_key:
             return None
 
@@ -103,12 +108,12 @@ class TTSService:
         headers = {
             "Accept": "audio/mpeg",
             "Content-Type": "application/json",
-            "xi-api-key": self.eleven_api_key
+            "xi-api-key": self.eleven_api_key,
         }
         payload = {
             "text": text,
             "model_id": "eleven_monolingual_v1",
-            "voice_settings": {"stability": 0.5, "similarity_boost": 0.5}
+            "voice_settings": {"stability": 0.5, "similarity_boost": 0.5},
         }
 
         try:
@@ -121,7 +126,9 @@ class TTSService:
             logger.error(f"ElevenLabs TTS failed: {e}")
             return None
 
+
 _tts_service: Optional[TTSService] = None
+
 
 def get_tts_service() -> TTSService:
     global _tts_service

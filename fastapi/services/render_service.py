@@ -75,8 +75,15 @@ def _run_ffmpeg(stream, *, timeout: int = _FFMPEG_SEGMENT_TIMEOUT) -> None:
 
     if result.returncode != 0:
         stderr = (result.stderr or b"").decode("utf-8", errors="replace")
-        logger.error("ffmpeg_nonzero_exit code=%d stderr_tail=%s", result.returncode, stderr[-500:])
-        raise RuntimeError(f"ffmpeg exited {result.returncode}: {stderr[-2000:]}")  # noqa: EM102
+        logger.error(
+            "ffmpeg_nonzero_exit code=%d stderr_tail=%s",
+            result.returncode,
+            stderr[-500:],
+        )
+        raise RuntimeError(
+            f"ffmpeg exited {result.returncode}: {stderr[-2000:]}"
+        )  # noqa: EM102
+
 
 def _validate_background_music(url_or_path: str) -> bool:
     """
@@ -89,20 +96,30 @@ def _validate_background_music(url_or_path: str) -> bool:
     # 1. If it's a URL
     if url_or_path.startswith(("http://", "https://")):
         from urllib.parse import urlparse
+
         try:
             parsed = urlparse(url_or_path)
             hostname = parsed.hostname.lower() if parsed.hostname else ""
 
             # Prevent private IP addresses, localhost, and metadata servers
-            if any(h in hostname for h in ["localhost", "127.0.0.1", "169.254.169.254", "metadata"]):
+            if any(
+                h in hostname
+                for h in ["localhost", "127.0.0.1", "169.254.169.254", "metadata"]
+            ):
                 return False
 
             # Clean allowlist check - allow Pixabay, local storage, googleapis, and public CDNs
             allowed_domains = [
-                "pixabay.com", "googleapis.com", "quickaishort.online",
-                "storage.googleapis.com", "cdn.pixabay.com"
+                "pixabay.com",
+                "googleapis.com",
+                "quickaishort.online",
+                "storage.googleapis.com",
+                "cdn.pixabay.com",
             ]
-            if any(hostname == domain or hostname.endswith("." + domain) for domain in allowed_domains):
+            if any(
+                hostname == domain or hostname.endswith("." + domain)
+                for domain in allowed_domains
+            ):
                 return True
 
             # Check dynamic origin from env variables
@@ -122,9 +139,12 @@ def _validate_background_music(url_or_path: str) -> bool:
         # Allow if it's an asset or temp file
         allowed_prefixes = [
             Path(tempfile.gettempdir()).resolve(),
-            Path(os.getcwd()).resolve()
+            Path(os.getcwd()).resolve(),
         ]
-        if any(resolved.as_posix().startswith(prefix.as_posix()) for prefix in allowed_prefixes):
+        if any(
+            resolved.as_posix().startswith(prefix.as_posix())
+            for prefix in allowed_prefixes
+        ):
             return True
         return False
     except Exception:
@@ -164,14 +184,17 @@ class CaptionsConfig:
 @dataclass
 class WatermarkConfig:
     enabled: bool = False
-    image_path: Optional[Path] = None  # PNG on disk; if None and enabled, drawtext fallback
+    image_path: Optional[Path] = (
+        None  # PNG on disk; if None and enabled, drawtext fallback
+    )
 
 
 @dataclass
 class CanvasOverlay:
     """A user-placed text or sticker element to composite onto the video."""
-    type: str          # "text" or "sticker"
-    content: str       # Raw text / emoji
+
+    type: str  # "text" or "sticker"
+    content: str  # Raw text / emoji
     x_pct: float = 0.5  # Fractional x position (0=left, 1=right)
     y_pct: float = 0.5  # Fractional y position (0=top, 1=bottom)
     scale: float = 1.0
@@ -215,17 +238,21 @@ class RenderService:
     def __init__(self) -> None:
         pass
 
-    def run(self, job: RenderJob, progress_callback: Optional[callable] = None) -> RenderResult:
+    def run(
+        self, job: RenderJob, progress_callback: Optional[callable] = None
+    ) -> RenderResult:
         workdir = Path(tempfile.mkdtemp(prefix="qais-export-"))
         try:
             if progress_callback:
                 progress_callback("Downloading segment from YouTube...")
             source = self._download_segment(job, workdir)
-            
+
             if progress_callback:
-                progress_callback("Transcoding video (applying aspect ratio, captions)...")
+                progress_callback(
+                    "Transcoding video (applying aspect ratio, captions)..."
+                )
             output = self._transcode(job, source, workdir)
-            
+
             return RenderResult(
                 output_path=output,
                 workdir=workdir,
@@ -273,21 +300,32 @@ class RenderService:
         if job.filter_name == "Urban":
             video = video.filter("eq", contrast=1.2, saturation=0.8, gamma=1.1)
         elif job.filter_name == "Retro":
-            video = video.filter("colorchannelmixer", rr=0.393, rg=0.769, rb=0.189,
-                                 gr=0.349, gg=0.686, gb=0.168,
-                                 br=0.272, bg=0.534, bb=0.131)
+            video = video.filter(
+                "colorchannelmixer",
+                rr=0.393,
+                rg=0.769,
+                rb=0.189,
+                gr=0.349,
+                gg=0.686,
+                gb=0.168,
+                br=0.272,
+                bg=0.534,
+                bb=0.131,
+            )
         elif job.filter_name == "Cinematic":
             video = video.filter("eq", contrast=1.1, saturation=1.2)
 
         if job.transition_enabled:
             # Simple fade in/out for 0.5s
             duration = job.end_sec - job.start_sec
-            video = video.filter("fade", t="in", st=0, d=0.5).filter("fade", t="out", st=duration - 0.5, d=0.5)
+            video = video.filter("fade", t="in", st=0, d=0.5).filter(
+                "fade", t="out", st=duration - 0.5, d=0.5
+            )
 
         if job.audio_boost != 85.0:
             volume = job.audio_boost / 85.0
             audio = audio.filter("volume", volume)
-        
+
         if job.noise_suppression > 0:
             # Highpass filter for basic noise reduction
             audio = audio.filter("highpass", f=200)
@@ -308,7 +346,7 @@ class RenderService:
                 # pulse at peak: (t is relative to clip start in zoompan)
                 # We use a simple step function for the 0.5s window
                 zoom_expr = f"if(between(it,{peak},{peak+0.5}),1.1,{zoom_expr})"
-            
+
             # zoompan: z=zoom, d=duration(frames), s=output_size
             # Note: zoompan happens at 30fps by default
             # H4 Fix: Dynamically set size based on job aspect ratio to prevent double scaling overhead
@@ -316,9 +354,7 @@ class RenderService:
             video = video.filter("zoompan", z=zoom_expr, d=1, s=zoompan_size, fps=30)
 
         if job.watermark.enabled and job.watermark.image_path is not None:
-            wm = ffmpeg.input(str(job.watermark.image_path)).filter(
-                "scale", 200, -1
-            )
+            wm = ffmpeg.input(str(job.watermark.image_path)).filter("scale", 200, -1)
             video = ffmpeg.overlay(
                 video,
                 wm,
@@ -361,8 +397,7 @@ class RenderService:
 
             # Sanitise text: ffmpeg drawtext uses ':' and '\n' as special chars
             safe_text = (
-                overlay.content
-                .replace("\\", "\\\\")
+                overlay.content.replace("\\", "\\\\")
                 .replace(":", "\\:")
                 .replace("'", "\\'")[:200]  # hard cap — long text breaks ffmpeg parser
             )
@@ -381,7 +416,9 @@ class RenderService:
                 )
             except Exception as _ov_err:
                 # Never let a canvas overlay crash the whole render
-                logger.warning("canvas_overlay_skipped content=%r err=%s", overlay.content, _ov_err)
+                logger.warning(
+                    "canvas_overlay_skipped content=%r err=%s", overlay.content, _ov_err
+                )
 
         if captions_path is not None:
             video = video.filter(
@@ -394,15 +431,22 @@ class RenderService:
             if not _validate_background_music(job.background_music):
                 logger.warning(
                     "Background music validation failed for source '%s' (SSRF/path traversal risk blocked) — skipping ambient mix",
-                    job.background_music
+                    job.background_music,
                 )
             else:
                 try:
                     music = ffmpeg.input(job.background_music, stream_loop=-1)
                     # Volume filter: primary 1.0, music 0.15 (ambient)
-                    audio = ffmpeg.filter([audio, music.audio.filter("volume", 0.15)], "amix", duration="first")
+                    audio = ffmpeg.filter(
+                        [audio, music.audio.filter("volume", 0.15)],
+                        "amix",
+                        duration="first",
+                    )
                 except Exception as exc:
-                    logger.warning("Background music mix failed: %s — falling back to original audio", exc)
+                    logger.warning(
+                        "Background music mix failed: %s — falling back to original audio",
+                        exc,
+                    )
 
         preset = QUALITY_PRESETS[job.quality]
         out = ffmpeg.output(
@@ -437,11 +481,9 @@ class RenderService:
             return video.filter("scale", 1080, 1920)
 
         if job.aspect_ratio == "1:1":
-            return (
-                video.filter(
-                    "scale", 1080, 1080, force_original_aspect_ratio="increase"
-                ).filter("crop", 1080, 1080)
-            )
+            return video.filter(
+                "scale", 1080, 1080, force_original_aspect_ratio="increase"
+            ).filter("crop", 1080, 1080)
 
         return video
 
@@ -452,10 +494,10 @@ def render_video(production_plan: dict) -> str:
     Downloads, trims, scales, stitches multiple clips, and overlays a voiceover.
     """
     from yt_dlp import YoutubeDL
-    
+
     service = RenderService()
     workdir = Path(tempfile.mkdtemp(prefix="qais-render-"))
-    
+
     try:
         segments = production_plan.get("segments", [])
         voiceover_path = production_plan.get("voiceover_path")
@@ -473,19 +515,21 @@ def render_video(production_plan: dict) -> str:
             clip_source = seg.get("clip_path")
             start = float(seg.get("start_sec", 0))
             end = float(seg.get("end_sec", 5))
-            
+
             # M5 Fix: Validate that start_sec < end_sec to avoid zero-duration sub-clips.
             if start >= end:
                 logger.warning(
                     "[render_video] Segment %d has invalid timings (start_sec=%.2f >= end_sec=%.2f). Adjusting end_sec to start_sec + 1.0.",
-                    i, start, end
+                    i,
+                    start,
+                    end,
                 )
                 end = start + 1.0
-            
+
             duration = end - start
-            
+
             target_clip = workdir / f"seg_{i}.mp4"
-            
+
             if not clip_source or clip_source == "BLACK_FRAME":
                 _run_ffmpeg(
                     ffmpeg.input(f"color=c=black:s=1080x1920:d={duration}", f="lavfi")
@@ -494,28 +538,44 @@ def render_video(production_plan: dict) -> str:
                 )
             elif clip_source.startswith("gridfs://"):
                 # Handle GridFS URIs (used for ADK uploads)
-                remote_path = clip_source[len("gridfs://"):]
+                remote_path = clip_source[len("gridfs://") :]
                 local_source = workdir / f"gridfs_src_{i}.mp4"
                 storage = get_storage_service()
-                
+
                 # We assume uploads bucket for adk_uploads/ paths
-                bucket: Literal["uploads", "exports"] = "uploads" if "adk_uploads/" in remote_path else "exports"
-                
-                success = storage.download_file(remote_path, local_source, bucket_name=bucket)
+                bucket: Literal["uploads", "exports"] = (
+                    "uploads" if "adk_uploads/" in remote_path else "exports"
+                )
+
+                success = storage.download_file(
+                    remote_path, local_source, bucket_name=bucket
+                )
                 if not success:
-                    logger.error("[render_video] GridFS download failed for %s", clip_source)
+                    logger.error(
+                        "[render_video] GridFS download failed for %s", clip_source
+                    )
                     # Fallback to black frame
                     _run_ffmpeg(
-                        ffmpeg.input(f"color=c=black:s=1080x1920:d={duration}", f="lavfi")
+                        ffmpeg.input(
+                            f"color=c=black:s=1080x1920:d={duration}", f="lavfi"
+                        )
                         .output(str(target_clip), vcodec="libx264", pix_fmt="yuv420p")
                         .overwrite_output()
                     )
                 else:
                     _run_ffmpeg(
                         ffmpeg.input(str(local_source), ss=start, t=duration)
-                        .filter("scale", 1080, 1920, force_original_aspect_ratio="increase")
+                        .filter(
+                            "scale", 1080, 1920, force_original_aspect_ratio="increase"
+                        )
                         .filter("crop", 1080, 1920)
-                        .output(str(target_clip), vcodec="libx264", acodec="aac", crf=23, preset="veryfast")
+                        .output(
+                            str(target_clip),
+                            vcodec="libx264",
+                            acodec="aac",
+                            crf=23,
+                            preset="veryfast",
+                        )
                         .overwrite_output()
                     )
             elif clip_source.startswith("gs://"):
@@ -523,21 +583,33 @@ def render_video(production_plan: dict) -> str:
                 local_source = workdir / f"gcs_src_{i}.mp4"
                 storage = get_storage_service()
                 success = storage.download_gcs_file(clip_source, local_source)
-                
+
                 if not success:
-                    logger.error("[render_video] GCS download failed for %s", clip_source)
+                    logger.error(
+                        "[render_video] GCS download failed for %s", clip_source
+                    )
                     # Fallback to black frame
                     _run_ffmpeg(
-                        ffmpeg.input(f"color=c=black:s=1080x1920:d={duration}", f="lavfi")
+                        ffmpeg.input(
+                            f"color=c=black:s=1080x1920:d={duration}", f="lavfi"
+                        )
                         .output(str(target_clip), vcodec="libx264", pix_fmt="yuv420p")
                         .overwrite_output()
                     )
                 else:
                     _run_ffmpeg(
                         ffmpeg.input(str(local_source), ss=start, t=duration)
-                        .filter("scale", 1080, 1920, force_original_aspect_ratio="increase")
+                        .filter(
+                            "scale", 1080, 1920, force_original_aspect_ratio="increase"
+                        )
                         .filter("crop", 1080, 1920)
-                        .output(str(target_clip), vcodec="libx264", acodec="aac", crf=23, preset="veryfast")
+                        .output(
+                            str(target_clip),
+                            vcodec="libx264",
+                            acodec="aac",
+                            crf=23,
+                            preset="veryfast",
+                        )
                         .overwrite_output()
                     )
             elif clip_source.startswith("http"):
@@ -548,22 +620,35 @@ def render_video(production_plan: dict) -> str:
                 try:
                     video_id = VideoService.extract_video_id(clip_source) or "unknown"
                     downloaded_file = str(
-                        VideoService.download_segment_sync(video_id, start, end, workdir)
+                        VideoService.download_segment_sync(
+                            video_id, start, end, workdir
+                        )
                     )
                     _run_ffmpeg(
                         ffmpeg.input(downloaded_file, ss=start, t=duration)
-                        .filter("scale", 1080, 1920, force_original_aspect_ratio="increase")
+                        .filter(
+                            "scale", 1080, 1920, force_original_aspect_ratio="increase"
+                        )
                         .filter("crop", 1080, 1920)
-                        .output(str(target_clip), vcodec="libx264", acodec="aac", crf=23, preset="veryfast")
+                        .output(
+                            str(target_clip),
+                            vcodec="libx264",
+                            acodec="aac",
+                            crf=23,
+                            preset="veryfast",
+                        )
                         .overwrite_output()
                     )
                 except Exception as dl_err:
                     logger.warning(
                         "[render_video] HTTP source unavailable, substituting black frame: %s (%s)",
-                        clip_source, dl_err,
+                        clip_source,
+                        dl_err,
                     )
                     _run_ffmpeg(
-                        ffmpeg.input(f"color=c=black:s=1080x1920:d={duration}", f="lavfi")
+                        ffmpeg.input(
+                            f"color=c=black:s=1080x1920:d={duration}", f="lavfi"
+                        )
                         .output(str(target_clip), vcodec="libx264", pix_fmt="yuv420p")
                         .overwrite_output()
                     )
@@ -573,10 +658,16 @@ def render_video(production_plan: dict) -> str:
                     ffmpeg.input(clip_source, ss=start, t=duration)
                     .filter("scale", 1080, 1920, force_original_aspect_ratio="increase")
                     .filter("crop", 1080, 1920)
-                    .output(str(target_clip), vcodec="libx264", acodec="aac", crf=23, preset="veryfast")
+                    .output(
+                        str(target_clip),
+                        vcodec="libx264",
+                        acodec="aac",
+                        crf=23,
+                        preset="veryfast",
+                    )
                     .overwrite_output()
                 )
-            
+
             processed_clips.append(ffmpeg.input(str(target_clip)))
             processed_clip_paths.append(str(target_clip))
             clip_durations.append(duration)
@@ -621,39 +712,47 @@ def render_video(production_plan: dict) -> str:
             joined = ffmpeg.concat(*processed_clips, v=1, a=1).node
             v = joined[0]
             a = joined[1]
-        
+
         # Overlay voiceover if provided
         if voiceover_path:
             local_vo = voiceover_path
             if voiceover_path.startswith("gridfs://"):
-                remote_vo = voiceover_path[len("gridfs://"):]
+                remote_vo = voiceover_path[len("gridfs://") :]
                 local_vo = str(workdir / "voiceover.mp3")
-                get_storage_service().download_file(remote_vo, Path(local_vo), bucket_name="uploads")
-            
+                get_storage_service().download_file(
+                    remote_vo, Path(local_vo), bucket_name="uploads"
+                )
+
             if os.path.exists(local_vo):
                 vo = ffmpeg.input(local_vo)
                 # Mix voiceover (higher volume) with ambient audio (lower volume)
                 a_ambient = a.filter("volume", 0.3)
                 a_voice = vo.filter("volume", 1.5)
-                a = ffmpeg.filter([a_ambient, a_voice], "amix", inputs=2, duration="first")
-            
+                a = ffmpeg.filter(
+                    [a_ambient, a_voice], "amix", inputs=2, duration="first"
+                )
+
         output_path = workdir / "final_output.mp4"
         # Use the longer final-concat timeout — number of clips scales the work.
         _run_ffmpeg(
             ffmpeg.output(
-                v, a, str(output_path),
-                vcodec="libx264", acodec="aac",
-                crf=21, preset="medium",
+                v,
+                a,
+                str(output_path),
+                vcodec="libx264",
+                acodec="aac",
+                crf=21,
+                preset="medium",
                 movflags="faststart",
             ).overwrite_output(),
             timeout=_FFMPEG_FINAL_TIMEOUT,
         )
-        
+
         final_dest = Path(tempfile.gettempdir()) / f"qai_final_{uuid.uuid4().hex}.mp4"
         shutil.move(str(output_path), str(final_dest))
         logger.info(f"Render successful: {final_dest}")
         return str(final_dest)
-        
+
     except Exception as e:
         logger.error(f"render_video failed: {e}")
         raise

@@ -6,8 +6,10 @@ logger = logging.getLogger(__name__)
 
 _COOKIE_FILE_PATH = None
 
+
 def get_cookie_file():
     import tempfile, os
+
     cookies = os.environ.get("YOUTUBE_COOKIES", "")
     if not cookies:
         return None
@@ -19,39 +21,47 @@ def get_cookie_file():
     except Exception:
         return None
 
+
 def inject_ydl_bypass(opts: dict) -> dict:
     """Injects bot bypass options and cookies into yt-dlp opts."""
     new_opts = opts.copy()
-    
+
     # Use a composite of the most hardened mobile and creator clients
     if "extractor_args" not in new_opts:
         new_opts["extractor_args"] = {}
-    
+
     # Merging instead of overwriting to allow caller specific clients
     existing_yt_args = new_opts["extractor_args"].get("youtube", {})
     existing_clients = existing_yt_args.get("player_client", [])
-    
+
     # tv_embedded and ios first — most reliable in server/CI environments
-    hardened_clients = ["tv_embedded", "ios", "android", "android_music", "web_creator", "mweb"]
-    
+    hardened_clients = [
+        "tv_embedded",
+        "ios",
+        "android",
+        "android_music",
+        "web_creator",
+        "mweb",
+    ]
+
     # Union of both
     unique_clients = list(dict.fromkeys(existing_clients + hardened_clients))
-    
+
     new_opts["extractor_args"]["youtube"] = {
         "player_client": unique_clients,
         "player_skip": ["webpage", "configs"],
     }
-    
+
     new_opts["nocheckcertificate"] = True
     new_opts["no_warnings"] = True
-    
+
     # Support for proxy rotation if provided in environment
     proxy = os.environ.get("YOUTUBE_PROXY")
     if proxy:
         new_opts["proxy"] = proxy
-    
+
     cookie_path = get_cookie_file()
     if cookie_path:
         new_opts["cookiefile"] = cookie_path
-        
+
     return new_opts

@@ -47,7 +47,9 @@ async def increment_stats(
     if not user_id:
         return _empty("anonymous")
     if not is_ready():
-        logger.warning("Mongo not initialized; skipping stats increment for %s", user_id)
+        logger.warning(
+            "Mongo not initialized; skipping stats increment for %s", user_id
+        )
         return _empty(user_id)
 
     db = get_db()
@@ -140,7 +142,9 @@ async def get_user_stats(user_id: str) -> dict[str, Any]:
     payload = _serialize(doc, user_id)
 
     try:
-        await async_redis_conn.setex(f"stats:{user_id}", STATS_CACHE_TTL, json.dumps(payload))
+        await async_redis_conn.setex(
+            f"stats:{user_id}", STATS_CACHE_TTL, json.dumps(payload)
+        )
     except Exception:
         pass
 

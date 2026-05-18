@@ -37,9 +37,9 @@ router = APIRouter(prefix="/api/youtube", tags=["youtube"])
 # ─── Circuit-breaker constants ────────────────────────────────────────────────
 _FAILURE_KEY = "yt_failures"
 _DISABLED_KEY = "yt_disabled"
-_FAILURE_WINDOW = 1800   # 30 min TTL for failure counter
-_DISABLE_WINDOW = 1800   # 30 min disable window after threshold hit
-_FAILURE_THRESHOLD = 5   # failures before tripping the breaker
+_FAILURE_WINDOW = 1800  # 30 min TTL for failure counter
+_DISABLE_WINDOW = 1800  # 30 min disable window after threshold hit
+_FAILURE_THRESHOLD = 5  # failures before tripping the breaker
 
 
 # ─── Request models ───────────────────────────────────────────────────────────
@@ -86,7 +86,12 @@ async def video_info(
         data = get_video_info(req.video_id)
         return {"success": True, "data": data}
     except Exception as exc:
-        logger.warning("youtube_info_failed video_id=%s user=%s: %s", req.video_id, verified_user_id, exc)
+        logger.warning(
+            "youtube_info_failed video_id=%s user=%s: %s",
+            req.video_id,
+            verified_user_id,
+            exc,
+        )
         raise HTTPException(
             status_code=500,
             detail="Could not fetch video info. If this persists, upload your MP4 directly.",
@@ -120,9 +125,13 @@ async def create_clip(
 
     duration = req.end_sec - req.start_sec
     if duration <= 0:
-        raise HTTPException(status_code=400, detail="end_sec must be greater than start_sec")
+        raise HTTPException(
+            status_code=400, detail="end_sec must be greater than start_sec"
+        )
     if duration > 600:
-        raise HTTPException(status_code=400, detail="Maximum clip length is 10 minutes (600 seconds)")
+        raise HTTPException(
+            status_code=400, detail="Maximum clip length is 10 minutes (600 seconds)"
+        )
 
     tmp_path: str | None = None
     try:
@@ -130,7 +139,13 @@ async def create_clip(
         with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
             tmp_path = tmp.name
 
-        logger.info("youtube_clip_start video_id=%s user=%s start=%.1f end=%.1f", req.video_id, verified_user_id, req.start_sec, req.end_sec)
+        logger.info(
+            "youtube_clip_start video_id=%s user=%s start=%.1f end=%.1f",
+            req.video_id,
+            verified_user_id,
+            req.start_sec,
+            req.end_sec,
+        )
         download_clip(req.video_id, req.start_sec, req.end_sec, tmp_path)
 
         # Upload to GridFS (exports bucket) — same path as render pipeline
@@ -146,7 +161,9 @@ async def create_clip(
         # Reset failure counter on success
         await async_redis_conn.delete(_FAILURE_KEY)
 
-        logger.info("youtube_clip_success user=%s gridfs=%s", verified_user_id, gridfs_uri)
+        logger.info(
+            "youtube_clip_success user=%s gridfs=%s", verified_user_id, gridfs_uri
+        )
         return {
             "success": True,
             "gridfs_uri": gridfs_uri,
@@ -156,7 +173,12 @@ async def create_clip(
     except HTTPException:
         raise
     except Exception as exc:
-        logger.error("youtube_clip_failed video_id=%s user=%s: %s", req.video_id, verified_user_id, exc)
+        logger.error(
+            "youtube_clip_failed video_id=%s user=%s: %s",
+            req.video_id,
+            verified_user_id,
+            exc,
+        )
 
         # Increment failure counter and trip circuit breaker if threshold reached
         failures = await async_redis_conn.incr(_FAILURE_KEY)

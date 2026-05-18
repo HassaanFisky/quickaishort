@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import warnings
+
 # Silence deprecation and future warnings from Google SDKs
 warnings.filterwarnings("ignore", category=DeprecationWarning, module="authlib")
 warnings.filterwarnings("ignore", category=FutureWarning, module="google")
@@ -24,16 +25,34 @@ import yt_dlp
 import sentry_sdk
 from datetime import datetime
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, File, HTTPException, Header, Query, Request, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import (
+    Depends,
+    FastAPI,
+    File,
+    HTTPException,
+    Header,
+    Query,
+    Request,
+    UploadFile,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse, RedirectResponse
+from fastapi.responses import (
+    FileResponse,
+    JSONResponse,
+    StreamingResponse,
+    RedirectResponse,
+)
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from starlette.background import BackgroundTask
 from pydantic import BaseModel, Field
+
 try:
     from sentry_sdk.integrations.fastapi import FastApiIntegration
+
     sentry_sdk.init(
         dsn=os.getenv("SENTRY_DSN"),
         integrations=[FastApiIntegration()],
@@ -74,7 +93,14 @@ from services.realtime import emit_export_event, ws_manager
 from services.auth import get_verified_user_id
 from services.signing import sign, verify
 from services.logging import log_metric
-from services.stats_service import get_user_stats, increment_stats, deduct_credits, recalculate_user_stats, is_user_premium, provision_credits
+from services.stats_service import (
+    get_user_stats,
+    increment_stats,
+    deduct_credits,
+    recalculate_user_stats,
+    is_user_premium,
+    provision_credits,
+)
 from services.video_service import VideoService
 from services.project_service import get_project_service
 from services.tts_service import get_tts_service
@@ -83,6 +109,7 @@ from services.storage_service import get_storage_service
 
 load_dotenv()
 from services.logging import setup_logging, get_logger, correlation_id
+
 setup_logging()
 logger = get_logger("api")
 
@@ -101,13 +128,16 @@ def _validate_env() -> None:
         "EXPORT_SIGNING_SECRET": "Download URL signing will fail — exports unreachable",
         "PUBLIC_API_URL": "Download links sent to users will be relative paths only",
     }
-    missing = [f"  {var}: {reason}" for var, reason in required.items() if not os.getenv(var)]
+    missing = [
+        f"  {var}: {reason}" for var, reason in required.items() if not os.getenv(var)
+    ]
     if missing:
         logger.warning(
             "STARTUP WARNING — missing environment variables:\n%s\n"
             "Copy fastapi/.env.example to fastapi/.env and fill in the values.",
             "\n".join(missing),
         )
+
 
 _validate_env()
 
@@ -174,11 +204,13 @@ async def _pubsub_listener(stop: asyncio.Event) -> None:
 async def _route_pubsub(channel: str, payload: dict) -> None:
     # Tracing
     cid = payload.get("correlation_id")
-    if cid: correlation_id.set(cid)
+    if cid:
+        correlation_id.set(cid)
 
     if channel == CHANNEL_STATS_INCREMENT:
         delta = StatsIncrement.model_validate(payload)
         from services.stats_service import increment_stats
+
         await increment_stats(
             delta.user_id,
             duration_delta=delta.duration_delta,
@@ -188,7 +220,11 @@ async def _route_pubsub(channel: str, payload: dict) -> None:
         )
         return
 
-    if channel in (CHANNEL_EXPORT_PROGRESS, CHANNEL_EXPORT_COMPLETE, CHANNEL_EXPORT_FAILED):
+    if channel in (
+        CHANNEL_EXPORT_PROGRESS,
+        CHANNEL_EXPORT_COMPLETE,
+        CHANNEL_EXPORT_FAILED,
+    ):
         user_id = payload.get("user_id", "")
         job_id = payload.get("job_id", "")
         event = {
@@ -205,15 +241,16 @@ async def _route_pubsub(channel: str, payload: dict) -> None:
                 updates = {"status": status}
                 if event == "error":
                     updates["error"] = payload.get("error", "Unknown error")
-                
+
                 # Find project by job_id and update
                 await db["Projects"].update_one(
-                    {"job_id": job_id, "user_id": user_id},
-                    {"$set": updates}
+                    {"job_id": job_id, "user_id": user_id}, {"$set": updates}
                 )
                 logger.info("project_status_updated", job_id=job_id, status=status)
             except Exception as e:
-                logger.error("project_status_update_failed", job_id=job_id, error=str(e))
+                logger.error(
+                    "project_status_update_failed", job_id=job_id, error=str(e)
+                )
 
         if event == "complete":
             payload = {**payload, "download_url": _build_download_url(job_id, user_id)}
@@ -233,6 +270,7 @@ async def lifespan(_app: FastAPI):
     await init_db()
     from services.diagnostics import run_startup_checks
     from routers.billing import _ensure_indexes as _billing_ensure_indexes
+
     try:
         await run_startup_checks()
         await _billing_ensure_indexes()
@@ -240,7 +278,7 @@ async def lifespan(_app: FastAPI):
         _STARTUP_COMPLETE = True
     except Exception as e:
         logger.error("startup_checks_failed", error=str(e))
-    
+
     stop_event = asyncio.Event()
     listener_task = asyncio.create_task(_pubsub_listener(stop_event))
     try:
@@ -255,10 +293,13 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 from routers.billing import router as billing_router
+
 app.include_router(billing_router)
 
 from routers.youtube import router as youtube_router
+
 app.include_router(youtube_router)
+
 
 def get_real_ip(request: Request) -> str:
     """
@@ -270,6 +311,7 @@ def get_real_ip(request: Request) -> str:
         # X-Forwarded-For: client, proxy1, proxy2 — take the leftmost (first) address
         return xff.split(",")[0].strip()
     return request.client.host if request.client else "127.0.0.1"
+
 
 limiter = Limiter(key_func=get_real_ip, default_limits=["200/minute"])
 app.state.limiter = limiter
@@ -315,6 +357,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         )
         return response
 
+
 app.add_middleware(SecurityHeadersMiddleware)
 
 
@@ -326,9 +369,11 @@ class TranscriptChunk(BaseModel):
     start: float
     end: float
 
+
 class ProjectCreateRequest(BaseModel):
     title: str
     script: str
+
 
 class ProjectUpdateRequest(BaseModel):
     title: Optional[str] = None
@@ -378,6 +423,7 @@ class CaptionsPayload(BaseModel):
     enabled: bool = False
     srt_content: str = ""
     style: Optional[str] = None
+
 
 class CanvasOverlayPayload(BaseModel):
     type: str
@@ -504,7 +550,11 @@ def prometheus_metrics():
 
     Scrape interval recommendation: 15s.
     """
-    from services.extractor_service import METRICS_AVAILABLE, generate_latest, CONTENT_TYPE_LATEST
+    from services.extractor_service import (
+        METRICS_AVAILABLE,
+        generate_latest,
+        CONTENT_TYPE_LATEST,
+    )
     from fastapi.responses import Response
 
     if not METRICS_AVAILABLE:
@@ -513,8 +563,6 @@ def prometheus_metrics():
             detail="prometheus-client not installed — add it to requirements.txt",
         )
     return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
-
-
 
 
 @app.get("/debug/tiers")
@@ -548,7 +596,11 @@ def debug_tiers(request: Request):
 
 @limiter.limit("10/minute")
 @app.post("/api/analyze")
-async def analyze_video(request: Request, body: AnalyzeRequest, verified_user_id: str = Depends(get_verified_user_id)):
+async def analyze_video(
+    request: Request,
+    body: AnalyzeRequest,
+    verified_user_id: str = Depends(get_verified_user_id),
+):
     try:
         user_id = verified_user_id or body.userId or "anonymous"
         if not await deduct_credits(user_id, 10):
@@ -577,24 +629,34 @@ async def analyze_video(request: Request, body: AnalyzeRequest, verified_user_id
         }
     except Exception as exc:
         logger.exception("/api/analyze failed: %s", exc)
-        raise HTTPException(status_code=500, detail="Analysis failed. Please try again.")
+        raise HTTPException(
+            status_code=500, detail="Analysis failed. Please try again."
+        )
 
 
 # ---- Export / Process ---------------------------------------------------------
 
 
 @app.post("/api/process-video")
-async def export_video(request: ExportRequest, verified_user_id: str = Depends(get_verified_user_id)):
+async def export_video(
+    request: ExportRequest, verified_user_id: str = Depends(get_verified_user_id)
+):
     user_id = verified_user_id or request.user_id
-    
+
     # Pillar 1: Overload Guardrail
     if is_overloaded():
-        raise HTTPException(status_code=503, detail="System currently overloaded or in maintenance. Try again later.")
+        raise HTTPException(
+            status_code=503,
+            detail="System currently overloaded or in maintenance. Try again later.",
+        )
 
     # Pillar 2: Duration Limit
     duration = request.end_sec - request.start_sec
-    if duration > 180: # Max 3 minutes per export
-        raise HTTPException(status_code=400, detail="Export duration exceeds maximum limit of 180 seconds.")
+    if duration > 180:  # Max 3 minutes per export
+        raise HTTPException(
+            status_code=400,
+            detail="Export duration exceeds maximum limit of 180 seconds.",
+        )
 
     if not await deduct_credits(user_id, 20):
         raise HTTPException(
@@ -602,28 +664,34 @@ async def export_video(request: ExportRequest, verified_user_id: str = Depends(g
             detail="Insufficient credits. Please upgrade your plan to continue.",
         )
 
-
     job_id = uuid.uuid4().hex
-    
+
     # CHANGED: Autonomous metadata lookup for 'Genius' features
     # (Auto-Reframing + Auto-Hook Overlay + Cinematic Peaks)
     salient_center_x = 0.5
     hook_overlay = ""
     emotional_peaks = []
     cinematic_style = "Impact"
-    
+
     if not request.reframing:
         try:
             lookup_key = f"{request.start_sec:.2f}:{request.end_sec:.2f}"
-            raw_meta = redis_conn.hget(f"segment:metadata:{request.videoId}", lookup_key)
+            raw_meta = redis_conn.hget(
+                f"segment:metadata:{request.videoId}", lookup_key
+            )
             if raw_meta:
                 import json as _json
+
                 meta = _json.loads(raw_meta)
                 salient_center_x = float(meta.get("cx", 0.5))
                 hook_overlay = meta.get("hook", "")
                 emotional_peaks = meta.get("peaks", [])
                 cinematic_style = meta.get("style", "Impact")
-                logger.info("autonomous_metadata_hit", video_id=request.videoId, peaks=emotional_peaks)
+                logger.info(
+                    "autonomous_metadata_hit",
+                    video_id=request.videoId,
+                    peaks=emotional_peaks,
+                )
         except Exception:
             pass
 
@@ -692,7 +760,9 @@ async def export_status(job_id: str, user_id: str):
                 for k in ("duration_sec", "file_size_bytes", "elapsed_sec")
             }
     elif status == "failed":
-        response["error"] = (job.exc_info or "").splitlines()[-1] if job.exc_info else "failed"
+        response["error"] = (
+            (job.exc_info or "").splitlines()[-1] if job.exc_info else "failed"
+        )
 
     return response
 
@@ -705,28 +775,30 @@ async def export_download(job_id: str, user_id: str, token: str, expires: int):
 
     # Enforce HMAC token — verify() uses hmac.compare_digest (timing-safe)
     if not verify(job_id, user_id, expires, token):
-        raise HTTPException(status_code=403, detail="Invalid or expired download token.")
+        raise HTTPException(
+            status_code=403, detail="Invalid or expired download token."
+        )
 
     remote_path = f"exports/{user_id}/{job_id}.mp4"
-    
+
     try:
         bucket = get_exports_bucket()
         # Find the file by name
         cursor = bucket.find({"filename": remote_path})
         files = await cursor.to_list(length=1)
-        
+
         if not files:
             logger.error("export_not_found_in_gridfs", path=remote_path)
             raise HTTPException(status_code=404, detail="Export not found")
-            
+
         file_id = files[0]["_id"]
-        
+
         # GridFS bucket open_download_stream returns an async stream
         grid_out = await bucket.open_download_stream(file_id)
-        
+
         async def stream_gridfs():
             while True:
-                chunk = await grid_out.read(256 * 1024) # 256KB chunks
+                chunk = await grid_out.read(256 * 1024)  # 256KB chunks
                 if not chunk:
                     break
                 yield chunk
@@ -736,13 +808,12 @@ async def export_download(job_id: str, user_id: str, token: str, expires: int):
             media_type="video/mp4",
             headers={
                 "Content-Disposition": f'attachment; filename="{job_id}.mp4"',
-                "Content-Length": str(files[0]["length"])
-            }
+                "Content-Length": str(files[0]["length"]),
+            },
         )
     except Exception as e:
         logger.error("gridfs_download_failed", error=str(e))
         raise HTTPException(status_code=500, detail="Internal storage error")
-
 
 
 # ---- Stats --------------------------------------------------------------------
@@ -785,7 +856,6 @@ async def stats_ws(websocket: WebSocket, user_id: str):
 async def get_video_info(url: str):
     video_id = _require_youtube_url(url)
 
-
     api_key = os.environ.get("YOUTUBE_API_KEY")
 
     if api_key and video_id:
@@ -793,50 +863,57 @@ async def get_video_info(url: str):
             # Use official YouTube Data API v3
             api_url = f"https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id={video_id}&key={api_key}"
             headers = {"Referer": "https://www.quickaishort.online"}
-            
+
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.get(api_url, headers=headers)
                 response.raise_for_status()
                 data = response.json()
-            
+
             if data.get("items"):
                 item = data["items"][0]
                 # Parse duration (ISO 8601 to seconds)
                 duration_iso = item["contentDetails"]["duration"]
                 duration_sec = 0
-                time_match = re.match(r'PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?', duration_iso)
+                time_match = re.match(
+                    r"PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?", duration_iso
+                )
                 if time_match:
                     h, m, s = time_match.groups()
                     duration_sec = int(h or 0) * 3600 + int(m or 0) * 60 + int(s or 0)
-                    
+
                 thumbnails = item["snippet"]["thumbnails"]
-                best_thumb = thumbnails.get("maxres", thumbnails.get("high", thumbnails.get("default", {})))
-                
+                best_thumb = thumbnails.get(
+                    "maxres", thumbnails.get("high", thumbnails.get("default", {}))
+                )
+
                 return {
                     "id": video_id,
                     "title": item["snippet"]["title"],
                     "duration": duration_sec,
                     "thumbnail": best_thumb.get("url", ""),
-                    "formats": [], 
+                    "formats": [],
                     "url": f"https://www.youtube.com/watch?v={video_id}",
-                    "source": "youtube_data_api"
+                    "source": "youtube_data_api",
                 }
         except Exception as exc:
             logger.warning(f"YouTube Data API failed, falling back to yt-dlp: {exc}")
 
     # Fallback to yt-dlp
-    ydl_opts = inject_ydl_bypass({
-        "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
-        "quiet": True,
-        "no_warnings": True,
-    })
+    ydl_opts = inject_ydl_bypass(
+        {
+            "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+            "quiet": True,
+            "no_warnings": True,
+        }
+    )
 
     try:
         loop = asyncio.get_event_loop()
+
         def _extract():
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 return ydl.extract_info(url, download=False)
-        
+
         info = await loop.run_in_executor(None, _extract)
         return {
             "id": info.get("id"),
@@ -845,11 +922,13 @@ async def get_video_info(url: str):
             "thumbnail": info.get("thumbnail"),
             "formats": info.get("formats"),
             "url": info.get("url"),
-            "source": "yt-dlp"
+            "source": "yt-dlp",
         }
     except Exception as exc:
-        logger.warning(f"yt-dlp info extraction failed, returning ID-based fallback: {exc}")
-        video_id_match = re.search(r'(?:v=|\/)([0-9A-Za-z_-]{11})', url)
+        logger.warning(
+            f"yt-dlp info extraction failed, returning ID-based fallback: {exc}"
+        )
+        video_id_match = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{11})", url)
         v_id = video_id_match.group(1) if video_id_match else video_id
         return {
             "id": v_id,
@@ -865,7 +944,6 @@ async def get_video_info(url: str):
 @app.get("/api/proxy")
 async def proxy_video(url: str):
     _require_youtube_url(url)
-    
 
     import httpx
 
@@ -880,31 +958,36 @@ async def proxy_video(url: str):
     # Prioritize itag 140 (m4a audio) for silence detection/visualization as it's MUCH smaller.
     # Fallback to itag 18 (360p combined) if audio-only is blocked.
     fmt = "140/bestaudio[ext=m4a]/best[ext=mp4]/18/best"
-    media_type = "audio/mp4" # Browsers handle m4a as audio/mp4
+    media_type = "audio/mp4"  # Browsers handle m4a as audio/mp4
 
-    ydl_opts = inject_ydl_bypass({
-        "format": fmt,
-        "quiet": True,
-        "no_warnings": True,
-    })
-    
+    ydl_opts = inject_ydl_bypass(
+        {
+            "format": fmt,
+            "quiet": True,
+            "no_warnings": True,
+        }
+    )
+
     try:
         # We run blocking yt-dlp in a thread to avoid stalling the event loop
         loop = asyncio.get_event_loop()
+
         def _extract():
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 return ydl.extract_info(url, download=False)
-        
+
         info = await loop.run_in_executor(None, _extract)
         stream_url = info.get("url")
     except Exception as exc:
         logger.warning(f"yt-dlp failed in proxy, trying Invidious fallback: {exc}")
-        video_id_match = re.search(r'(?:v=|\/)([0-9A-Za-z_-]{11})', url)
+        video_id_match = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{11})", url)
         v_id = video_id_match.group(1) if video_id_match else None
         if v_id:
             for instance in ["yewtu.be", "invidious.kavin.rocks", "vid.priv.au"]:
                 try:
-                    async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as client:
+                    async with httpx.AsyncClient(
+                        timeout=5.0, follow_redirects=True
+                    ) as client:
                         inv_resp = await client.get(
                             f"https://{instance}/api/v1/videos/{v_id}",
                             params={"fields": "adaptiveFormats,formatStreams"},
@@ -917,10 +1000,15 @@ async def proxy_video(url: str):
                                 media_type = "video/mp4"
                                 break
                         if not stream_url:
-                            audio_fmts = [f for f in inv_data.get("adaptiveFormats", [])
-                                          if "audio" in f.get("type", "")]
+                            audio_fmts = [
+                                f
+                                for f in inv_data.get("adaptiveFormats", [])
+                                if "audio" in f.get("type", "")
+                            ]
                             if audio_fmts:
-                                best = max(audio_fmts, key=lambda x: int(x.get("bitrate", 0)))
+                                best = max(
+                                    audio_fmts, key=lambda x: int(x.get("bitrate", 0))
+                                )
                                 stream_url = best.get("url")
                                 media_type = "audio/mp4"
                         if stream_url:
@@ -930,7 +1018,10 @@ async def proxy_video(url: str):
                     logger.warning(f"Invidious {instance} failed: {inv_exc}")
                     continue
         if not stream_url:
-            raise HTTPException(status_code=503, detail="Video stream unavailable. Please try again later.")
+            raise HTTPException(
+                status_code=503,
+                detail="Video stream unavailable. Please try again later.",
+            )
 
     if not stream_url:
         raise HTTPException(status_code=404, detail="Could not retrieve stream URL")
@@ -946,7 +1037,9 @@ async def proxy_video(url: str):
         )
     except Exception as exc:
         logger.exception("/api/proxy stream error: %s", exc)
-        raise HTTPException(status_code=500, detail="Stream unavailable. Please try again.")
+        raise HTTPException(
+            status_code=500, detail="Stream unavailable. Please try again."
+        )
 
 
 @app.get("/api/audio")
@@ -959,7 +1052,7 @@ async def get_audio(url: str = Query(...)):
 
     tmpdir = tempfile.mkdtemp()
     output_path = Path(tmpdir) / f"{video_id}.m4a"
-    
+
     success = False
     last_error = ""
 
@@ -986,13 +1079,15 @@ async def get_audio(url: str = Query(...)):
         cookie_file = get_cookie_file()
         if cookie_file:
             ydl_opts["cookiefile"] = cookie_file
-            
+
         ydl_opts = inject_ydl_bypass(ydl_opts)
 
         loop = asyncio.get_event_loop()
+
         def _run_yt():
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([url])
+
         await loop.run_in_executor(None, _run_yt)
         if output_path.exists() and output_path.stat().st_size > 10000:
             success = True
@@ -1005,7 +1100,9 @@ async def get_audio(url: str = Query(...)):
         try:
             stream_url = await VideoService._fetch_cobalt(url, mode="audio")
             if stream_url:
-                async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+                async with httpx.AsyncClient(
+                    timeout=30.0, follow_redirects=True
+                ) as client:
                     async with client.stream("GET", stream_url) as r:
                         r.raise_for_status()
                         with open(output_path, "wb") as f:
@@ -1063,7 +1160,11 @@ async def get_audio(url: str = Query(...)):
                     if r.status_code != 200:
                         continue
                     data = r.json()
-                    formats = [f for f in data.get("adaptiveFormats", []) if "audio" in f.get("type", "")]
+                    formats = [
+                        f
+                        for f in data.get("adaptiveFormats", [])
+                        if "audio" in f.get("type", "")
+                    ]
                     if not formats:
                         formats = data.get("formatStreams", [])
                     if not formats:
@@ -1090,14 +1191,16 @@ async def get_audio(url: str = Query(...)):
     return FileResponse(
         path=output_path,
         media_type="audio/mpeg",
-        background=BackgroundTask(lambda: shutil.rmtree(tmpdir, ignore_errors=True))
+        background=BackgroundTask(lambda: shutil.rmtree(tmpdir, ignore_errors=True)),
     )
 
 
 # ---- Pre-Flight ---------------------------------------------------------------
 
 
-def _viral_to_preflight_result(viral_suggestions: list, original_candidates: list) -> dict:
+def _viral_to_preflight_result(
+    viral_suggestions: list, original_candidates: list
+) -> dict:
     """
     Adapter: converts ViralAgent output (List[ViralSuggestion]) into a
     PreflightResult-compatible dict for the degraded fallback response.
@@ -1113,15 +1216,21 @@ def _viral_to_preflight_result(viral_suggestions: list, original_candidates: lis
         score = round(raw_score / 100.0, 3)
         total_score += score
         captions = getattr(sug, "suggestedCaptions", [])
-        clip_candidates.append({
-            "start_sec": sug.start,
-            "end_sec": sug.end,
-            "score": score,
-            "transcript": getattr(sug, "reason", ""),
-            "recommendation": captions[0] if captions else getattr(sug, "reason", ""),
-        })
+        clip_candidates.append(
+            {
+                "start_sec": sug.start,
+                "end_sec": sug.end,
+                "score": score,
+                "transcript": getattr(sug, "reason", ""),
+                "recommendation": (
+                    captions[0] if captions else getattr(sug, "reason", "")
+                ),
+            }
+        )
 
-    weighted = round(total_score / len(viral_suggestions), 3) if viral_suggestions else 0.0
+    weighted = (
+        round(total_score / len(viral_suggestions), 3) if viral_suggestions else 0.0
+    )
     top = clip_candidates[0] if clip_candidates else {}
 
     return {
@@ -1141,7 +1250,11 @@ def _viral_to_preflight_result(viral_suggestions: list, original_candidates: lis
 
 @limiter.limit("10/minute")
 @app.post("/api/preflight")
-async def run_preflight(request: Request, body: PreflightRequest, verified_user_id: str = Depends(get_verified_user_id)):
+async def run_preflight(
+    request: Request,
+    body: PreflightRequest,
+    verified_user_id: str = Depends(get_verified_user_id),
+):
     user_id = verified_user_id or body.user_id
     if not _ADK_AVAILABLE:
         raise HTTPException(
@@ -1150,7 +1263,9 @@ async def run_preflight(request: Request, body: PreflightRequest, verified_user_
         )
 
     if not body.clip_candidates:
-        raise HTTPException(status_code=422, detail="clip_candidates must contain at least one clip")
+        raise HTTPException(
+            status_code=422, detail="clip_candidates must contain at least one clip"
+        )
 
     is_premium_active = await is_user_premium(user_id)
 
@@ -1159,7 +1274,6 @@ async def run_preflight(request: Request, body: PreflightRequest, verified_user_
             status_code=402,
             detail="Insufficient credits. Please upgrade your plan to continue.",
         )
-
 
     candidates = [
         PreflightClipCandidate(
@@ -1182,7 +1296,9 @@ async def run_preflight(request: Request, body: PreflightRequest, verified_user_
             timeout=120.0,
         )
         await increment_stats(user_id, ai_run_delta=1)
-        log_metric("preflight_success", 1, user_id=user_id, metadata={"strategy": "full"})
+        log_metric(
+            "preflight_success", 1, user_id=user_id, metadata={"strategy": "full"}
+        )
         return {
             "preflight_result": result.model_dump(),
             "strategy": "full",
@@ -1192,16 +1308,29 @@ async def run_preflight(request: Request, body: PreflightRequest, verified_user_
     except (asyncio.TimeoutError, Exception) as primary_exc:
         # Classify the failure type for logging
         exc_type = (
-            "timeout" if isinstance(primary_exc, asyncio.TimeoutError)
+            "timeout"
+            if isinstance(primary_exc, asyncio.TimeoutError)
             else type(primary_exc).__name__
         )
         logger.warning(
             "preflight_primary_failed user=%s type=%s error=%s — attempting viral fallback",
-            user_id, exc_type, str(primary_exc)[:200],
+            user_id,
+            exc_type,
+            str(primary_exc)[:200],
         )
-        log_metric("preflight_fallback_activation", 1, user_id=user_id, metadata={"reason": exc_type})
+        log_metric(
+            "preflight_fallback_activation",
+            1,
+            user_id=user_id,
+            metadata={"reason": exc_type},
+        )
         if exc_type == "timeout":
-            log_metric("agent_timeout", 1, user_id=user_id, metadata={"pipeline": "preflight_primary"})
+            log_metric(
+                "agent_timeout",
+                1,
+                user_id=user_id,
+                metadata={"pipeline": "preflight_primary"},
+            )
 
         # --- Strategy switch: degrade to ViralAgent (SequentialAgent, no MCP) ---
         # The ViralAgent is faster (<45s), simpler, and has no external service deps.
@@ -1210,23 +1339,28 @@ async def run_preflight(request: Request, body: PreflightRequest, verified_user_
             from agent.viral_agent import run_viral_pipeline
 
             first = candidates[0] if candidates else None
-            video_id = VideoService.extract_video_id(body.youtube_url) or body.youtube_url
+            video_id = (
+                VideoService.extract_video_id(body.youtube_url) or body.youtube_url
+            )
 
             viral_suggestions = await asyncio.wait_for(
                 run_viral_pipeline(
                     youtube_url=body.youtube_url,
                     video_id=video_id,
                     transcript_text=first.transcript if first else "",
-                    duration=(
-                        (first.end_sec - first.start_sec) if first else 60.0
-                    ),
+                    duration=((first.end_sec - first.start_sec) if first else 60.0),
                 ),
                 timeout=45.0,
             )
 
             if viral_suggestions:
                 await increment_stats(user_id, ai_run_delta=1)
-                log_metric("preflight_success", 1, user_id=user_id, metadata={"strategy": "viral_fallback"})
+                log_metric(
+                    "preflight_success",
+                    1,
+                    user_id=user_id,
+                    metadata={"strategy": "viral_fallback"},
+                )
                 return {
                     "preflight_result": _viral_to_preflight_result(
                         viral_suggestions, candidates
@@ -1257,7 +1391,11 @@ async def run_preflight(request: Request, body: PreflightRequest, verified_user_
 
 @limiter.limit("10/minute")
 @app.post("/api/direct")
-async def run_director(request: Request, body: DirectRequest, verified_user_id: str = Depends(get_verified_user_id)):
+async def run_director(
+    request: Request,
+    body: DirectRequest,
+    verified_user_id: str = Depends(get_verified_user_id),
+):
     user_id = verified_user_id or body.user_id
     if not _ADK_AVAILABLE:
         raise HTTPException(
@@ -1273,11 +1411,8 @@ async def run_director(request: Request, body: DirectRequest, verified_user_id: 
             )
 
         result = await asyncio.wait_for(
-            run_director_pipeline(
-                input_text=body.input_text,
-                user_id=user_id
-            ),
-            timeout=120.0
+            run_director_pipeline(input_text=body.input_text, user_id=user_id),
+            timeout=120.0,
         )
 
         await increment_stats(user_id, ai_run_delta=1)
@@ -1287,22 +1422,26 @@ async def run_director(request: Request, body: DirectRequest, verified_user_id: 
         raise
     except asyncio.TimeoutError:
         raise HTTPException(
-            status_code=504,
-            detail="Storyboard generation timed out after 120 seconds."
+            status_code=504, detail="Storyboard generation timed out after 120 seconds."
         )
     except Exception as exc:
         logger.error("POST /api/direct failed: %s", exc)
-        raise HTTPException(status_code=500, detail="Storyboard generation failed. Please try again.")
+        raise HTTPException(
+            status_code=500, detail="Storyboard generation failed. Please try again."
+        )
 
 
 @app.post("/api/create-video")
-async def create_video(request: CreateVideoRequest, verified_user_id: str = Depends(get_verified_user_id)):
+async def create_video(
+    request: CreateVideoRequest, verified_user_id: str = Depends(get_verified_user_id)
+):
     """
     Runs: ScriptAgent → PreFlight → RenderService (Background)
     """
     user_id = verified_user_id or request.user_id
     try:
         from agent.script_agent import ScriptAgent
+
         agent = ScriptAgent()
         production_plan = await agent.run(request.script, request.clip_paths)
 
@@ -1320,7 +1459,7 @@ async def create_video(request: CreateVideoRequest, verified_user_id: str = Depe
                         start_sec=hero["start_sec"],
                         end_sec=hero["end_sec"],
                         score=0.9,
-                        transcript=hero["text"]
+                        transcript=hero["text"],
                     )
                 ]
                 result = await asyncio.wait_for(
@@ -1335,9 +1474,12 @@ async def create_video(request: CreateVideoRequest, verified_user_id: str = Depe
                 viral_score = result.weighted_consensus_score
                 persona_votes = [v.model_dump() for v in result.persona_votes]
             except Exception as e:
-                logger.warning(f"Pre-flight analysis failed in video creation flow: {e}")
+                logger.warning(
+                    f"Pre-flight analysis failed in video creation flow: {e}"
+                )
 
         from render_worker import process_render_task
+
         options = {
             "production_plan": production_plan,
             "user_id": user_id,
@@ -1345,11 +1487,13 @@ async def create_video(request: CreateVideoRequest, verified_user_id: str = Depe
 
         try:
             from rq import Retry as RqRetry
+
             render_queue.enqueue(
                 process_render_task,
                 job_id,
                 "generated",
-                0, 0,
+                0,
+                0,
                 user_id,
                 options,
                 job_id=job_id,
@@ -1372,7 +1516,9 @@ async def create_video(request: CreateVideoRequest, verified_user_id: str = Depe
         }
     except Exception as exc:
         logger.exception("Video creation pipeline failed: %s", exc)
-        raise HTTPException(status_code=500, detail="Video creation failed. Please try again.")
+        raise HTTPException(
+            status_code=500, detail="Video creation failed. Please try again."
+        )
 
 
 # ---- ADK Studio ---------------------------------------------------------------
@@ -1403,7 +1549,9 @@ def _parse_script_to_segments(
     for i, para in enumerate(paragraphs):
         duration = max(3.0, len(para.split()) / 2.5)
         clip = all_clips[i % len(all_clips)] if all_clips else "BLACK_FRAME"
-        segments.append({"clip_path": clip, "start_sec": 0, "end_sec": duration, "text": para})
+        segments.append(
+            {"clip_path": clip, "start_sec": 0, "end_sec": duration, "text": para}
+        )
     # Legacy TTS removed in favor of services.tts_service
     return segments
 
@@ -1412,11 +1560,13 @@ def _parse_script_to_segments(
 async def liveness():
     return {"status": "alive"}
 
+
 @app.get("/health/ready")
 async def readiness():
     if not db_is_ready():
         raise HTTPException(status_code=503, detail="DB_NOT_READY")
     return {"status": "ready"}
+
 
 @app.get("/health/startup")
 async def startup_check():
@@ -1426,7 +1576,9 @@ async def startup_check():
 
 
 @app.post("/api/adk/upload")
-async def adk_upload(file: UploadFile = File(...), verified_user_id: str = Depends(get_verified_user_id)):
+async def adk_upload(
+    file: UploadFile = File(...), verified_user_id: str = Depends(get_verified_user_id)
+):
     """
     Uploads a media file for ADK Studio, persisting it in GridFS.
     This ensures horizontal scalability as all worker instances can access the file.
@@ -1436,14 +1588,14 @@ async def adk_upload(file: UploadFile = File(...), verified_user_id: str = Depen
     ext = Path(original_name).suffix.lower()
     if ext not in _ADK_EXTENSIONS:
         ext = ".mp4"
-    
+
     filename = f"{file_id}{ext}"
     remote_path = f"adk_uploads/{verified_user_id}/{filename}"
 
     content = await file.read()
     if len(content) > 200 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="File too large (max 200 MB)")
-    
+
     try:
         bucket = get_uploads_bucket()
         # CHANGED: Persist to GridFS instead of local disk
@@ -1453,24 +1605,28 @@ async def adk_upload(file: UploadFile = File(...), verified_user_id: str = Depen
             metadata={
                 "user_id": verified_user_id,
                 "original_name": original_name,
-                "uploaded_at": datetime.utcnow().isoformat()
-            }
+                "uploaded_at": datetime.utcnow().isoformat(),
+            },
         )
-        logger.info("ADK upload persisted to GridFS: %s (%d bytes)", remote_path, len(content))
+        logger.info(
+            "ADK upload persisted to GridFS: %s (%d bytes)", remote_path, len(content)
+        )
     except Exception as e:
         logger.error("ADK upload to GridFS failed: %s", e)
         raise HTTPException(status_code=500, detail="Failed to store upload")
 
     return {
-        "file_id": file_id, 
-        "filename": original_name, 
+        "file_id": file_id,
+        "filename": original_name,
         "size_bytes": len(content),
-        "gridfs_path": remote_path
+        "gridfs_path": remote_path,
     }
 
 
 @app.get("/api/adk/stock")
-async def adk_stock_search(q: str = Query(..., min_length=1), per_page: int = Query(12, ge=1, le=20)):
+async def adk_stock_search(
+    q: str = Query(..., min_length=1), per_page: int = Query(12, ge=1, le=20)
+):
     api_key = os.getenv("PEXELS_API_KEY")
     if not api_key:
         return {"videos": [], "notice": "Stock search requires PEXELS_API_KEY"}
@@ -1488,30 +1644,47 @@ async def adk_stock_search(q: str = Query(..., min_length=1), per_page: int = Qu
         videos = []
         for v in data.get("videos", []):
             files = v.get("video_files", [])
-            hd = next((f for f in files if f.get("quality") == "hd" and f.get("width", 9999) <= 1080), files[0] if files else None)
+            hd = next(
+                (
+                    f
+                    for f in files
+                    if f.get("quality") == "hd" and f.get("width", 9999) <= 1080
+                ),
+                files[0] if files else None,
+            )
             if hd:
-                videos.append({
-                    "id": str(v["id"]),
-                    "url": hd["link"],
-                    "thumbnail": v.get("image", ""),
-                    "title": f"Stock {v['id']}",
-                    "duration": v.get("duration", 5),
-                })
+                videos.append(
+                    {
+                        "id": str(v["id"]),
+                        "url": hd["link"],
+                        "thumbnail": v.get("image", ""),
+                        "title": f"Stock {v['id']}",
+                        "duration": v.get("duration", 5),
+                    }
+                )
         return {"videos": videos}
     except Exception as exc:
         logger.exception("Pexels search failed: %s", exc)
-        raise HTTPException(status_code=502, detail="Stock video search unavailable. Please try again.")
+        raise HTTPException(
+            status_code=502, detail="Stock video search unavailable. Please try again."
+        )
 
 
 class ADKEnhanceRequest(BaseModel):
     topic: str = Field(..., min_length=5, max_length=1000)
 
+
 @app.post("/api/adk/enhance")
 @limiter.limit("5/minute")
-async def adk_enhance(request: Request, body: ADKEnhanceRequest, _user_id: str = Depends(get_verified_user_id)):
+async def adk_enhance(
+    request: Request,
+    body: ADKEnhanceRequest,
+    _user_id: str = Depends(get_verified_user_id),
+):
     """Rewrites a simple topic into a viral script using the ScriptAgent."""
     try:
         from agent.script_agent import ScriptAgent
+
         agent = ScriptAgent()
         enhanced_text = await agent.enhance_script(body.topic)
         return {"enhanced_script": enhanced_text}
@@ -1519,50 +1692,66 @@ async def adk_enhance(request: Request, body: ADKEnhanceRequest, _user_id: str =
         logger.error(f"ADK Enhance failed: {e}")
         raise HTTPException(status_code=500, detail="Failed to enhance script")
 
+
 @app.post("/api/adk/generate")
-async def adk_generate(request: Request, body: ADKGenerateRequest, user_id: str = Depends(get_verified_user_id)):
+async def adk_generate(
+    request: Request,
+    body: ADKGenerateRequest,
+    user_id: str = Depends(get_verified_user_id),
+):
     # Pillar 1: Overload Guardrail
     if is_overloaded():
-        raise HTTPException(status_code=503, detail="System currently overloaded or in maintenance.")
+        raise HTTPException(
+            status_code=503, detail="System currently overloaded or in maintenance."
+        )
 
     if not await deduct_credits(user_id, 50):
         logger.warning("low_credits_continuing", user_id=user_id)
 
     from services.adk_service import ADKService
+
     plan = await ADKService.generate_production_plan(
         script=body.script,
         voice_id=body.voice_id,
         uploaded_file_ids=body.uploaded_file_ids,
         user_id=user_id,
         stock_query=body.stock_query,
-        aspect_ratio=body.aspect_ratio
+        aspect_ratio=body.aspect_ratio,
     )
 
     job_id = uuid.uuid4().hex
     project_svc = get_project_service()
     project_id = await project_svc.create_project(
-        user_id, 
-        f"Short - {datetime.now().strftime('%Y-%m-%d %H:%M')}", 
-        body.script
+        user_id, f"Short - {datetime.now().strftime('%Y-%m-%d %H:%M')}", body.script
     )
-    
-    await project_svc.update_project(project_id, user_id, {
-        "status": "processing",
-        "job_id": job_id,
-        "segments": plan["segments"],
-        "voice_id": body.voice_id,
-        "aspect_ratio": body.aspect_ratio
-    })
+
+    await project_svc.update_project(
+        project_id,
+        user_id,
+        {
+            "status": "processing",
+            "job_id": job_id,
+            "segments": plan["segments"],
+            "voice_id": body.voice_id,
+            "aspect_ratio": body.aspect_ratio,
+        },
+    )
 
     from render_worker import process_render_task
     from rq import Retry as RqRetry
+
     render_queue.enqueue(
         process_render_task,
         job_id,
         "adk-generated",
-        0, 0,
+        0,
+        0,
         user_id,
-        {"production_plan": plan, "quality": body.quality, "aspect_ratio": body.aspect_ratio},
+        {
+            "production_plan": plan,
+            "quality": body.quality,
+            "aspect_ratio": body.aspect_ratio,
+        },
         job_id=job_id,
         job_timeout=JOB_TIMEOUT_SECONDS,
         result_ttl=JOB_RESULT_TTL_SECONDS,
@@ -1571,39 +1760,57 @@ async def adk_generate(request: Request, body: ADKGenerateRequest, user_id: str 
     )
 
     from services.stats_service import increment_stats
+
     await increment_stats(user_id, ai_run_delta=1)
     return {
         "status": "queued",
         "job_id": job_id,
         "project_id": project_id,
-        "subscribe_channel": f"export-{job_id}"
+        "subscribe_channel": f"export-{job_id}",
     }
 
+
 # ---- Projects Endpoints ------------------------------------------------------
+
 
 @app.get("/api/projects")
 async def list_projects(verified_user_id: str = Depends(get_verified_user_id)):
     svc = get_project_service()
     return await svc.list_projects(verified_user_id)
 
+
 @app.get("/api/projects/{project_id}")
-async def get_project(project_id: str, verified_user_id: str = Depends(get_verified_user_id)):
+async def get_project(
+    project_id: str, verified_user_id: str = Depends(get_verified_user_id)
+):
     svc = get_project_service()
     project = await svc.get_project(project_id, verified_user_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     return project
 
+
 @app.patch("/api/projects/{project_id}")
-async def update_project(project_id: str, body: ProjectUpdateRequest, verified_user_id: str = Depends(get_verified_user_id)):
+async def update_project(
+    project_id: str,
+    body: ProjectUpdateRequest,
+    verified_user_id: str = Depends(get_verified_user_id),
+):
     svc = get_project_service()
-    success = await svc.update_project(project_id, verified_user_id, body.model_dump(exclude_none=True))
+    success = await svc.update_project(
+        project_id, verified_user_id, body.model_dump(exclude_none=True)
+    )
     if not success:
-        raise HTTPException(status_code=404, detail="Project not found or no changes made")
+        raise HTTPException(
+            status_code=404, detail="Project not found or no changes made"
+        )
     return {"status": "success"}
 
+
 @app.delete("/api/projects/{project_id}")
-async def delete_project(project_id: str, verified_user_id: str = Depends(get_verified_user_id)):
+async def delete_project(
+    project_id: str, verified_user_id: str = Depends(get_verified_user_id)
+):
     svc = get_project_service()
     success = await svc.delete_project(project_id, verified_user_id)
     if not success:
@@ -1639,7 +1846,9 @@ async def agent_trace(
     if preflight_runner and hasattr(preflight_runner, "session_service"):
         svc = preflight_runner.session_service
     if svc is None:
-        raise HTTPException(status_code=503, detail="Session service unavailable — ADK not initialised")
+        raise HTTPException(
+            status_code=503, detail="Session service unavailable — ADK not initialised"
+        )
 
     try:
         session = await svc.get_session(
@@ -1653,7 +1862,11 @@ async def agent_trace(
         return {
             "session_id": session_id,
             "state": state,
-            "events": [e.model_dump() for e in session.events] if hasattr(session, "events") else [],
+            "events": (
+                [e.model_dump() for e in session.events]
+                if hasattr(session, "events")
+                else []
+            ),
             "summary": {
                 "recommendation": state.get("recommendation"),
                 "consensus_score": state.get("consensus_score"),
@@ -1668,7 +1881,9 @@ async def agent_trace(
         logger.error("Trace fetch error session %s: %s", session_id, e)
         raise HTTPException(status_code=500, detail="Could not retrieve session trace.")
 
+
 # ---- Music Endpoints ---------------------------------------------------------
+
 
 @app.get("/api/music")
 async def list_music():

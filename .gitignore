@@ -19,6 +19,7 @@ __pycache__/
 /coverage
 .pytest_cache/
 fastapi/chaos_test.py
+*.tsbuildinfo
 
 # Next.js and Vercel
 /.next/

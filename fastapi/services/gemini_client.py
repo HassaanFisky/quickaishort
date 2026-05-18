@@ -23,6 +23,7 @@ DEFAULT_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 # We use a singleton-like pattern for the client
 _client: genai.Client | None = None
 
+
 def get_client() -> genai.Client:
     global _client
     if _client is None:
@@ -33,6 +34,7 @@ def get_client() -> genai.Client:
         _client = genai.Client(api_key=api_key)
     return _client
 
+
 try:
     from tenacity import (
         AsyncRetrying,
@@ -40,10 +42,12 @@ try:
         stop_after_attempt,
         wait_exponential,
     )
+
     _TENACITY_OK = True
 except ImportError:
     logger.warning("tenacity unavailable — Gemini calls will not retry.")
     _TENACITY_OK = False
+
 
 async def call_gemini(
     contents: Any,
@@ -81,6 +85,7 @@ async def call_gemini(
         with attempt:
             return await _attempt()
 
+
 async def call_gemini_text(
     prompt: str,
     *,
@@ -92,7 +97,7 @@ async def call_gemini_text(
     config: dict[str, Any] = {}
     if json_mode:
         config["response_mime_type"] = "application/json"
-    
+
     response = await call_gemini(
         prompt,
         model=model,
@@ -100,6 +105,7 @@ async def call_gemini_text(
         max_attempts=max_attempts,
     )
     return getattr(response, "text", "") or ""
+
 
 async def gather_with_retries(coros: Iterable[asyncio.Future | asyncio.Task]) -> list:
     """Helper to gather multiple Gemini calls."""
