@@ -77,7 +77,6 @@ from services.logging import log_metric
 from services.stats_service import get_user_stats, increment_stats, deduct_credits, recalculate_user_stats, is_user_premium, provision_credits
 from services.video_service import VideoService
 from services.project_service import get_project_service
-from services.demo_service import DemoService
 from services.tts_service import get_tts_service
 from services.music_service import get_music_service
 from services.storage_service import get_storage_service
@@ -603,14 +602,6 @@ async def export_video(request: ExportRequest, verified_user_id: str = Depends(g
             detail="Insufficient credits. Please upgrade your plan to continue.",
         )
 
-    # --- Pillar 4: Safe Demo Bypass ---
-    if DemoService.is_demo_url(request.videoId):
-        logger.info("demo_export_triggered", user_id=user_id, video_id=request.videoId)
-        return {
-            "status": "queued",
-            "job_id": "demo-job-showcase",
-            "subscribe_channel": f"export-demo-job-showcase",
-        }
 
     job_id = uuid.uuid4().hex
     
@@ -682,10 +673,6 @@ async def export_video(request: ExportRequest, verified_user_id: str = Depends(g
 
 @app.get("/api/status/{job_id}")
 async def export_status(job_id: str, user_id: str):
-    if DemoService.is_demo_job(job_id):
-        payload = DemoService.get_cached_render_payload(job_id, "system")
-        payload["download_url"] = _build_download_url(job_id, "system")
-        return payload
 
     try:
         from rq.job import Job
@@ -715,8 +702,6 @@ async def export_download(job_id: str, user_id: str, token: str, expires: int):
     """
     Serves the rendered video directly from GridFS.
     """
-    if DemoService.is_demo_job(job_id):
-        return RedirectResponse(url="https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_1MB.mp4")
 
     # Enforce HMAC token — verify() uses hmac.compare_digest (timing-safe)
     if not verify(job_id, user_id, expires, token):
@@ -800,16 +785,6 @@ async def stats_ws(websocket: WebSocket, user_id: str):
 async def get_video_info(url: str):
     video_id = _require_youtube_url(url)
 
-    if DemoService.is_demo_url(url):
-        return {
-            "id": video_id,
-            "title": "AI Evolution: The Next Frontier (Demo)",
-            "duration": 45,
-            "thumbnail": f"https://i.ytimg.com/vi/{video_id}/maxresdefault.jpg",
-            "formats": [], 
-            "url": url,
-            "source": "demo_cache"
-        }
 
     api_key = os.environ.get("YOUTUBE_API_KEY")
 
@@ -891,9 +866,6 @@ async def get_video_info(url: str):
 async def proxy_video(url: str):
     _require_youtube_url(url)
     
-    if DemoService.is_demo_url(url):
-        # Redirect to a known safe open source video for the demo
-        return RedirectResponse(url="https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_1MB.mp4")
 
     import httpx
 
@@ -980,9 +952,7 @@ async def proxy_video(url: str):
 @app.get("/api/audio")
 async def get_audio(url: str = Query(...)):
     """Serves the audio stream for a given YouTube URL with 100% reliability fallbacks."""
-    if DemoService.is_demo_url(url):
-        return RedirectResponse(url="https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_1MB.mp4")
-        
+
     video_id = VideoService.extract_video_id(url)
     if not video_id:
         raise HTTPException(status_code=400, detail="Invalid YouTube URL")
@@ -1099,10 +1069,10 @@ async def get_audio(url: str = Query(...)):
                     if not formats:
                         continue
                     best = max(formats, key=lambda x: x.get("bitrate", 0))
-                    url = best.get("url", "")
-                    if not url:
+                    audio_url = best.get("url", "")
+                    if not audio_url:
                         continue
-                    async with client.stream("GET", url) as stream:
+                    async with client.stream("GET", audio_url) as stream:
                         with open(output_path, "wb") as f:
                             async for chunk in stream.aiter_bytes(8192):
                                 f.write(chunk)
@@ -1114,13 +1084,8 @@ async def get_audio(url: str = Query(...)):
                 continue
 
     if not success:
+        shutil.rmtree(tmpdir, ignore_errors=True)
         raise HTTPException(status_code=500, detail="Video unavailable on all sources")
-
-    return FileResponse(
-        path=output_path,
-        media_type="audio/mpeg",
-        background=BackgroundTask(lambda: shutil.rmtree(tmpdir, ignore_errors=True))
-    )
 
     return FileResponse(
         path=output_path,
@@ -1195,15 +1160,6 @@ async def run_preflight(request: Request, body: PreflightRequest, verified_user_
             detail="Insufficient credits. Please upgrade your plan to continue.",
         )
 
-    # --- Pillar 4: Safe Demo Bypass ---
-    if DemoService.is_demo_url(body.youtube_url):
-        logger.info("demo_mode_triggered", user_id=user_id, url=body.youtube_url)
-        cached_result = DemoService.get_cached_preflight()
-        return {
-            "preflight_result": cached_result,
-            "strategy": "demo_cached",
-            "degraded": False,
-        }
 
     candidates = [
         PreflightClipCandidate(

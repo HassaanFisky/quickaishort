@@ -71,9 +71,16 @@ async def test_preflight_pipeline():
         source_url = "https://www.youtube.com/watch?v=86S8pS21n8k"
         result = await run_preflight_pipeline(source_url, test_clips, False, "test_user_123")
         
-        logger.info(f"Pre-Flight Success: Weighted Consensus Score: {result.get('weighted_consensus_score')}")
-        logger.info(f"Recommendation: {result.get('recommendation')}")
-        logger.info(f"Persona Count: {len(result.get('persona_votes', []))}")
+        if hasattr(result, "model_dump"):
+            res_dict = result.model_dump()
+        elif hasattr(result, "dict"):
+            res_dict = result.dict()
+        else:
+            res_dict = result
+
+        logger.info(f"Pre-Flight Success: Weighted Consensus Score: {res_dict.get('weighted_consensus_score')}")
+        logger.info(f"Recommendation: {res_dict.get('recommendation')}")
+        logger.info(f"Persona Count: {len(res_dict.get('persona_votes', []))}")
         return True
     except Exception as e:
         logger.error(f"Pre-Flight Pipeline Failed: {e}")

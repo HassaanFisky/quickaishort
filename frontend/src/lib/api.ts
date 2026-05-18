@@ -7,8 +7,8 @@ import type {
 } from "@/types/export";
 import type { UserStats } from "@/types/stats";
 
-// Hardcoded production URL to bypass Vercel environment variable bugs
-export const API_URL = "https://quickaishort-api-rqmhzhsxua-uc.a.run.app";
+export const API_URL =
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 // Default timeout: 30 s. Long-running inference calls override per-request.
 axios.defaults.timeout = 30_000;

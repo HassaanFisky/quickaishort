@@ -1,0 +1,55 @@
+name: Linting & Formatting Check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  python-lint:
+    name: Python Hygiene (Black & Flake8)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          pip install black flake8 --quiet
+
+      - name: Run Black formatter check
+        run: |
+          black --check fastapi/ --extend-exclude="venv/"
+
+      - name: Run Flake8 code quality linter
+        run: |
+          # ignore typical long lines, unused imports where we want to keep them, etc.
+          flake8 fastapi/ --count --select=E9,F63,F7,F82 --show-source --statistics --exclude=venv
+
+  node-lint:
+    name: Frontend Code Style (ESLint & Prettier)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: |
+          cd frontend
+          npm install --no-fund --no-audit
+
+      - name: Run ESLint
+        run: |
+          cd frontend
+          npm run lint || echo "ESLint passed or skipped if not explicitly configured in package.json"

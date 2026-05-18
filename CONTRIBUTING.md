@@ -1,133 +1,104 @@
-# Contributing to Quick AI Shorts
+# 🤝 Contributing to QuickAIShort.online
 
-Thanks for your interest in contributing.
+Thank you for your interest in contributing to QuickAIShort.online. We welcome contributions from the engineering community to help optimize our video processing, agentic AI pipelines, and user interfaces. 
 
-Contribute karne ke liye shukriya.
-
----
-
-## Quick Rules
-
-1. **Open PRs** — Don't ask permission. Just open a PR.
-2. **Small focused changes** — One feature or fix per PR.
-3. **Run tests locally** — Before you submit.
-4. **Follow existing patterns** — Match the code style you see.
-5. **Write clear commit messages** — What changed and why.
-
-PR kholo. Chhote focused changes. Tests run karo. Patterns follow karo.
+To maintain the elite engineering quality, security, and performance standards of this repository, we ask that all contributors adhere to the guidelines below.
 
 ---
 
-## Getting Started
+## 1. Quick Contribution Rules
+
+1. **Direct Pull Requests:** Feel free to open a Pull Request directly for bugs and small feature optimizations. You do not need to ask for permission for clear, non-breaking improvements.
+2. **Focused & Atomic Changes:** Submit one logical feature or bug fix per Pull Request. This keeps code reviews highly efficient and reduces regression risk.
+3. **Local Validation:** Ensure all lint and build checks pass successfully in your local environment prior to submission.
+4. **Adhere to Code Patterns:** Align your implementation with the established architecture, folder layout, and design conventions of the codebase.
+5. **Conventional Commits:** Write clean, descriptive, and structured commit messages that specify the scope and intent of the change.
+
+---
+
+## 2. Local Development Lifecycle
+
+To set up your workstation and validate your changes:
 
 ```bash
-# Clone
-git clone https://github.com/your-org/quickai-shorts.git
-cd quickai-shorts
+# 1. Clone the repository
+git clone https://github.com/HassaanFisky/quickaishort.git
+cd quickaishort
 
-# Install
+# 2. Install dependencies (Frontend and Backend)
 pnpm install
+# In a separate terminal or virtual environment:
+cd fastapi && pip install -r requirements.txt
 
-# Dev server
+# 3. Spin up the development server
 pnpm dev
 
-# Run tests
-pnpm test
-
-# Lint
+# 4. Run local static analysis and typescript checks
 pnpm lint
+pnpm tsc --noEmit
 ```
 
 ---
 
-## What We're Looking For
+## 3. Contribution Classifications
 
-**High priority:**
+### High-Priority Focus Areas:
+* **Bug Fixes:** Address structural issues with reproducible steps.
+* **Performance Enhancements:** Optimize FFMpeg transcoding profiles or agent latency with benchmark metrics.
+* **Accessibility (a11y):** Improve screen reader support, keyboard navigation, and contrast levels.
+* **Security Hardening:** Identify and secure potential input injection vectors or dependencies.
 
-- Bug fixes with reproduction steps
-- Performance improvements with benchmarks
-- Accessibility improvements
-- Documentation improvements
+### Standard Contributions:
+* **New Caption Themes:** Propose modern CSS caption layouts and animation sets.
+* **UI/UX Polish:** Improve micro-animations, loading skeletons, and interactive transitions.
+* **Localization:** Add robust multilingual support files.
 
-**Welcome:**
-
-- New caption themes
-- UI polish and animations
-- i18n contributions
-
-**Discuss first:**
-
-- Major architecture changes
-- New dependencies
-- Breaking changes
-
-Bug fixes, performance improvements, accessibility welcome hain. Major changes pehle discuss karo.
+### Architectural Proposals (Discuss First):
+* Adding heavy third-party dependencies.
+* Modifying core database schema layouts (MongoDB).
+* Introducing breaking changes to API endpoints.
+* *Please open a structural RFC (Request for Comments) issue before implementing major structural refactors.*
 
 ---
 
-## Code Style
+## 4. Code Quality & Standards
 
-- **TypeScript** — Strict mode enabled
-- **ESLint** — Run `pnpm lint` before committing
-- **Prettier** — Auto-formatted on save
-- **Naming** — `camelCase` for variables, `PascalCase` for components
-- **Imports** — Absolute paths with `@/` alias
-
----
-
-## Commit Messages
-
-```
-feat: add neon caption theme
-fix: correct aspect ratio calculation for ultrawide
-docs: update QUICKSTART with Windows instructions
-perf: lazy load Motion components
-```
-
-Use conventional commits: `feat`, `fix`, `docs`, `perf`, `refactor`, `test`.
+* **TypeScript:** Strict mode typing is strictly enforced across the frontend workspace.
+* **Linting & Formatting:** Ensure code complies with ESLint and Prettier.
+* **Directory Layout:** Preserve the clean boundary between `fastapi/` (Python core services) and `frontend/` (Next.js client interface).
+* **Environment Isolation:** Never commit local `.env` or configurations containing private tokens.
 
 ---
 
-## Pull Request Process
+## 5. Commit Message Standard
 
-1. Fork the repo
-2. Create a branch: `feat/your-feature` or `fix/your-fix`
-3. Make your changes
-4. Run tests: `pnpm test`
-5. Run lint: `pnpm lint`
-6. Open PR against `main`
-7. Fill out the PR template
-8. Wait for review
+We follow the **Conventional Commits** specification to ensure clean and automated release management. Please prefix your commits with the correct action identifier:
 
-Fork karo, branch banao, changes karo, tests run karo, PR kholo.
+* `feat:` A new user-facing feature.
+* `fix:` A bug fix.
+* `docs:` Documentation updates only.
+* `perf:` Code changes that improve performance.
+* `refactor:` Code changes that neither fix a bug nor add a feature.
+* `test:` Adding missing tests or correcting existing tests.
 
----
-
-## Review Process
-
-- PRs are reviewed within 48 hours
-- Small fixes may be merged immediately
-- Larger changes need 1 approval
-- Breaking changes need 2 approvals + discussion
-
-48 hours mein review. Breaking changes ke liye discussion zaruri.
+*Example:* `feat(caption): add modern glow glassmorphic caption theme`
 
 ---
 
-## License
+## 6. Pull Request & Review Pipeline
 
-By contributing, you agree that your contributions will be licensed under MIT.
-
-Contribute karne pe tumhara kaam MIT license ke under hoga.
-
----
-
-## Questions?
-
-Open an issue labeled `question` or reach out on discussions.
-
-Sawaal? Issue kholo ya discussions mein baat karo.
+1. **Branch Naming:** Create a focused branch off `main` (e.g., `feat/face-tracking-opt` or `fix/paddle-webhook-signature`).
+2. **Implement & Format:** Write clean code, run quality checks (`pnpm lint`), and test locally.
+3. **Submit PR:** Complete all sections of the [Pull Request Template](file:///.github/PULL_REQUEST_TEMPLATE.md).
+4. **Static CI Gates:** GitHub Actions will automatically run typescript checks, backend smoke imports, and linter pipelines.
+5. **Code Review:** The engineering team reviews Pull Requests within 48 hours. Small bug fixes may be approved and merged immediately. Large architecture modifications require thorough discussion and consensus.
 
 ---
 
-**Thanks for helping make Quick AI Shorts better.**
+## 7. Licensing & Code Handoff
+
+By contributing to QuickAIShort.online, you agree that your code will be licensed under the project's **MIT License** and that you possess all intellectual property rights to the submitted code.
+
+---
+
+**Thank you for your dedication to building the future of automated video creation!**

@@ -10,7 +10,7 @@ All Gemini calls go through services.gemini_client.call_gemini, which wraps
 them in tenacity retry on 429 / 5xx / deadline exceeded.
 """
 
-from __future__ import annotations
+
 
 import json
 import logging
@@ -444,14 +444,13 @@ async def run_viral_pipeline(
             new_message=message,
         ):
             if event.is_final_response():
-                final_text = getattr(event, "text", None)
-                if not final_text and hasattr(event, "content"):
+                txt = getattr(event, "text", None)
+                if not txt and hasattr(event, "content"):
                     parts = getattr(event.content, "parts", [])
                     if parts and hasattr(parts[0], "text"):
-                        final_text = parts[0].text
-                
-                final_text = final_text or "[]"
-                break
+                        txt = parts[0].text
+                if txt:
+                    final_text = txt
 
         suggestions = _coerce_suggestions(final_text)
 

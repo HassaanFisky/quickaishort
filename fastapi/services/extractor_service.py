@@ -793,10 +793,9 @@ class ExtractorService:
                         log_metric("circuit_open", 1, metadata={"tier": tier_name, "request_id": request_id})
                         if METRICS_AVAILABLE:
                             _METRIC_CIRCUIT_OPENS.labels(tier=tier_name).inc()
-
-                        _METRIC_DURATION.labels(
-                            tier=tier_name, status="failure"
-                        ).observe(duration_s)
+                            _METRIC_DURATION.labels(
+                                tier=tier_name, status="failure"
+                            ).observe(duration_s)
 
                     log_metric("extraction_failure", 1, metadata={"tier": tier_name, "error_class": ec.value, "request_id": request_id, "duration_ms": int(duration_s * 1000)})
 

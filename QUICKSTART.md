@@ -1,165 +1,161 @@
-# Quick AI Shorts — Developer Quickstart
+# 💻 QuickAIShort.online — Developer Quickstart Guide
 
-Get a local dev environment running in under 5 minutes.
-
-Local dev environment 5 minute mein ready karo.
+Follow this guide to spin up a fully optimized, production-equivalent local development environment for the QuickAIShort.online platform in under 5 minutes.
 
 ---
 
-## Prerequisites
+## 1. Prerequisites & Requirements
 
-- Node.js 20+
-- pnpm (or npm/yarn)
-- Docker (for FFmpeg worker)
-- S3-compatible bucket (or local MinIO)
+Ensure your local workstation has the following runtimes and services installed:
 
-Node.js 20+, pnpm, Docker, aur S3-compatible bucket chahiye.
+* **Node.js:** version `20.x` or later (Active LTS recommended).
+* **Package Manager:** `pnpm` (strongly preferred for workspace integrity) or `npm`/`yarn`.
+* **Python:** version `3.10` or later (required for backend AI agent orchestrators).
+* **Redis Instance:** (Required for processing task queues and rate limiting caches).
+* **MongoDB Instance:** (Either a local community server instance or a free tier MongoDB Atlas URI).
 
 ---
 
-## 1. Clone Repository
+## 2. Repository Clonal & Workspace Setup
+
+Clone the repository and initialize the project:
 
 ```bash
-git clone https://github.com/your-org/quickai-shorts.git
-cd quickai-shorts
+git clone https://github.com/HassaanFisky/quickaishort.git
+cd quickaishort
 ```
 
 ---
 
-## 2. Environment Variables
+## 3. Environment Variable Provisioning
 
-Create `.env.local` in project root:
+Establish a private environment configuration by creating a `.env.local` file inside the `frontend/` directory and a `.env` file inside the `fastapi/` directory.
 
+### Frontend Environment Configuration (`frontend/.env.local`):
 ```env
-# API
-NEXT_PUBLIC_API_URL=http://localhost:3000/api
-NODE_ENV=development
+# Production and Local Gateway Mapping
+NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_APP_URL=http://localhost:3000
 
-# Storage (S3-compatible)
-S3_BUCKET=quickai-shorts-dev
-S3_REGION=us-east-1
-S3_ACCESS_KEY=your_access_key
-S3_SECRET_KEY=your_secret_key
-S3_ENDPOINT=http://localhost:9000  # MinIO for local dev
-
-# Job Queue
-QUEUE_URL=redis://localhost:6379
-
-# Worker
-JOB_WORKER_URL=http://localhost:8080
+# NextAuth Authentication Config
+NEXTAUTH_SECRET=a_high_entropy_cryptographic_secret_string
+NEXTAUTH_URL=http://localhost:3000
 ```
 
-`.env.local` file banao. S3, Redis, Worker URLs set karo.
+### Backend Environment Configuration (`fastapi/.env`):
+```env
+# FastAPI Gateway Core
+PORT=8000
+ENV=development
+
+# Database Cluster & Cache Connections
+MONGO_URI=mongodb://localhost:27017/quickaishort_dev
+REDIS_URL=redis://localhost:6379/0
+
+# Agent intelligence Configuration keys
+GEMINI_API_KEY=your_gemini_api_key_here
+PADDLE_API_KEY=your_paddle_api_key_here
+PADDLE_WEBHOOK_SECRET=your_paddle_webhook_secret_here
+```
 
 ---
 
-## 3. Install Dependencies
+## 4. Install Dependencies & Spin Up Servers
 
+We recommend executing frontend and backend runtimes in isolated terminal sessions.
+
+### Step 3.1: Initialize the Python Backend:
 ```bash
+cd fastapi
+
+# Create and activate a clean virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: .\venv\Scripts\activate
+
+# Install exact python dependencies
+pip install -r requirements.txt
+
+# Boot the FastAPI hot-reloading development server
+uvicorn main:app --reload --port 8000
+```
+
+### Step 3.2: Initialize the Next.js Frontend:
+```bash
+# From the project root workspace directory
 pnpm install
-```
 
-Or with npm:
-
-```bash
-npm install
-```
-
----
-
-## 4. Start Development Server
-
-```bash
+# Spin up the next hot-reloading development client
 pnpm dev
 ```
 
-Frontend runs at `http://localhost:3000`.
-
-Frontend `http://localhost:3000` pe chalega.
-
----
-
-## 5. Start FFmpeg Worker (Local Docker)
-
-```bash
-docker run --rm -it \
-  -v $(pwd)/media:/media \
-  -p 8080:8080 \
-  quickai/ffmpeg-worker:latest \
-  ./worker --listen 0.0.0.0:8080
-```
-
-For Windows PowerShell:
-
-```powershell
-docker run --rm -it `
-  -v ${PWD}/media:/media `
-  -p 8080:8080 `
-  quickai/ffmpeg-worker:latest `
-  ./worker --listen 0.0.0.0:8080
-```
-
-FFmpeg worker Docker mein chalo. Port 8080 pe listen karega.
+* **Client Gateway:** Access the visual dashboard locally at `http://localhost:3000`.
+* **API Gateway Documentation:** Access interactive Swagger specifications at `http://localhost:8000/docs`.
 
 ---
 
-## 6. Start Redis (Local)
+## 5. Local Docker Infrastructure (Optional Fallbacks)
 
+To test Redis or local databases without manual system installs, leverage standard Docker containers:
+
+### Spin Up Redis Container:
 ```bash
-docker run --rm -p 6379:6379 redis:alpine
+docker run --name quickai-redis -d -p 6379:6379 redis:alpine
+```
+
+### Spin Up Local MongoDB Container:
+```bash
+docker run --name quickai-mongo -d -p 27017:27017 mongo:latest
 ```
 
 ---
 
-## 7. Test the Pipeline
+## 6. Functional Pipeline Smoke Test
 
-Hit the clip preview endpoint with a test URL:
+Validate that your local API Gateway resolves agent workflows correctly by running a POST simulation against the preflight suite:
 
 ```bash
-curl -X POST http://localhost:3000/api/clip-preview \
+curl -X POST http://localhost:8000/api/preflight \
   -H "Content-Type: application/json" \
-  -d '{"url": "https://youtube.com/watch?v=test123"}'
+  -d '{"url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"}'
 ```
 
-Ya browser mein `/api/clip-preview` endpoint ko test karo.
+A successful environment setup will return a structured JSON response containing the simulated audience persona consensus scores, transcription nodes, and focal-point crops.
 
 ---
 
-## Folder Structure
+## 7. Directory Architecture Overview
 
+The repository enforces a clean, modular separation of concerns between client and server layers:
+
+```text
+quickaishort/
+├── fastapi/                    # Python Backend Microservices
+│   ├── agent/                  # ADK 1.0 Agent Workforce Suite
+│   ├── db/                     # MongoDB Operations & GridFS Buckets
+│   ├── router/                 # REST Controller Endpoints
+│   ├── main.py                 # FastAPI Application Entrypoint
+│   └── requirements.txt        # Python Packages Directory
+├── frontend/                   # Next.js 14 Web Application
+│   ├── src/
+│   │   ├── app/                # React App Router Layouts & Pages
+│   │   ├── components/         # Premium, Glassmorphic UI Primitives
+│   │   └── lib/                # Pusher Sync & API REST Connectors
+│   ├── package.json            # Node Package Configuration
+│   └── next.config.mjs         # Next.js Build Configurations
+├── .github/                    # CI/CD Workflows & Issue Templates
+└── README.md                   # Enterprise Repository Landing Page
 ```
-quickai-shorts/
-├── src/
-│   ├── app/           # Next.js App Router
-│   ├── components/    # React components
-│   ├── lib/           # Utilities, API clients
-│   └── styles/        # Global CSS
-├── public/            # Static assets
-├── media/             # Local media storage (dev)
-└── scripts/           # Build/deploy scripts
-```
 
 ---
 
-## Common Issues
+## 8. Common Troubleshooting
 
-| Issue                   | Fix                                          |
-| ----------------------- | -------------------------------------------- |
-| `ECONNREFUSED` on Redis | Start Redis container first                  |
-| Worker timeout          | Check Docker network connectivity            |
-| S3 access denied        | Verify bucket policies and credentials       |
-| FFmpeg not found        | Ensure worker container has FFmpeg installed |
-
----
-
-## Next Steps
-
-- Read [ARCHITECTURE.md](./ARCHITECTURE.md) for system design
-- Check [ffmpeg.sh](./ffmpeg.sh) for production FFmpeg commands
-- Review [SECURITY.md](./SECURITY.md) before handling user data
+| Error Code / Symptom | Potential Root Cause | Verified Remediation Strategy |
+| :--- | :--- | :--- |
+| **`ECONNREFUSED` on port 6379** | Redis service is stopped. | Verify Redis status by running `redis-cli ping` or booting the docker alpine container. |
+| **`Authentication Failed`** | Invalid/Missing Gemini API key. | Ensure `GEMINI_API_KEY` is fully declared inside `fastapi/.env` and possesses valid request quotas. |
+| **`GridFS Storage Exception`** | Unreachable MongoDB collection. | Validate that your `MONGO_URI` is correct and does not contain unescaped characters in the password. |
 
 ---
 
-**Questions?** Open an issue or check existing docs.
-
-Sawaal? Issue kholo ya docs check karo.
+For architectural deeper dives or production security requirements, refer to [ARCHITECTURE.md](file:///E:/QuickAI%20Short%20orignal/ARCHITECTURE.md) and [SECURITY.md](file:///E:/QuickAI%20Short%20orignal/SECURITY.md).

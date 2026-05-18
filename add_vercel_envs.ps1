@@ -1,4 +1,4 @@
-$envFile = Get-Content "frontend/.env.local"
+$envFile = Get-Content "frontend/.env.production"
 foreach ($line in $envFile) {
     $line = $line.Trim()
     if ($line.StartsWith("#") -or [string]::IsNullOrWhiteSpace($line)) { continue }

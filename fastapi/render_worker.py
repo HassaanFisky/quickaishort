@@ -22,6 +22,7 @@ import logging
 import os
 import time
 import signal
+import tempfile
 import threading
 import http.server
 import socketserver
@@ -29,6 +30,7 @@ import shutil
 import asyncio
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Optional
 
 from rq import Worker
 from services.queue_service import redis_conn, render_queue
