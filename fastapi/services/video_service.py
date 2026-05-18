@@ -8,7 +8,7 @@ import re
 import yt_dlp
 from typing import Optional, List, Dict, Any
 from pathlib import Path
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from starlette.background import BackgroundTask
 from app.utils.youtube_auth import inject_ydl_bypass, get_cookie_file
 

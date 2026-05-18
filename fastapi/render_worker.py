@@ -116,7 +116,6 @@ _worker_ref = None
 def handle_preemption(signum, frame):
     """Gracefully handle SIGTERM from Cloud Run."""
     logger.warning("preemption_signal_received", signal=signum)
-    global _worker_ref
     if _worker_ref:
         logger.info("triggering_rq_worker_warm_shutdown")
         _worker_ref.request_stop(signum, frame)
