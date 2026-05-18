@@ -1,7 +1,100 @@
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
+import type { RefObject } from "react";
 
 import { Clip, Transcript, CutSegment } from "@/types/pipeline";
+
+// ─── AI Editor Types ──────────────────────────────────────────────────────────
+
+export interface VideoMetadata {
+  id: string;
+  url: string;
+  title: string;
+  duration: number;
+  nativeWidth: number;
+  nativeHeight: number;
+  fps: number;
+}
+
+export interface CaptionStyle {
+  fontSize: number;
+  color: string;
+  background: string;
+  position: "top" | "middle" | "bottom";
+  bold: boolean;
+}
+
+export interface Caption {
+  id: string;
+  text: string;
+  startTime: number;
+  endTime: number;
+  style: CaptionStyle;
+}
+
+export interface FrameFilter {
+  brightness: number;
+  contrast: number;
+  saturation: number;
+  hue: number;
+  blur: number;
+}
+
+export interface TrimMarker {
+  startTime: number;
+  endTime: number;
+}
+
+export interface EditorAction {
+  type:
+    | "ADD_CAPTION"
+    | "REMOVE_CAPTION"
+    | "UPDATE_CAPTION"
+    | "TRIM"
+    | "ADD_FILTER"
+    | "RESET_FILTER"
+    | "SEEK"
+    | "PLAY"
+    | "PAUSE";
+  payload: Record<string, unknown>;
+}
+
+export interface GeminiResponse {
+  actions: EditorAction[];
+  message: string;
+  suggestions: string[];
+}
+
+export interface VideoAnalysis {
+  scenes: { time: number; description: string }[];
+  transcript: { text: string; startTime: number; endTime: number }[];
+  topics: string[];
+  suggestedEdits: string[];
+}
+
+export interface AIMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  timestamp: number;
+  actions?: EditorAction[];
+}
+
+const DEFAULT_FRAME_FILTERS: FrameFilter = {
+  brightness: 1,
+  contrast: 1,
+  saturation: 1,
+  hue: 0,
+  blur: 0,
+};
+
+const DEFAULT_CAPTION_STYLE: CaptionStyle = {
+  fontSize: 20,
+  color: "#FFFFFF",
+  background: "rgba(0,0,0,0.6)",
+  position: "bottom",
+  bold: false,
+};
 
 export type AgentStatus = "idle" | "working" | "done" | "error";
 
@@ -150,6 +243,32 @@ interface EditorState {
   setScriptPrompt: (prompt: string) => void;
   setActiveTool: (tool: EditorState["activeTool"]) => void;
   reset: () => void;
+
+  // ─── AI Editor State ───────────────────────────────────────────────────────
+  videoMetadata: VideoMetadata | null;
+  captions: Caption[];
+  trimMarker: TrimMarker | null;
+  frameFilters: FrameFilter;
+  aiMessages: AIMessage[];
+  isAIThinking: boolean;
+  aiPanelOpen: boolean;
+  videoAnalysis: VideoAnalysis | null;
+  videoElementRef: RefObject<HTMLVideoElement> | null;
+
+  // AI Editor Actions
+  setVideoMetadata: (meta: VideoMetadata) => void;
+  setTrimMarker: (m: TrimMarker | null) => void;
+  setFrameFilter: (patch: Partial<FrameFilter>) => void;
+  resetFrameFilters: () => void;
+  addCaption: (c: Omit<Caption, "id" | "style"> & { style?: Partial<CaptionStyle> }) => string;
+  removeCaption: (id: string) => void;
+  updateCaption: (id: string, patch: Partial<Caption>) => void;
+  addAIMessage: (msg: Omit<AIMessage, "id" | "timestamp">) => void;
+  setAIThinking: (v: boolean) => void;
+  setAIPanelOpen: (v: boolean) => void;
+  setVideoAnalysis: (a: VideoAnalysis) => void;
+  setVideoElementRef: (ref: RefObject<HTMLVideoElement>) => void;
+  dispatchAIActions: (actions: EditorAction[]) => void;
 }
 
 export const useEditorStore = create<EditorState>()(
@@ -190,6 +309,17 @@ export const useEditorStore = create<EditorState>()(
       undoStack: [],
       redoStack: [],
       activeTool: "select",
+
+      // AI Editor initial state
+      videoMetadata: null,
+      captions: [],
+      trimMarker: null,
+      frameFilters: { ...DEFAULT_FRAME_FILTERS },
+      aiMessages: [],
+      isAIThinking: false,
+      aiPanelOpen: false,
+      videoAnalysis: null,
+      videoElementRef: null,
 
       setScriptPrompt: (prompt) => set({ scriptPrompt: prompt }),
 
@@ -345,6 +475,87 @@ export const useEditorStore = create<EditorState>()(
           canvasElements: state.canvasElements.filter((el) => el.id !== id),
         })),
 
+      // ─── AI Editor Actions ─────────────────────────────────────────────────
+      setVideoMetadata: (meta) => set({ videoMetadata: meta }),
+      setTrimMarker: (m) => set({ trimMarker: m }),
+
+      setFrameFilter: (patch) =>
+        set((state) => ({ frameFilters: { ...state.frameFilters, ...patch } })),
+
+      resetFrameFilters: () => set({ frameFilters: { ...DEFAULT_FRAME_FILTERS } }),
+
+      addCaption: (c) => {
+        const id = crypto.randomUUID();
+        set((state) => {
+          const updated = [
+            ...state.captions,
+            { id, text: c.text, startTime: c.startTime, endTime: c.endTime, style: { ...DEFAULT_CAPTION_STYLE, ...(c.style || {}) } },
+          ].sort((a, b) => a.startTime - b.startTime);
+          return { captions: updated };
+        });
+        return id;
+      },
+
+      removeCaption: (id) =>
+        set((state) => ({ captions: state.captions.filter((c) => c.id !== id) })),
+
+      updateCaption: (id, patch) =>
+        set((state) => ({
+          captions: state.captions.map((c) => c.id === id ? { ...c, ...patch } : c),
+        })),
+
+      addAIMessage: (msg) =>
+        set((state) => ({
+          aiMessages: [...state.aiMessages, { id: crypto.randomUUID(), timestamp: Date.now(), ...msg }],
+        })),
+
+      setAIThinking: (v) => set({ isAIThinking: v }),
+      setAIPanelOpen: (v) => set({ aiPanelOpen: v }),
+      setVideoAnalysis: (a) => set({ videoAnalysis: a }),
+      setVideoElementRef: (ref) => set({ videoElementRef: ref }),
+
+      dispatchAIActions: (actions) => {
+        const store = useEditorStore.getState();
+        const videoEl = store.videoElementRef?.current;
+        actions.forEach((action) => {
+          switch (action.type) {
+            case "ADD_CAPTION":
+              store.addCaption({
+                text: action.payload.text as string,
+                startTime: action.payload.startTime as number,
+                endTime: action.payload.endTime as number,
+                style: action.payload.style as Partial<CaptionStyle> | undefined,
+              });
+              break;
+            case "REMOVE_CAPTION":
+              store.removeCaption(action.payload.id as string);
+              break;
+            case "UPDATE_CAPTION":
+              store.updateCaption(action.payload.id as string, action.payload.patch as Partial<Caption>);
+              break;
+            case "TRIM":
+              store.setTrimMarker({ startTime: action.payload.start as number, endTime: action.payload.end as number });
+              if (videoEl) videoEl.currentTime = action.payload.start as number;
+              break;
+            case "ADD_FILTER":
+              store.setFrameFilter({ [action.payload.filter as string]: action.payload.value as number });
+              break;
+            case "RESET_FILTER":
+              store.resetFrameFilters();
+              break;
+            case "SEEK":
+              if (videoEl) videoEl.currentTime = action.payload.time as number;
+              break;
+            case "PLAY":
+              videoEl?.play();
+              break;
+            case "PAUSE":
+              videoEl?.pause();
+              break;
+          }
+        });
+      },
+
       reset: () =>
         set({
           sourceFile: null,
@@ -372,6 +583,15 @@ export const useEditorStore = create<EditorState>()(
           selectedClipId: null,
           canvasElements: [],
           exportSettings: { ...DEFAULT_EXPORT_SETTINGS },
+          videoMetadata: null,
+          captions: [],
+          trimMarker: null,
+          frameFilters: { ...DEFAULT_FRAME_FILTERS },
+          aiMessages: [],
+          isAIThinking: false,
+          aiPanelOpen: false,
+          videoAnalysis: null,
+          videoElementRef: null,
         }),
     }),
     { 

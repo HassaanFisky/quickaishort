@@ -8,6 +8,7 @@ import { useEditorStore } from "@/stores/editorStore";
 import { TelemetryDock } from "@/components/editor/TelemetryDock";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import { extractAudioData } from "@/lib/utils/audioExtractor";
+import { AIPanel } from "@/components/editor/AIPanel";
 
 export default function EditorPage() {
   const transcription = useTranscription();
@@ -142,10 +143,23 @@ export default function EditorPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const { aiPanelOpen, setAIPanelOpen } = useEditorStore();
+
   return (
     <ErrorBoundary>
       <EditorLayout />
       <TelemetryDock />
+      {/* AI Editor panel — fixed overlay, does not break existing layout */}
+      <AIPanel />
+      {/* Floating AI Edit toggle */}
+      <button
+        className="ai-panel-toggle"
+        onClick={() => setAIPanelOpen(!aiPanelOpen)}
+        aria-label="Toggle AI Editor"
+      >
+        <span className="ai-toggle-icon">✦</span>
+        <span className="ai-toggle-label">AI Edit</span>
+      </button>
     </ErrorBoundary>
   );
 }
