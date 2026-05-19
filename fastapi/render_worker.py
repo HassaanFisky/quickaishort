@@ -8,7 +8,7 @@ if current_dir not in sys.path:
 
 
 def validate_env():
-    _REQUIRED = ["MONGODB_URI", "REDIS_URL", "GEMINI_API_KEY"]
+    _REQUIRED = ["REDIS_URL", "GEMINI_API_KEY"]
     _missing = [k for k in _REQUIRED if not os.environ.get(k)]
     if _missing:
         print(f"[FATAL] Missing env vars: {_missing}", file=sys.stderr)
@@ -23,8 +23,6 @@ def validate_env():
             sys.exit(1)
 
 
-import logging
-import os
 import time
 import signal
 import tempfile
@@ -33,7 +31,6 @@ import http.server
 import socketserver
 import shutil
 import asyncio
-from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -231,16 +228,6 @@ async def _async_process_render_task(
     options = options or {}
     production_plan = options.get("production_plan")
 
-    # C2 fix: Motor's AsyncIOMotorClient is bound to the event loop it was
-    # created in. RQ calls asyncio.run() for each job, which creates a *new*
-    # event loop. We must close and re-initialize the Motor client on every
-    # invocation; otherwise, jobs #2+ will get "Event loop is closed" on all
-    # DB operations because _client was created in the previous loop.
-    from services.db import init_db, close_db
-
-    await close_db()  # no-op if already None; releases the old closed-loop client
-    await init_db()
-
     logger.info("processing_render_task_start", job_id=job_id, user_id=user_id)
 
     def progress(status: str, progress_val: int = 0):
@@ -374,7 +361,7 @@ async def _async_process_render_task(
         storage = get_storage_service()
         remote_filename = f"exports/{user_id}/{job_id}.mp4"
 
-        gcs_uri = await storage.upload_file_async(
+        await storage.upload_file_async(
             local_path=result_path,
             remote_path=remote_filename,
             content_type="video/mp4",
@@ -467,9 +454,11 @@ if __name__ == "__main__":
     sys.stderr.reconfigure(line_buffering=True)
     validate_env()
 
-    # Skip top-level init_db here; let process_render_task handle it per-loop
-    # to avoid "Event loop is closed" errors.
-    logger.info("mongodb_init_deferred_to_task_lifecycle")
+    # Sync clients (Firestore + GCS) are not bound to any event loop —
+    # initialize once here and reuse across all RQ jobs.
+    from services.db import init_db_sync
+    init_db_sync()
+    logger.info("gcp_clients_initialized")
 
     logger.info("worker_starting_production_lifecycle", queue=render_queue.name)
 

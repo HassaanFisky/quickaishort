@@ -67,8 +67,6 @@ from app.utils.youtube_auth import get_cookie_file, inject_ydl_bypass
 from agent.viral_agent import get_viral_agent
 from models.user_stats import StatsIncrement
 from services.db import (
-    EXPORTS_BUCKET,
-    UPLOADS_BUCKET,
     close_db,
     get_db,
     get_exports_bucket,
@@ -122,7 +120,7 @@ _STARTUP_COMPLETE = False
 def _validate_env() -> None:
     required = {
         "GEMINI_API_KEY": "AI agent pipeline will not function",
-        "MONGODB_URI": "Database features (stats, credits, exports) will be disabled",
+        "GOOGLE_CLOUD_PROJECT": "Firestore/GCS features (stats, credits, exports) will be disabled",
         "REDIS_URL": "Background render queue will not function",
         "NEXTAUTH_SECRET": "All protected endpoints will return 503 (or set AUTH_DISABLED=true for dev)",
         "EXPORT_SIGNING_SECRET": "Download URL signing will fail — exports unreachable",
@@ -236,17 +234,33 @@ async def _route_pubsub(channel: str, payload: dict) -> None:
         # Auto-update project status in DB if this belongs to a project
         if event in ("complete", "error"):
             try:
-                db = get_db()
+                from datetime import datetime, timezone as _tz
+
                 status = "ready" if event == "complete" else "failed"
-                updates = {"status": status}
+                updates: dict = {
+                    "status": status,
+                    "updated_at": datetime.now(_tz.utc),
+                }
                 if event == "error":
                     updates["error"] = payload.get("error", "Unknown error")
 
-                # Find project by job_id and update
-                await db["Projects"].update_one(
-                    {"job_id": job_id, "user_id": user_id}, {"$set": updates}
-                )
-                logger.info("project_status_updated", job_id=job_id, status=status)
+                def _update_project_by_job():
+                    snaps = list(
+                        get_db()
+                        .collection("Projects")
+                        .where("job_id", "==", job_id)
+                        .limit(5)
+                        .stream()
+                    )
+                    for snap in snaps:
+                        if (snap.to_dict() or {}).get("user_id") == user_id:
+                            snap.reference.update(updates)
+                            return True
+                    return False
+
+                updated = await asyncio.to_thread(_update_project_by_job)
+                if updated:
+                    logger.info("project_status_updated", job_id=job_id, status=status)
             except Exception as e:
                 logger.error(
                     "project_status_update_failed", job_id=job_id, error=str(e)
@@ -488,7 +502,7 @@ def health_check():
     `agent_ready_state`) suitable for dashboards. Top-level `status` remains
     "ok" for liveness; dependency state is exposed alongside it.
     """
-    mongo_ok = db_is_ready()
+    firestore_ok = db_is_ready()
     redis_ok = False
     try:
         redis_conn.ping()
@@ -498,12 +512,12 @@ def health_check():
 
     return {
         "status": "ok",
-        # Legacy boolean fields — kept for backward compatibility.
-        "mongo": mongo_ok,
+        # Legacy boolean field kept for backward compatibility with external monitors.
+        "mongo": firestore_ok,
         "redis": redis_ok,
         "adk": _ADK_AVAILABLE,
         # Detailed v2 fields.
-        "mongo_status": "connected" if mongo_ok else "disconnected",
+        "firestore_status": "connected" if firestore_ok else "disconnected",
         "redis_status": "ready" if redis_ok else "unreachable",
         "agent_ready_state": "ready" if _ADK_AVAILABLE else "unavailable",
     }
@@ -530,7 +544,7 @@ def readiness_check():
     if not db_is_ready():
         raise HTTPException(
             status_code=503,
-            detail="MongoDB not initialised — not ready to serve",
+            detail="Firestore not initialised — not ready to serve",
         )
     return {"status": "ready"}
 
@@ -770,7 +784,7 @@ async def export_status(job_id: str, user_id: str):
 @app.get("/api/download/{job_id}")
 async def export_download(job_id: str, user_id: str, token: str, expires: int):
     """
-    Serves the rendered video directly from GridFS.
+    Serves the rendered video directly from GCS.
     """
 
     # Enforce HMAC token — verify() uses hmac.compare_digest (timing-safe)
@@ -782,37 +796,35 @@ async def export_download(job_id: str, user_id: str, token: str, expires: int):
     remote_path = f"exports/{user_id}/{job_id}.mp4"
 
     try:
-        bucket = get_exports_bucket()
-        # Find the file by name
-        cursor = bucket.find({"filename": remote_path})
-        files = await cursor.to_list(length=1)
-
-        if not files:
-            logger.error("export_not_found_in_gridfs", path=remote_path)
+        blob = get_exports_bucket().blob(remote_path)
+        exists = await asyncio.to_thread(blob.exists)
+        if not exists:
+            logger.error("export_not_found_in_gcs", path=remote_path)
             raise HTTPException(status_code=404, detail="Export not found")
 
-        file_id = files[0]["_id"]
+        # Reload to get size metadata for Content-Length header.
+        await asyncio.to_thread(blob.reload)
+        file_size = blob.size or 0
 
-        # GridFS bucket open_download_stream returns an async stream
-        grid_out = await bucket.open_download_stream(file_id)
+        data = await asyncio.to_thread(blob.download_as_bytes)
 
-        async def stream_gridfs():
-            while True:
-                chunk = await grid_out.read(256 * 1024)  # 256KB chunks
-                if not chunk:
-                    break
-                yield chunk
+        async def stream_gcs():
+            chunk_size = 256 * 1024
+            for i in range(0, len(data), chunk_size):
+                yield data[i : i + chunk_size]
 
         return StreamingResponse(
-            stream_gridfs(),
+            stream_gcs(),
             media_type="video/mp4",
             headers={
                 "Content-Disposition": f'attachment; filename="{job_id}.mp4"',
-                "Content-Length": str(files[0]["length"]),
+                "Content-Length": str(file_size),
             },
         )
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error("gridfs_download_failed", error=str(e))
+        logger.error("gcs_download_failed", error=str(e))
         raise HTTPException(status_code=500, detail="Internal storage error")
 
 
@@ -1580,7 +1592,7 @@ async def adk_upload(
     file: UploadFile = File(...), verified_user_id: str = Depends(get_verified_user_id)
 ):
     """
-    Uploads a media file for ADK Studio, persisting it in GridFS.
+    Uploads a media file for ADK Studio, persisting it in GCS.
     This ensures horizontal scalability as all worker instances can access the file.
     """
     file_id = uuid.uuid4().hex
@@ -1597,29 +1609,24 @@ async def adk_upload(
         raise HTTPException(status_code=413, detail="File too large (max 200 MB)")
 
     try:
-        bucket = get_uploads_bucket()
-        # CHANGED: Persist to GridFS instead of local disk
-        await bucket.upload_from_stream(
-            remote_path,
+        blob = get_uploads_bucket().blob(remote_path)
+        await asyncio.to_thread(
+            blob.upload_from_string,
             content,
-            metadata={
-                "user_id": verified_user_id,
-                "original_name": original_name,
-                "uploaded_at": datetime.utcnow().isoformat(),
-            },
+            content_type=file.content_type or "application/octet-stream",
         )
         logger.info(
-            "ADK upload persisted to GridFS: %s (%d bytes)", remote_path, len(content)
+            "ADK upload persisted to GCS: %s (%d bytes)", remote_path, len(content)
         )
     except Exception as e:
-        logger.error("ADK upload to GridFS failed: %s", e)
+        logger.error("ADK upload to GCS failed: %s", e)
         raise HTTPException(status_code=500, detail="Failed to store upload")
 
     return {
         "file_id": file_id,
         "filename": original_name,
         "size_bytes": len(content),
-        "gridfs_path": remote_path,
+        "gcs_path": remote_path,
     }
 
 

@@ -1,6 +1,7 @@
-import logging
-from datetime import datetime, timedelta
+import asyncio
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict
+
 from services.db import get_db
 from services.logging import get_logger
 
@@ -10,19 +11,19 @@ logger = get_logger("job_persistence")
 async def persist_failed_job(
     job_id: str, user_id: str, error: str, payload: Dict[str, Any]
 ):
-    """Persists dead-letter jobs to MongoDB for later analysis or replay."""
+    """Persists dead-letter jobs to Firestore for later analysis or replay."""
     try:
-        db = get_db()
-        await db["FailedJobs"].insert_one(
-            {
+        def _do():
+            get_db().collection("FailedJobs").document(job_id).set({
                 "job_id": job_id,
                 "user_id": user_id,
                 "error": str(error),
                 "payload": payload,
-                "failed_at": datetime.utcnow(),
+                "failed_at": datetime.now(timezone.utc),
                 "status": "dead_letter",
-            }
-        )
+            })
+
+        await asyncio.to_thread(_do)
         logger.error(
             "job_dead_lettered", job_id=job_id, user_id=user_id, error=str(error)
         )
@@ -31,23 +32,32 @@ async def persist_failed_job(
 
 
 async def cleanup_stale_jobs():
-    """Finds jobs that have been in 'processing' status for > 4 hours and marks them failed."""
+    """Marks jobs in 'processing' for > 4 hours as failed."""
     try:
-        db = get_db()
-        threshold = datetime.utcnow() - timedelta(hours=4)
+        threshold = datetime.now(timezone.utc) - timedelta(hours=4)
 
-        # Collection name must match ProjectService ("Projects")
-        result = await db["Projects"].update_many(
-            {"status": "processing", "updated_at": {"$lt": threshold}},
-            {
-                "$set": {
-                    "status": "failed",
-                    "error": "stale_job_cleanup_trigger",
-                    "updated_at": datetime.utcnow(),
-                }
-            },
-        )
-        if result.modified_count > 0:
-            logger.info("stale_jobs_cleaned", count=result.modified_count)
+        def _do():
+            db = get_db()
+            # Fetch by status, filter by age in Python to avoid composite index requirement.
+            snaps = db.collection("Projects").where("status", "==", "processing").stream()
+            batch = db.batch()
+            count = 0
+            for snap in snaps:
+                data = snap.to_dict() or {}
+                updated = data.get("updated_at")
+                if updated and updated < threshold:
+                    batch.update(snap.reference, {
+                        "status": "failed",
+                        "error": "stale_job_cleanup_trigger",
+                        "updated_at": datetime.now(timezone.utc),
+                    })
+                    count += 1
+            if count > 0:
+                batch.commit()
+            return count
+
+        count = await asyncio.to_thread(_do)
+        if count > 0:
+            logger.info("stale_jobs_cleaned", count=count)
     except Exception as e:
         logger.error("stale_cleanup_failed", error=str(e))

@@ -1,6 +1,5 @@
 import asyncio
 import os
-import logging
 from services.db import is_ready as db_ready
 from services.queue_service import redis_conn
 from services.vault_service import get_secret
@@ -21,7 +20,7 @@ async def run_startup_checks():
             if db_ready():
                 break
         if not db_ready():
-            raise RuntimeError("CRITICAL_DEPENDENCY_FAILURE: MongoDB unreachable")
+            raise RuntimeError("CRITICAL_DEPENDENCY_FAILURE: Firestore unreachable")
 
     # 2. Redis / Queue Connectivity
     try:
@@ -36,7 +35,7 @@ async def run_startup_checks():
     # 3. Essential Production Secrets
     is_prod = os.getenv("ENVIRONMENT") == "production"
     if is_prod:
-        critical_secrets = ["GEMINI_API_KEY", "MONGODB_URI", "NEXTAUTH_SECRET"]
+        critical_secrets = ["GEMINI_API_KEY", "NEXTAUTH_SECRET"]
         for secret in critical_secrets:
             if not get_secret(secret):
                 logger.error(f"MISSING_CRITICAL_SECRET: {secret}")

@@ -158,7 +158,7 @@ _MCP_OK = False
 MCPToolset = StdioServerParams = None  # type: ignore[assignment]
 if _ADK_OK:
     try:
-        from google.adk.tools.mcp_tool.mcp_toolset import MCPToolset, StdioServerParams  # type: ignore[assignment]
+        from google.adk.tools.mcp_tool.mcp_toolset import MCPToolset, StdioServerParameters as StdioServerParams  # type: ignore[assignment]
 
         _MCP_OK = True
     except ImportError:

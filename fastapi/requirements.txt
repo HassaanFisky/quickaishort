@@ -15,11 +15,9 @@ redis==5.0.4
 rq==1.16.2
 pusher==3.3.2
 ffmpeg-python==0.2.0
-motor==3.6.0
-pymongo==4.9.1
+google-cloud-storage>=2.14.0
 httpx==0.28.1
 python-jose[cryptography]==3.3.0
-certifi>=2024.2.2
 google-api-python-client>=2.120.0
 slowapi==0.1.9
 structlog>=23.1.0

@@ -1,19 +1,22 @@
-"""Project management service.
+"""Project management service backed by Firestore.
 
 Handles persistence for video projects, including scripts, segments,
 voiceover settings, and render history.
 """
 
+import asyncio
 import logging
 from datetime import datetime, timezone
-from typing import List, Optional, Any
+from typing import List, Optional
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
-from motor.motor_asyncio import AsyncIOMotorDatabase
+
 from services.db import get_db
 
 logger = logging.getLogger(__name__)
+
+COLLECTION = "Projects"
 
 
 class ProjectSegment(BaseModel):
@@ -40,13 +43,12 @@ class Project(BaseModel):
 
 
 class ProjectService:
-    def __init__(self, db: AsyncIOMotorDatabase):
-        self.db = db
-        self.collection = db["Projects"]
+    def _col(self):
+        return get_db().collection(COLLECTION)
 
     async def create_project(self, user_id: str, title: str, script: str) -> str:
         project_id = uuid4().hex
-        project = {
+        doc = {
             "_id": project_id,
             "user_id": user_id,
             "title": title,
@@ -56,36 +58,58 @@ class ProjectService:
             "created_at": datetime.now(timezone.utc),
             "updated_at": datetime.now(timezone.utc),
         }
-        await self.collection.insert_one(project)
+
+        def _do():
+            self._col().document(project_id).set(doc)
+
+        await asyncio.to_thread(_do)
         return project_id
 
     async def get_project(self, project_id: str, user_id: str) -> Optional[Project]:
-        doc = await self.collection.find_one({"_id": project_id, "user_id": user_id})
-        if doc:
+        def _do():
+            snap = self._col().document(project_id).get()
+            return snap.to_dict() if snap.exists else None
+
+        doc = await asyncio.to_thread(_do)
+        if doc and doc.get("user_id") == user_id:
             return Project(**doc)
         return None
 
     async def list_projects(self, user_id: str) -> List[Project]:
-        cursor = self.collection.find({"user_id": user_id}).sort("updated_at", -1)
-        docs = await cursor.to_list(length=100)
-        return [Project(**doc) for doc in docs]
+        def _do():
+            snaps = self._col().where("user_id", "==", user_id).stream()
+            docs = [s.to_dict() for s in snaps]
+            docs.sort(key=lambda d: d.get("updated_at", datetime.min.replace(tzinfo=timezone.utc)), reverse=True)
+            return docs[:100]
+
+        docs = await asyncio.to_thread(_do)
+        return [Project(**d) for d in docs]
 
     async def update_project(
         self, project_id: str, user_id: str, updates: dict
     ) -> bool:
-        updates["updated_at"] = datetime.now(timezone.utc)
-        result = await self.collection.update_one(
-            {"_id": project_id, "user_id": user_id}, {"$set": updates}
-        )
-        return result.modified_count > 0
+        def _do():
+            doc_ref = self._col().document(project_id)
+            snap = doc_ref.get()
+            if not snap.exists or snap.to_dict().get("user_id") != user_id:
+                return False
+            updates["updated_at"] = datetime.now(timezone.utc)
+            doc_ref.update(updates)
+            return True
+
+        return await asyncio.to_thread(_do)
 
     async def delete_project(self, project_id: str, user_id: str) -> bool:
-        result = await self.collection.delete_one(
-            {"_id": project_id, "user_id": user_id}
-        )
-        return result.deleted_count > 0
+        def _do():
+            doc_ref = self._col().document(project_id)
+            snap = doc_ref.get()
+            if not snap.exists or snap.to_dict().get("user_id") != user_id:
+                return False
+            doc_ref.delete()
+            return True
+
+        return await asyncio.to_thread(_do)
 
 
-# Instance provider
 def get_project_service() -> ProjectService:
-    return ProjectService(get_db())
+    return ProjectService()

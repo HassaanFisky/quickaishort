@@ -1,19 +1,17 @@
-"""Async stats service backed by motor + GridFS, with realtime fan-out.
+"""Stats service backed by Firestore, with realtime fan-out.
 
-This file replaces the previous sync pymongo implementation. The web app
-imports `increment_stats` and `get_user_stats`; the worker process publishes
-a Redis pubsub message instead (see services/events.py) which a lifespan
-listener in main.py routes back here.
+Replaces MongoDB/motor implementation. Uses sync Firestore client via asyncio.to_thread().
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from datetime import datetime, timezone
 from typing import Any
 
-from pymongo import ReturnDocument
+from google.cloud import firestore
 
 from models.user_stats import UserStats
 from services.db import get_db, is_ready
@@ -23,16 +21,28 @@ from services.queue_service import async_redis_conn
 logger = logging.getLogger(__name__)
 
 COLLECTION = "UserStats"
-STATS_CACHE_TTL = 300  # 5 minutes
+STATS_CACHE_TTL = 300
 
-# Canonical starter-credit grant for new users. Mirrors the default in
-# provision_credits() and matches billing.PRO_MONTHLY_CREDITS so a free user
-# never has more headroom than a paying Pro subscriber.
 STARTER_CREDITS = 100
 
 
 def _empty(user_id: str) -> dict[str, Any]:
     return UserStats(user_id=user_id).model_dump(mode="json")
+
+
+def _empty_dict(user_id: str) -> dict[str, Any]:
+    return {
+        "user_id": user_id,
+        "credits_balance": STARTER_CREDITS,
+        "is_premium": False,
+        "is_pro": False,
+        "total_projects": 0,
+        "total_duration_processed": 0.0,
+        "export_count": 0,
+        "ai_runs": 0,
+        "created_at": datetime.now(timezone.utc),
+        "updated_at": datetime.now(timezone.utc),
+    }
 
 
 async def increment_stats(
@@ -43,46 +53,39 @@ async def increment_stats(
     ai_run_delta: int = 0,
     project_delta: int = 0,
 ) -> dict[str, Any]:
-    """Atomically $inc the stats document and broadcast the result."""
+    """Atomically increment stats and broadcast the result."""
     if not user_id:
         return _empty("anonymous")
     if not is_ready():
-        logger.warning(
-            "Mongo not initialized; skipping stats increment for %s", user_id
-        )
+        logger.warning("DB not initialized; skipping stats increment for %s", user_id)
         return _empty(user_id)
 
-    db = get_db()
-    inc: dict[str, Any] = {}
-    if duration_delta:
-        inc["total_duration_processed"] = float(duration_delta)
-    if export_delta:
-        inc["export_count"] = int(export_delta)
-    if ai_run_delta:
-        inc["ai_runs"] = int(ai_run_delta)
-    if project_delta:
-        inc["total_projects"] = int(project_delta)
+    def _do() -> dict[str, Any]:
+        db = get_db()
+        doc_ref = db.collection(COLLECTION).document(user_id)
+        snap = doc_ref.get()
+        if not snap.exists:
+            doc_ref.set(_empty_dict(user_id))
 
-    update: dict[str, Any] = {
-        "$set": {"updated_at": datetime.now(timezone.utc)},
-        "$setOnInsert": {"user_id": user_id},
-    }
-    if inc:
-        update["$inc"] = inc
+        updates: dict[str, Any] = {"updated_at": datetime.now(timezone.utc)}
+        if duration_delta:
+            updates["total_duration_processed"] = firestore.Increment(float(duration_delta))
+        if export_delta:
+            updates["export_count"] = firestore.Increment(int(export_delta))
+        if ai_run_delta:
+            updates["ai_runs"] = firestore.Increment(int(ai_run_delta))
+        if project_delta:
+            updates["total_projects"] = firestore.Increment(int(project_delta))
+        doc_ref.update(updates)
+        return doc_ref.get().to_dict()
 
-    doc = await db[COLLECTION].find_one_and_update(
-        {"user_id": user_id},
-        update,
-        upsert=True,
-        return_document=ReturnDocument.AFTER,
-    )
+    doc = await asyncio.to_thread(_do)
     payload = _serialize(doc, user_id)
 
     try:
         await async_redis_conn.delete(f"stats:{user_id}")
     except Exception:
         pass
-
     try:
         await emit_stats_updated(user_id, payload)
     except Exception as exc:
@@ -91,23 +94,35 @@ async def increment_stats(
 
 
 async def deduct_credits(user_id: str, amount: int) -> bool:
-    """Atomic single-operation credit deduction. No race condition — single MongoDB op with $gte guard."""
+    """Transactional credit deduction — prevents going negative."""
     if not user_id or user_id == "anonymous":
         return False
     if not is_ready():
         return False
 
-    db = get_db()
-    doc = await db[COLLECTION].find_one_and_update(
-        {"user_id": user_id, "credits_balance": {"$gte": amount}},
-        {
-            "$inc": {"credits_balance": -amount},
-            "$set": {"updated_at": datetime.now(timezone.utc)},
-        },
-        upsert=False,
-        return_document=ReturnDocument.AFTER,
-    )
+    def _do() -> dict[str, Any] | None:
+        db = get_db()
+        doc_ref = db.collection(COLLECTION).document(user_id)
 
+        @firestore.transactional
+        def _txn(transaction: firestore.Transaction) -> dict[str, Any] | None:
+            snap = doc_ref.get(transaction=transaction)
+            if not snap.exists:
+                return None
+            data = snap.to_dict() or {}
+            balance = data.get("credits_balance", 0)
+            if balance < amount:
+                return None
+            new_balance = balance - amount
+            transaction.update(doc_ref, {
+                "credits_balance": new_balance,
+                "updated_at": datetime.now(timezone.utc),
+            })
+            return {**data, "credits_balance": new_balance}
+
+        return _txn(db.transaction())
+
+    doc = await asyncio.to_thread(_do)
     if doc is None:
         logger.warning("credit_deduction_failed user_id=%s amount=%d", user_id, amount)
         return False
@@ -135,19 +150,21 @@ async def get_user_stats(user_id: str) -> dict[str, Any]:
     except Exception:
         pass
 
-    doc = await get_db()[COLLECTION].find_one({"user_id": user_id})
+    def _do() -> dict[str, Any] | None:
+        snap = get_db().collection(COLLECTION).document(user_id).get()
+        return snap.to_dict() if snap.exists else None
+
+    doc = await asyncio.to_thread(_do)
     if doc is None:
         return _empty(user_id)
 
     payload = _serialize(doc, user_id)
-
     try:
         await async_redis_conn.setex(
             f"stats:{user_id}", STATS_CACHE_TTL, json.dumps(payload)
         )
     except Exception:
         pass
-
     return payload
 
 
@@ -163,37 +180,39 @@ async def is_user_premium(user_id: str) -> bool:
 
     stats = await get_user_stats(user_id)
     is_premium = stats.get("is_premium", False)
-
     try:
         await async_redis_conn.setex(cache_key, 300, b"1" if is_premium else b"0")
     except Exception as _err:
         logger.warning("Redis premium cache write failed: %s", _err)
-
     return is_premium
 
 
 async def provision_credits(user_id: str, amount: int = STARTER_CREDITS) -> None:
-    """Create user stats doc on first login. $setOnInsert never overwrites existing users."""
+    """Create user stats doc on first login. No-op if already exists."""
     if not is_ready():
         return
-    db = get_db()
-    await db[COLLECTION].update_one(
-        {"user_id": user_id},
-        {
-            "$setOnInsert": {
+
+    def _do() -> None:
+        doc_ref = get_db().collection(COLLECTION).document(user_id)
+        snap = doc_ref.get()
+        if not snap.exists:
+            doc_ref.set({
                 "user_id": user_id,
                 "credits_balance": amount,
                 "is_premium": False,
+                "is_pro": False,
+                "total_projects": 0,
+                "total_duration_processed": 0.0,
+                "export_count": 0,
+                "ai_runs": 0,
                 "created_at": datetime.now(timezone.utc),
                 "updated_at": datetime.now(timezone.utc),
-            }
-        },
-        upsert=True,
-    )
+            })
+
+    await asyncio.to_thread(_do)
 
 
 async def invalidate_premium_cache(user_id: str) -> None:
-    """Invalidate Redis premium cache after subscription change."""
     try:
         await async_redis_conn.delete(f"premium:{user_id}")
     except Exception:
@@ -201,49 +220,8 @@ async def invalidate_premium_cache(user_id: str) -> None:
 
 
 async def recalculate_user_stats(user_id: str) -> dict[str, Any]:
-    """Recalculate stats from scratch using aggregation on the exports collection."""
-    if not is_ready():
-        return _empty(user_id)
-
-    db = get_db()
-    pipeline = [
-        {"$match": {"metadata.user_id": user_id}},
-        {
-            "$group": {
-                "_id": "$metadata.user_id",
-                "total_duration": {"$sum": "$metadata.duration_sec"},
-                "export_count": {"$sum": 1},
-            }
-        },
-    ]
-
-    cursor = db["exports.files"].aggregate(pipeline)
-    result = await cursor.to_list(length=1)
-
-    if not result:
-        return await increment_stats(user_id)
-
-    agg = result[0]
-    duration = float(agg.get("total_duration", 0.0))
-    count = int(agg.get("export_count", 0))
-
-    doc = await db[COLLECTION].find_one_and_update(
-        {"user_id": user_id},
-        {
-            "$set": {
-                "total_duration_processed": duration,
-                "export_count": count,
-                "updated_at": datetime.now(timezone.utc),
-            },
-            "$setOnInsert": {"user_id": user_id, "credits_balance": STARTER_CREDITS},
-        },
-        upsert=True,
-        return_document=ReturnDocument.AFTER,
-    )
-
-    payload = _serialize(doc, user_id)
-    await emit_stats_updated(user_id, payload)
-    return payload
+    """Returns current Firestore stats. Stats are maintained incrementally via increment_stats()."""
+    return await get_user_stats(user_id)
 
 
 def _serialize(doc: dict[str, Any] | None, user_id: str) -> dict[str, Any]:

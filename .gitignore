@@ -92,10 +92,22 @@ QAI_Shorts_Antigravity_Prompt.md.pdf
 .vercel
 .env*.local
 
-# Raw testing and instruction assets (strictly local)
+# Raw testing, documentation, and instruction assets (strictly local)
 test_video.mp4
 test_upload.txt
 quickaishort LOGO.PNG.png
 innocollab/
 *.mp4
 fastapi/inject_test.py
+
+# Local developer documents and deployment scripts
+ARCHITECTURE.md
+CLAUDE.md
+CONTRIBUTING.md
+LICENSE
+QUICKSTART.md
+SECURITY.md
+VISION.md
+quickai-editor-implementation.md
+deploy.sh
+deploy_production.sh

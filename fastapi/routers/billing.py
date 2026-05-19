@@ -5,13 +5,15 @@ Signature verification uses ed25519 — the PADDLE_WEBHOOK_SECRET env var must b
 to the base64-encoded public key shown in the Paddle dashboard after registering the
 webhook endpoint.
 
-Idempotency: every processed event ID is stored in the `paddle_webhook_events`
-collection so replays never double-credit a user.
+Idempotency: every processed event ID is stored as a Firestore document ID in the
+paddle_webhook_events collection so replays never double-credit a user.
 """
 
 from __future__ import annotations
 
+import asyncio
 import base64
+import json
 import logging
 import os
 from datetime import datetime, timezone
@@ -19,8 +21,6 @@ from datetime import datetime, timezone
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from fastapi import APIRouter, HTTPException, Request
-from pymongo import ASCENDING
-from bson import ObjectId
 
 from services.db import get_db, is_ready
 
@@ -79,7 +79,7 @@ def _verify_paddle_signature(
 
 
 # ---------------------------------------------------------------------------
-# Idempotency helper
+# Idempotency helpers
 # ---------------------------------------------------------------------------
 
 
@@ -87,41 +87,40 @@ async def _is_event_processed(event_id: str) -> bool:
     """Return True if this event_id has already been handled."""
     if not is_ready():
         return False
-    db = get_db()
-    return bool(
-        await db[PADDLE_WEBHOOK_EVENTS_COLLECTION].find_one({"event_id": event_id})
-    )
+
+    def _do():
+        snap = (
+            get_db()
+            .collection(PADDLE_WEBHOOK_EVENTS_COLLECTION)
+            .document(event_id)
+            .get()
+        )
+        return snap.exists
+
+    return await asyncio.to_thread(_do)
 
 
 async def _mark_event_processed(event_id: str, event_type: str) -> None:
     if not is_ready():
         return
-    db = get_db()
-    await db[PADDLE_WEBHOOK_EVENTS_COLLECTION].insert_one(
-        {
+
+    def _do():
+        get_db().collection(PADDLE_WEBHOOK_EVENTS_COLLECTION).document(event_id).set({
             "event_id": event_id,
             "event_type": event_type,
             "processed_at": datetime.now(timezone.utc),
-        }
-    )
+        })
+
+    await asyncio.to_thread(_do)
 
 
 async def _ensure_indexes() -> None:
-    """Create unique index on event_id — called once at startup."""
-    if not is_ready():
-        return
-    try:
-        db = get_db()
-        await db[PADDLE_WEBHOOK_EVENTS_COLLECTION].create_index(
-            [("event_id", ASCENDING)],
-            unique=True,
-        )
-    except Exception as exc:
-        logger.warning("paddle_indexes: %s", exc)
+    """No-op: Firestore document IDs are inherently unique (replaces MongoDB unique index)."""
+    pass
 
 
 # ---------------------------------------------------------------------------
-# Subscription grant helper
+# Subscription grant/revoke helpers
 # ---------------------------------------------------------------------------
 
 
@@ -130,51 +129,48 @@ async def _grant_pro(user_id: str, subscription_id: str) -> None:
     if not is_ready():
         logger.error("paddle_grant_pro: DB not ready for user %s", user_id)
         return
-    db = get_db()
-    result = await db["UserStats"].update_one(
-        {"user_id": user_id},
-        {
-            "$set": {
+
+    def _do():
+        db = get_db()
+        stats_ref = db.collection("UserStats").document(user_id)
+        snap = stats_ref.get()
+        if snap.exists:
+            data = snap.to_dict() or {}
+            new_balance = data.get("credits_balance", 0) + PRO_MONTHLY_CREDITS
+            stats_ref.update({
                 "is_pro": True,
                 "is_premium": True,
                 "paddle_subscription_id": subscription_id,
+                "credits_balance": new_balance,
                 "updated_at": datetime.now(timezone.utc),
-            },
-            "$inc": {"credits_balance": PRO_MONTHLY_CREDITS},
-        },
-        upsert=True,
-    )
-    logger.info(
-        "paddle_grant_pro user=%s sub=%s matched=%d modified=%d",
-        user_id,
-        subscription_id,
-        result.matched_count,
-        result.modified_count,
-    )
+            })
+        else:
+            stats_ref.set({
+                "user_id": user_id,
+                "is_pro": True,
+                "is_premium": True,
+                "paddle_subscription_id": subscription_id,
+                "credits_balance": PRO_MONTHLY_CREDITS,
+                "total_projects": 0,
+                "total_duration_processed": 0.0,
+                "export_count": 0,
+                "ai_runs": 0,
+                "created_at": datetime.now(timezone.utc),
+                "updated_at": datetime.now(timezone.utc),
+            })
 
-    # 2. Sync with NextAuth users collection for frontend session
-    try:
-        # Check if user_id is a valid ObjectId, if not use it as email
-        query = (
-            {"_id": ObjectId(user_id)}
-            if ObjectId.is_valid(user_id)
-            else {"email": user_id}
-        )
-        await db["users"].update_one(
-            query,
-            {
-                "$set": {
-                    "isPro": True,
-                    "isPremium": True,
-                    "updatedAt": datetime.now(timezone.utc),
-                }
-            },
-        )
-        logger.info("paddle_grant_pro: synced with users collection for %s", user_id)
-    except Exception as exc:
-        logger.warning("paddle_grant_pro: users sync failed: %s", exc)
+        # Sync billing flags to users collection for frontend session reads.
+        try:
+            db.collection("users").document(user_id).set(
+                {"isPro": True, "isPremium": True, "updatedAt": datetime.now(timezone.utc)},
+                merge=True,
+            )
+        except Exception as exc:
+            logger.warning("paddle_grant_pro: users sync failed: %s", exc)
 
-    # 3. Invalidate Redis premium and stats caches so next API call re-reads from DB
+    await asyncio.to_thread(_do)
+    logger.info("paddle_grant_pro user=%s sub=%s", user_id, subscription_id)
+
     try:
         from services.stats_service import invalidate_premium_cache
         from services.queue_service import async_redis_conn
@@ -189,40 +185,29 @@ async def _revoke_pro(user_id: str, subscription_id: str) -> None:
     """Revoke Pro access on cancellation."""
     if not is_ready():
         return
-    db = get_db()
-    await db["UserStats"].update_one(
-        {"user_id": user_id},
-        {
-            "$set": {
+
+    def _do():
+        db = get_db()
+        stats_ref = db.collection("UserStats").document(user_id)
+        snap = stats_ref.get()
+        if snap.exists:
+            stats_ref.update({
                 "is_pro": False,
                 "is_premium": False,
                 "paddle_subscription_id": None,
                 "updated_at": datetime.now(timezone.utc),
-            }
-        },
-    )
-    logger.info("paddle_revoke_pro user=%s sub=%s", user_id, subscription_id)
+            })
 
-    # 2. Sync with NextAuth users collection for frontend session
-    try:
-        query = (
-            {"_id": ObjectId(user_id)}
-            if ObjectId.is_valid(user_id)
-            else {"email": user_id}
-        )
-        await db["users"].update_one(
-            query,
-            {
-                "$set": {
-                    "isPro": False,
-                    "isPremium": False,
-                    "updatedAt": datetime.now(timezone.utc),
-                }
-            },
-        )
-        logger.info("paddle_revoke_pro: synced with users collection for %s", user_id)
-    except Exception as exc:
-        logger.warning("paddle_revoke_pro: users sync failed: %s", exc)
+        try:
+            db.collection("users").document(user_id).set(
+                {"isPro": False, "isPremium": False, "updatedAt": datetime.now(timezone.utc)},
+                merge=True,
+            )
+        except Exception as exc:
+            logger.warning("paddle_revoke_pro: users sync failed: %s", exc)
+
+    await asyncio.to_thread(_do)
+    logger.info("paddle_revoke_pro user=%s sub=%s", user_id, subscription_id)
 
     try:
         from services.stats_service import invalidate_premium_cache
@@ -268,8 +253,6 @@ async def paddle_webhook(request: Request):
 
     # ---- 2. Parse event ---------------------------------------------------
     try:
-        import json
-
         payload = json.loads(raw_body)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid JSON payload")
@@ -328,14 +311,13 @@ async def paddle_webhook(request: Request):
     except Exception as exc:
         logger.error("paddle_webhook handler error event=%s: %s", event_id, exc)
         # Return 200 anyway — prevents Paddle from retrying an internal error endlessly.
-        # The event will NOT be marked processed so manual re-run is possible.
         return {"status": "handler_error", "detail": str(exc)}
 
     # ---- 5. Mark processed -----------------------------------------------
     try:
         await _mark_event_processed(event_id, event_type)
     except Exception as exc:
-        # Unique-index violation = race condition double-delivery. Safe to ignore.
+        # Document already exists = race condition double-delivery. Safe to ignore.
         logger.debug("paddle_webhook: mark_processed error (likely duplicate): %s", exc)
 
     return {"status": "ok"}
