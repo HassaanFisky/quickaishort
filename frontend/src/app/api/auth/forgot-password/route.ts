@@ -16,11 +16,24 @@ export async function POST(req: Request) {
     }
 
     await connectDB();
-    const user = await User.findOne({ email: email.toLowerCase().trim() }).select("+resetToken +resetTokenExpiry");
+    const user = await User.findOne({ email: email.toLowerCase().trim() }).select(
+      "+resetToken +resetTokenExpiry +password"
+    );
 
-    // Always return success to prevent email enumeration
-    if (!user || !user.password) {
+    // User doesn't exist — return generic message to prevent email enumeration
+    if (!user) {
       return NextResponse.json({ message: "If that email exists, a reset link has been sent." });
+    }
+
+    // Google-only account (no password set) — tell the user to sign in with Google instead
+    if (!user.password) {
+      return NextResponse.json(
+        {
+          message:
+            "This account uses Google Sign-In. Please sign in with Google — no password is needed.",
+        },
+        { status: 400 }
+      );
     }
 
     const token = crypto.randomBytes(32).toString("hex");
@@ -31,7 +44,7 @@ export async function POST(req: Request) {
     const resetUrl = `${APP_URL}/reset-password?token=${token}`;
 
     const resend = new Resend(process.env.RESEND_API_KEY);
-    await resend.emails.send({
+    const { error: sendError } = await resend.emails.send({
       from: FROM,
       to: email,
       subject: "Reset your QuickAI Short password",
@@ -58,6 +71,15 @@ export async function POST(req: Request) {
         </div>
       `,
     });
+
+    // Resend v2+ returns { data, error } instead of throwing — always check
+    if (sendError) {
+      console.error("[forgot-password] Resend send failed:", sendError);
+      return NextResponse.json(
+        { message: "Failed to send email. Please try again in a moment." },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({ message: "If that email exists, a reset link has been sent." });
   } catch (err) {
