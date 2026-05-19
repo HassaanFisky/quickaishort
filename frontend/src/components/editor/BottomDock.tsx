@@ -137,6 +137,7 @@ export default function BottomDock() {
     duration,
     currentTime,
     isPlaying,
+    isProcessing,
     setIsPlaying,
     setCurrentTime,
     setPendingSeek,
@@ -148,6 +149,8 @@ export default function BottomDock() {
     exportSettings,
     audioData,
     silenceSegments,
+    undoStack,
+    redoStack,
     undo,
     redo,
     deleteClip,
@@ -294,18 +297,20 @@ export default function BottomDock() {
             size="icon"
             onClick={() => undo()}
             title="Undo — Ctrl+Z"
-            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+            disabled={undoStack.length === 0}
+            className="undo-btn h-8 w-8 text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            <Undo2 className="w-4 h-4" />
+            <Undo2 className="undo-icon w-4 h-4" />
           </Button>
           <Button
             variant="ghost"
             size="icon"
             onClick={() => redo()}
             title="Redo — Ctrl+Shift+Z"
-            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+            disabled={redoStack.length === 0}
+            className="redo-btn h-8 w-8 text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            <Redo2 className="w-4 h-4" />
+            <Redo2 className="redo-icon w-4 h-4" />
           </Button>
           <Button
             variant="ghost"
@@ -380,7 +385,22 @@ export default function BottomDock() {
             onClick={handleTrackClick}
             className="flex-1 h-8 rounded-lg bg-foreground/5 border border-foreground/5 relative overflow-hidden cursor-crosshair"
           >
-            {duration > 0 && suggestions.length > 0 ? (
+            {isProcessing ? (
+              /* Pulsing skeleton while pipeline is running */
+              <div className="absolute inset-0 flex items-end gap-[2px] px-2 py-1 pointer-events-none">
+                {Array.from({ length: 24 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="flex-1 rounded-sm bg-primary/25 animate-pulse"
+                    style={{
+                      height: `${20 + ((i * 13 + 7) % 55)}%`,
+                      animationDelay: `${(i * 60) % 800}ms`,
+                      animationDuration: "1.2s",
+                    }}
+                  />
+                ))}
+              </div>
+            ) : duration > 0 && suggestions.length > 0 ? (
               suggestions.map((clip) => (
                 <TimelineClip
                   key={clip.id}

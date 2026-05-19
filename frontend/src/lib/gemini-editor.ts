@@ -1,8 +1,7 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import type { GeminiResponse, VideoAnalysis, VideoMetadata } from "@/stores/editorStore";
 
-const genAI = new GoogleGenerativeAI(process.env.NEXT_PUBLIC_GEMINI_API_KEY!);
-
+// Re-export the system prompt so any consumer can read the contract without
+// duplicating it (no SDK import needed here for the client-side functions).
 export const EDITOR_SYSTEM_PROMPT = `You are a video editing state compiler for QuickAI Short.
 
 ROLE: Convert user editing instructions into JSON action arrays. You are not a chatbot. You do not explain yourself. You execute.
@@ -39,109 +38,89 @@ RULES:
 9. If user asks something outside your action scope: return empty actions array, message explaining limitation in 12 words
 10. NEVER output anything except the JSON object`;
 
+// ─── Client-side API-route wrappers ───────────────────────────────────────────
+// These run in the browser. They call Next.js API routes which hold the Gemini
+// API key server-side. This avoids exposing GEMINI_API_KEY in the browser bundle.
+
 export async function callGeminiEditor(
   userMessage: string,
   videoMetadata: VideoMetadata | null,
   videoAnalysis: VideoAnalysis | null,
   history: { role: string; content: string }[],
 ): Promise<GeminiResponse> {
-  const model = genAI.getGenerativeModel({
-    model: "gemini-2.5-flash",
-    generationConfig: {
-      temperature: 0.1,
-      responseMimeType: "application/json",
-    },
+  const res = await fetch("/api/ai/editor", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message: userMessage, videoMetadata, videoAnalysis, history }),
   });
 
-  const videoContext = buildVideoContext(videoMetadata, videoAnalysis);
-
-  const chatHistory = history.slice(-10).map((m) => ({
-    role: m.role === "user" ? "user" : ("model" as const),
-    parts: [{ text: m.content }],
-  }));
-
-  const chat = model.startChat({
-    history: [
-      {
-        role: "user",
-        parts: [{ text: EDITOR_SYSTEM_PROMPT + "\n\nVIDEO DATA:\n" + videoContext }],
-      },
-      {
-        role: "model",
-        parts: [
-          {
-            text: JSON.stringify({
-              actions: [],
-              message: "Ready. Video loaded and analyzed.",
-              suggestions: videoAnalysis?.suggestedEdits?.slice(0, 3) || [
-                "Add auto-captions from transcript",
-                "Trim intro to first scene break",
-                "Apply cinematic color grade",
-              ],
-            }),
-          },
-        ],
-      },
-      ...chatHistory,
-    ],
-  });
-
-  const result = await chat.sendMessage(userMessage);
-  const text = result.response.text().trim();
-
-  try {
-    const cleaned = text.replace(/^```json\n?|\n?```$/g, "").trim();
-    return JSON.parse(cleaned);
-  } catch {
-    return {
-      actions: [],
-      message: "Could not parse response. Please try again.",
-      suggestions: [],
-    };
+  if (!res.ok) {
+    let errMsg = `HTTP ${res.status}`;
+    try {
+      const body = await res.json();
+      if (body.error) errMsg = body.error;
+    } catch {
+      // ignore parse error, use HTTP status as message
+    }
+    throw new Error(errMsg);
   }
+
+  return res.json() as Promise<GeminiResponse>;
 }
 
 export async function getInitialSuggestions(
   videoMetadata: VideoMetadata,
   videoAnalysis: VideoAnalysis | null,
 ): Promise<string[]> {
-  const model = genAI.getGenerativeModel({
-    model: "gemini-2.5-flash",
-    generationConfig: { temperature: 0.2, responseMimeType: "application/json" },
-  });
-
-  const prompt = `Video title: "${videoMetadata.title}"
-Duration: ${Math.round(videoMetadata.duration)}s
-Topics: ${videoAnalysis?.topics?.join(", ") || "unknown"}
-Scene count: ${videoAnalysis?.scenes?.length || "unknown"}
-Transcript available: ${videoAnalysis && videoAnalysis.transcript.length > 0 ? "yes" : "no"}
-
-Return ONLY JSON: { "suggestions": ["action1", "action2", "action3", "action4", "action5"] }
-Make suggestions specific to this video. Format: imperative verb + specific detail.
-Examples: "Add captions to first 30 seconds", "Trim intro to 0:05", "Apply warm color grade for lifestyle content"`;
-
-  const result = await model.generateContent(prompt);
-  const text = result.response.text();
+  const DEFAULT = [
+    "Add captions from transcript",
+    "Trim to highlight best moments",
+    "Apply cinematic color grade",
+    "Boost brightness +20%",
+    "Remove intro silence",
+  ];
 
   try {
-    const cleaned = text.replace(/^```json\n?|\n?```$/g, "").trim();
-    const parsed = JSON.parse(cleaned);
-    return parsed.suggestions || [];
-  } catch {
-    return [
-      "Add captions from transcript",
-      "Trim to highlight best moments",
-      "Apply cinematic color grade",
-      "Boost brightness +20%",
-      "Remove intro silence",
-    ];
+    const res = await fetch("/api/ai/suggestions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ videoMetadata, videoAnalysis }),
+    });
+
+    if (!res.ok) {
+      console.error("[Gemini Editor] /api/ai/suggestions returned", res.status);
+      return DEFAULT;
+    }
+
+    const data = await res.json();
+    return Array.isArray(data.suggestions) && data.suggestions.length > 0
+      ? data.suggestions
+      : DEFAULT;
+  } catch (err: unknown) {
+    console.error(
+      "[Gemini Editor] getInitialSuggestions fetch failed:",
+      err instanceof Error ? err.message : String(err),
+    );
+    return DEFAULT;
   }
 }
+
+// ─── Server-side helper (called only from Next.js API routes) ─────────────────
+// analyzeVideoWithGemini is imported by /api/analyze-video/route.ts which runs
+// server-side, so it can read GEMINI_API_KEY directly.
 
 export async function analyzeVideoWithGemini(
   videoUrl: string,
   videoTitle: string,
 ): Promise<Pick<VideoAnalysis, "topics" | "suggestedEdits">> {
+  const { GoogleGenerativeAI } = await import("@google/generative-ai");
+  const apiKey = process.env.GEMINI_API_KEY ?? process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+  if (!apiKey) {
+    console.error("[Gemini Editor] analyzeVideoWithGemini: no API key");
+    return { topics: ["video", "content"], suggestedEdits: [] };
+  }
+
+  const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({
     model: "gemini-2.5-flash",
     generationConfig: { temperature: 0.2, responseMimeType: "application/json" },
@@ -161,13 +140,16 @@ Return ONLY this JSON:
 topics: 3-5 content topics inferred from the title
 suggestedEdits: 5 specific, actionable editing suggestions based on likely content`;
 
-  const result = await model.generateContent(prompt);
-  const text = result.response.text();
-
   try {
+    const result = await model.generateContent(prompt);
+    const text = result.response.text();
     const cleaned = text.replace(/^```json\n?|\n?```$/g, "").trim();
     return JSON.parse(cleaned);
-  } catch {
+  } catch (err: unknown) {
+    console.error(
+      "[Gemini Editor] analyzeVideoWithGemini failed:",
+      err instanceof Error ? err.message : String(err),
+    );
     return {
       topics: ["video", "content"],
       suggestedEdits: [
@@ -181,29 +163,25 @@ suggestedEdits: 5 specific, actionable editing suggestions based on likely conte
   }
 }
 
-function buildVideoContext(
+// ─── Shared utility ───────────────────────────────────────────────────────────
+
+export function buildVideoContext(
   meta: VideoMetadata | null,
   analysis: VideoAnalysis | null,
 ): string {
   if (!meta) return "No video loaded.";
-
   const parts = [
     `Title: ${meta.title}`,
     `Duration: ${meta.duration}s`,
     `Dimensions: ${meta.nativeWidth}x${meta.nativeHeight}`,
   ];
-
   if (analysis) {
-    if (analysis.scenes.length > 0) {
+    if (analysis.scenes.length > 0)
       parts.push(`Scenes: ${JSON.stringify(analysis.scenes.slice(0, 15))}`);
-    }
-    if (analysis.transcript.length > 0) {
+    if (analysis.transcript.length > 0)
       parts.push(`Transcript: ${JSON.stringify(analysis.transcript.slice(0, 25))}`);
-    }
-    if (analysis.topics.length > 0) {
+    if (analysis.topics.length > 0)
       parts.push(`Topics: ${analysis.topics.join(", ")}`);
-    }
   }
-
   return parts.join("\n");
 }

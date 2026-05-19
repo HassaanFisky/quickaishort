@@ -49,14 +49,27 @@ export function AIPanel() {
     if (!videoMetadata || suggestionsLoaded) return;
     setSuggestionsLoaded(true);
 
-    getInitialSuggestions(videoMetadata, videoAnalysis).then((s) => {
-      setSuggestions(s);
-      addAIMessage({
-        role: "assistant",
-        content: `Video loaded — **${videoMetadata.title || "Untitled"}** (${Math.round(videoMetadata.duration)}s, ${videoMetadata.nativeWidth}×${videoMetadata.nativeHeight}).\n\nI've analyzed it. Tell me what to edit or tap a suggestion.`,
-        actions: [],
+    getInitialSuggestions(videoMetadata, videoAnalysis)
+      .then((s) => {
+        setSuggestions(s);
+      })
+      .catch((err: unknown) => {
+        console.error("[AIPanel] getInitialSuggestions failed:", err instanceof Error ? err.message : String(err));
+        setSuggestions([
+          "Add captions from transcript",
+          "Trim intro to first scene",
+          "Apply cinematic color grade",
+          "Boost brightness +20%",
+          "Remove intro silence",
+        ]);
+      })
+      .finally(() => {
+        addAIMessage({
+          role: "assistant",
+          content: `Video loaded — **${videoMetadata.title || "Untitled"}** (${Math.round(videoMetadata.duration)}s, ${videoMetadata.nativeWidth}×${videoMetadata.nativeHeight}).\n\nI've analyzed it. Tell me what to edit or tap a suggestion.`,
+          actions: [],
+        });
       });
-    });
   }, [videoMetadata, videoAnalysis, suggestionsLoaded, addAIMessage]);
 
   const sendMessage = useCallback(
@@ -68,16 +81,18 @@ export function AIPanel() {
       setInputText("");
       setInterimText("");
 
-      addAIMessage({ role: "user", content: trimmed });
-      setAIThinking(true);
-
-      const history = useEditorStore.getState().aiMessages.map((m) => ({
+      // Snapshot history BEFORE adding the new user message so Gemini doesn't
+      // see the current user turn twice (once in history, once via sendMessage).
+      const historySnapshot = useEditorStore.getState().aiMessages.map((m) => ({
         role: m.role,
         content: m.content,
       }));
 
+      addAIMessage({ role: "user", content: trimmed });
+      setAIThinking(true);
+
       try {
-        const response = await callGeminiEditor(trimmed, videoMetadata, videoAnalysis, history);
+        const response = await callGeminiEditor(trimmed, videoMetadata, videoAnalysis, historySnapshot);
 
         if (response.actions.length > 0) {
           dispatchAIActions(response.actions);
@@ -91,8 +106,24 @@ export function AIPanel() {
           content: response.message || "Done.",
           actions: response.actions,
         });
-      } catch {
-        addAIMessage({ role: "assistant", content: "Something went wrong. Try again.", actions: [] });
+      } catch (err: unknown) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        console.error("[AIPanel] Gemini request failed:", errMsg);
+
+        let displayMsg = "Request failed — please try again.";
+        if (/API_KEY|401|403/i.test(errMsg)) {
+          displayMsg = "API key error — Gemini configuration issue.";
+        } else if (/400|invalid argument|alternates/i.test(errMsg)) {
+          displayMsg = "Invalid request — try rephrasing your message.";
+        } else if (/429|quota|RESOURCE_EXHAUSTED/i.test(errMsg)) {
+          displayMsg = "Rate limit reached — wait a moment and try again.";
+        } else if (/network|fetch|failed to fetch/i.test(errMsg)) {
+          displayMsg = "Network error — check your connection and retry.";
+        } else if (/parse|JSON/i.test(errMsg)) {
+          displayMsg = "Unexpected response from Gemini — try again.";
+        }
+
+        addAIMessage({ role: "assistant", content: displayMsg, actions: [] });
       } finally {
         setAIThinking(false);
       }

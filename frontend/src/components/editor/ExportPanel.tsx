@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { CheckCircle, Download, ShieldCheck, Clock, Settings2, Rocket } from "lucide-react";
-import { Progress } from "@/components/ui/progress";
+import { TimelineLoader } from "@/components/ui/TimelineLoader";
 import { toast } from "sonner";
 import { useState, useEffect } from "react";
 import type { ExportQuality } from "@/types/export";
@@ -107,15 +107,10 @@ export default function ExportPanel() {
 
           <div className="pt-4 space-y-5">
             {isExporting && (
-              <div className="space-y-3">
-                <div className="flex justify-between text-[9px] font-black uppercase tracking-widest text-muted-foreground/60">
-                  <span className="flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />
-                    Rendering…
-                  </span>
-                  <span className="tabular-nums">{exportProgress}%</span>
-                </div>
-                <Progress value={exportProgress} className="h-1.5 bg-foreground/5 overflow-hidden" />
+              <div className="flex justify-center py-2">
+                <TimelineLoader
+                  phases={["Rendering...", "Encoding...", "Finishing..."]}
+                />
               </div>
             )}
 

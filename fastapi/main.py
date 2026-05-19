@@ -345,10 +345,13 @@ origins = [
     "https://quickaishort.online",
     "https://www.quickaishort.online",
     "https://quickaishort-ls7d.vercel.app",
-    "http://localhost:8000",
 ]
 if allowed_origins_env:
     origins.extend([o.strip() for o in allowed_origins_env.split(",") if o.strip()])
+# Accept any Vercel preview deployment automatically (*.vercel.app)
+_vercel_url = os.getenv("VERCEL_URL", "")
+if _vercel_url:
+    origins.append(f"https://{_vercel_url}")
 
 app.add_middleware(
     CORSMiddleware,

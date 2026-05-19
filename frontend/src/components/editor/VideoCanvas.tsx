@@ -426,19 +426,29 @@ export default function VideoCanvas() {
           >
             <SkipBack className="w-4 h-4" strokeWidth={1.5} />
           </Button>
+
+          {/* Play/Pause — slide-up icon/text on hover */}
           <Button
             variant="default"
             size="icon"
-            className="w-14 h-14 rounded-full bg-primary text-white hover:scale-110 active:scale-95 shadow-[0_0_20px_hsl(var(--primary)/0.3)] transition-all interactive"
+            className="relative w-14 h-14 rounded-full bg-primary text-white hover:scale-110 active:scale-95 shadow-[0_0_20px_hsl(var(--primary)/0.3)] transition-all interactive overflow-hidden group"
             onClick={togglePlay}
             disabled={isBuffering}
           >
-            {isPlaying ? (
-              <Pause className="w-6 h-6 fill-current" />
-            ) : (
-              <Play className="w-6 h-6 fill-current pl-1" />
-            )}
+            {/* Icon layer — default visible, slides up on hover */}
+            <span className="absolute inset-0 flex items-center justify-center transition-transform duration-300 ease-in-out group-hover:-translate-y-full">
+              {isPlaying ? (
+                <Pause className="w-6 h-6 fill-current" />
+              ) : (
+                <Play className="w-6 h-6 fill-current pl-1" />
+              )}
+            </span>
+            {/* Text label — slides up from below on hover */}
+            <span className="absolute inset-0 flex items-center justify-center transition-transform duration-300 ease-in-out translate-y-full group-hover:translate-y-0 text-[8px] font-black uppercase tracking-widest pointer-events-none">
+              {isPlaying ? "Pause" : "Play"}
+            </span>
           </Button>
+
           <Button
             variant="ghost"
             size="icon"

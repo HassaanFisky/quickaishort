@@ -35,6 +35,7 @@ import { toast } from "sonner";
 import type { PreflightResult, PersonaVote, Recommendation } from "@/types/preflight";
 import { motion, AnimatePresence } from "framer-motion";
 import { InlinePaywallCard } from "@/components/shared/InlinePaywallCard";
+import { TimelineLoader } from "@/components/ui/TimelineLoader";
 import { useAnimatedCounter } from "@/hooks/useAnimatedCounter";
 
 const QUALITY_OPTIONS = ["low", "medium", "high"] as const;
@@ -555,22 +556,10 @@ export default function RightPanel() {
 
               {/* Loading State */}
               {isPreflightRunning && (
-                <div className="p-10 rounded-lg bg-secondary/40 border border-border flex flex-col items-center justify-center gap-6">
-                  <div className="relative">
-                    <div className="absolute inset-0 bg-primary/20 blur-2xl rounded-full animate-pulse" />
-                    <Loader2
-                      className="w-10 h-10 animate-spin text-primary relative z-10"
-                      strokeWidth={1}
-                    />
-                  </div>
-                  <div className="space-y-2 text-center">
-                    <p className="text-[11px] font-black text-foreground uppercase tracking-[0.25em] animate-pulse">
-                      Asking Your Audience...
-                    </p>
-                    <p className="text-[10px] text-muted-foreground font-medium">
-                      Checking who&apos;d watch this...
-                    </p>
-                  </div>
+                <div className="flex justify-center py-6">
+                  <TimelineLoader
+                    phases={["Analyzing...", "Simulating...", "Scoring...", "Grounding..."]}
+                  />
                 </div>
               )}
 

@@ -23,6 +23,8 @@ import {
   Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { TimelineLoader } from "@/components/ui/TimelineLoader";
+import { UploadLoader } from "@/components/ui/UploadLoader";
 import { useADKStore, type StockClip } from "@/stores/adkStore";
 import {
   API_URL,
@@ -124,12 +126,20 @@ function ScriptStep() {
         </button>
       </div>
 
-      <textarea
-        value={script}
-        onChange={(e) => setScript(e.target.value)}
-        placeholder={`Write your short's script here, or describe your topic and hit "AI Enhance".\n\nSeparate scenes with a blank line — each paragraph becomes a segment.`}
-        className="w-full min-h-[280px] resize-none rounded-2xl bg-secondary/30 border border-foreground/8 p-5 text-sm leading-relaxed placeholder:text-muted-foreground/40 focus:outline-none focus:border-primary/40 transition-colors"
-      />
+      {generating ? (
+        <div className="flex justify-center py-8">
+          <TimelineLoader
+            phases={["Scripting...", "Analyzing...", "Enhancing...", "Refining..."]}
+          />
+        </div>
+      ) : (
+        <textarea
+          value={script}
+          onChange={(e) => setScript(e.target.value)}
+          placeholder={`Write your short's script here, or describe your topic and hit "AI Enhance".\n\nSeparate scenes with a blank line — each paragraph becomes a segment.`}
+          className="w-full min-h-[280px] resize-none rounded-2xl bg-secondary/30 border border-foreground/8 p-5 text-sm leading-relaxed placeholder:text-muted-foreground/40 focus:outline-none focus:border-primary/40 transition-colors"
+        />
+      )}
 
       <div className="flex items-center gap-4 text-[11px] text-muted-foreground/60">
         <span>{wordCount} words</span>
@@ -221,13 +231,21 @@ function MediaStep() {
         <Upload className="w-8 h-8 text-muted-foreground/40 mb-3" />
         <p className="text-sm font-bold text-foreground/70">Drop B-roll footage here</p>
         <p className="text-xs text-muted-foreground/50 mt-1">MP4, MOV, WebM — up to 200 MB each</p>
-        {pendingCount > 0 && (
-          <div className="mt-3 flex items-center gap-2 text-xs text-primary">
-            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            Uploading {pendingCount} file{pendingCount > 1 ? "s" : ""}…
-          </div>
-        )}
       </div>
+
+      <AnimatePresence>
+        {pendingCount > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.2 }}
+            className="flex justify-center"
+          >
+            <UploadLoader />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Uploaded files */}
       {uploadedFiles.length > 0 && (
@@ -471,18 +489,10 @@ function RenderStep({
 
       {/* Progress / Result */}
       {isRunning && (
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-xs text-muted-foreground/60">
-            <span>Rendering…</span>
-            <span>{progress}%</span>
-          </div>
-          <div className="h-2 rounded-full bg-secondary overflow-hidden">
-            <motion.div
-              className="h-full bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500"
-              animate={{ width: `${Math.max(progress, 5)}%` }}
-              transition={{ ease: "easeOut" }}
-            />
-          </div>
+        <div className="flex justify-center py-2">
+          <TimelineLoader
+            phases={["Scripting...", "Designing...", "Captioning...", "Rendering...", "Finishing..."]}
+          />
         </div>
       )}
 
@@ -670,7 +680,7 @@ export default function ADKPage() {
             <span className="text-[10px] font-black uppercase tracking-[0.3em] text-primary">ADK Studio</span>
           </div>
           <h1 className="text-4xl font-black tracking-tighter text-white">
-            AI Short Generator
+            ADK Studio AI Generation
           </h1>
           <p className="text-sm text-white/50 mt-2">
             Script → Footage → Voice → Render. Your short, fully orchestrated.

@@ -53,32 +53,37 @@ function StatCard({
   color: string;
 }) {
   return (
-    <motion.article
-      whileHover={{ y: -3 }}
-      transition={spring.smooth}
-      aria-label={`${label}: ${loading ? "loading" : value}`}
-      aria-busy={loading}
-      className="relative group rounded-2xl border border-white/[0.06] bg-[#0c0c10]/80 p-5 overflow-hidden spring-hover"
-    >
-      <div className={cn("absolute -top-10 -right-10 w-28 h-28 blur-[70px] opacity-[0.18] rounded-full pointer-events-none", color)} aria-hidden="true" />
+    <div className="stat-glow-wrapper">
+      {/* Ambient rotating neon glow — stays behind the card */}
+      <div className="stat-card-glow-ring" aria-hidden="true" />
 
-      <div className="flex items-center gap-2.5 mb-4">
-        <div className="p-1.5 rounded-lg bg-white/[0.04] border border-white/[0.06] text-muted-foreground group-hover:text-foreground transition-colors duration-[160ms]">
-          <Icon className="w-3.5 h-3.5" aria-hidden="true" />
+      <motion.article
+        whileHover={{ y: -3 }}
+        transition={spring.smooth}
+        aria-label={`${label}: ${loading ? "loading" : value}`}
+        aria-busy={loading}
+        className="relative group rounded-2xl border border-white/[0.06] bg-[#0c0c10]/80 p-5 overflow-hidden spring-hover"
+      >
+        <div className={cn("absolute -top-10 -right-10 w-28 h-28 blur-[70px] opacity-[0.18] rounded-full pointer-events-none", color)} aria-hidden="true" />
+
+        <div className="flex items-center gap-2.5 mb-4">
+          <div className="p-1.5 rounded-lg bg-white/[0.04] border border-white/[0.06] text-muted-foreground group-hover:text-foreground transition-colors duration-[160ms]">
+            <Icon className="w-3.5 h-3.5" aria-hidden="true" />
+          </div>
+          <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            {label}
+          </span>
         </div>
-        <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-          {label}
-        </span>
-      </div>
 
-      {loading ? (
-        <div className="h-8 w-20 rounded-lg bg-white/[0.06] animate-pulse" aria-hidden="true" />
-      ) : (
-        <span className="text-[2rem] font-black tracking-tight font-mono tabular-nums leading-none">
-          {value}
-        </span>
-      )}
-    </motion.article>
+        {loading ? (
+          <div className="h-8 w-20 rounded-lg bg-white/[0.06] animate-pulse" aria-hidden="true" />
+        ) : (
+          <span className="text-[2rem] font-black tracking-tight font-mono tabular-nums leading-none">
+            {value}
+          </span>
+        )}
+      </motion.article>
+    </div>
   );
 }
 

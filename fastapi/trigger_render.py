@@ -1,7 +1,13 @@
+import os
 import requests
-import json
 
-url = "https://quickaishort-api-946316698978.us-central1.run.app/api/process-video"
+url = (
+    os.environ.get(
+        "BACKEND_URL",
+        "https://quickaishort-api-946316698978.us-central1.run.app",
+    ).rstrip("/")
+    + "/api/process-video"
+)
 payload = {
     "videoId": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
     "start_sec": 0,

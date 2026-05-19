@@ -684,7 +684,368 @@ main:focus {
   }
 }
 
-/* ─── AI Video Editor styles ─────────────────────────────────────────────── */
+/* ======================================================
+   Neon Rotating URL Input Border (Task 1)
+   ====================================================== */
+
+@keyframes neon-url-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.neon-url-container {
+  position: relative;
+  border-radius: 1rem;
+}
+
+.neon-url-spin-layer {
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
+.neon-url-spin-layer::before {
+  content: '';
+  position: absolute;
+  width: 150%;
+  height: 150%;
+  top: -25%;
+  left: -25%;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    #402fb5 40deg,
+    #7c3aed 100deg,
+    #6e1b60 160deg,
+    #cf30aa 220deg,
+    #a855f7 280deg,
+    transparent 320deg
+  );
+  animation: neon-url-spin 2s linear infinite;
+  animation-play-state: paused;
+}
+
+.neon-url-glow-layer {
+  position: absolute;
+  inset: -4px;
+  border-radius: inherit;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
+.neon-url-glow-layer::before {
+  content: '';
+  position: absolute;
+  width: 150%;
+  height: 150%;
+  top: -25%;
+  left: -25%;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    rgba(64, 47, 181, 0.45) 40deg,
+    rgba(168, 85, 247, 0.7) 160deg,
+    rgba(207, 48, 170, 0.5) 220deg,
+    transparent 320deg
+  );
+  filter: blur(12px);
+  animation: neon-url-spin 2s linear infinite;
+  animation-play-state: paused;
+}
+
+.neon-url-container:hover .neon-url-spin-layer,
+.neon-url-container:hover .neon-url-glow-layer {
+  opacity: 1;
+}
+.neon-url-container:hover .neon-url-spin-layer::before,
+.neon-url-container:hover .neon-url-glow-layer::before {
+  animation-play-state: running;
+  animation-duration: 2s;
+}
+
+.neon-url-container:focus-within .neon-url-spin-layer,
+.neon-url-container:focus-within .neon-url-glow-layer {
+  opacity: 1;
+}
+.neon-url-container:focus-within .neon-url-spin-layer::before,
+.neon-url-container:focus-within .neon-url-glow-layer::before {
+  animation-play-state: running;
+  animation-duration: 4s;
+}
+
+.neon-url-inner {
+  position: relative;
+  z-index: 2;
+  margin: 2px;
+  background: rgba(8, 8, 10, 0.95);
+  border-radius: calc(1rem - 2px);
+  overflow: hidden;
+}
+
+/* ======================================================
+   Dashboard Stats Card — Ambient Neon Glow (Task 2)
+   ====================================================== */
+
+@keyframes stat-glow-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.stat-glow-wrapper {
+  position: relative;
+}
+
+.stat-card-glow-ring {
+  position: absolute;
+  inset: -16px;
+  border-radius: 1.75rem;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0%,
+    hsl(var(--primary) / 0.25) 25%,
+    transparent 50%,
+    hsl(var(--primary) / 0.12) 75%,
+    transparent 100%
+  );
+  animation: stat-glow-spin 8s linear infinite;
+  opacity: 0.18;
+  filter: blur(18px);
+  pointer-events: none;
+  transition: opacity 0.4s ease;
+  z-index: 0;
+}
+
+.stat-glow-wrapper:hover .stat-card-glow-ring {
+  opacity: 0.42;
+}
+
+.stat-glow-wrapper > article {
+  position: relative;
+  z-index: 1;
+}
+
+/* ======================================================
+   Sidebar Icon Animations (Task 3)
+   ====================================================== */
+
+/* Blur-neighbors: when any link is hovered, others dim */
+nav:has(.nav-link:hover) .nav-link:not(:hover) {
+  filter: blur(0.5px);
+  transform: scale(0.965);
+  opacity: 0.6;
+}
+
+.nav-link {
+  transition:
+    filter 0.18s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.18s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.18s ease;
+}
+
+/* Scissors — snip motion on hover */
+@keyframes scissors-snip {
+  0%   { transform: rotate(0deg) scale(1); }
+  20%  { transform: rotate(-18deg) scale(1.18); }
+  45%  { transform: rotate(8deg) scale(1.05); }
+  65%  { transform: rotate(-6deg) scale(1.1); }
+  85%  { transform: rotate(2deg) scale(1.02); }
+  100% { transform: rotate(0deg) scale(1); }
+}
+
+.nav-scissors-link:hover .nav-icon {
+  animation: scissors-snip 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Clapperboard — arm lifts on hover, snaps on click */
+@keyframes clapper-lift {
+  0%   { transform: rotate(0deg); }
+  100% { transform: rotate(-15deg) translateY(-1px); }
+}
+
+@keyframes clapper-snap {
+  0%   { transform: rotate(-15deg) translateY(-1px); }
+  40%  { transform: rotate(2deg) translateY(0px); }
+  70%  { transform: rotate(-4deg); }
+  100% { transform: rotate(0deg); }
+}
+
+.nav-clapperboard-link:hover .nav-icon {
+  animation: clapper-lift 0.3s ease forwards;
+}
+
+.nav-clapperboard-link:active .nav-icon {
+  animation: clapper-snap 0.4s ease forwards;
+}
+
+/* Clock — anti-clockwise full spin on click */
+@keyframes clock-rewind {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(-360deg); }
+}
+
+.nav-history-link:active .nav-icon {
+  animation: clock-rewind 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Settings — gear rotation on hover */
+@keyframes gear-rotate {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.nav-settings-link:hover .nav-icon {
+  animation: gear-rotate 1s ease;
+}
+
+/* Dashboard — pulse on active state */
+@keyframes dash-active-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.72; transform: scale(0.92); }
+}
+
+.nav-dashboard-active .nav-icon {
+  animation: dash-active-pulse 2s ease-in-out infinite;
+}
+
+/* ======================================================
+   Sun / Moon Theme Toggle (Task 4)
+   ====================================================== */
+
+.theme-toggle-pill {
+  display: flex;
+  align-items: center;
+  width: 60px;
+  height: 34px;
+  border-radius: 999px;
+  cursor: pointer;
+  border: none;
+  padding: 3px;
+  position: relative;
+  overflow: hidden;
+  transition: background 0.5s ease, box-shadow 0.3s ease;
+  flex-shrink: 0;
+}
+
+.theme-toggle-pill:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px #020203, 0 0 0 4px rgba(168, 85, 247, 0.6);
+}
+
+.theme-toggle-pill.theme-dark {
+  background: linear-gradient(135deg, #080810 0%, #0f0f1e 100%);
+  box-shadow: 0 0 12px rgba(168, 85, 247, 0.15) inset;
+}
+
+.theme-toggle-pill.theme-light {
+  background: linear-gradient(135deg, #74b4e0 0%, #b8dcf5 100%);
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.2);
+}
+
+.toggle-thumb {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 2;
+  transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  flex-shrink: 0;
+}
+
+.theme-toggle-pill.theme-light .toggle-thumb {
+  background: radial-gradient(circle at 40% 35%, #ffe066, #ffa800);
+  box-shadow: 0 0 10px rgba(255, 200, 0, 0.5), 0 0 22px rgba(255, 180, 0, 0.25);
+  transform: translateX(0px);
+}
+
+.theme-toggle-pill.theme-dark .toggle-thumb {
+  background: radial-gradient(circle at 35% 35%, #e8e8e8, #c8c8c8);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4), 0 0 10px rgba(255, 255, 255, 0.15);
+  transform: translateX(26px);
+}
+
+@keyframes sun-pulse {
+  0%, 100% { box-shadow: 0 0 8px rgba(255, 200, 0, 0.5), 0 0 20px rgba(255, 180, 0, 0.2); }
+  50%       { box-shadow: 0 0 14px rgba(255, 200, 0, 0.7), 0 0 30px rgba(255, 180, 0, 0.35); }
+}
+
+.theme-toggle-pill.theme-light .toggle-thumb {
+  animation: sun-pulse 2.5s ease-in-out infinite;
+}
+
+.moon-dot {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.18);
+  pointer-events: none;
+}
+
+.toggle-star {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  pointer-events: none;
+}
+
+@keyframes star-twinkle {
+  0%, 100% { opacity: 0.25; transform: scale(0.8); }
+  50%       { opacity: 1; transform: scale(1.3); }
+}
+
+.toggle-cloud {
+  position: absolute;
+  right: 7px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 999px;
+  pointer-events: none;
+}
+
+.toggle-cloud::before {
+  content: '';
+  position: absolute;
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 50%;
+  top: -4px;
+  left: 3px;
+}
+
+/* ======================================================
+   Undo / Redo Button Animations (Task 5)
+   ====================================================== */
+
+@keyframes undo-nudge {
+  0%   { transform: rotate(0deg); }
+  40%  { transform: rotate(-40deg) scale(1.1); }
+  100% { transform: rotate(0deg) scale(1); }
+}
+
+@keyframes redo-nudge {
+  0%   { transform: rotate(0deg); }
+  40%  { transform: rotate(40deg) scale(1.1); }
+  100% { transform: rotate(0deg) scale(1); }
+}
+
+.undo-btn:not([disabled]):active .undo-icon {
+  animation: undo-nudge 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.redo-btn:not([disabled]):active .redo-icon {
+  animation: redo-nudge 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* ── AI Video Editor styles ─────────────────────────────────────────────── */
 
 .editor-root {
   display: grid;
@@ -1142,6 +1503,45 @@ main:focus {
 .send-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 
 .voice-error { font-size: 0.7rem; color: #f87171; margin: 0; padding: 0 0.25rem; }
+
+/* ─── TimelineLoader / UploadLoader ─── */
+@keyframes tl-shimmer {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(250%); }
+}
+@keyframes tl-playhead {
+  0%   { left: -3px; }
+  100% { left: calc(100% + 3px); }
+}
+@keyframes tl-progress-flow {
+  0%   { background-position: 0% 0%; }
+  100% { background-position: 200% 0%; }
+}
+.tl-shimmer-bg {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.07) 50%, transparent 100%);
+  animation: tl-shimmer 1.8s ease-in-out infinite;
+}
+.tl-playhead-line {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  width: 2px;
+  background: linear-gradient(to bottom, #6ee7ff, #b08cff);
+  box-shadow: 0 0 8px rgba(110,231,255,0.55), 0 0 18px rgba(176,140,255,0.35);
+  animation: tl-playhead 2.4s ease-in-out infinite;
+}
+.tl-playhead-line-2 {
+  animation-delay: -1.2s;
+}
+.tl-progress-bar {
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, transparent 0%, #6ee7ff 20%, #b08cff 50%, #6ee7ff 80%, transparent 100%);
+  background-size: 200% 100%;
+  animation: tl-progress-flow 1.8s linear infinite;
+}
 
 @media (max-width: 768px) {
   .editor-root {

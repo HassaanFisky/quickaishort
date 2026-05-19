@@ -19,11 +19,11 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
-  { href: "/dashboard", label: "Dashboard",  icon: LayoutGrid   },
-  { href: "/editor",    label: "Editor",      icon: Scissors     },
-  { href: "/adk",       label: "ADK Studio",  icon: Clapperboard },
-  { href: "/history",   label: "History",     icon: HistoryIcon  },
-  { href: "/settings",  label: "Settings",    icon: SettingsIcon },
+  { href: "/dashboard", label: "Dashboard",  icon: LayoutGrid,   linkClass: "nav-dashboard-link",     activeClass: "nav-dashboard-active"    },
+  { href: "/editor",    label: "Editor",      icon: Scissors,     linkClass: "nav-scissors-link",      activeClass: ""                        },
+  { href: "/adk",       label: "ADK Studio",  icon: Clapperboard, linkClass: "nav-clapperboard-link",  activeClass: ""                        },
+  { href: "/history",   label: "History",     icon: HistoryIcon,  linkClass: "nav-history-link",       activeClass: ""                        },
+  { href: "/settings",  label: "Settings",    icon: SettingsIcon, linkClass: "nav-settings-link",      activeClass: ""                        },
 ];
 
 const menuVariants: Variants = {
@@ -70,7 +70,7 @@ export default function Sidebar() {
 
       {/* Nav */}
       <nav className="flex-1 px-3 py-5 space-y-0.5" aria-label="Main navigation">
-        {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+        {NAV_ITEMS.map(({ href, label, icon: Icon, linkClass, activeClass }) => {
           const active = pathname === href || (href !== "/" && pathname.startsWith(`${href}/`));
           return (
             <Link
@@ -78,12 +78,14 @@ export default function Sidebar() {
               href={href}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium",
+                "nav-link group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium",
                 "transition-[background-color,border-color,color] duration-[160ms] ease-[cubic-bezier(0.22,1,0.36,1)]",
                 "focus-visible:outline-none focus-visible:[box-shadow:0_0_0_2px_#020203,_0_0_0_4px_rgba(168,85,247,0.6)]",
                 active
                   ? "bg-primary/[0.08] text-primary font-semibold"
                   : "text-[#71717a] hover:text-[#f4f4f5] hover:bg-white/[0.04]",
+                linkClass,
+                active && activeClass,
               )}
             >
               {/* Active left indicator */}
@@ -97,7 +99,7 @@ export default function Sidebar() {
               )}
               <Icon
                 className={cn(
-                  "w-[17px] h-[17px] shrink-0 transition-colors duration-[160ms]",
+                  "nav-icon w-[17px] h-[17px] shrink-0 transition-colors duration-[160ms]",
                   active ? "text-primary" : "text-[#52525b] group-hover:text-[#a1a1aa]",
                 )}
                 aria-hidden

@@ -7,7 +7,7 @@ import type { DragEvent, ChangeEvent, KeyboardEvent } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { GlowButton } from "@/components/ui/GlowButton";
 import {
-  Search,
+  Link2,
   Loader2,
   Zap,
   Smartphone,
@@ -26,7 +26,7 @@ import RightPanel from "./RightPanel";
 import BottomDock from "./BottomDock";
 import VideoCanvas from "./VideoCanvas";
 import Sidebar from "@/components/layout/Sidebar";
-import AgentWorkforce from "./AgentWorkforce";
+import { TimelineLoader } from "@/components/ui/TimelineLoader";
 import { LiquidThemeToggle } from "@/components/shared/LiquidThemeToggle";
 import axios from "axios";
 
@@ -264,55 +264,40 @@ export default function EditorLayout() {
                   </AnimatePresence>
 
                   <div className="flex items-center gap-2 p-1.5">
-                    <div
-                      className={cn(
-                        "relative flex-1 bg-black/20 rounded-xl border transition-all duration-300 shadow-inner",
+                    {/* Neon rotating border URL input */}
+                    <div className="neon-url-container flex-1">
+                      <div className="neon-url-spin-layer" aria-hidden="true" />
+                      <div className="neon-url-glow-layer" aria-hidden="true" />
+                      <div className={cn(
+                        "neon-url-inner flex items-center transition-all duration-300",
                         urlValid === true
-                          ? "border-emerald-500/40 bg-emerald-500/5"
+                          ? "ring-1 ring-emerald-500/30"
                           : urlValid === false
-                          ? "border-destructive/40 bg-destructive/5"
-                          : "border-white/5 hover:border-white/20",
-                      )}
-                    >
-                      {urlValid === true ? (
-                        <CheckCircle2 className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-400 transition-colors" />
-                      ) : urlValid === false ? (
-                        <AlertCircle className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-destructive transition-colors" />
-                      ) : (
-                        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/30 transition-colors" />
-                      )}
-                      <input
-                        id="youtube-url-input"
-                        type="text"
-                        placeholder="Paste YouTube URL or drag & drop..."
-                        className="bg-transparent border-none outline-none text-sm w-full text-foreground placeholder:text-muted-foreground/20 h-11 pl-11 pr-4 font-bold tracking-tight"
-                        value={urlInput}
-                        onChange={handleUrlChange}
-                        onKeyDown={(e: KeyboardEvent<HTMLInputElement>) =>
-                          e.key === "Enter" && !isAnalysing && handleAnalyze()
-                        }
-                        disabled={isAnalysing}
-                      />
-                      {!isAnalysing && (
-                        <button
-                          id="try-demo-btn"
-                          onClick={() => {
-                            const DEMO_URL =
-                              "https://www.youtube.com/watch?v=P6FORh8U0Og";
-                            // Set UI state for preview
-                            setUrlInput(DEMO_URL);
-                            const vid = extractYouTubeId(DEMO_URL)!;
-                            setThumbnailUrl(getYTThumbnail(vid));
-                            setUrlValid(true);
-                            // Pass URL directly — avoids stale closure on urlInput state
-                            handleAnalyze(DEMO_URL);
-                          }}
-                          className="text-[9px] font-black uppercase tracking-widest text-primary hover:text-primary/80 transition-colors px-3 h-full border-l border-foreground/5"
-                          title="Try with a safe demo video"
-                        >
-                          Try Demo
-                        </button>
-                      )}
+                          ? "ring-1 ring-destructive/30"
+                          : "",
+                      )}>
+                        <span className="pl-3.5 flex-shrink-0">
+                          {urlValid === true ? (
+                            <CheckCircle2 className="w-4 h-4 text-emerald-400 transition-colors" />
+                          ) : urlValid === false ? (
+                            <AlertCircle className="w-4 h-4 text-destructive transition-colors" />
+                          ) : (
+                            <Link2 className="w-4 h-4 text-muted-foreground/30 transition-colors" />
+                          )}
+                        </span>
+                        <input
+                          id="youtube-url-input"
+                          type="text"
+                          placeholder="Paste video URL or upload MP4..."
+                          className="bg-transparent border-none outline-none text-sm w-full text-foreground placeholder:text-muted-foreground/20 h-11 pl-3 pr-4 font-bold tracking-tight"
+                          value={urlInput}
+                          onChange={handleUrlChange}
+                          onKeyDown={(e: KeyboardEvent<HTMLInputElement>) =>
+                            e.key === "Enter" && !isAnalysing && handleAnalyze()
+                          }
+                          disabled={isAnalysing}
+                        />
+                      </div>
                     </div>
 
                     {isAnalysing ? (
@@ -368,14 +353,22 @@ export default function EditorLayout() {
               <AnimatePresence mode="wait">
                 {isAnalysing ? (
                   <motion.div
-                    key="workforce"
+                    key="timeline-loader"
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 1.05 }}
                     transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-                    className="absolute inset-0 z-10 bg-background"
+                    className="absolute inset-0 z-10 bg-background flex items-center justify-center"
                   >
-                    <AgentWorkforce />
+                    <TimelineLoader
+                      phases={
+                        currentStage === "transcribing"
+                          ? ["Transcribing...", "Captioning...", "Building subtitles..."]
+                          : currentStage === "analyzing"
+                          ? ["Analyzing...", "Scoring virality...", "Finding hooks..."]
+                          : ["Downloading...", "Preparing...", "Extracting..."]
+                      }
+                    />
                   </motion.div>
                 ) : (
                   <motion.div
