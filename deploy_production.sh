@@ -6,7 +6,7 @@ PROJECT_ID="quickaishort-agent-494304"
 REGION="us-central1"
 REPO_NAME="quickai-repo"
 BUCKET_NAME="qai-exports-${PROJECT_ID}"
-SA_EMAIL="quickai-sa@${PROJECT_ID}.iam.gserviceaccount.com"
+SA_EMAIL="99900313102-compute@developer.gserviceaccount.com"
 IMAGE_TAG=$(date +%Y%m%d-%H%M%S)
 IMAGE_URI="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/backend:${IMAGE_TAG}"
 
@@ -29,8 +29,8 @@ gcloud run deploy quickai-api \
     --cpu 2 \
     --concurrency 80 \
     --timeout 300 \
-    --liveness-probe-path=/health/live \
-    --readiness-probe-path=/health/ready \
+    --liveness-probe=httpGet.path=/health \
+    --startup-probe=httpGet.path=/ready \
     --project ${PROJECT_ID} \
     --update-env-vars \
 ENVIRONMENT=production,\
@@ -47,7 +47,8 @@ gcloud run deploy quickai-worker \
     --platform managed \
     --no-allow-unauthenticated \
     --service-account ${SA_EMAIL} \
-    --command python,render_worker.py \
+    --command python \
+    --args render_worker.py \
     --memory 8Gi \
     --cpu 4 \
     --concurrency 1 \

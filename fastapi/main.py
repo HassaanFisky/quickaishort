@@ -164,6 +164,14 @@ PUBSUB_CHANNELS = (
 
 async def _pubsub_listener(stop: asyncio.Event) -> None:
     """Bridges Redis pubsub events from the worker process into async fan-out."""
+    is_prod = os.getenv("ENVIRONMENT") == "production"
+    redis_url = os.getenv("REDIS_URL")
+    if is_prod and not redis_url:
+        logger.warning(
+            "REDIS_URL not configured in production — pubsub listener disabled."
+        )
+        return
+
     pubsub = redis_conn.pubsub(ignore_subscribe_messages=True)
     try:
         pubsub.subscribe(*PUBSUB_CHANNELS)

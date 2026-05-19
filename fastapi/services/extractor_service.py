@@ -692,6 +692,18 @@ class ExtractorService:
         # Use Redis-backed circuit breakers so state is shared across all
         # Cloud Run instances. Falls back to in-process if Redis is down.
         try:
+            # Prevent socket blocks on start: bypass ping if REDIS_URL is unconfigured in production
+            is_prod = os.getenv("ENVIRONMENT") == "production"
+            redis_url = os.getenv("REDIS_URL")
+            if is_prod and not redis_url:
+                raise RuntimeError("REDIS_URL not configured in production")
+
+            # Ping Redis to verify connectivity (fails fast due to socket_timeout)
+            if redis_conn:
+                redis_conn.ping()
+            else:
+                raise ValueError("redis_conn is None")
+
             self.circuits: Dict[str, Any] = {
                 t["name"]: RedisCircuitBreaker(
                     tier_name=t["name"],

@@ -24,7 +24,14 @@ async def run_startup_checks():
 
     # 2. Redis / Queue Connectivity
     try:
-        if redis_conn:
+        # Prevent socket blocks on start: bypass ping if REDIS_URL is unconfigured in production
+        is_prod = os.getenv("ENVIRONMENT") == "production"
+        redis_url = os.getenv("REDIS_URL")
+        if is_prod and not redis_url:
+            logger.warning(
+                "REDIS_URL not configured in production — bypassing Redis connectivity check"
+            )
+        elif redis_conn:
             redis_conn.ping()
         else:
             logger.warning("REDIS_CONN_MISSING: Queue operations will be mocked")

@@ -13,9 +13,20 @@
 
 ## 🌟 The Core Vision
 
-Every short-form video generator on the market operates completely blind. Creators copy-paste a URL, hit export, and publish to TikTok or Reels with zero context, hoping the algorithm picks it up. 
+Every short-form video generator on the market operates completely blind. Creators copy-paste a URL, hit export, and publish with zero context, hoping the algorithm picks it up. 
 
-**Pre-Flight completely changes this.** It is the first production-grade, multi-agent AI audience panel that simulates and optimizes short-form video performance *before* you ever upload. Built for the **Google for Startups AI Agents Challenge 2026**, QuickAI Short harnesses **Gemini 2.5 Flash** and the **Google Agent Development Kit (ADK)** to give creators scientific, data-backed publishing confidence.
+**QuickAI Short completely changes this.** We have shifted the paradigm from static clicking to an **interactive, conversational AI Video Editing Studio**. Creators are guided by an intelligent **Chatbot Co-Pilot** that handles everything from video cut boundaries and smart transcription-based clip adjustments to real-time high-fidelity voiceover synthesis and sidechain audio mixing.
+
+---
+
+## 💬 The Conversational AI Editor Chatbot & Voice Pipeline
+
+The QuickAI Short Studio integrates a cutting-edge chatbot interface that acts as a real-time partner during the editing lifecycle:
+
+* **Interactive Natural Language Control**: Instruct the chatbot to split clips, apply filter presets, adjust aspect ratios, or shift focus parameters using natural conversational cues.
+* **Transcription-Based Dispatching**: The chatbot automatically analyzes video transcriptions and aligns edits (splits, trims, crops) to exact verbal cues.
+* **High-Fidelity AI Voiceovers**: Seamlessly generate synthetic voice narrations using a curated library of professional, emotionally-aware voices.
+* **Sidechain Compression Mixing**: The render worker applies standard broadcaster mixing: auto-lowering background music volume when narration is active, then boosting it back during breaks.
 
 ---
 
