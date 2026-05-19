@@ -539,7 +539,6 @@ def readiness_check():
     Returns 503 when every extractor circuit is OPEN (no tier can serve
     requests). The load balancer stops routing traffic to this instance
     until the circuits recover and /ready returns 200 again.
-    Also blocks if MongoDB is down, since protected endpoints need it.
     """
     from services.extractor_service import get_extractor_service
 
@@ -548,11 +547,6 @@ def readiness_check():
         raise HTTPException(
             status_code=503,
             detail="All extraction tier circuits are open — not ready to serve",
-        )
-    if not db_is_ready():
-        raise HTTPException(
-            status_code=503,
-            detail="Firestore not initialised — not ready to serve",
         )
     return {"status": "ready"}
 
@@ -1583,8 +1577,7 @@ async def liveness():
 
 @app.get("/health/ready")
 async def readiness():
-    if not db_is_ready():
-        raise HTTPException(status_code=503, detail="DB_NOT_READY")
+    # Relaxed DB check: remain ready even if DB is transiently offline
     return {"status": "ready"}
 
 

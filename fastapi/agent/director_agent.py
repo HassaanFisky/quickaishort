@@ -28,8 +28,11 @@ try:
     from google.adk.sessions import InMemorySessionService
 
     _ADK_OK = True
-except ImportError:
-    logger.warning("google-adk not installed — Director Agent will be unavailable")
+except Exception as _adk_err:
+    logger.warning(
+        "google-adk not installed or failed to initialize (%s) — Director Agent will be unavailable",
+        _adk_err,
+    )
     Agent = object  # Placeholder for type hints
     _ADK_OK = False
 

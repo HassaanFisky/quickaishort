@@ -143,9 +143,10 @@ try:
     import google.genai.types as genai_types
 
     _ADK_OK = True
-except ImportError as _adk_err:
+except Exception as _adk_err:
     logger.warning(
-        "google-adk not installed (%s) — preflight pipeline unavailable", _adk_err
+        "google-adk not installed or failed to initialize (%s) — preflight pipeline unavailable",
+        _adk_err,
     )
     _ADK_OK = False
     Agent = BaseAgent = LoopAgent = ParallelAgent = SequentialAgent = None  # type: ignore[assignment]
@@ -161,9 +162,10 @@ if _ADK_OK:
         from google.adk.tools.mcp_tool.mcp_toolset import MCPToolset, StdioServerParameters as StdioServerParams  # type: ignore[assignment]
 
         _MCP_OK = True
-    except ImportError:
+    except Exception as _mcp_err:
         logger.warning(
-            "google-adk MCPToolset not available — Supabase MCP agent disabled"
+            "google-adk MCPToolset not available or failed to load (%s) — Supabase MCP agent disabled",
+            _mcp_err,
         )
 
 

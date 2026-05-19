@@ -91,9 +91,10 @@ try:
     import google.genai.types as genai_types
 
     _ADK_OK = True
-except ImportError:
+except Exception as _adk_err:
     logger.warning(
-        "google-adk not installed — using direct Gemini fallback for viral agent."
+        "google-adk not installed or failed to initialize (%s) — using direct Gemini fallback for viral agent.",
+        _adk_err,
     )
     _ADK_OK = False
     Agent = SequentialAgent = Runner = InMemorySessionService = FunctionTool = None  # type: ignore[assignment]
