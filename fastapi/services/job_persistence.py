@@ -13,15 +13,18 @@ async def persist_failed_job(
 ):
     """Persists dead-letter jobs to Firestore for later analysis or replay."""
     try:
+
         def _do():
-            get_db().collection("FailedJobs").document(job_id).set({
-                "job_id": job_id,
-                "user_id": user_id,
-                "error": str(error),
-                "payload": payload,
-                "failed_at": datetime.now(timezone.utc),
-                "status": "dead_letter",
-            })
+            get_db().collection("FailedJobs").document(job_id).set(
+                {
+                    "job_id": job_id,
+                    "user_id": user_id,
+                    "error": str(error),
+                    "payload": payload,
+                    "failed_at": datetime.now(timezone.utc),
+                    "status": "dead_letter",
+                }
+            )
 
         await asyncio.to_thread(_do)
         logger.error(
@@ -39,18 +42,23 @@ async def cleanup_stale_jobs():
         def _do():
             db = get_db()
             # Fetch by status, filter by age in Python to avoid composite index requirement.
-            snaps = db.collection("Projects").where("status", "==", "processing").stream()
+            snaps = (
+                db.collection("Projects").where("status", "==", "processing").stream()
+            )
             batch = db.batch()
             count = 0
             for snap in snaps:
                 data = snap.to_dict() or {}
                 updated = data.get("updated_at")
                 if updated and updated < threshold:
-                    batch.update(snap.reference, {
-                        "status": "failed",
-                        "error": "stale_job_cleanup_trigger",
-                        "updated_at": datetime.now(timezone.utc),
-                    })
+                    batch.update(
+                        snap.reference,
+                        {
+                            "status": "failed",
+                            "error": "stale_job_cleanup_trigger",
+                            "updated_at": datetime.now(timezone.utc),
+                        },
+                    )
                     count += 1
             if count > 0:
                 batch.commit()

@@ -109,7 +109,9 @@ class StorageService:
         except Exception:
             pass
 
-    def delete_file(self, remote_path: str, _bucket_name: BucketType = "exports") -> None:
+    def delete_file(
+        self, remote_path: str, _bucket_name: BucketType = "exports"
+    ) -> None:
         try:
             self._blob(remote_path).delete()
         except Exception:

@@ -69,7 +69,9 @@ async def increment_stats(
 
         updates: dict[str, Any] = {"updated_at": datetime.now(timezone.utc)}
         if duration_delta:
-            updates["total_duration_processed"] = firestore.Increment(float(duration_delta))
+            updates["total_duration_processed"] = firestore.Increment(
+                float(duration_delta)
+            )
         if export_delta:
             updates["export_count"] = firestore.Increment(int(export_delta))
         if ai_run_delta:
@@ -114,10 +116,13 @@ async def deduct_credits(user_id: str, amount: int) -> bool:
             if balance < amount:
                 return None
             new_balance = balance - amount
-            transaction.update(doc_ref, {
-                "credits_balance": new_balance,
-                "updated_at": datetime.now(timezone.utc),
-            })
+            transaction.update(
+                doc_ref,
+                {
+                    "credits_balance": new_balance,
+                    "updated_at": datetime.now(timezone.utc),
+                },
+            )
             return {**data, "credits_balance": new_balance}
 
         return _txn(db.transaction())
@@ -196,18 +201,20 @@ async def provision_credits(user_id: str, amount: int = STARTER_CREDITS) -> None
         doc_ref = get_db().collection(COLLECTION).document(user_id)
         snap = doc_ref.get()
         if not snap.exists:
-            doc_ref.set({
-                "user_id": user_id,
-                "credits_balance": amount,
-                "is_premium": False,
-                "is_pro": False,
-                "total_projects": 0,
-                "total_duration_processed": 0.0,
-                "export_count": 0,
-                "ai_runs": 0,
-                "created_at": datetime.now(timezone.utc),
-                "updated_at": datetime.now(timezone.utc),
-            })
+            doc_ref.set(
+                {
+                    "user_id": user_id,
+                    "credits_balance": amount,
+                    "is_premium": False,
+                    "is_pro": False,
+                    "total_projects": 0,
+                    "total_duration_processed": 0.0,
+                    "export_count": 0,
+                    "ai_runs": 0,
+                    "created_at": datetime.now(timezone.utc),
+                    "updated_at": datetime.now(timezone.utc),
+                }
+            )
 
     await asyncio.to_thread(_do)
 

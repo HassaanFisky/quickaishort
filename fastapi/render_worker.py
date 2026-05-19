@@ -457,6 +457,7 @@ if __name__ == "__main__":
     # Sync clients (Firestore + GCS) are not bound to any event loop —
     # initialize once here and reuse across all RQ jobs.
     from services.db import init_db_sync
+
     init_db_sync()
     logger.info("gcp_clients_initialized")
 

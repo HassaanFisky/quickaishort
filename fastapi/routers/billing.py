@@ -105,11 +105,13 @@ async def _mark_event_processed(event_id: str, event_type: str) -> None:
         return
 
     def _do():
-        get_db().collection(PADDLE_WEBHOOK_EVENTS_COLLECTION).document(event_id).set({
-            "event_id": event_id,
-            "event_type": event_type,
-            "processed_at": datetime.now(timezone.utc),
-        })
+        get_db().collection(PADDLE_WEBHOOK_EVENTS_COLLECTION).document(event_id).set(
+            {
+                "event_id": event_id,
+                "event_type": event_type,
+                "processed_at": datetime.now(timezone.utc),
+            }
+        )
 
     await asyncio.to_thread(_do)
 
@@ -137,32 +139,40 @@ async def _grant_pro(user_id: str, subscription_id: str) -> None:
         if snap.exists:
             data = snap.to_dict() or {}
             new_balance = data.get("credits_balance", 0) + PRO_MONTHLY_CREDITS
-            stats_ref.update({
-                "is_pro": True,
-                "is_premium": True,
-                "paddle_subscription_id": subscription_id,
-                "credits_balance": new_balance,
-                "updated_at": datetime.now(timezone.utc),
-            })
+            stats_ref.update(
+                {
+                    "is_pro": True,
+                    "is_premium": True,
+                    "paddle_subscription_id": subscription_id,
+                    "credits_balance": new_balance,
+                    "updated_at": datetime.now(timezone.utc),
+                }
+            )
         else:
-            stats_ref.set({
-                "user_id": user_id,
-                "is_pro": True,
-                "is_premium": True,
-                "paddle_subscription_id": subscription_id,
-                "credits_balance": PRO_MONTHLY_CREDITS,
-                "total_projects": 0,
-                "total_duration_processed": 0.0,
-                "export_count": 0,
-                "ai_runs": 0,
-                "created_at": datetime.now(timezone.utc),
-                "updated_at": datetime.now(timezone.utc),
-            })
+            stats_ref.set(
+                {
+                    "user_id": user_id,
+                    "is_pro": True,
+                    "is_premium": True,
+                    "paddle_subscription_id": subscription_id,
+                    "credits_balance": PRO_MONTHLY_CREDITS,
+                    "total_projects": 0,
+                    "total_duration_processed": 0.0,
+                    "export_count": 0,
+                    "ai_runs": 0,
+                    "created_at": datetime.now(timezone.utc),
+                    "updated_at": datetime.now(timezone.utc),
+                }
+            )
 
         # Sync billing flags to users collection for frontend session reads.
         try:
             db.collection("users").document(user_id).set(
-                {"isPro": True, "isPremium": True, "updatedAt": datetime.now(timezone.utc)},
+                {
+                    "isPro": True,
+                    "isPremium": True,
+                    "updatedAt": datetime.now(timezone.utc),
+                },
                 merge=True,
             )
         except Exception as exc:
@@ -191,16 +201,22 @@ async def _revoke_pro(user_id: str, subscription_id: str) -> None:
         stats_ref = db.collection("UserStats").document(user_id)
         snap = stats_ref.get()
         if snap.exists:
-            stats_ref.update({
-                "is_pro": False,
-                "is_premium": False,
-                "paddle_subscription_id": None,
-                "updated_at": datetime.now(timezone.utc),
-            })
+            stats_ref.update(
+                {
+                    "is_pro": False,
+                    "is_premium": False,
+                    "paddle_subscription_id": None,
+                    "updated_at": datetime.now(timezone.utc),
+                }
+            )
 
         try:
             db.collection("users").document(user_id).set(
-                {"isPro": False, "isPremium": False, "updatedAt": datetime.now(timezone.utc)},
+                {
+                    "isPro": False,
+                    "isPremium": False,
+                    "updatedAt": datetime.now(timezone.utc),
+                },
                 merge=True,
             )
         except Exception as exc:

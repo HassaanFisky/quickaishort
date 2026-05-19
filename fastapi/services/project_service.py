@@ -79,7 +79,12 @@ class ProjectService:
         def _do():
             snaps = self._col().where("user_id", "==", user_id).stream()
             docs = [s.to_dict() for s in snaps]
-            docs.sort(key=lambda d: d.get("updated_at", datetime.min.replace(tzinfo=timezone.utc)), reverse=True)
+            docs.sort(
+                key=lambda d: d.get(
+                    "updated_at", datetime.min.replace(tzinfo=timezone.utc)
+                ),
+                reverse=True,
+            )
             return docs[:100]
 
         docs = await asyncio.to_thread(_do)

@@ -1,0 +1,30 @@
+{
+	"folders": [
+		{
+			"name": "QuickAI Studio Core",
+			"path": "."
+		},
+		{
+			"name": "Global NPM Context",
+			"path": "../npm-global"
+		}
+	],
+	"settings": {
+		"powershell.cwd": "QuickAI Short orignal",
+		"editor.formatOnSave": true,
+		"editor.tabSize": 2,
+		"editor.insertSpaces": true,
+		"files.exclude": {
+			"**/.git": true,
+			"**/.next": true,
+			"**/node_modules": false,
+			"**/*.tsbuildinfo": true
+		},
+		"search.exclude": {
+			"**/node_modules": true,
+			"**/.next": true,
+			"**/dist": true,
+			"**/*.tsbuildinfo": true
+		}
+	}
+}
