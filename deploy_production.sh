@@ -1,6 +1,9 @@
 #!/bin/bash
 # Production Deployment Script for QuickAI Shorts
 set -e
+# On Windows/Git Bash, MSYS mangles Unix paths in --probe flags (e.g. /health → C:/Program Files/Git/health).
+# Workaround: exclude the probe flag patterns from MSYS path conversion.
+export MSYS2_ARG_CONV_EXCL="--liveness-probe=*:--startup-probe=*"
 
 PROJECT_ID="quickaishort-agent-494304"
 REGION="us-central1"
@@ -29,15 +32,16 @@ gcloud run deploy quickai-api \
     --cpu 2 \
     --concurrency 80 \
     --timeout 300 \
-    --liveness-probe=httpGet.path=/health \
-    --startup-probe=httpGet.path=/ready \
+    "--liveness-probe=httpGet.path=/health,timeoutSeconds=5,failureThreshold=3,periodSeconds=30" \
+    "--startup-probe=httpGet.path=/health,timeoutSeconds=10,failureThreshold=30,periodSeconds=10" \
     --project ${PROJECT_ID} \
     --update-env-vars \
 ENVIRONMENT=production,\
+WEB_CONCURRENCY=2,\
 GCS_BUCKET_NAME=${BUCKET_NAME},\
 GOOGLE_CLOUD_PROJECT=${PROJECT_ID},\
 PUBLIC_API_URL=https://quickai-api-y2cgnbsbxa-uc.a.run.app,\
-LOG_LEVEL=info
+LOG_LEVEL=INFO
 
 # 3. Deploy Render Worker
 echo "Deploying Worker Service..."
@@ -59,7 +63,7 @@ ENVIRONMENT=production,\
 GCS_BUCKET_NAME=${BUCKET_NAME},\
 GOOGLE_CLOUD_PROJECT=${PROJECT_ID},\
 PUBLIC_API_URL=https://quickai-api-y2cgnbsbxa-uc.a.run.app,\
-LOG_LEVEL=info
+LOG_LEVEL=INFO
 
 echo "✅ Deployment Complete."
 echo "Web API: $(gcloud run services describe quickai-api --region ${REGION} --project ${PROJECT_ID} --format='value(status.url)')"
