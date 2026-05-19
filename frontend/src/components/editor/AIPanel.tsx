@@ -150,16 +150,22 @@ export function AIPanel() {
         >
           <div className="ai-panel-header">
             <div className="ai-header-left">
-              <span className="ai-gem-icon">✦</span>
-              <span className="ai-panel-title">Gemini Editor</span>
+              <div className="ai-header-gem">✦</div>
+              <div className="ai-header-info">
+                <span className="ai-panel-brand">QuickAI Short</span>
+                <span className="ai-panel-title">Gemini Editor</span>
+              </div>
             </div>
-            <button
-              className="ai-close-btn"
-              onClick={() => setAIPanelOpen(false)}
-              aria-label="Close AI panel"
-            >
-              ✕
-            </button>
+            <div className="ai-header-right">
+              <span className="ai-header-model">2.5 Flash</span>
+              <button
+                className="ai-close-btn"
+                onClick={() => setAIPanelOpen(false)}
+                aria-label="Close AI panel"
+              >
+                ✕
+              </button>
+            </div>
           </div>
 
           {suggestions.length > 0 && (

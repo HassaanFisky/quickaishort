@@ -136,10 +136,14 @@ export function VideoEditorPage({ videoUrl, videoTitle }: VideoEditorPageProps) 
       <button
         className="ai-panel-toggle"
         onClick={() => setAIPanelOpen(!aiPanelOpen)}
-        aria-label="Toggle AI Editor"
+        aria-label="Toggle Gemini AI Editor"
       >
-        <span className="ai-toggle-icon">✦</span>
-        <span className="ai-toggle-label">AI Edit</span>
+        <span className="ai-toggle-gem-wrap">✦</span>
+        <span className="ai-toggle-content">
+          <span className="ai-toggle-brand">QuickAI Short</span>
+          <span className="ai-toggle-label">Gemini Editor</span>
+        </span>
+        {videoMetadata && <span className="ai-toggle-ready-dot" />}
       </button>
 
       <AIPanel />
