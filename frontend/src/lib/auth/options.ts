@@ -43,6 +43,8 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async signIn({ user, account }) {
       if (account?.provider === "google") {
+        // DB persistence is a side-effect — never block or reject a Google-authenticated user.
+        // If MongoDB is unavailable the user still has a valid Google session; log and continue.
         try {
           await connectDB();
           const existingUser = await User.findOne({ email: user.email });
@@ -51,7 +53,8 @@ export const authOptions: NextAuthOptions = {
             await User.create({
               googleId: account.providerAccountId,
               email: user.email,
-              name: user.name,
+              // Google occasionally omits displayName; fall back gracefully.
+              name: user.name || user.email?.split("@")[0] || "User",
               image: user.image,
             });
           } else {
@@ -59,11 +62,12 @@ export const authOptions: NextAuthOptions = {
             existingUser.googleId = account.providerAccountId;
             await existingUser.save();
           }
-          return true;
         } catch (error) {
-          console.error("Error during sign in:", error);
-          return false;
+          // Log the failure for observability but do NOT return false.
+          // Returning false here produces "AccessDenied" for a legitimately authenticated user.
+          console.error("[auth] Google sign-in DB persistence failed:", error);
         }
+        return true;
       }
       return true;
     },
