@@ -23,9 +23,6 @@ from pathlib import Path
 from typing import Literal, Optional, List
 
 import ffmpeg
-import yt_dlp
-import asyncio
-from app.utils.youtube_auth import inject_ydl_bypass
 from services.video_service import VideoService
 from services.storage_service import get_storage_service
 
@@ -459,6 +456,7 @@ class RenderService:
             crf=preset["crf"],
             preset=preset["preset"],
             movflags="+faststart",
+            threads=2,
         ).overwrite_output()
 
         # _run_ffmpeg enforces a hard timeout and raises RuntimeError on failure.
@@ -493,9 +491,6 @@ def render_video(production_plan: dict) -> str:
     Production-grade entry point for rendering a full production plan.
     Downloads, trims, scales, stitches multiple clips, and overlays a voiceover.
     """
-    from yt_dlp import YoutubeDL
-
-    service = RenderService()
     workdir = Path(tempfile.mkdtemp(prefix="qais-render-"))
 
     try:
@@ -538,7 +533,7 @@ def render_video(production_plan: dict) -> str:
                 )
             elif clip_source.startswith("gridfs://"):
                 # Handle GridFS URIs (used for ADK uploads)
-                remote_path = clip_source[len("gridfs://") :]
+                remote_path = clip_source[len("gridfs://") :]  # noqa: E203
                 local_source = workdir / f"gridfs_src_{i}.mp4"
                 storage = get_storage_service()
 
@@ -548,7 +543,7 @@ def render_video(production_plan: dict) -> str:
                 )
 
                 success = storage.download_file(
-                    remote_path, local_source, bucket_name=bucket
+                    remote_path, local_source, _bucket_name=bucket
                 )
                 if not success:
                     logger.error(
@@ -717,10 +712,10 @@ def render_video(production_plan: dict) -> str:
         if voiceover_path:
             local_vo = voiceover_path
             if voiceover_path.startswith("gridfs://"):
-                remote_vo = voiceover_path[len("gridfs://") :]
+                remote_vo = voiceover_path[len("gridfs://") :]  # noqa: E203
                 local_vo = str(workdir / "voiceover.mp3")
                 get_storage_service().download_file(
-                    remote_vo, Path(local_vo), bucket_name="uploads"
+                    remote_vo, Path(local_vo), _bucket_name="uploads"
                 )
 
             if os.path.exists(local_vo):
@@ -744,6 +739,7 @@ def render_video(production_plan: dict) -> str:
                 crf=21,
                 preset="medium",
                 movflags="faststart",
+                threads=2,
             ).overwrite_output(),
             timeout=_FFMPEG_FINAL_TIMEOUT,
         )

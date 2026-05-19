@@ -8,7 +8,6 @@ from typing import Optional, Literal
 
 import httpx
 from services.storage_service import get_storage_service
-from services.db import is_ready
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +37,7 @@ class TTSService:
         remote_path = self._get_cache_key(text, voice_id, provider)
 
         # Check GridFS cache
-        if await self.storage.exists_async(remote_path, bucket_name="uploads"):
+        if await self.storage.exists_async(remote_path, _bucket_name="uploads"):
             logger.info(f"[TTS] Cache hit in GridFS for {voice_id}")
             return f"gridfs://{remote_path}"
 
@@ -58,7 +57,7 @@ class TTSService:
                     tmp_path,
                     remote_path,
                     content_type="audio/mpeg",
-                    bucket_name="uploads",
+                    _bucket_name="uploads",
                 )
                 return gridfs_uri
             return None

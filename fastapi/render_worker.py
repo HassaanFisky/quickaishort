@@ -1,10 +1,40 @@
-import os, sys
+import asyncio
+import http.server
+import os
+import shutil
+import signal
+import socketserver
+import sys
+import tempfile
+import threading
+import time
 from pathlib import Path
+from typing import Optional
 
 # Ensure the current directory is in sys.path for reliable module resolution
 current_dir = os.path.dirname(os.path.abspath(__file__))
 if current_dir not in sys.path:
     sys.path.insert(0, current_dir)
+
+from rq import Worker  # noqa: E402
+from services.queue_service import redis_conn, render_queue  # noqa: E402
+from services.logging import get_logger, log_workload, log_metric  # noqa: E402
+from services.storage_service import get_storage_service  # noqa: E402
+from services.events import (  # noqa: E402
+    CHANNEL_EXPORT_COMPLETE,
+    CHANNEL_EXPORT_FAILED,
+    CHANNEL_STATS_INCREMENT,
+    publish,
+)
+from services.render_service import (  # noqa: E402
+    CanvasOverlay,
+    CaptionsConfig,
+    Reframing,
+    RenderJob,
+    RenderService,
+    WatermarkConfig,
+)
+from services.job_persistence import persist_failed_job  # noqa: E402
 
 
 def validate_env():
@@ -22,37 +52,6 @@ def validate_env():
             )
             sys.exit(1)
 
-
-import time
-import signal
-import tempfile
-import threading
-import http.server
-import socketserver
-import shutil
-import asyncio
-from pathlib import Path
-from typing import Optional
-
-from rq import Worker
-from services.queue_service import redis_conn, render_queue
-from services.logging import get_logger, log_workload, log_metric
-from services.storage_service import get_storage_service
-from services.events import (
-    CHANNEL_EXPORT_COMPLETE,
-    CHANNEL_EXPORT_FAILED,
-    CHANNEL_STATS_INCREMENT,
-    publish,
-)
-from services.render_service import (
-    CanvasOverlay,
-    CaptionsConfig,
-    Reframing,
-    RenderJob,
-    RenderService,
-    WatermarkConfig,
-)
-from services.job_persistence import persist_failed_job
 
 logger = get_logger("render_worker")
 
@@ -337,8 +336,8 @@ async def _async_process_render_task(
 
             progress("Starting production render...", 5)
             # render_video is sync because it calls ffmpeg.run() which is blocking
-            # This is fine; we are in a worker thread/process.
-            result_path = Path(render_video(production_plan))
+            # We wrap it in to_thread so it doesn't starve the async event loop (which could drop Redis async keepalives).
+            result_path = Path(await asyncio.to_thread(render_video, production_plan))
             duration_sec = sum(
                 (float(s.get("end_sec", 0)) - float(s.get("start_sec", 0)))
                 for s in production_plan.get("segments", [])
