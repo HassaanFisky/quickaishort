@@ -555,11 +555,17 @@ def readiness_check():
     Returns 503 when every extractor circuit is OPEN (no tier can serve
     requests). The load balancer stops routing traffic to this instance
     until the circuits recover and /ready returns 200 again.
-    """
-    from services.extractor_service import get_extractor_service
 
-    svc = get_extractor_service()
-    if not svc.is_ready():
+    Intentionally does NOT trigger lazy initialization — probing must never
+    block on Redis or other I/O with sub-second probe timeouts.
+    """
+    import services.extractor_service as _ext_mod
+
+    instance = _ext_mod._service_instance
+    if instance is None:
+        # Not yet initialized — circuits are closed by default, report ready.
+        return {"status": "ready"}
+    if not instance.is_ready():
         raise HTTPException(
             status_code=503,
             detail="All extraction tier circuits are open — not ready to serve",
