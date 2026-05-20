@@ -326,6 +326,10 @@ from app.agents.preflight import router as preflight_router
 
 app.include_router(preflight_router)
 
+from routers.video import router as video_router
+
+app.include_router(video_router)
+
 
 def get_real_ip(request: Request) -> str:
     """

@@ -10,7 +10,7 @@
 		}
 	],
 	"settings": {
-		"powershell.cwd": "QuickAI Short orignal",
+		"powershell.cwd": "QuickAI Studio Core",
 		"editor.formatOnSave": true,
 		"editor.tabSize": 2,
 		"editor.insertSpaces": true,

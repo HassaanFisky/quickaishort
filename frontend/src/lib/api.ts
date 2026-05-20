@@ -6,6 +6,11 @@ import type {
   ExportStatusResponse,
 } from "@/types/export";
 import type { UserStats } from "@/types/stats";
+import type {
+  VideoUploadResponse,
+  VideoTaskStatus,
+  FrameAdjustment,
+} from "@/types/video";
 
 export const API_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -167,5 +172,45 @@ export async function searchStockVideos(q: string): Promise<{ videos: StockClip[
 
 export async function runADKGenerate(payload: ADKGeneratePayload): Promise<ADKGenerateResponse> {
   const { data } = await axios.post<ADKGenerateResponse>(`${API_URL}/api/adk/generate`, payload);
+  return data;
+}
+
+// ---- Video Upload & Processing API -------------------------------------------
+
+export async function uploadVideo(
+  file: File,
+  processVideo: boolean = false,
+  frameAdjustments?: FrameAdjustment,
+): Promise<VideoUploadResponse> {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("process_video", processVideo ? "true" : "false");
+
+  if (frameAdjustments) {
+    form.append("frame_adjustments", JSON.stringify(frameAdjustments));
+  }
+
+  const { data } = await axios.post<VideoUploadResponse>(
+    `${API_URL}/api/v1/video/upload`,
+    form,
+    {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+      timeout: 60_000, // 60s timeout for large file uploads
+    },
+  );
+
+  return data;
+}
+
+export async function getVideoTaskStatus(taskId: string): Promise<VideoTaskStatus> {
+  const { data } = await axios.get<VideoTaskStatus>(
+    `${API_URL}/api/v1/video/task/${taskId}`,
+    {
+      timeout: 10_000,
+    },
+  );
+
   return data;
 }

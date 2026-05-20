@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useDropzone } from "react-dropzone";
 import { Upload, Youtube, FileVideo, CheckCircle2, Loader2 } from "lucide-react";
@@ -61,53 +61,84 @@ export default function AcquirePanel() {
     if (urlValidationError) setUrlValidationError(null);
   };
 
+  const importVideo = useCallback(
+    async (videoUrl: string) => {
+      const cleanUrl = videoUrl.trim();
+      if (!YT_PATTERN.test(cleanUrl)) {
+        setUrlValidationError(
+          "That doesn't look like a YouTube link. Try the full URL from your browser address bar — for example youtube.com/watch?v=... or youtu.be/...",
+        );
+        return;
+      }
+
+      setUrlValidationError(null);
+
+      try {
+        setIsImporting(true);
+        toast.loading("Fetching video metadata...", { id: "import-video" });
+
+        const { getVideoInfo } = await import("@/lib/api");
+        const info = await getVideoInfo(cleanUrl);
+
+        if (info) {
+          // Enforce the strict 30-minute duration limit
+          if (info.duration > 1800) {
+            toast.error("Videos longer than 30 minutes are not supported. Please select a shorter video.", { id: "import-video" });
+            setUrlValidationError("Videos longer than 30 minutes are not supported. Choose a video under 30 minutes.");
+            setIsImporting(false);
+            return;
+          }
+
+          setSourceUrl(cleanUrl); // Store original URL
+
+          // Update store with metadata
+          useEditorStore.setState({
+            duration: info.duration,
+          });
+
+          toast.success("Video imported successfully!", { id: "import-video" });
+          runPipeline();
+        }
+      } catch (err: any) {
+        console.error("Import error:", err);
+        toast.error(err.response?.data?.detail || "Failed to import video", { id: "import-video" });
+      } finally {
+        setIsImporting(false);
+      }
+    },
+    [setSourceUrl, runPipeline]
+  );
+
   const handleUrlSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!url) return;
-
-    if (!urlIsValid) {
-      setUrlValidationError(
-        "That doesn't look like a YouTube link. Try the full URL from your browser address bar — for example youtube.com/watch?v=... or youtu.be/...",
-      );
-      return;
-    }
-
-    setUrlValidationError(null);
-
-    try {
-      setIsImporting(true);
-      toast.loading("Fetching video metadata...", { id: "import-video" });
-
-      const { getVideoInfo } = await import("@/lib/api");
-      const info = await getVideoInfo(url);
-
-      if (info) {
-        // Enforce the strict 30-minute duration limit
-        if (info.duration > 1800) {
-          toast.error("Videos longer than 30 minutes are not supported. Please select a shorter video.", { id: "import-video" });
-          setUrlValidationError("Videos longer than 30 minutes are not supported. Choose a video under 30 minutes.");
-          setIsImporting(false);
-          return;
-        }
-
-        setSourceUrl(url); // Store original URL
-
-        // Update store with metadata
-        useEditorStore.setState({
-          duration: info.duration,
-          // We can't set sourceFile for URLs, but the store handles sourceUrl
-        });
-
-        toast.success("Video imported successfully!", { id: "import-video" });
-        runPipeline();
-      }
-    } catch (err: any) {
-      console.error("Import error:", err);
-      toast.error(err.response?.data?.detail || "Failed to import video", { id: "import-video" });
-    } finally {
-      setIsImporting(false);
-    }
+    await importVideo(url);
   };
+
+  // Flag to avoid duplicate runs in React.StrictMode double-mount
+  const hasAutoLoaded = useRef(false);
+
+  // Auto-load YouTube video if present in query parameters (from Chrome extension)
+  useEffect(() => {
+    if (hasAutoLoaded.current) return;
+
+    const params = new URLSearchParams(window.location.search);
+    const videoId = params.get("v");
+    const queryUrl = params.get("url");
+
+    let targetUrl = "";
+    if (videoId) {
+      targetUrl = `https://www.youtube.com/watch?v=${videoId}`;
+    } else if (queryUrl) {
+      targetUrl = decodeURIComponent(queryUrl);
+    }
+
+    if (targetUrl) {
+      hasAutoLoaded.current = true;
+      setUrl(targetUrl);
+      importVideo(targetUrl);
+    }
+  }, [importVideo]);
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
