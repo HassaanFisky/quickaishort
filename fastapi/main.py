@@ -322,6 +322,10 @@ from routers.youtube import router as youtube_router
 
 app.include_router(youtube_router)
 
+from app.agents.preflight import router as preflight_router
+
+app.include_router(preflight_router)
+
 
 def get_real_ip(request: Request) -> str:
     """
