@@ -4,12 +4,19 @@ import asyncio
 import io
 import logging
 import os
+import time
 from typing import Optional
 
 from celery import Celery, Task
 from celery.exceptions import SoftTimeLimitExceeded
 
 import ffmpeg
+
+from services.observability import (
+    track_celery_task,
+    track_video_processing,
+    capture_ffmpeg_error,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -58,11 +65,41 @@ class CallbackTask(Task):
 celery_app.Task = CallbackTask
 
 
+def _get_filter_type(adjustments: dict) -> str:
+    """Determine the primary filter type from adjustments for metrics.
+
+    Args:
+        adjustments: Frame adjustments dict
+
+    Returns:
+        Filter type string (brightness, blur, composite, or none)
+    """
+    filters_applied = []
+
+    if adjustments.get("brightness", 1.0) != 1.0:
+        filters_applied.append("brightness")
+    if adjustments.get("contrast", 1.0) != 1.0:
+        filters_applied.append("contrast")
+    if adjustments.get("saturation", 1.0) != 1.0:
+        filters_applied.append("saturation")
+    if adjustments.get("hue", 0.0) != 0.0:
+        filters_applied.append("hue")
+    if adjustments.get("blur", 0.0) > 0:
+        filters_applied.append("blur")
+
+    if not filters_applied:
+        return "none"
+    elif len(filters_applied) == 1:
+        return filters_applied[0]
+    else:
+        return "composite"
+
+
 async def _process_video_async(
     input_file_id: str,
     frame_adjustments: Optional[dict] = None,
 ) -> dict:
-    """Async helper for video processing."""
+    """Async helper for video processing with metrics and error tracking."""
     from bson import ObjectId
 
     from services.storage import (
@@ -70,6 +107,9 @@ async def _process_video_async(
         upload_to_gridfs,
         get_file_metadata,
     )
+
+    processing_start_time = time.time()
+    filter_type = _get_filter_type(frame_adjustments or {})
 
     # Validate input file exists
     try:
@@ -93,8 +133,9 @@ async def _process_video_async(
         input_buffer.write(chunk)
     input_buffer.seek(0)
 
-    # Process video with ffmpeg
+    # Process video with ffmpeg and capture errors
     output_buffer = io.BytesIO()
+    stdout = b""
     try:
         if filter_chain:
             stream = ffmpeg.input("pipe:0").filter(filter_chain)
@@ -117,13 +158,43 @@ async def _process_video_async(
         if process.returncode != 0:
             error_msg = stderr.decode() if stderr else "Unknown error"
             logger.error("ffmpeg processing failed: %s", error_msg)
+
+            # Capture classified FFmpeg error to Sentry
+            capture_ffmpeg_error(
+                stderr=error_msg,
+                input_file_id=input_file_id,
+                filter_type=filter_type,
+                extra_context={
+                    "filter_chain": filter_chain,
+                    "frame_adjustments": frame_adjustments or {},
+                },
+            )
+
             raise RuntimeError(f"FFmpeg error: {error_msg[:200]}")
 
         output_buffer.write(stdout)
         output_buffer.seek(0)
 
+    except RuntimeError:
+        # Re-raise FFmpeg errors after logging metrics
+        processing_time = time.time() - processing_start_time
+        track_video_processing(
+            duration_seconds=processing_time,
+            output_size_bytes=0,
+            filter_type=filter_type,
+            status="failure",
+        )
+        raise
+
     except Exception as e:
         logger.error("Video processing failed: %s", e)
+        processing_time = time.time() - processing_start_time
+        track_video_processing(
+            duration_seconds=processing_time,
+            output_size_bytes=0,
+            filter_type=filter_type,
+            status="failure",
+        )
         raise RuntimeError(f"Video processing failed: {str(e)[:100]}") from e
 
     # Upload result to GridFS exports
@@ -141,15 +212,32 @@ async def _process_video_async(
         )
     except Exception as e:
         logger.error("Failed to upload processed video: %s", e)
+        processing_time = time.time() - processing_start_time
+        track_video_processing(
+            duration_seconds=processing_time,
+            output_size_bytes=0,
+            filter_type=filter_type,
+            status="failure",
+        )
         raise RuntimeError(f"Failed to upload result: {str(e)[:100]}") from e
 
+    # Track successful processing metrics
     output_size = len(stdout)
     duration = metadata.get("metadata", {}).get("duration", 0.0)
+    processing_time = time.time() - processing_start_time
+
+    track_video_processing(
+        duration_seconds=processing_time,
+        output_size_bytes=output_size,
+        filter_type=filter_type,
+        status="success",
+    )
 
     logger.info(
-        "Video render completed: output=%s, size=%d bytes",
+        "Video render completed: output=%s, size=%d bytes, duration=%.2fs",
         result_file_id,
         output_size,
+        processing_time,
     )
 
     return {
@@ -158,6 +246,7 @@ async def _process_video_async(
         "output_file_id": result_file_id,
         "duration": duration,
         "output_size": output_size,
+        "processing_time_seconds": processing_time,
     }
 
 
@@ -185,26 +274,54 @@ def process_video_render_task(
             "output_file_id": str,
             "duration": float,
             "output_size": int,
+            "processing_time_seconds": float,
         }
 
     Raises:
         RuntimeError: If video processing fails
     """
+    task_start_time = time.time()
+
     try:
-        return asyncio.run(_process_video_async(input_file_id, frame_adjustments))
+        result = asyncio.run(_process_video_async(input_file_id, frame_adjustments))
+
+        # Track successful task completion
+        task_duration = time.time() - task_start_time
+        track_celery_task(
+            task_name="process_video_render_task",
+            duration_seconds=task_duration,
+            status="success",
+        )
+
+        return result
 
     except SoftTimeLimitExceeded:
+        task_duration = time.time() - task_start_time
+        track_celery_task(
+            task_name="process_video_render_task",
+            duration_seconds=task_duration,
+            status="timeout",
+        )
         logger.warning("Task timeout for input_file_id=%s, retrying", input_file_id)
         raise self.retry(exc=RuntimeError("Task timeout"))
 
     except Exception as e:
+        task_duration = time.time() - task_start_time
+        track_celery_task(
+            task_name="process_video_render_task",
+            duration_seconds=task_duration,
+            status="failure",
+        )
+
         logger.error(
             "Unexpected error in process_video_render_task: %s",
             e,
             exc_info=True,
         )
+
         if self.request.retries < self.max_retries:
             raise self.retry(exc=e)
+
         raise RuntimeError(f"Task failed after {self.max_retries} retries: {str(e)}")
 
 

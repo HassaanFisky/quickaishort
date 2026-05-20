@@ -52,12 +52,17 @@ from pydantic import BaseModel, Field
 
 try:
     from sentry_sdk.integrations.fastapi import FastApiIntegration
+    from services.observability import init_sentry_for_celery
 
     sentry_sdk.init(
         dsn=os.getenv("SENTRY_DSN"),
         integrations=[FastApiIntegration()],
         traces_sample_rate=0.1,
     )
+
+    # Initialize Sentry for Celery worker error tracking
+    init_sentry_for_celery(dsn=os.getenv("SENTRY_DSN"))
+
 except ImportError:
     print("[WARN] sentry_sdk not found, skipping initialization")
 except Exception as _sentry_err:
@@ -567,7 +572,9 @@ def prometheus_metrics():
     """
     Prometheus-compatible metrics endpoint.
 
-    Exposes counters and histograms for:
+    Exposes counters and histograms for extraction, video processing, and Celery:
+
+    Extraction metrics (from extractor_service):
       - extraction_duration_seconds (per tier, per status)
       - tier_failures_total (per tier, per error_class)
       - circuit_open_total (per tier)
@@ -575,21 +582,33 @@ def prometheus_metrics():
       - extraction_exhausted_total
       - extraction_success_total (per tier)
 
+    Video processing metrics (from observability):
+      - celery_task_duration_seconds (per task_name, per status)
+      - celery_task_total (per task_name, per status)
+      - video_processing_duration_seconds (per filter_type, per status)
+      - video_processing_output_bytes (per filter_type)
+      - ffmpeg_errors_total (per error_type, per filter_type)
+
     Scrape interval recommendation: 15s.
     """
-    from services.extractor_service import (
-        METRICS_AVAILABLE,
-        generate_latest,
-        CONTENT_TYPE_LATEST,
-    )
+    from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
     from fastapi.responses import Response
 
-    if not METRICS_AVAILABLE:
+    try:
+        # This will include all registered metrics from both extractor_service and observability
+        metrics_output = generate_latest()
+        return Response(content=metrics_output, media_type=CONTENT_TYPE_LATEST)
+    except ImportError:
         raise HTTPException(
             status_code=501,
             detail="prometheus-client not installed — add it to requirements.txt",
         )
-    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
+    except Exception as e:
+        logger.error("Failed to generate metrics: %s", e)
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to generate metrics",
+        )
 
 
 @app.get("/debug/tiers")
