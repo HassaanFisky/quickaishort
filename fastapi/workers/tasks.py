@@ -21,10 +21,7 @@ from services.observability import (
 logger = logging.getLogger(__name__)
 
 # Celery app configuration
-redis_url = os.environ.get(
-    "REDIS_URL",
-    "redis://localhost:6379/0"
-)
+redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 
 celery_app = Celery(
     "quickaishort_tasks",
@@ -143,8 +140,7 @@ async def _process_video_async(
             stream = ffmpeg.input("pipe:0")
 
         process = (
-            stream
-            .output("pipe:1", format="mp4", vcodec="libx264", acodec="aac")
+            stream.output("pipe:1", format="mp4", vcodec="libx264", acodec="aac")
             .run_async(
                 cmd="ffmpeg",
                 stdin=ffmpeg.subprocess.PIPE,
@@ -346,7 +342,7 @@ def _build_filter_chain(adjustments: dict) -> Optional[str]:
     contrast = adjustments.get("contrast", 1.0)
 
     if brightness != 1.0 or contrast != 1.0:
-        filters.append(f"eq=brightness={brightness-1}:contrast={contrast}")
+        filters.append(f"eq=brightness={brightness - 1}:contrast={contrast}")
 
     saturation = adjustments.get("saturation", 1.0)
     hue = adjustments.get("hue", 0.0)
@@ -356,6 +352,6 @@ def _build_filter_chain(adjustments: dict) -> Optional[str]:
 
     blur = adjustments.get("blur", 0.0)
     if blur > 0:
-        filters.append(f"boxblur=lr={blur/10}:lh={blur/10}")
+        filters.append(f"boxblur=lr={blur / 10}:lh={blur / 10}")
 
     return ",".join(filters) if filters else None
