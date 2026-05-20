@@ -30,7 +30,7 @@ const menuVariants: Variants = {
   hidden: { opacity: 0, y: 6, scale: 0.97 },
   visible: {
     opacity: 1, y: 0, scale: 1,
-    transition: { type: "spring" as const, stiffness: 380, damping: 28 },
+    transition: { type: "spring" as const, stiffness: 260, damping: 28 },
   },
   exit: {
     opacity: 0, y: 4, scale: 0.97,
@@ -94,7 +94,7 @@ export default function Sidebar() {
                   layoutId="sidebar-active"
                   aria-hidden
                   className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r-full bg-gradient-to-b from-primary to-[#ec4899] shadow-[0_0_8px_rgba(168,85,247,0.6)]"
-                  transition={{ type: "spring", stiffness: 400, damping: 32 }}
+                  transition={{ type: "spring", stiffness: 260, damping: 28 }}
                 />
               )}
               <Icon
@@ -137,7 +137,7 @@ export default function Sidebar() {
                 <motion.p
                   initial={{ opacity: 0, scale: 0.85 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  transition={{ type: "spring", stiffness: 380, damping: 28, delay: 0.1 }}
+                  transition={{ type: "spring", stiffness: 260, damping: 28, delay: 0.1 }}
                   className={cn(
                     "text-[10px] truncate font-bold uppercase tracking-widest",
                     session.user.isPro ? "text-primary" : "text-[hsl(var(--fg-subtle))]",

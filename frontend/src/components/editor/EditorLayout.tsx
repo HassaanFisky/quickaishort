@@ -44,9 +44,12 @@ export default function EditorLayout() {
     currentStage,
     sourceUrl,
     setThumbnailUrl: storeThumbnail,
+    aiPanelOpen,
   } = useEditorStore();
   const { runPipeline, cancelPipeline, status } = useMediaPipeline();
-  const { setOpen: setAIPanelOpen, setVideoContext } = useAIPanel();
+  const { isOpen: aiPanelStoreOpen, setOpen: setAIPanelOpen, setVideoContext } = useAIPanel();
+
+  const anyPanelOpen = aiPanelOpen || aiPanelStoreOpen;
 
   const [urlInput, setUrlInput] = useState("");
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
@@ -218,7 +221,11 @@ export default function EditorLayout() {
     <div
       onDrop={handleDrop}
       onDragOver={handleDragOver}
-      className="relative h-screen w-full overflow-hidden bg-background flex flex-col items-center p-6 md:pl-[256px] pb-8 selection:bg-primary/30 font-sans"
+      className={cn(
+        "relative h-screen w-full overflow-hidden bg-background flex flex-col items-center p-6 md:pl-[256px] pb-8 selection:bg-primary/30 font-sans",
+        "transition-[padding-right] duration-[350ms] ease-out",
+        anyPanelOpen ? "pr-[clamp(320px,30vw,420px)]" : "pr-6"
+      )}
     >
       {/* Dynamic Ambient Background */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
