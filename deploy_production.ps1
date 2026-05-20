@@ -1,54 +1,62 @@
-# Windows PowerShell Production Deployment Script for QuickAI Shorts
+# Windows PowerShell Production Deployment Script for QuickAIShort.online
+# Targets: quickaishort-api + quickaishort-worker on Cloud Run
 $ErrorActionPreference = "Stop"
 
-$PROJECT_ID = "quickaishort-agent-494304"
+$PROJECT_ID = "quick-ai-shorts-477012"
 $REGION = "us-central1"
-$REPO_NAME = "quickai-repo"
-$BUCKET_NAME = "qai-exports-$PROJECT_ID"
-$SA_EMAIL = "99900313102-compute@developer.gserviceaccount.com"
+$REPO_NAME = "quickaishort"
+$DOCKER_REGISTRY = "us-central1-docker.pkg.dev"
 $IMAGE_TAG = Get-Date -Format "yyyyMMdd-HHmmss"
-$IMAGE_URI = "$($REGION)-docker.pkg.dev/$($PROJECT_ID)/$($REPO_NAME)/backend:$($IMAGE_TAG)"
+$API_IMAGE_URI = "$DOCKER_REGISTRY/$PROJECT_ID/$REPO_NAME/api:$IMAGE_TAG"
+$WORKER_IMAGE_URI = "$DOCKER_REGISTRY/$PROJECT_ID/$REPO_NAME/worker:$IMAGE_TAG"
 
-Write-Output "🚀 Deploying QuickAI to Production (Windows Native) [Tag: $IMAGE_TAG]..."
+Write-Output "Deploying QuickAIShort.online to Production [Tag: $IMAGE_TAG]..."
 
-# 1. Build & Push
-Write-Output "Building Container Image using Cloud Build..."
-gcloud builds submit --tag $IMAGE_URI fastapi/ --project $PROJECT_ID
+# 1. Build API image
+Write-Output "Building API container image via Cloud Build..."
+gcloud builds submit `
+    --tag $API_IMAGE_URI `
+    --project $PROJECT_ID `
+    fastapi/
 
-# 2. Deploy Web API
-Write-Output "Deploying Web Service to Cloud Run..."
-gcloud run deploy quickai-api `
-    --image $IMAGE_URI `
+# 2. Build Worker image
+Write-Output "Building Worker container image via Cloud Build..."
+gcloud builds submit `
+    --dockerfile fastapi/Dockerfile.worker `
+    --tag $WORKER_IMAGE_URI `
+    --project $PROJECT_ID `
+    fastapi/
+
+# 3. Deploy API to Cloud Run
+Write-Output "Deploying quickaishort-api to Cloud Run..."
+gcloud run deploy quickaishort-api `
+    --image $API_IMAGE_URI `
     --region $REGION `
     --platform managed `
     --allow-unauthenticated `
-    --service-account $SA_EMAIL `
-    --memory 2Gi `
+    --memory 4Gi `
     --cpu 2 `
     --concurrency 80 `
-    --timeout 300 `
-    --liveness-probe=httpGet.path=/health `
-    --startup-probe=httpGet.path=/ready `
+    --timeout 900 `
+    --max-instances 3 `
     --project $PROJECT_ID `
-    --update-env-vars "ENVIRONMENT=production,GCS_BUCKET_NAME=$BUCKET_NAME,GOOGLE_CLOUD_PROJECT=$PROJECT_ID,PUBLIC_API_URL=https://quickai-api-y2cgnbsbxa-uc.a.run.app,LOG_LEVEL=info"
+    --update-env-vars "GOOGLE_CLOUD_PROJECT=$PROJECT_ID,PUBLIC_API_URL=https://quickaishort-api-946316698978.us-central1.run.app,WEB_CONCURRENCY=3,AUTH_DISABLED=false"
 
-# 3. Deploy Render Worker
-Write-Output "Deploying Worker Service to Cloud Run..."
-gcloud run deploy quickai-worker `
-    --image $IMAGE_URI `
+# 4. Deploy Celery Worker to Cloud Run
+Write-Output "Deploying quickaishort-worker to Cloud Run..."
+gcloud run deploy quickaishort-worker `
+    --image $WORKER_IMAGE_URI `
     --region $REGION `
     --platform managed `
     --no-allow-unauthenticated `
-    --service-account $SA_EMAIL `
-    --command python `
-    --args render_worker.py `
-    --memory 8Gi `
-    --cpu 4 `
+    --memory 2Gi `
+    --cpu 2 `
     --concurrency 1 `
-    --timeout 900 `
+    --timeout 600 `
+    --max-instances 3 `
     --project $PROJECT_ID `
-    --update-env-vars "ENVIRONMENT=production,GCS_BUCKET_NAME=$BUCKET_NAME,GOOGLE_CLOUD_PROJECT=$PROJECT_ID,PUBLIC_API_URL=https://quickai-api-y2cgnbsbxa-uc.a.run.app,LOG_LEVEL=info"
+    --update-env-vars "GOOGLE_CLOUD_PROJECT=$PROJECT_ID,WEB_CONCURRENCY=1,AUTH_DISABLED=false"
 
-Write-Output "✅ Deployment Complete."
-$api_url = gcloud run services describe quickai-api --region $REGION --project $PROJECT_ID --format='value(status.url)'
-Write-Output "Web API URL: $api_url"
+Write-Output "Deployment complete."
+$api_url = gcloud run services describe quickaishort-api --region $REGION --project $PROJECT_ID --format='value(status.url)'
+Write-Output "API URL: $api_url"

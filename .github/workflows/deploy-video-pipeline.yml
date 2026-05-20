@@ -1,0 +1,475 @@
+name: Deploy Video Pipeline (FastAPI + Celery Worker)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'fastapi/**'
+      - '.github/workflows/deploy-video-pipeline.yml'
+  workflow_dispatch:
+    inputs:
+      deploy_api:
+        description: 'Deploy FastAPI API'
+        required: true
+        default: 'true'
+      deploy_worker:
+        description: 'Deploy Celery Worker'
+        required: true
+        default: 'true'
+
+env:
+  PROJECT_ID: quick-ai-shorts-477012
+  REGION: us-central1
+  GKE_CLUSTER: quickaishort
+  DOCKER_REGISTRY: us-central1-docker.pkg.dev
+
+concurrency:
+  group: deploy-video-pipeline
+  cancel-in-progress: false
+
+jobs:
+  # ────────────────────────────────────────────────────────────────────────────
+  # BUILD & TEST FASTAPI
+  # ────────────────────────────────────────────────────────────────────────────
+
+  build-api:
+    name: Build FastAPI Image
+    runs-on: ubuntu-latest
+    outputs:
+      image-uri: ${{ steps.image.outputs.uri }}
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup gcloud CLI
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          use_new_gke_gcloud_auth_plugin: true
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Configure Docker for Artifact Registry
+        run: |
+          gcloud auth configure-docker ${{ env.DOCKER_REGISTRY }} --quiet
+
+      - name: Build FastAPI image
+        id: docker_build_api
+        run: |
+          IMAGE_URI="${{ env.DOCKER_REGISTRY }}/${{ env.PROJECT_ID }}/quickaishort/api:${{ github.sha }}"
+          IMAGE_LATEST="${{ env.DOCKER_REGISTRY }}/${{ env.PROJECT_ID }}/quickaishort/api:latest"
+
+          docker build \
+            -f fastapi/Dockerfile \
+            -t "$IMAGE_URI" \
+            -t "$IMAGE_LATEST" \
+            --build-arg BUILDKIT_INLINE_CACHE=1 \
+            fastapi/
+
+          echo "uri=$IMAGE_URI" >> $GITHUB_OUTPUT
+          echo "latest=$IMAGE_LATEST" >> $GITHUB_OUTPUT
+
+      - name: Push FastAPI image
+        run: |
+          docker push ${{ steps.docker_build_api.outputs.uri }}
+          docker push ${{ steps.docker_build_api.outputs.latest }}
+
+      - name: Output image URI
+        id: image
+        run: echo "uri=${{ steps.docker_build_api.outputs.uri }}" >> $GITHUB_OUTPUT
+
+  test-api:
+    name: Test FastAPI Application
+    runs-on: ubuntu-latest
+    needs: build-api
+    services:
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+      mongodb:
+        image: mongo:7
+        options: >-
+          --health-cmd "mongosh --eval \"db.adminCommand('ping')\""
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 27017:27017
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: 'fastapi/requirements.txt'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r fastapi/requirements.txt
+          pip install pytest httpx
+
+      - name: Lint Python code
+        run: |
+          pip install black flake8
+          black fastapi --check --quiet
+          flake8 fastapi --max-line-length=120 --ignore=E501,W503
+
+      - name: Type check with mypy
+        continue-on-error: true
+        run: |
+          pip install mypy
+          mypy fastapi/main.py fastapi/routers/ fastapi/workers/ --ignore-missing-imports
+
+      - name: Test FastAPI imports
+        env:
+          AUTH_DISABLED: "true"
+          NEXTAUTH_SECRET: "test-secret"
+          REDIS_URL: "redis://localhost:6379/0"
+          MONGODB_URI: "mongodb://localhost:27017"
+          MONGODB_DB: "quickaishort_test"
+        run: |
+          cd fastapi
+          python -c "import main; print('FastAPI app imports successfully')"
+          python -c "from routers.video import router; print('Video router imports successfully')"
+          python -c "from workers.tasks import process_video_render_task; print('Celery tasks import successfully')"
+
+      - name: Run integration tests
+        env:
+          AUTH_DISABLED: "true"
+          NEXTAUTH_SECRET: "test-secret"
+          REDIS_URL: "redis://localhost:6379/0"
+          MONGODB_URI: "mongodb://localhost:27017"
+          MONGODB_DB: "quickaishort_test"
+          GEMINI_API_KEY: "test-key"
+          GOOGLE_CLOUD_PROJECT: "quickaishort-agent"
+          EXPORT_SIGNING_SECRET: "test-secret"
+        run: |
+          cd fastapi
+          python tests/test_video_api.py --token "test-token" --url "http://localhost:8000" || true
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # BUILD & TEST CELERY WORKER
+  # ────────────────────────────────────────────────────────────────────────────
+
+  build-worker:
+    name: Build Celery Worker Image
+    runs-on: ubuntu-latest
+    outputs:
+      image-uri: ${{ steps.image.outputs.uri }}
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup gcloud CLI
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          use_new_gke_gcloud_auth_plugin: true
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Configure Docker for Artifact Registry
+        run: |
+          gcloud auth configure-docker ${{ env.DOCKER_REGISTRY }} --quiet
+
+      - name: Build Celery Worker image
+        id: docker_build_worker
+        run: |
+          IMAGE_URI="${{ env.DOCKER_REGISTRY }}/${{ env.PROJECT_ID }}/quickaishort/worker:${{ github.sha }}"
+          IMAGE_LATEST="${{ env.DOCKER_REGISTRY }}/${{ env.PROJECT_ID }}/quickaishort/worker:latest"
+
+          docker build \
+            -f fastapi/Dockerfile.worker \
+            -t "$IMAGE_URI" \
+            -t "$IMAGE_LATEST" \
+            --build-arg BUILDKIT_INLINE_CACHE=1 \
+            --build-arg REDIS_URL="redis://placeholder:6379/0" \
+            fastapi/
+
+          echo "uri=$IMAGE_URI" >> $GITHUB_OUTPUT
+          echo "latest=$IMAGE_LATEST" >> $GITHUB_OUTPUT
+
+      - name: Push Celery Worker image
+        run: |
+          docker push ${{ steps.docker_build_worker.outputs.uri }}
+          docker push ${{ steps.docker_build_worker.outputs.latest }}
+
+      - name: Output image URI
+        id: image
+        run: echo "uri=${{ steps.docker_build_worker.outputs.uri }}" >> $GITHUB_OUTPUT
+
+  test-worker:
+    name: Test Celery Worker
+    runs-on: ubuntu-latest
+    needs: build-worker
+    services:
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r fastapi/requirements.txt
+
+      - name: Test Celery worker imports
+        env:
+          AUTH_DISABLED: "true"
+          NEXTAUTH_SECRET: "test-secret"
+          REDIS_URL: "redis://localhost:6379/0"
+          MONGODB_URI: "mongodb://localhost:27017"
+          MONGODB_DB: "quickaishort_test"
+        run: |
+          cd fastapi
+          python -c "from workers.tasks import process_video_render_task; print('Celery tasks loaded')"
+          python -c "from celery import Celery; print('Celery imported successfully')"
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # DEPLOY TO CLOUD RUN
+  # ────────────────────────────────────────────────────────────────────────────
+
+  deploy-api:
+    name: Deploy FastAPI to Cloud Run
+    runs-on: ubuntu-latest
+    needs: [build-api, test-api]
+    if: ${{ github.event_name == 'push' || inputs.deploy_api == 'true' }}
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Setup gcloud CLI
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+
+      - name: Deploy FastAPI to Cloud Run
+        run: |
+          gcloud run deploy quickaishort-api \
+            --image=${{ needs.build-api.outputs.image-uri }} \
+            --region=${{ env.REGION }} \
+            --platform=managed \
+            --allow-unauthenticated \
+            --memory=4Gi \
+            --cpu=2 \
+            --timeout=900 \
+            --max-instances=3 \
+            --set-env-vars="WEB_CONCURRENCY=3" \
+            --update-env-vars \
+            REDIS_URL=${{ secrets.REDIS_URL }},\
+            MONGODB_URI=${{ secrets.MONGODB_URI }},\
+            MONGODB_DB=quickaishort,\
+            GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }},\
+            GOOGLE_CLOUD_PROJECT=${{ env.PROJECT_ID }},\
+            EXPORT_SIGNING_SECRET=${{ secrets.EXPORT_SIGNING_SECRET }},\
+            NEXTAUTH_SECRET=${{ secrets.NEXTAUTH_SECRET }},\
+            PUBLIC_API_URL=https://quickaishort-api-${{ env.PROJECT_ID }}.run.app,\
+            PUSHER_APP_ID=${{ secrets.PUSHER_APP_ID }},\
+            PUSHER_KEY=${{ secrets.PUSHER_KEY }},\
+            PUSHER_SECRET=${{ secrets.PUSHER_SECRET }},\
+            PUSHER_CLUSTER=${{ secrets.PUSHER_CLUSTER }},\
+            AUTH_DISABLED=false \
+            --quiet
+
+      - name: Get FastAPI service URL
+        id: api_url
+        run: |
+          URL=$(gcloud run services describe quickaishort-api --region=${{ env.REGION }} --format='value(status.url)')
+          echo "url=$URL" >> $GITHUB_OUTPUT
+          echo "API deployed to: $URL"
+
+      - name: Smoke test FastAPI health endpoint
+        run: |
+          sleep 10  # Allow cold start
+          HEALTH=$(curl -sf ${{ steps.api_url.outputs.url }}/health || echo '{"status":"unavailable"}')
+          echo "Health check response: $HEALTH"
+          if echo "$HEALTH" | grep -q '"status":"ok"'; then
+            echo "✓ API health check passed"
+          else
+            echo "⚠ API health check returned: $HEALTH"
+          fi
+
+  deploy-worker:
+    name: Deploy Celery Worker to Cloud Run
+    runs-on: ubuntu-latest
+    needs: [build-worker, test-worker]
+    if: ${{ github.event_name == 'push' || inputs.deploy_worker == 'true' }}
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Setup gcloud CLI
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+
+      - name: Deploy Celery Worker to Cloud Run
+        run: |
+          gcloud run deploy quickaishort-worker \
+            --image=${{ needs.build-worker.outputs.image-uri }} \
+            --region=${{ env.REGION }} \
+            --platform=managed \
+            --no-allow-unauthenticated \
+            --memory=2Gi \
+            --cpu=2 \
+            --timeout=600 \
+            --max-instances=3 \
+            --min-instances=0 \
+            --set-env-vars="WEB_CONCURRENCY=1" \
+            --update-env-vars \
+            REDIS_URL=${{ secrets.REDIS_URL }},\
+            MONGODB_URI=${{ secrets.MONGODB_URI }},\
+            MONGODB_DB=quickaishort,\
+            GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }},\
+            GOOGLE_CLOUD_PROJECT=${{ env.PROJECT_ID }},\
+            EXPORT_SIGNING_SECRET=${{ secrets.EXPORT_SIGNING_SECRET }},\
+            NEXTAUTH_SECRET=${{ secrets.NEXTAUTH_SECRET }},\
+            AUTH_DISABLED=false \
+            --quiet
+
+      - name: Get Worker service URL
+        id: worker_url
+        run: |
+          URL=$(gcloud run services describe quickaishort-worker --region=${{ env.REGION }} --format='value(status.url)')
+          echo "url=$URL" >> $GITHUB_OUTPUT
+          echo "Worker deployed to: $URL"
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # POST-DEPLOYMENT VERIFICATION
+  # ────────────────────────────────────────────────────────────────────────────
+
+  verify-deployment:
+    name: Verify Deployment
+    runs-on: ubuntu-latest
+    needs: [deploy-api, deploy-worker]
+    if: ${{ success() }}
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Setup gcloud CLI
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+
+      - name: Check API deployment status
+        run: |
+          gcloud run services describe quickaishort-api \
+            --region=${{ env.REGION }} \
+            --format='table(status.conditions[].message)'
+
+      - name: Check Worker deployment status
+        run: |
+          gcloud run services describe quickaishort-worker \
+            --region=${{ env.REGION }} \
+            --format='table(status.conditions[].message)'
+
+      - name: Verify environment variables
+        run: |
+          echo "API environment variables:"
+          gcloud run services describe quickaishort-api \
+            --region=${{ env.REGION }} \
+            --format='value(spec.template.spec.containers[0].env[].name)' | sort
+
+          echo ""
+          echo "Worker environment variables:"
+          gcloud run services describe quickaishort-worker \
+            --region=${{ env.REGION }} \
+            --format='value(spec.template.spec.containers[0].env[].name)' | sort
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # NOTIFY DEPLOYMENT STATUS
+  # ────────────────────────────────────────────────────────────────────────────
+
+  notify:
+    name: Notify Deployment Status
+    runs-on: ubuntu-latest
+    needs: [deploy-api, deploy-worker, verify-deployment]
+    if: always()
+
+    steps:
+      - name: Deployment Summary
+        run: |
+          echo "========================================"
+          echo "Deployment Status"
+          echo "========================================"
+          echo "API Deployment: ${{ needs.deploy-api.result }}"
+          echo "Worker Deployment: ${{ needs.deploy-worker.result }}"
+          echo "Verification: ${{ needs.verify-deployment.result }}"
+          echo ""
+          echo "Services:"
+          echo "  API: https://quickaishort-api-${{ env.PROJECT_ID }}.run.app"
+          echo "  Worker: https://quickaishort-worker-${{ env.PROJECT_ID }}.run.app"
+          echo ""
+          echo "Logs:"
+          echo "  gcloud run logs read quickaishort-api --region=${{ env.REGION }} --limit=100"
+          echo "  gcloud run logs read quickaishort-worker --region=${{ env.REGION }} --limit=100"

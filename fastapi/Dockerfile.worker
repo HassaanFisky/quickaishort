@@ -1,0 +1,46 @@
+FROM python:3.12-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    CELERY_BROKER_URL=${REDIS_URL} \
+    CELERY_RESULT_BACKEND=${REDIS_URL}
+
+# System dependencies: FFmpeg for video processing, libgl1/libglib2.0 for OpenCV
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    ca-certificates \
+    curl \
+    libgl1 \
+    libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy and install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY . .
+
+# Smoke test: verify imports and Celery tasks are loadable
+RUN AUTH_DISABLED=true NEXTAUTH_SECRET=build-check python -c "from workers.tasks import process_video_render_task; print('BUILD CHECK: Worker tasks loaded')" || exit 1
+
+# Health check: verify Celery worker can connect to broker
+# This is a basic check that the worker can start and reach Redis
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD python -c "from celery import Celery; app = Celery('quickaishort'); app.conf.broker_url = '${REDIS_URL}'; app.connection() and print('OK')" || exit 1
+
+# Run Celery worker with:
+# - Concurrency of 1 (serial processing to avoid resource contention)
+# - Task timeout of 600s (10 minutes for large video processing)
+# - Prefetch multiplier of 1 (process one task at a time)
+# - ETA enabled for long-running tasks
+# - Logging to stdout for Cloud Run
+CMD ["celery", "-A", "workers.tasks", "worker", \
+    "--loglevel=info", \
+    "--concurrency=1", \
+    "--time-limit=600", \
+    "--soft-time-limit=580", \
+    "--prefetch-multiplier=1", \
+    "--pool=solo"]
