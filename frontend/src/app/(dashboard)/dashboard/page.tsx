@@ -14,12 +14,14 @@ import {
   LayoutGrid,
 } from "lucide-react";
 import { useDashboardStats } from "@/hooks/useDashboardStats";
+import { useAIPanel } from "@/stores/aiPanelStore";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { GlowButton } from "@/components/ui/GlowButton";
 import { CreditsLowBanner } from "@/components/shared/CreditsLowBanner";
 import { InlineError } from "@/components/shared/InlineError";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { AIPanel } from "@/components/ai/AIPanel";
 import { spring } from "@/lib/animations";
 
 const CREDITS_LOW_THRESHOLD = 10;
@@ -62,7 +64,7 @@ function StatCard({
         transition={spring.smooth}
         aria-label={`${label}: ${loading ? "loading" : value}`}
         aria-busy={loading}
-        className="relative group rounded-2xl border border-white/[0.06] bg-[#0c0c10]/80 p-5 overflow-hidden spring-hover"
+        className="relative group rounded-2xl border border-white/[0.06] bg-[hsl(var(--bg-subtle))]/80 p-5 overflow-hidden spring-hover"
       >
         <div className={cn("absolute -top-10 -right-10 w-28 h-28 blur-[70px] opacity-[0.18] rounded-full pointer-events-none", color)} aria-hidden="true" />
 
@@ -102,7 +104,7 @@ function ProjectCard({ project, index }: { project: ProjectRecord; index: number
     >
       <Link
         href={`/editor?project=${project._id}`}
-        className="group block relative rounded-2xl border border-white/[0.06] bg-[#0c0c10]/60 overflow-hidden spring-hover hover:border-primary/20"
+        className="group block relative rounded-2xl border border-white/[0.06] bg-[hsl(var(--bg-subtle))]/60 overflow-hidden spring-hover hover:border-primary/20"
       >
         <div
           className="aspect-video w-full relative overflow-hidden bg-zinc-900"
@@ -172,10 +174,16 @@ export default function DashboardPage() {
   const userId = session?.user?.id ?? session?.user?.email ?? null;
 
   const { stats, isReady, error } = useDashboardStats({ userId });
+  const { isOpen: aiPanelOpen, setOpen: setAIPanelOpen, setVideoContext } = useAIPanel();
 
   const [projects, setProjects] = useState<ProjectRecord[] | null>(null);
   const [projectsError, setProjectsError] = useState(false);
   const [exportCount, setExportCount] = useState<number | null>(null);
+
+  // Dashboard shows the general assistant — clear any video context from the editor
+  useEffect(() => {
+    setVideoContext(null);
+  }, [setVideoContext]);
 
   useEffect(() => {
     let cancelled = false;
@@ -215,7 +223,7 @@ export default function DashboardPage() {
   const projectsLoading = projects === null;
 
   return (
-    <div className="max-w-7xl mx-auto space-y-12 py-8 px-4">
+    <div className="max-w-7xl mx-auto space-y-12 py-8 px-4 relative">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="space-y-1">
@@ -326,6 +334,26 @@ export default function DashboardPage() {
           </div>
         )}
       </div>
+
+      {/* Floating AI assistant button — bottom-right */}
+      {!aiPanelOpen && (
+        <motion.button
+          initial={{ scale: 0, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ delay: 0.5, type: "spring", stiffness: 260, damping: 20 }}
+          onClick={() => setAIPanelOpen(true)}
+          title="Open AI Assistant"
+          className="fixed bottom-8 right-8 z-30 h-12 w-12 rounded-2xl
+                     bg-[hsl(var(--accent-indigo))] text-[hsl(var(--accent-fg))]
+                     flex items-center justify-center shadow-2xl
+                     hover:bg-[hsl(var(--accent-hover))] transition-colors"
+        >
+          <Sparkles size={18} />
+        </motion.button>
+      )}
+
+      {/* General-purpose AI assistant panel */}
+      <AIPanel />
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useEditorStore } from "@/stores/editorStore";
 import { useMediaPipeline } from "@/hooks/useMediaPipeline";
+import { useAIPanel } from "@/stores/aiPanelStore";
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import type { DragEvent, ChangeEvent, KeyboardEvent } from "react";
 import { AnimatePresence, motion } from "framer-motion";
@@ -15,63 +16,68 @@ import {
   CheckCircle2,
   X,
   AlertCircle,
+  Upload,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { getVideoInfo, getProxyUrl } from "@/lib/api";
+import { parseYouTubeId } from "@/lib/youtube-utils";
 
 // Components
 import LeftPanel from "./LeftPanel";
 import RightPanel from "./RightPanel";
 import BottomDock from "./BottomDock";
 import VideoCanvas from "./VideoCanvas";
+import { YouTubePlayer } from "./YouTubePlayer";
 import Sidebar from "@/components/layout/Sidebar";
 import { TimelineLoader } from "@/components/ui/TimelineLoader";
 import { LiquidThemeToggle } from "@/components/shared/LiquidThemeToggle";
+import { AIPanel } from "@/components/ai/AIPanel";
 import axios from "axios";
 
-// YouTube URL regex — accepts watch, shorts, live, embed, and youtu.be short links
-const YT_REGEX =
-  /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/|v\/|live\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
-
-function extractYouTubeId(url: string): string | null {
-  const match = url.match(YT_REGEX);
-  return match ? match[1] : null;
-}
-
-/** Resolves a YouTube video ID to its best-quality thumbnail URL. */
-function getYTThumbnail(videoId: string): string {
-  return `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
-}
-
 export default function EditorLayout() {
-  const { setSourceFile, setSourceUrl, setProcessing, isProcessing, currentStage, sourceUrl, setThumbnailUrl: storeThumbnail } =
-    useEditorStore();
+  const {
+    setSourceFile,
+    setSourceUrl,
+    setProcessing,
+    isProcessing,
+    currentStage,
+    sourceUrl,
+    setThumbnailUrl: storeThumbnail,
+  } = useEditorStore();
   const { runPipeline, cancelPipeline, status } = useMediaPipeline();
+  const { setOpen: setAIPanelOpen, setVideoContext } = useAIPanel();
+
   const [urlInput, setUrlInput] = useState("");
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
-  const [urlValid, setUrlValid] = useState<boolean | null>(null); // null = no input, true = valid, false = invalid
+  const [urlValid, setUrlValid] = useState<boolean | null>(null);
+  const [youtubePreviewId, setYoutubePreviewId] = useState<string | null>(null);
+  const [backendFailed, setBackendFailed] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isAnalysing = (
     ["analyzing", "loading", "transcribing"] as string[]
   ).includes(status || "");
 
-  // Validate URL on every keystroke and update thumbnail preview
   const handleUrlChange = (e: ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setUrlInput(val);
+    setBackendFailed(false);
     if (!val.trim()) {
       setUrlValid(null);
       setThumbnailUrl(null);
+      setYoutubePreviewId(null);
       return;
     }
-    const videoId = extractYouTubeId(val);
+    const videoId = parseYouTubeId(val);
     if (videoId) {
       setUrlValid(true);
-      setThumbnailUrl(getYTThumbnail(videoId));
+      setThumbnailUrl(`https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`);
+      setYoutubePreviewId(videoId);
     } else {
       setUrlValid(false);
       setThumbnailUrl(null);
+      setYoutubePreviewId(null);
     }
   };
 
@@ -83,34 +89,81 @@ export default function EditorLayout() {
       return;
     }
 
+    // Immediately show YouTube preview before backend responds
+    const videoId = parseYouTubeId(url);
+    if (videoId) {
+      setYoutubePreviewId(videoId);
+      setBackendFailed(false);
+    }
+
     try {
       setProcessing(true, "loading");
       toast.info("Connecting to Viral Intelligence Engine...");
 
       const info = await getVideoInfo(url);
 
-      toast.success(`Found: ${info.title}`);
+      // Structured error returned by backend when yt-dlp also failed
+      if (info.code === "YOUTUBE_FETCH_FAILED") {
+        toast.warning(
+          "YouTube server-side access failed. The preview is still playing above. For AI analysis, upload the MP4 file instead.",
+          { duration: 7000 }
+        );
+        setBackendFailed(true);
+        setProcessing(false, "idle");
+        return;
+      }
 
+      toast.success(`Found: ${info.title}`);
       if (info.thumbnail) storeThumbnail(info.thumbnail);
 
-      // Use the API helper to build the proxy URL — avoids duplicating the URL format
+      // Set initial video context for AI panel (transcript added after pipeline)
+      setVideoContext({
+        id: info.id ?? videoId ?? "",
+        title: info.title ?? "YouTube Video",
+        transcript: "",
+      });
+
       setSourceUrl(getProxyUrl(url));
       await runPipeline();
-    } catch (error: any) {
+
+      // Update AI panel with transcript once pipeline completes
+      const { transcript } = useEditorStore.getState();
+      if (transcript) {
+        const transcriptText = transcript.chunks
+          .map((c) => c.text)
+          .join(" ")
+          .slice(0, 3000);
+        setVideoContext({
+          id: info.id ?? videoId ?? "",
+          title: info.title ?? "YouTube Video",
+          transcript: transcriptText,
+        });
+      }
+    } catch (error: unknown) {
       console.error(error);
+
+      // Keep YouTube preview visible on any backend failure
+      setBackendFailed(true);
 
       let errMsg = "Process interrupted. Please try another link.";
       if (axios.isAxiosError(error)) {
         if (error.code === "ERR_NETWORK") {
           errMsg =
             "Network Error: Could not connect to the backend server. Check your connection.";
+        } else if (error.response?.data?.code === "YOUTUBE_FETCH_FAILED") {
+          toast.warning(
+            "YouTube server-side access failed. The preview is still playing above. For AI analysis, upload the MP4 file instead.",
+            { duration: 7000 }
+          );
+          setProcessing(false, "idle");
+          return;
         } else if (error.response) {
           errMsg =
-            error.response.data?.detail ||
+            (error.response.data as { detail?: string })?.detail ||
             `Server returned error ${error.response.status}`;
         }
-      } else {
-        errMsg = error?.message || errMsg;
+      } else if (error instanceof Error) {
+        errMsg = error.message || errMsg;
       }
 
       toast.error(`Error: ${errMsg}`);
@@ -123,6 +176,23 @@ export default function EditorLayout() {
     setProcessing(false, "idle");
     toast.info("Processing cancelled.");
   };
+
+  const handleFileUpload = useCallback(
+    (e: ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      if (!file.type.startsWith("video/")) {
+        toast.error("Please select a video file.");
+        return;
+      }
+      const url = URL.createObjectURL(file);
+      setSourceFile(file, url);
+      setBackendFailed(false);
+      setYoutubePreviewId(null);
+      runPipeline();
+    },
+    [setSourceFile, runPipeline]
+  );
 
   const handleDrop = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -159,6 +229,15 @@ export default function EditorLayout() {
 
       <Sidebar />
 
+      {/* Hidden file input for MP4 upload fallback */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="video/*"
+        className="hidden"
+        onChange={handleFileUpload}
+      />
+
       {/* Main Workspace Container */}
       <div className="relative z-10 w-full h-full flex flex-col gap-6 max-w-[1920px] mx-auto transition-all duration-1000 ease-fluid">
 
@@ -190,7 +269,18 @@ export default function EditorLayout() {
               QuickAI <span className="premium-gradient-text italic">Studio</span>
             </h1>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
+            {/* AI Panel toggle */}
+            <button
+              onClick={() => setAIPanelOpen(true)}
+              title="Open AI Assistant"
+              className="h-9 w-9 rounded-lg flex items-center justify-center
+                         bg-[hsl(var(--bg-elevated))] border border-[hsl(var(--border))]
+                         hover:bg-[hsl(var(--bg-muted))] transition-colors
+                         text-[hsl(var(--fg-muted))] hover:text-[hsl(var(--accent-indigo))]"
+            >
+              <Sparkles size={15} />
+            </button>
             <LiquidThemeToggle />
           </div>
         </header>
@@ -229,13 +319,14 @@ export default function EditorLayout() {
                   <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
 
                   <div className="text-[9px] font-black text-center uppercase tracking-[0.25em] pt-2 pb-1 transition-colors duration-300">
-                    {urlValid === true
-                      ? <span className="text-emerald-400">Video Ready — Hit Generate</span>
-                      : <span className="text-primary/50">Import Your Video</span>
-                    }
+                    {urlValid === true ? (
+                      <span className="text-emerald-400">Video Ready — Hit Generate</span>
+                    ) : (
+                      <span className="text-primary/50">Import Your Video</span>
+                    )}
                   </div>
 
-                  {/* Thumbnail preview strip — only shown when URL is valid */}
+                  {/* Thumbnail preview strip */}
                   <AnimatePresence>
                     {thumbnailUrl && urlValid && (
                       <motion.div
@@ -264,18 +355,20 @@ export default function EditorLayout() {
                   </AnimatePresence>
 
                   <div className="flex items-center gap-2 p-1.5">
-                    {/* Neon rotating border URL input */}
+                    {/* URL input */}
                     <div className="neon-url-container flex-1">
                       <div className="neon-url-spin-layer" aria-hidden="true" />
                       <div className="neon-url-glow-layer" aria-hidden="true" />
-                      <div className={cn(
-                        "neon-url-inner flex items-center transition-all duration-300",
-                        urlValid === true
-                          ? "ring-1 ring-emerald-500/30"
-                          : urlValid === false
-                          ? "ring-1 ring-destructive/30"
-                          : "",
-                      )}>
+                      <div
+                        className={cn(
+                          "neon-url-inner flex items-center transition-all duration-300",
+                          urlValid === true
+                            ? "ring-1 ring-emerald-500/30"
+                            : urlValid === false
+                            ? "ring-1 ring-destructive/30"
+                            : "",
+                        )}
+                      >
                         <span className="pl-3.5 flex-shrink-0">
                           {urlValid === true ? (
                             <CheckCircle2 className="w-4 h-4 text-emerald-400 transition-colors" />
@@ -339,6 +432,26 @@ export default function EditorLayout() {
                       </motion.p>
                     )}
                   </AnimatePresence>
+
+                  {/* Upload MP4 fallback — shown when backend fails */}
+                  <AnimatePresence>
+                    {backendFailed && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="px-4 pb-2 flex items-center gap-2"
+                      >
+                        <button
+                          onClick={() => fileInputRef.current?.click()}
+                          className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-amber-400 hover:text-amber-300 transition-colors"
+                        >
+                          <Upload className="w-3 h-3" />
+                          Upload MP4 instead
+                        </button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
               </motion.div>
             </div>
@@ -353,26 +466,63 @@ export default function EditorLayout() {
               <AnimatePresence mode="wait">
                 {isAnalysing ? (
                   <motion.div
-                    key="timeline-loader"
+                    key="stage-analysing"
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 1.05 }}
                     transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-                    className="absolute inset-0 z-10 bg-background flex items-center justify-center"
+                    className="absolute inset-0 z-10 flex items-center justify-center"
                   >
-                    <TimelineLoader
-                      phases={
-                        currentStage === "transcribing"
-                          ? ["Transcribing...", "Captioning...", "Building subtitles..."]
-                          : currentStage === "analyzing"
-                          ? ["Analyzing...", "Scoring virality...", "Finding hooks..."]
-                          : ["Downloading...", "Preparing...", "Extracting..."]
-                      }
+                    {youtubePreviewId ? (
+                      /* YouTube preview visible behind analysis overlay */
+                      <div className="relative w-full h-full flex items-center justify-center p-16">
+                        <YouTubePlayer
+                          videoId={youtubePreviewId}
+                          className="max-w-lg w-full"
+                        />
+                        <div className="absolute inset-0 bg-background/60 backdrop-blur-sm flex items-center justify-center">
+                          <TimelineLoader
+                            phases={
+                              currentStage === "transcribing"
+                                ? ["Transcribing...", "Captioning...", "Building subtitles..."]
+                                : currentStage === "analyzing"
+                                ? ["Analyzing...", "Scoring virality...", "Finding hooks..."]
+                                : ["Downloading...", "Preparing...", "Extracting..."]
+                            }
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bg-background w-full h-full flex items-center justify-center">
+                        <TimelineLoader
+                          phases={
+                            currentStage === "transcribing"
+                              ? ["Transcribing...", "Captioning...", "Building subtitles..."]
+                              : currentStage === "analyzing"
+                              ? ["Analyzing...", "Scoring virality...", "Finding hooks..."]
+                              : ["Downloading...", "Preparing...", "Extracting..."]
+                          }
+                        />
+                      </div>
+                    )}
+                  </motion.div>
+                ) : youtubePreviewId && !sourceUrl ? (
+                  /* Immediate YouTube preview — before or after failed backend */
+                  <motion.div
+                    key="stage-youtube-preview"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="w-full h-full flex items-center justify-center p-16"
+                  >
+                    <YouTubePlayer
+                      videoId={youtubePreviewId}
+                      className="max-w-lg w-full"
                     />
                   </motion.div>
                 ) : (
                   <motion.div
-                    key="canvas"
+                    key="stage-canvas"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
@@ -383,7 +533,7 @@ export default function EditorLayout() {
                 )}
               </AnimatePresence>
 
-              {/* Contextual HUD Overlay — only when a video is actually loaded */}
+              {/* Contextual HUD Overlay */}
               {!isAnalysing && sourceUrl && (
                 <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-6 px-8 py-4 glass-surface rounded-2xl border-foreground/10 opacity-0 group-hover:opacity-100 translate-y-4 group-hover:translate-y-0 transition-all duration-500 shadow-2xl">
                   <div className="flex items-center gap-2 border-r border-foreground/10 pr-6">
@@ -420,6 +570,9 @@ export default function EditorLayout() {
       <div className="fixed right-10 top-1/2 -translate-y-1/2 flex flex-col gap-5 z-40 hidden 2xl:flex">
         <FloatingControls />
       </div>
+
+      {/* Context-aware AI Panel */}
+      <AIPanel />
     </div>
   );
 }
@@ -428,7 +581,7 @@ function FloatingControls() {
   const { exportSettings, setExportSetting } = useEditorStore();
 
   const ASPECT_CYCLE = ["9:16", "16:9", "1:1"] as const;
-  type AspectOption = typeof ASPECT_CYCLE[number];
+  type AspectOption = (typeof ASPECT_CYCLE)[number];
 
   const cycleAspectRatio = () => {
     const idx = ASPECT_CYCLE.indexOf(exportSettings.aspectRatio as AspectOption);

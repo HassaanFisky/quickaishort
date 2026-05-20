@@ -39,7 +39,7 @@ export default function Navbar() {
           "w-full max-w-6xl h-14 px-5 flex items-center justify-between rounded-2xl",
           "transition-[background-color,border-color,box-shadow,transform] duration-[280ms] ease-[cubic-bezier(0.22,1,0.36,1)]",
           isScrolled
-            ? "bg-[#08080a]/80 backdrop-blur-2xl border border-white/[0.07] shadow-[0_8px_32px_-8px_rgba(0,0,0,0.5)] scale-[0.99]"
+            ? "bg-[hsl(var(--bg-base))]/80 backdrop-blur-2xl border border-white/[0.07] shadow-[0_8px_32px_-8px_rgba(0,0,0,0.5)] scale-[0.99]"
             : "bg-transparent border border-transparent",
         )}
       >

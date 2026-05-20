@@ -259,7 +259,7 @@ export default function LandingPage() {
                     >
                       <div className="absolute inset-0 bg-primary/10 rounded-2xl blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                       <item.icon className="w-9 h-9 text-primary relative z-10" />
-                      <div className="absolute -top-3 -right-3 w-7 h-7 rounded-full bg-[#0c0c10] border border-white/10 flex items-center justify-center font-black text-[10px] text-muted-foreground tracking-wider shadow-lg">
+                      <div className="absolute -top-3 -right-3 w-7 h-7 rounded-full bg-[hsl(var(--bg-subtle))] border border-white/10 flex items-center justify-center font-black text-[10px] text-muted-foreground tracking-wider shadow-lg">
                         {item.step}
                       </div>
                     </motion.div>

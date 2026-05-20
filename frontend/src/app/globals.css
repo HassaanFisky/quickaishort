@@ -32,6 +32,18 @@
   --color-popover: hsl(var(--popover));
   --color-card-foreground: hsl(var(--card-foreground));
   --color-card: hsl(var(--card));
+  /* === Task-3 semantic tokens exposed as Tailwind utilities === */
+  --color-base: hsl(var(--bg-base));
+  --color-subtle: hsl(var(--bg-subtle));
+  --color-elevated: hsl(var(--bg-elevated));
+  --color-fg: hsl(var(--fg));
+  --color-fg-muted: hsl(var(--fg-muted));
+  --color-fg-subtle: hsl(var(--fg-subtle));
+  --color-accent-indigo: hsl(var(--accent-indigo));
+  --color-accent-hover: hsl(var(--accent-hover));
+  --color-accent-fg: hsl(var(--accent-fg));
+  --color-accent-soft: hsl(var(--accent-soft));
+  --color-border-strong: hsl(var(--border-strong));
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -68,26 +80,27 @@
 
 @layer base {
   :root {
-    /* === QS Brand Tokens (Phase 1 — locked) === */
-    --bg-base:        #020203;
-    --bg-surface:     #08080a;
-    --bg-surface-2:   #0c0c10;
-    --bg-surface-3:   #121218;
+    /* === Task-3 Semantic Tokens (light-mode defaults) === */
+    --bg-base:         220 14% 98%;
+    --bg-subtle:       220 13% 95%;
+    --bg-muted:        220 11% 91%;
+    --bg-elevated:     0 0% 100%;
+    --border-strong:   220 12% 82%;
+    --fg:              224 12% 10%;
+    --fg-muted:        224 8% 42%;
+    --fg-subtle:       224 6% 62%;
+    --accent-indigo:   239 84% 60%;
+    --accent-hover:    239 80% 53%;
+    --accent-fg:       0 0% 100%;
+    --accent-soft:     239 100% 96%;
 
-    --border-raw:        #18181f;
-    --border-subtle:     #121218;
-    --border-accent:     rgba(168, 85, 247, 0.4);
-
-    --text-primary:   #fcfcfd;
-    --text-secondary: #a1a1aa;
-    --text-muted:     #52525b;
-
+    /* === Brand Tokens (locked — viral score ramp uses these) === */
     --brand-purple:   #a855f7;
     --brand-blue:     #3b82f6;
     --brand-pink:     #ec4899;
-    --accent-glow:    rgba(168, 85, 247, 0.15);
-    --speed-trail:    linear-gradient(135deg, #3b82f6, #a855f7, #ec4899);
-    --brand-gradient: linear-gradient(135deg, #3b82f6 0%, #a855f7 60%, #ec4899 100%);
+    --accent-glow:    rgba(79, 70, 229, 0.1);
+    --speed-trail:    linear-gradient(135deg, #3b82f6, #4f46e5, #818cf8);
+    --brand-gradient: linear-gradient(135deg, #3b82f6 0%, #4f46e5 60%, #818cf8 100%);
 
     --status-success: #10b981;
     --status-warning: #f59e0b;
@@ -97,82 +110,95 @@
     --font-display:   'Outfit', 'Inter', system-ui, sans-serif;
     --font-mono:      'JetBrains Mono', monospace;
 
-    --radius-token-sm:   0.5rem;
-    --radius-token:      0.75rem;
-    --radius-token-lg:   1.25rem;
-    --radius-token-xl:   2rem;
+    --radius-token-sm:   0.375rem;
+    --radius-token:      0.625rem;
+    --radius-token-lg:   1rem;
+    --radius-token-xl:   1.5rem;
 
-    --background: 240 10% 2%;          /* #020203 */
-    --foreground: 240 5% 98%;           /* #fcfcfd */
-    --card: 240 10% 4%;                 /* #08080a */
-    --card-foreground: 240 5% 98%;
-    --popover: 240 10% 6%;              /* #0c0c10 */
-    --popover-foreground: 240 5% 98%;
-    --primary: 270 91% 65%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 240 10% 10%;
-    --secondary-foreground: 240 5% 90%;
-    --muted: 240 10% 8%;
-    --muted-foreground: 240 5% 65%;
-    --accent: 217 91% 60%;
-    --accent-foreground: 240 10% 2%;
-    --border: 240 10% 12%;
-    --input: 240 10% 12%;
-    --ring: 270 91% 65%;
-    --radius: 1.25rem;
+    /* === Tailwind semantic vars (mapped to new indigo system) === */
+    --background: var(--bg-base);
+    --foreground: var(--fg);
+    --card: var(--bg-elevated);
+    --card-foreground: var(--fg);
+    --popover: var(--bg-elevated);
+    --popover-foreground: var(--fg);
+    --primary: var(--accent-indigo);
+    --primary-foreground: var(--accent-fg);
+    --secondary: var(--bg-muted);
+    --secondary-foreground: var(--fg-muted);
+    --muted: var(--bg-muted);
+    --muted-foreground: var(--fg-subtle);
+    --accent: var(--accent-soft);
+    --accent-foreground: var(--accent-indigo);
+    --border: 220 13% 88%;
+    --input: 220 13% 88%;
+    --ring: var(--accent-indigo);
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --radius: 0.625rem;
 
-    --glass-bg: rgba(8, 8, 10, 0.75);
-    --glass-border: rgba(255, 255, 255, 0.08);
-    --card-shadow: 0 20px 50px -12px rgba(0, 0, 0, 0.5);
-    --gradient-from: #ffffff;
-    --gradient-to: rgba(255, 255, 255, 0.5);
+    --glass-bg: rgba(255, 255, 255, 0.85);
+    --glass-border: rgba(0, 0, 0, 0.06);
+    --card-shadow: 0 4px 24px -8px rgba(31, 38, 135, 0.08);
+    --gradient-from: #1e1b4b;
+    --gradient-to: rgba(30, 27, 75, 0.7);
 
-    /* === Spec motion tokens (Phase 1) ===
-       Used by components that need to inherit a consistent
-       duration vocabulary. Reduced-motion media query collapses
-       these globally via the universal selector below. */
-    --motion-1: 80ms;       /* press feedback */
-    --motion-2: 160ms;      /* hover, focus, color */
-    --motion-3: 220ms;      /* dropdown, tooltip */
-    --motion-4: 280ms;      /* route, inline swap */
-    --motion-5: 400ms;      /* modal, sheet (attention shift) */
+    /* === Motion tokens (unchanged) === */
+    --motion-1: 80ms;
+    --motion-2: 160ms;
+    --motion-3: 220ms;
+    --motion-4: 280ms;
+    --motion-5: 400ms;
     --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
     --ease-in-soft:  cubic-bezier(0.64, 0, 0.78, 0);
   }
 
+  .dark {
+    /* === Task-3 Semantic Tokens (dark-mode overrides) === */
+    --bg-base:         240 8% 5%;
+    --bg-subtle:       240 7% 8%;
+    --bg-muted:        240 6% 12%;
+    --bg-elevated:     240 6% 9%;
+    --border-strong:   240 5% 22%;
+    --fg:              240 8% 95%;
+    --fg-muted:        240 5% 65%;
+    --fg-subtle:       240 4% 45%;
+    --accent-indigo:   234 89% 74%;
+    --accent-hover:    239 84% 67%;
+    --accent-fg:       240 10% 4%;
+    --accent-soft:     239 50% 16%;
+    --accent-glow:     rgba(129, 140, 248, 0.15);
+
+    --background: var(--bg-base);
+    --foreground: var(--fg);
+    --card: var(--bg-elevated);
+    --card-foreground: var(--fg);
+    --popover: var(--bg-subtle);
+    --popover-foreground: var(--fg);
+    --primary: var(--accent-indigo);
+    --primary-foreground: var(--accent-fg);
+    --secondary: var(--bg-muted);
+    --secondary-foreground: var(--fg-muted);
+    --muted: var(--bg-muted);
+    --muted-foreground: var(--fg-subtle);
+    --accent: var(--accent-soft);
+    --accent-foreground: var(--accent-indigo);
+    --border: 240 6% 17%;
+    --input: 240 6% 17%;
+    --ring: var(--accent-indigo);
+    --destructive: 0 91% 71%;
+    --destructive-foreground: 240 10% 4%;
+
+    --glass-bg: rgba(9, 9, 15, 0.78);
+    --glass-border: rgba(255, 255, 255, 0.07);
+    --card-shadow: 0 20px 50px -12px rgba(0, 0, 0, 0.55);
+    --gradient-from: #e0e7ff;
+    --gradient-to: rgba(224, 231, 255, 0.5);
+  }
+
+  /* .light kept as alias so any explicit class="light" still applies :root values */
   .light {
-    --bg-base:        #fdfdff;
-    --bg-surface:     #ffffff;
-    --bg-surface-2:   #f4f4f9;
-    --bg-surface-3:   #ededf5;
-    --text-primary:   #09090b;
-    --text-secondary: #4b5563;
-    --text-muted:     #9ca3af;
-    --accent-glow:    rgba(168, 85, 247, 0.1);
-
-    --background: 240 20% 99%;
-    --foreground: 240 10% 4%;
-    --card: 0 0% 100%;
-    --card-foreground: 240 10% 4%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 4%;
-    --primary: 270 91% 60%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 240 20% 96%;
-    --secondary-foreground: 240 10% 15%;
-    --muted: 240 20% 94%;
-    --muted-foreground: 240 10% 45%;
-    --accent: 217 91% 55%;
-    --accent-foreground: 0 0% 100%;
-    --border: 240 10% 90%;
-    --input: 240 10% 90%;
-    --ring: 270 91% 60%;
-
-    --glass-bg: rgba(255, 255, 255, 0.85);
-    --glass-border: rgba(0, 0, 0, 0.05);
-    --card-shadow: 0 20px 40px -12px rgba(31, 38, 135, 0.08);
-    --gradient-from: #0f172a;
-    --gradient-to: rgba(15, 23, 42, 0.7);
+    --accent-glow: rgba(79, 70, 229, 0.08);
   }
 
   .aurora {

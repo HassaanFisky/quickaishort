@@ -66,7 +66,7 @@ export default function SignInPage() {
         transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
         className="w-full max-w-[400px]"
       >
-        <Card className="w-full bg-[#08080a]/80 backdrop-blur-2xl border border-white/[0.08] shadow-[0_32px_80px_-16px_rgba(0,0,0,0.7)] rounded-3xl overflow-hidden relative">
+        <Card className="w-full bg-[hsl(var(--bg-base))]/80 backdrop-blur-2xl border border-white/[0.08] shadow-[0_32px_80px_-16px_rgba(0,0,0,0.7)] rounded-3xl overflow-hidden relative">
           <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-primary/60 to-transparent" />
 
           <CardHeader className="text-center space-y-5 pt-10 pb-2">

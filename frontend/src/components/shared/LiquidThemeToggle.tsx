@@ -1,79 +1,40 @@
-"use client";
-
-import React from "react";
-import { useTheme } from "next-themes";
-import { cn } from "@/lib/utils";
+'use client';
+import { useTheme } from 'next-themes';
+import { useEffect, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Moon, Sun } from 'lucide-react';
 
 export function LiquidThemeToggle() {
   const { theme, setTheme, resolvedTheme } = useTheme();
-  const isDark = (resolvedTheme ?? theme) !== "light";
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!mounted) return <div className="h-9 w-9 rounded-lg" />;
 
-  const toggle = () => {
-    setTheme(isDark ? "light" : "dark");
-  };
+  const isDark = (resolvedTheme ?? theme) === 'dark';
 
   return (
     <button
-      onClick={toggle}
-      className={cn(
-        "theme-toggle-pill",
-        isDark ? "theme-dark" : "theme-light",
-      )}
-      aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
-      title={isDark ? "Switch to Pearl (light) theme" : "Switch to Midnight (dark) theme"}
       type="button"
+      aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+      onClick={() => setTheme(isDark ? 'light' : 'dark')}
+      className="relative h-9 w-9 rounded-lg bg-[hsl(var(--bg-elevated))]
+                 border border-[hsl(var(--border))]
+                 overflow-hidden hover:bg-[hsl(var(--bg-muted))]
+                 transition-colors focus-visible:outline-none
+                 focus-visible:ring-2 focus-visible:ring-[hsl(var(--accent-indigo))]"
     >
-      {/* Stars — visible in dark mode */}
-      {isDark && (
-        <>
-          <span
-            className="toggle-star"
-            style={{ width: 3, height: 3, top: 7, right: 10, animation: "star-twinkle 1.6s ease infinite" }}
-            aria-hidden="true"
-          />
-          <span
-            className="toggle-star"
-            style={{ width: 2, height: 2, top: 15, right: 7, animation: "star-twinkle 2.1s ease infinite 0.5s" }}
-            aria-hidden="true"
-          />
-          <span
-            className="toggle-star"
-            style={{ width: 2, height: 2, top: 23, right: 13, animation: "star-twinkle 1.9s ease infinite 1s" }}
-            aria-hidden="true"
-          />
-        </>
-      )}
-
-      {/* Cloud — visible in light mode */}
-      {!isDark && (
-        <span
-          className="toggle-cloud"
-          style={{ width: 14, height: 5 }}
-          aria-hidden="true"
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.span
+          key={isDark ? 'moon' : 'sun'}
+          initial={{ y: -20, opacity: 0, rotate: -45 }}
+          animate={{ y: 0, opacity: 1, rotate: 0 }}
+          exit={{ y: 20, opacity: 0, rotate: 45 }}
+          transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+          className="absolute inset-0 grid place-items-center text-[hsl(var(--fg))]"
         >
-          <span style={{
-            position: "absolute",
-            background: "rgba(255,255,255,0.85)",
-            borderRadius: "50%",
-            width: 8,
-            height: 8,
-            top: -4,
-            left: 3,
-          }} />
-        </span>
-      )}
-
-      {/* Thumb — slides left (light) / right (dark) */}
-      <span className="toggle-thumb" aria-hidden="true">
-        {/* Moon craters */}
-        {isDark && (
-          <>
-            <span className="moon-dot" style={{ width: 6, height: 6, top: 6, left: 10 }} />
-            <span className="moon-dot" style={{ width: 4, height: 4, top: 14, left: 7 }} />
-            <span className="moon-dot" style={{ width: 3, height: 3, top: 9, left: 18 }} />
-          </>
-        )}
-      </span>
+          {isDark ? <Moon size={15} /> : <Sun size={15} />}
+        </motion.span>
+      </AnimatePresence>
     </button>
   );
 }

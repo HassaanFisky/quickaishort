@@ -33,12 +33,16 @@ import yt_dlp
 logger = logging.getLogger(__name__)
 
 
-def get_proxy_url() -> str | None:
+def get_proxy_url(session_suffix: str = "") -> str | None:
     """Build Decodo residential proxy URL from environment.
 
     Set DECODO_USERNAME and DECODO_PASSWORD in Cloud Run env vars.
     Without a proxy, GCP datacenter IPs are blocked by YouTube.
     Returns None when credentials are absent (graceful degradation).
+
+    Args:
+        session_suffix: Optional suffix appended to the username for sticky
+            session rotation (e.g. "-sessionduration-60").
     """
     username = os.environ.get("DECODO_USERNAME", "")
     password = os.environ.get("DECODO_PASSWORD", "")
@@ -49,10 +53,10 @@ def get_proxy_url() -> str | None:
             "DECODO credentials not set; proxy disabled for YouTube extraction"
         )
         return None
-    return f"http://{username}:{password}@{endpoint}:{port}"
+    return f"http://{username}{session_suffix}:{password}@{endpoint}:{port}"
 
 
-def _base_opts(*, skip_download: bool) -> dict[str, Any]:
+def _base_opts(*, skip_download: bool, session_suffix: str = "") -> dict[str, Any]:
     """Common yt-dlp options shared by info and download calls."""
     opts: dict[str, Any] = {
         "quiet": True,
@@ -70,7 +74,7 @@ def _base_opts(*, skip_download: bool) -> dict[str, Any]:
         "sleep_interval": 1,
         "max_sleep_interval": 3,
     }
-    proxy = get_proxy_url()
+    proxy = get_proxy_url(session_suffix=session_suffix)
     if proxy:
         opts["proxy"] = proxy
     return opts
@@ -80,6 +84,7 @@ def get_video_info(video_id: str) -> dict[str, Any]:
     """Fetch YouTube video metadata (title, duration, thumbnail).
 
     Metadata-only — no download.  Passes through Decodo proxy + bgutil PoToken.
+    Retries once with a different sticky session ID on failure.
 
     Args:
         video_id: 11-character YouTube video ID.
@@ -88,22 +93,31 @@ def get_video_info(video_id: str) -> dict[str, Any]:
         Dict with title, duration (seconds), thumbnail URL, uploader.
 
     Raises:
-        RuntimeError: If yt-dlp extraction fails.
+        RuntimeError: If yt-dlp extraction fails after retry.
     """
     url = f"https://www.youtube.com/watch?v={video_id}"
-    opts = _base_opts(skip_download=True)
-    try:
-        with yt_dlp.YoutubeDL(opts) as ydl:
-            info = ydl.extract_info(url, download=False)
-    except Exception as exc:
-        raise RuntimeError(f"yt-dlp metadata extraction failed: {exc}") from exc
+    # First attempt uses the default session; second rotates to a new sticky session.
+    attempts = [("", "attempt 1"), ("-sessionduration-60", "retry with sticky session")]
+    last_exc: Exception | None = None
 
-    return {
-        "title": info.get("title", "Untitled"),
-        "duration": int(info.get("duration") or 0),
-        "thumbnail": info.get("thumbnail", ""),
-        "uploader": info.get("uploader", ""),
-    }
+    for session_suffix, label in attempts:
+        opts = _base_opts(skip_download=True, session_suffix=session_suffix)
+        try:
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                info = ydl.extract_info(url, download=False)
+            return {
+                "title": info.get("title", "Untitled"),
+                "duration": int(info.get("duration") or 0),
+                "thumbnail": info.get("thumbnail", ""),
+                "uploader": info.get("uploader", ""),
+            }
+        except Exception as exc:
+            logger.warning("yt-dlp metadata %s failed for %s: %s", label, video_id, exc)
+            last_exc = exc
+
+    raise RuntimeError(
+        f"yt-dlp metadata extraction failed after retry: {last_exc}"
+    ) from last_exc
 
 
 def download_clip(

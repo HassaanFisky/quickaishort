@@ -93,7 +93,7 @@ export const CinematicIntro = ({ onComplete }: { onComplete: () => void }) => {
   }, [phase]);
 
   return (
-    <div className="fixed inset-0 z-[9999] bg-[#08080a] flex items-center justify-center overflow-hidden">
+    <div className="fixed inset-0 z-[9999] bg-[hsl(var(--bg-base))] flex items-center justify-center overflow-hidden">
       {/* Cinematic Background Blobs */}
       <div className="absolute inset-0 pointer-events-none">
         <motion.div

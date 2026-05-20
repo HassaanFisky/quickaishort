@@ -943,15 +943,20 @@ async def get_video_info(url: str):
         }
     except Exception as exc:
         logger.warning(
-            f"yt-dlp info extraction failed, returning ID-based fallback: {exc}"
+            f"yt-dlp info extraction failed, returning structured error: {exc}"
         )
         video_id_match = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{11})", url)
         v_id = video_id_match.group(1) if video_id_match else video_id
+        # Return a structured error the frontend detects via code field.
+        # HTTP 200 so the client's axios error handler doesn't swallow the payload.
         return {
+            "code": "YOUTUBE_FETCH_FAILED",
+            "detail": "Server-side YouTube extraction failed. Use the iframe preview or upload an MP4.",
+            "fallback": "upload_mp4",
             "id": v_id,
             "title": "YouTube Video",
             "duration": 0,
-            "thumbnail": f"https://i.ytimg.com/vi/{v_id}/maxresdefault.jpg",
+            "thumbnail": f"https://i.ytimg.com/vi/{v_id}/hqdefault.jpg",
             "formats": [],
             "url": url,
             "source": "fallback",

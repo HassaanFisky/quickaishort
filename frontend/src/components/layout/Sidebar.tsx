@@ -46,7 +46,7 @@ export default function Sidebar() {
   const initial = session?.user?.name?.[0]?.toUpperCase() ?? "U";
 
   return (
-    <aside className="fixed top-0 left-0 z-40 hidden md:flex h-screen w-[232px] flex-col border-r border-white/[0.05] bg-[#04040600] backdrop-blur-xl bg-[#08080a]/80">
+    <aside className="fixed top-0 left-0 z-40 hidden md:flex h-screen w-[232px] flex-col border-r border-white/[0.05] backdrop-blur-xl bg-[hsl(var(--bg-base))]/80">
       {/* Logo */}
       <div className="px-5 py-5 border-b border-white/[0.05]">
         <Link
@@ -83,7 +83,7 @@ export default function Sidebar() {
                 "focus-visible:outline-none focus-visible:[box-shadow:0_0_0_2px_#020203,_0_0_0_4px_rgba(168,85,247,0.6)]",
                 active
                   ? "bg-primary/[0.08] text-primary font-semibold"
-                  : "text-[#71717a] hover:text-[#f4f4f5] hover:bg-white/[0.04]",
+                  : "text-[hsl(var(--fg-muted))] hover:text-[hsl(var(--fg))] hover:bg-white/[0.04]",
                 linkClass,
                 active && activeClass,
               )}
@@ -100,7 +100,7 @@ export default function Sidebar() {
               <Icon
                 className={cn(
                   "nav-icon w-[17px] h-[17px] shrink-0 transition-colors duration-[160ms]",
-                  active ? "text-primary" : "text-[#52525b] group-hover:text-[#a1a1aa]",
+                  active ? "text-primary" : "text-[hsl(var(--fg-subtle))] group-hover:text-[hsl(var(--fg-muted))]",
                 )}
                 aria-hidden
               />
@@ -133,14 +133,14 @@ export default function Sidebar() {
                 </AvatarFallback>
               </Avatar>
               <div className="flex-1 min-w-0 text-left">
-                <p className="text-[13px] font-semibold truncate text-[#f4f4f5]">{session.user.name}</p>
+                <p className="text-[13px] font-semibold truncate text-[hsl(var(--fg))]">{session.user.name}</p>
                 <motion.p
                   initial={{ opacity: 0, scale: 0.85 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ type: "spring", stiffness: 380, damping: 28, delay: 0.1 }}
                   className={cn(
                     "text-[10px] truncate font-bold uppercase tracking-widest",
-                    session.user.isPro ? "text-primary" : "text-[#52525b]",
+                    session.user.isPro ? "text-primary" : "text-[hsl(var(--fg-subtle))]",
                   )}
                 >
                   {session.user.isPro ? "Pro" : "Free"}
@@ -149,7 +149,7 @@ export default function Sidebar() {
             </div>
             <ChevronUp
               className={cn(
-                "w-3.5 h-3.5 text-[#52525b] shrink-0 transition-transform duration-200",
+                "w-3.5 h-3.5 text-[hsl(var(--fg-subtle))] shrink-0 transition-transform duration-200",
                 menuOpen && "rotate-180",
               )}
               aria-hidden
@@ -164,7 +164,7 @@ export default function Sidebar() {
                 initial="hidden"
                 animate="visible"
                 exit="exit"
-                className="absolute bottom-[calc(100%+6px)] left-3 right-3 rounded-xl border border-white/[0.08] bg-[#0c0c10]/95 backdrop-blur-2xl shadow-2xl p-1.5 z-10"
+                className="absolute bottom-[calc(100%+6px)] left-3 right-3 rounded-xl border border-white/[0.08] bg-[hsl(var(--bg-subtle))]/95 backdrop-blur-2xl shadow-2xl p-1.5 z-10"
               >
                 <button
                   role="menuitem"
