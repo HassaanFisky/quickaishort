@@ -1063,6 +1063,7 @@ async def proxy_video(url: str):
             status_code=500, detail="Stream unavailable. Please try again."
         )
 
+
 @app.get("/api/proxy-video")
 async def proxy_video_stream(url: str):
     _require_youtube_url(url)
@@ -1097,20 +1098,22 @@ async def proxy_video_stream(url: str):
                 return ydl.extract_info(url, download=False)
 
         info = await loop.run_in_executor(None, _extract)
-        
+
         # Validate duration (max 30 minutes = 1800 seconds)
         duration = info.get("duration", 0)
         if duration and duration > 1800:
             raise HTTPException(
                 status_code=400,
-                detail="Videos longer than 30 minutes are not supported."
+                detail="Videos longer than 30 minutes are not supported.",
             )
-            
+
         stream_url = info.get("url")
     except HTTPException:
         raise
     except Exception as exc:
-        logger.warning(f"yt-dlp failed in video proxy, trying Invidious fallback: {exc}")
+        logger.warning(
+            f"yt-dlp failed in video proxy, trying Invidious fallback: {exc}"
+        )
         video_id_match = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{11})", url)
         v_id = video_id_match.group(1) if video_id_match else None
         if v_id:
@@ -1130,10 +1133,14 @@ async def proxy_video_stream(url: str):
                                 stream_url = fmt.get("url")
                                 break
                         if stream_url:
-                            logger.info(f"Invidious video fallback succeeded via {instance}")
+                            logger.info(
+                                f"Invidious video fallback succeeded via {instance}"
+                            )
                             break
                 except Exception as inv_exc:
-                    logger.warning(f"Invidious video fallback {instance} failed: {inv_exc}")
+                    logger.warning(
+                        f"Invidious video fallback {instance} failed: {inv_exc}"
+                    )
                     continue
         if not stream_url:
             raise HTTPException(
@@ -1142,7 +1149,9 @@ async def proxy_video_stream(url: str):
             )
 
     if not stream_url:
-        raise HTTPException(status_code=404, detail="Could not retrieve video stream URL")
+        raise HTTPException(
+            status_code=404, detail="Could not retrieve video stream URL"
+        )
 
     try:
         return StreamingResponse(
