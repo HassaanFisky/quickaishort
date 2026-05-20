@@ -1063,6 +1063,102 @@ async def proxy_video(url: str):
             status_code=500, detail="Stream unavailable. Please try again."
         )
 
+@app.get("/api/proxy-video")
+async def proxy_video_stream(url: str):
+    _require_youtube_url(url)
+
+    import httpx
+
+    async def iterfile(stream_url):
+        async with httpx.AsyncClient(timeout=120.0, follow_redirects=True) as client:
+            async with client.stream("GET", stream_url) as r:
+                r.raise_for_status()
+                async for chunk in r.aiter_bytes(chunk_size=16384):
+                    yield chunk
+
+    stream_url = None
+    # We want a combined H.264 MP4 stream (like itag 18) for native browser playback
+    fmt = "18/best[ext=mp4]/best"
+    media_type = "video/mp4"
+
+    ydl_opts = inject_ydl_bypass(
+        {
+            "format": fmt,
+            "quiet": True,
+            "no_warnings": True,
+        }
+    )
+
+    try:
+        loop = asyncio.get_event_loop()
+
+        def _extract():
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                return ydl.extract_info(url, download=False)
+
+        info = await loop.run_in_executor(None, _extract)
+        
+        # Validate duration (max 30 minutes = 1800 seconds)
+        duration = info.get("duration", 0)
+        if duration and duration > 1800:
+            raise HTTPException(
+                status_code=400,
+                detail="Videos longer than 30 minutes are not supported."
+            )
+            
+        stream_url = info.get("url")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.warning(f"yt-dlp failed in video proxy, trying Invidious fallback: {exc}")
+        video_id_match = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{11})", url)
+        v_id = video_id_match.group(1) if video_id_match else None
+        if v_id:
+            for instance in ["yewtu.be", "invidious.kavin.rocks", "vid.priv.au"]:
+                try:
+                    async with httpx.AsyncClient(
+                        timeout=5.0, follow_redirects=True
+                    ) as client:
+                        inv_resp = await client.get(
+                            f"https://{instance}/api/v1/videos/{v_id}",
+                            params={"fields": "formatStreams"},
+                        )
+                        inv_resp.raise_for_status()
+                        inv_data = inv_resp.json()
+                        for fmt in inv_data.get("formatStreams", []):
+                            if fmt.get("itag") == "18":
+                                stream_url = fmt.get("url")
+                                break
+                        if stream_url:
+                            logger.info(f"Invidious video fallback succeeded via {instance}")
+                            break
+                except Exception as inv_exc:
+                    logger.warning(f"Invidious video fallback {instance} failed: {inv_exc}")
+                    continue
+        if not stream_url:
+            raise HTTPException(
+                status_code=503,
+                detail="Video stream unavailable. Please try again later.",
+            )
+
+    if not stream_url:
+        raise HTTPException(status_code=404, detail="Could not retrieve video stream URL")
+
+    try:
+        return StreamingResponse(
+            iterfile(stream_url),
+            media_type=media_type,
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Cross-Origin-Resource-Policy": "cross-origin",
+            },
+        )
+    except Exception as exc:
+        logger.exception("/api/proxy-video stream error: %s", exc)
+        raise HTTPException(
+            status_code=500, detail="Stream unavailable. Please try again."
+        )
+
 
 @app.get("/api/audio")
 async def get_audio(url: str = Query(...)):

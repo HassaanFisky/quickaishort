@@ -3,7 +3,7 @@
 import { useState, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useDropzone } from "react-dropzone";
-import { Upload, Youtube, FileVideo, CheckCircle2 } from "lucide-react";
+import { Upload, Youtube, FileVideo, CheckCircle2, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,13 +42,17 @@ export default function AcquirePanel() {
   });
 
   const YT_PATTERN =
-    /^https?:\/\/(www\.)?(youtube\.com\/watch\?.*v=|youtu\.be\/)[A-Za-z0-9_-]{11}/;
+    /^https?:\/\/(www\.)?(youtube\.com\/watch\?.*v=|youtu\.be\/|youtube\.com\/shorts\/)[A-Za-z0-9_-]{11}/;
 
   // Derived state: is the current URL a well-formed YouTube link?
   // Used to render the right-edge validation icon and to gate submission.
   const urlIsValid = useMemo(() => {
     if (!url.trim()) return false;
     return YT_PATTERN.test(url.trim());
+  }, [url]);
+
+  const isYtActive = useMemo(() => {
+    return url.trim().length > 0;
   }, [url]);
 
   const handleUrlChange = (next: string) => {
@@ -74,13 +78,19 @@ export default function AcquirePanel() {
       setIsImporting(true);
       toast.loading("Fetching video metadata...", { id: "import-video" });
 
-      const { getVideoInfo, getProxyUrl } = await import("@/lib/api");
+      const { getVideoInfo } = await import("@/lib/api");
       const info = await getVideoInfo(url);
 
       if (info) {
+        // Enforce the strict 30-minute duration limit
+        if (info.duration > 1800) {
+          toast.error("Videos longer than 30 minutes are not supported. Please select a shorter video.", { id: "import-video" });
+          setUrlValidationError("Videos longer than 30 minutes are not supported. Choose a video under 30 minutes.");
+          setIsImporting(false);
+          return;
+        }
+
         setSourceUrl(url); // Store original URL
-        // We use the proxy URL for the video element to avoid CORS issues
-        const proxyUrl = getProxyUrl(url);
 
         // Update store with metadata
         useEditorStore.setState({
@@ -101,85 +111,105 @@ export default function AcquirePanel() {
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
-      <div
-        {...getRootProps()}
-        className={cn(
-          "relative border-2 border-dashed rounded-2xl p-8 transition-all duration-300 cursor-pointer group",
-          isDragActive
-            ? "border-primary bg-primary/5 scale-[0.98]"
-            : "border-muted-foreground/20 hover:border-primary/50 hover:bg-accent/50",
-          sourceFile && "border-green-500/50 bg-green-500/5",
-        )}
-      >
-        <input {...getInputProps()} />
-        <div className="flex flex-col items-center text-center gap-4">
+      <AnimatePresence initial={false}>
+        {!isYtActive && (
           <motion.div
-            animate={isDragActive ? { scale: 1.15 } : { scale: 1 }}
-            transition={{ type: "spring", stiffness: 360, damping: 24 }}
-            className={cn(
-              "w-16 h-16 rounded-full flex items-center justify-center",
-              sourceFile
-                ? "bg-green-500/10 text-green-500"
-                : "bg-primary/10 text-primary",
-            )}
+            initial={{ opacity: 1, height: "auto" }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0, overflow: "hidden", marginBottom: 0 }}
+            transition={{ type: "spring", stiffness: 300, damping: 28 }}
+            className="space-y-6"
           >
-            <AnimatePresence mode="wait">
-              {sourceFile ? (
-                <motion.div key="check" initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 400, damping: 20 }}>
-                  <CheckCircle2 className="w-8 h-8" />
-                </motion.div>
-              ) : (
-                <motion.div key="upload" initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 400, damping: 20 }}>
-                  <Upload className="w-8 h-8" />
-                </motion.div>
+            <div
+              {...getRootProps()}
+              className={cn(
+                "relative border-2 border-dashed rounded-2xl p-8 transition-all duration-300 cursor-pointer group",
+                isDragActive
+                  ? "border-primary bg-primary/5 scale-[0.98]"
+                  : "border-muted-foreground/20 hover:border-primary/50 hover:bg-accent/50",
+                sourceFile && "border-green-500/50 bg-green-500/5",
               )}
-            </AnimatePresence>
+            >
+              <input {...getInputProps()} />
+              <div className="flex flex-col items-center text-center gap-4">
+                <motion.div
+                  animate={isDragActive ? { scale: 1.15 } : { scale: 1 }}
+                  transition={{ type: "spring", stiffness: 360, damping: 24 }}
+                  className={cn(
+                    "w-16 h-16 rounded-full flex items-center justify-center",
+                    sourceFile
+                      ? "bg-green-500/10 text-green-500"
+                      : "bg-primary/10 text-primary",
+                  )}
+                >
+                  <AnimatePresence mode="wait">
+                    {sourceFile ? (
+                      <motion.div key="check" initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 400, damping: 20 }}>
+                        <CheckCircle2 className="w-8 h-8" />
+                      </motion.div>
+                    ) : (
+                      <motion.div key="upload" initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 400, damping: 20 }}>
+                        <Upload className="w-8 h-8" />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </motion.div>
+                <div>
+                  <p className="font-semibold text-lg">
+                    {sourceFile
+                      ? sourceFile.name
+                      : isDragActive
+                        ? "Drop video here"
+                        : "Click or drag video"}
+                  </p>
+                  <p className="text-sm text-muted-foreground mt-1 text-balance">
+                    MP4, MOV, WebM or AVI. Max 500MB recommended for browser
+                    performance.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-card px-2 text-muted-foreground">
+                  Or import from URL
+                </span>
+              </div>
+            </div>
           </motion.div>
-          <div>
-            <p className="font-semibold text-lg">
-              {sourceFile
-                ? sourceFile.name
-                : isDragActive
-                  ? "Drop video here"
-                  : "Click or drag video"}
-            </p>
-            <p className="text-sm text-muted-foreground mt-1 text-balance">
-              MP4, MOV, WebM or AVI. Max 500MB recommended for browser
-              performance.
-            </p>
-          </div>
-        </div>
-      </div>
+        )}
+      </AnimatePresence>
 
-      <div className="relative">
-        <div className="absolute inset-0 flex items-center">
-          <span className="w-full border-t" />
-        </div>
-        <div className="relative flex justify-center text-xs uppercase">
-          <span className="bg-card px-2 text-muted-foreground">
-            Or import from URL
-          </span>
-        </div>
-      </div>
-
-      <form
+      <motion.form
+        layout
         onSubmit={handleUrlSubmit}
-        className="space-y-2"
+        className="space-y-4"
         aria-describedby={urlValidationError ? "acquire-url-error" : undefined}
         noValidate
       >
-        <div className="flex gap-2">
-          <div className="relative flex-1">
+        <motion.div layout className={cn("relative flex-1", isYtActive && "neon-url-container p-[2px] bg-card/40 rounded-2xl shadow-[0_0_30px_rgba(168,85,247,0.15)]")}>
+          {isYtActive && (
+            <>
+              <div className="neon-url-spin-layer" />
+              <div className="neon-url-glow-layer" />
+            </>
+          )}
+          <div className={cn("relative flex-1", isYtActive && "neon-url-inner")}>
             <Youtube
-              className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground"
+              className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground z-10"
               aria-hidden="true"
             />
             <Input
-              placeholder="Paste YouTube or Video URL"
+              placeholder="Paste YouTube URL"
               className={cn(
-                "pl-10",
-                urlIsValid && "pr-10",
+                "pl-12 bg-background/50 border-foreground/10 focus-visible:ring-primary/40",
+                urlIsValid && "pr-12",
                 urlValidationError && "border-destructive/60 focus-visible:ring-destructive/40",
+                isYtActive && "h-14 font-medium text-base rounded-2xl border-none pl-14"
               )}
               value={url}
               onChange={(e) => handleUrlChange(e.target.value)}
@@ -194,23 +224,52 @@ export default function AcquirePanel() {
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.5 }}
                   transition={{ type: "spring", stiffness: 420, damping: 24 }}
-                  className="absolute right-3 top-1/2 -translate-y-1/2"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 z-10"
                 >
-                  <CheckCircle2 aria-hidden="true" className="w-4 h-4 text-emerald-500" />
+                  <CheckCircle2 aria-hidden="true" className="w-5 h-5 text-emerald-500" />
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
-          <Button type="submit" disabled={isImporting || !url}>
-            {isImporting ? "Importing..." : "Import"}
-          </Button>
-        </div>
+        </motion.div>
+
+        <AnimatePresence mode="wait">
+          {isYtActive ? (
+            <motion.div
+              key="large-btn"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 10 }}
+              transition={{ type: "spring", stiffness: 400, damping: 25 }}
+              className="flex justify-center"
+            >
+              <Button
+                type="submit"
+                disabled={isImporting || !url}
+                className={cn(
+                  "w-full h-12 text-sm font-black uppercase tracking-widest bg-gradient-to-r from-primary to-pink-500 hover:brightness-110 active:scale-98 transition-all rounded-xl shadow-[0_0_20px_rgba(168,85,247,0.3)]",
+                  isImporting && "from-purple-800 to-pink-800"
+                )}
+              >
+                {isImporting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Analyzing Video stream...
+                  </>
+                ) : (
+                  "✦ Analyze & Generate Shorts"
+                )}
+              </Button>
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
+
         {urlValidationError && (
           <div id="acquire-url-error">
             <InlineError title="Check that URL" body={urlValidationError} />
           </div>
         )}
-      </form>
+      </motion.form>
 
       {sourceFile && (
         <div className="bg-accent/50 p-4 rounded-xl flex items-center gap-4 border border-primary/20 animate-in zoom-in-95 duration-300">
