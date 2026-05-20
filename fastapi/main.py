@@ -295,16 +295,21 @@ def _build_download_url(job_id: str, user_id: str) -> str:
 async def lifespan(_app: FastAPI):
     logger.info("lifespan_starting")
     await init_db()
+
     from services.diagnostics import run_startup_checks
     from routers.billing import _ensure_indexes as _billing_ensure_indexes
 
-    try:
-        await run_startup_checks()
-        await _billing_ensure_indexes()
-        global _STARTUP_COMPLETE
-        _STARTUP_COMPLETE = True
-    except Exception as e:
-        logger.error("startup_checks_failed", error=str(e))
+    async def _deferred_checks():
+        """Runs after the worker is live so startup probes are not blocked."""
+        try:
+            await run_startup_checks()
+            await _billing_ensure_indexes()
+            global _STARTUP_COMPLETE
+            _STARTUP_COMPLETE = True
+        except Exception as e:
+            logger.error("startup_checks_failed", error=str(e))
+
+    asyncio.create_task(_deferred_checks())
 
     stop_event = asyncio.Event()
     listener_task = asyncio.create_task(_pubsub_listener(stop_event))
