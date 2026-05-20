@@ -168,21 +168,6 @@ export function AIPanel() {
             </div>
           </div>
 
-          {suggestions.length > 0 && (
-            <div className="suggestions-rail">
-              {suggestions.map((s, i) => (
-                <button
-                  key={i}
-                  className="suggestion-chip"
-                  onClick={() => sendMessage(s)}
-                  disabled={isAIThinking}
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          )}
-
           <div className="ai-messages">
             {aiMessages.length === 0 && (
               <div className="ai-empty-state">
@@ -232,6 +217,21 @@ export function AIPanel() {
 
             <div ref={messagesEndRef} />
           </div>
+
+          {suggestions.length > 0 && (
+            <div className="suggestions-rail">
+              {suggestions.map((s, i) => (
+                <button
+                  key={i}
+                  className="suggestion-chip"
+                  onClick={() => sendMessage(s)}
+                  disabled={isAIThinking}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          )}
 
           <div className="ai-input-area">
             {interimText && <div className="interim-text">{interimText}</div>}

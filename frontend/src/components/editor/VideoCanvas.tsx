@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useEditorStore } from "@/stores/editorStore";
+import { API_URL } from "@/lib/api";
 import { useFaceTracker } from "@/hooks/useFaceTracker";
 import { CaptionOverlay } from "./CaptionOverlay";
 import { CanvasLayer } from "./CanvasLayer";
@@ -142,16 +143,22 @@ export default function VideoCanvas() {
     setVideoError(false);
     const ytId = extractYtVideoId(sourceUrl);
     if (ytId) {
-      // YouTube URL detected — switch to IFrame mode.
-      setLocalYtId(ytId);      // drives the IFrame player
-      setYtVideoId(ytId);      // syncs to store for clip marking
-      setDisplayUrl(null);
+      setYtVideoId(ytId);  // always sync to store for clip marking
+      if (duration <= 1800) {
+        // Short enough to stream via proxy — native <video> enables full editing.
+        setLocalYtId(null);
+        setDisplayUrl(`${API_URL}/api/proxy-video?url=${encodeURIComponent(sourceUrl)}`);
+      } else {
+        // Too long to proxy — fall back to ToS-compliant IFrame preview.
+        setLocalYtId(ytId);
+        setDisplayUrl(null);
+      }
     } else {
       setLocalYtId(null);
       setYtVideoId(null);
       setDisplayUrl(sourceUrl);
     }
-  }, [sourceUrl]);
+  }, [sourceUrl, duration]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load the YouTube IFrame Player API script once and create a player
   // instance when a YouTube video ID is available.
