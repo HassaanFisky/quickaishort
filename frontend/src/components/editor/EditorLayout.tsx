@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { getVideoInfo, getProxyUrl } from "@/lib/api";
+import { getVideoInfo } from "@/lib/api";
 import { parseYouTubeId } from "@/lib/youtube-utils";
 
 // Components
@@ -45,6 +45,7 @@ export default function EditorLayout() {
     sourceUrl,
     setThumbnailUrl: storeThumbnail,
     aiPanelOpen,
+    setVideoMetadata,
   } = useEditorStore();
   const { runPipeline, cancelPipeline, status } = useMediaPipeline();
   const { isOpen: aiPanelStoreOpen, setOpen: setAIPanelOpen, setVideoContext } = useAIPanel();
@@ -126,7 +127,19 @@ export default function EditorLayout() {
         transcript: "",
       });
 
-      setSourceUrl(getProxyUrl(url));
+      // Set video metadata so the Gemini Editor AI panel knows what video is loaded
+      setVideoMetadata({
+        id: info.id ?? videoId ?? "",
+        url: url,
+        title: info.title ?? "YouTube Video",
+        duration: info.duration ?? 0,
+        nativeWidth: 1280,
+        nativeHeight: 720,
+        fps: 30,
+      });
+
+      // Store the raw YouTube URL — VideoCanvas handles building /api/proxy-video internally
+      setSourceUrl(url);
       await runPipeline();
 
       // Update AI panel with transcript once pipeline completes
@@ -333,9 +346,9 @@ export default function EditorLayout() {
                     )}
                   </div>
 
-                  {/* Thumbnail preview strip */}
+                  {/* Thumbnail preview strip — hidden while analysing to compact the bar */}
                   <AnimatePresence>
-                    {thumbnailUrl && urlValid && (
+                    {thumbnailUrl && urlValid && !isAnalysing && (
                       <motion.div
                         initial={{ opacity: 0, height: 0 }}
                         animate={{ opacity: 1, height: "auto" }}
@@ -363,7 +376,7 @@ export default function EditorLayout() {
 
                   <div className="flex items-center gap-2 p-1.5">
                     {/* URL input */}
-                    <div className="neon-url-container flex-1">
+                    <div className="neon-url-container flex-1" data-analyzing={isAnalysing || undefined}>
                       <div className="neon-url-spin-layer" aria-hidden="true" />
                       <div className="neon-url-glow-layer" aria-hidden="true" />
                       <div

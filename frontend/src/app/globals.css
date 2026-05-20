@@ -807,6 +807,17 @@ main:focus {
   animation-duration: 4s;
 }
 
+/* Analysing state — persistent fast-spinning glow ring while Generate is processing */
+.neon-url-container[data-analyzing] .neon-url-spin-layer,
+.neon-url-container[data-analyzing] .neon-url-glow-layer {
+  opacity: 1;
+}
+.neon-url-container[data-analyzing] .neon-url-spin-layer::before,
+.neon-url-container[data-analyzing] .neon-url-glow-layer::before {
+  animation-play-state: running;
+  animation-duration: 1s;
+}
+
 .neon-url-inner {
   position: relative;
   z-index: 2;

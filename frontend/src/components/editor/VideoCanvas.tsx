@@ -79,12 +79,14 @@ export default function VideoCanvas() {
     isPlaying,
     pendingSeek,
     exportSettings,
+    videoMetadata,
     setCurrentTime,
     setIsPlaying,
     setDuration,
     clearPendingSeek,
     setYtVideoId,
     setClipRange,
+    setVideoMetadata,
   } = useEditorStore();
 
   const { isReady, reframingData, detect } = useFaceTracker();
@@ -366,7 +368,19 @@ export default function VideoCanvas() {
                   controls={false}
                   loop
                   onLoadedMetadata={() => {
-                    if (videoRef.current) setDuration(videoRef.current.duration);
+                    if (!videoRef.current) return;
+                    const v = videoRef.current;
+                    setDuration(v.duration);
+                    // Patch real native dimensions into videoMetadata so the AI panel
+                    // can reference them in its prompts (set initially with defaults in EditorLayout)
+                    if (videoMetadata) {
+                      setVideoMetadata({
+                        ...videoMetadata,
+                        duration: v.duration,
+                        nativeWidth: v.videoWidth || videoMetadata.nativeWidth,
+                        nativeHeight: v.videoHeight || videoMetadata.nativeHeight,
+                      });
+                    }
                   }}
                   onWaiting={() => setIsBuffering(true)}
                   onCanPlay={() => setIsBuffering(false)}

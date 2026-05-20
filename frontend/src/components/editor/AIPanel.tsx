@@ -111,8 +111,8 @@ export function AIPanel() {
         console.error("[AIPanel] Gemini request failed:", errMsg);
 
         let displayMsg = "Request failed — please try again.";
-        if (/API_KEY|401|403/i.test(errMsg)) {
-          displayMsg = "API key error — Gemini configuration issue.";
+        if (/api[_\s]?key|not configured|gemini.*auth|401|403/i.test(errMsg)) {
+          displayMsg = "API key error — Gemini is not configured on this server.";
         } else if (/400|invalid argument|alternates/i.test(errMsg)) {
           displayMsg = "Invalid request — try rephrasing your message.";
         } else if (/429|quota|RESOURCE_EXHAUSTED/i.test(errMsg)) {
