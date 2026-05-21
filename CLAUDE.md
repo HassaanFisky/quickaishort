@@ -449,10 +449,10 @@ ADK Studio: 4-step wizard (Script → Media → Voice → Render) via POST /api/
 
 LIVE SERVICES:
 
-- Backend API:    `https://quickaishort-api-946316698978.us-central1.run.app`
-- Render Worker:  `https://quickaishort-worker-946316698978.us-central1.run.app`
+- Backend API:    `https://quickai-api-y2cgnbsbxa-uc.a.run.app` (service: quickai-api, revision: 00030-vdg)
+- Render Worker:  `https://quickai-worker-99900313102.us-central1.run.app` (service: quickai-worker, revision: 00007-6xm)
 - Frontend:       `https://www.quickaishort.online`
-- Health:         `{"status":"ok","mongo":true,"redis":true,"adk":true}`
+- Health:         `{"status":"ok","mongo":true,"redis":true,"adk":true,"firestore_status":"connected","redis_status":"ready","agent_ready_state":"ready"}`
 
 COMPLETED:
 
@@ -481,6 +481,7 @@ COMPLETED:
 - Production hardening pass 1 (2026-05-06): HTTP 402 gates removed, COEP scoped to /editor, datetime.utcnow fixed, /api/audio FFmpeg MP3 conversion, mongo_session.py deleted, ARCHITECTURE.md aligned
 - Production hardening pass 2 (2026-05-06): /api/audio Cobalt v10 fallback; JWT verified_user_id enforced in all 5 protected endpoints; frontend shows real backend error messages; client-side YouTube URL validation in AcquirePanel; requirements.txt cleaned (removed firebase-admin, google-cloud-speech, moviepy; yt-dlp pin updated to >=2025.4.0); Dockerfile adds libgl1 + libglib2.0-0
 - Production stability pass (2026-05-09): Fully migrated to MongoDB GridFS for all media; removed GCS dependencies; implemented lazy runner initialization for all agents; fixed startup 503 timeout by making DB ping non-blocking; optimized WEB_CONCURRENCY for stability.
+- FINAL PRODUCTION LOCKDOWN v1.0 (2026-05-21): Zero TS errors, zero lint errors, zero Python syntax errors. Conversational AI Editor verified. Pre-Flight multi-agent pipeline verified. Full deployment: Vercel (frontend) + Cloud Run quickai-api rev 00030 + quickai-worker rev 00007. Fixed /ready startup probe: deferred run_startup_checks() to background task; added startup probe failureThreshold=20/timeoutSeconds=5 in deploy_production.ps1 to accommodate 13s+ cold-start import time of heavy dependencies (google-adk, google-genai, celery).
 
 KEY DECISIONS (do not change without reason):
 - No subscription gating — core product is free and unblocked until billing is intentionally shipped
@@ -490,6 +491,11 @@ KEY DECISIONS (do not change without reason):
 - Server export: ffmpeg-python via RQ worker (production path, stored in MongoDB GridFS)
 - All protected endpoints use verified_user_id from JWT, not request body
 - 6 personas in preflight panel (genz, millennial, sports, tech, entertainment, news)
+- Startup probe: failureThreshold=20, periodSeconds=10, timeoutSeconds=5 — heavy deps (google-adk, google-genai, celery) take 13s+ to import before gunicorn workers are ready
+- /ready endpoint: must NOT call get_extractor_service() lazily (2s Redis ping exceeds 1s probe timeout). Check _service_instance directly.
+- run_startup_checks(): runs as asyncio.create_task() after lifespan yields — never blocks probe window
+- gcloud deploy on this machine: requires CLOUDSDK_CONFIG=E:\gcloud-config, TMP=E:\gcloud-temp (C: drive is 100% full). Use --async flag for long-running deploys to avoid C: saturation.
+- GCP project: quickaishort-agent-494304 (number: 99900313102). Service account: 99900313102-compute@developer.gserviceaccount.com
 
 IN PROGRESS:
 
