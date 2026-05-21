@@ -33,6 +33,7 @@ from fastapi import (
     Header,
     Query,
     Request,
+    Response,
     UploadFile,
     WebSocket,
     WebSocketDisconnect,
@@ -1102,31 +1103,47 @@ async def proxy_video(url: str):
         )
 
 
+@app.options("/api/proxy-video")
+async def proxy_video_preflight():
+    return Response(
+        status_code=204,
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+            "Access-Control-Allow-Headers": "Range, Content-Type",
+            "Access-Control-Max-Age": "86400",
+        },
+    )
+
+
 @app.get("/api/proxy-video")
-async def proxy_video_stream(url: str):
+async def proxy_video_stream(url: str, request: Request):
     _require_youtube_url(url)
 
-    import httpx
-
-    async def iterfile(stream_url):
-        async with httpx.AsyncClient(timeout=120.0, follow_redirects=True) as client:
-            async with client.stream("GET", stream_url) as r:
-                r.raise_for_status()
-                async for chunk in r.aiter_bytes(chunk_size=16384):
-                    yield chunk
-
-    stream_url = None
-    # We want a combined H.264 MP4 stream (like itag 18) for native browser playback
-    fmt = "18/best[ext=mp4]/best"
-    media_type = "video/mp4"
+    # --- Step 1: resolve a playable combined-stream URL via yt-dlp ---
+    # Only combined H.264+AAC formats work for native <video> without muxing.
+    # Preference order: 360p combined → 720p combined → any combined MP4 → any MP4
+    FMT_COMBINED = (
+        "18/22"
+        "/best[vcodec^=avc1][acodec!='none'][ext=mp4]"
+        "/best[vcodec!='none'][acodec!='none'][ext=mp4]"
+        "/best[ext=mp4]"
+        "/best"
+    )
 
     ydl_opts = inject_ydl_bypass(
         {
-            "format": fmt,
+            "format": FMT_COMBINED,
             "quiet": True,
             "no_warnings": True,
+            # Don't skip webpage — needed for correct format availability in 2026
         }
     )
+    # Remove player_skip injected by older calls — it causes missing formats
+    ydl_opts.get("extractor_args", {}).get("youtube", {}).pop("player_skip", None)
+
+    stream_url: str | None = None
+    media_type = "video/mp4"
 
     try:
         loop = asyncio.get_event_loop()
@@ -1137,7 +1154,6 @@ async def proxy_video_stream(url: str):
 
         info = await loop.run_in_executor(None, _extract)
 
-        # Validate duration (max 30 minutes = 1800 seconds)
         duration = info.get("duration", 0)
         if duration and duration > 1800:
             raise HTTPException(
@@ -1146,65 +1162,162 @@ async def proxy_video_stream(url: str):
             )
 
         stream_url = info.get("url")
+        if not stream_url:
+            raise ValueError("yt-dlp returned no URL")
+
+        logger.info("proxy-video yt-dlp ok: fmt=%s", info.get("format_id", "?"))
+
     except HTTPException:
         raise
     except Exception as exc:
-        logger.warning(
-            f"yt-dlp failed in video proxy, trying Invidious fallback: {exc}"
-        )
+        logger.warning("proxy-video yt-dlp failed (%s), trying fallbacks", exc)
+
         video_id_match = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{11})", url)
         v_id = video_id_match.group(1) if video_id_match else None
+
         if v_id:
-            for instance in ["yewtu.be", "invidious.kavin.rocks", "vid.priv.au"]:
+            # Fallback 1: Invidious public instances
+            for instance in [
+                "invidious.privacyredirect.com",
+                "yewtu.be",
+                "invidious.kavin.rocks",
+                "vid.priv.au",
+            ]:
                 try:
                     async with httpx.AsyncClient(
-                        timeout=5.0, follow_redirects=True
+                        timeout=8.0, follow_redirects=True
                     ) as client:
                         inv_resp = await client.get(
                             f"https://{instance}/api/v1/videos/{v_id}",
-                            params={"fields": "formatStreams"},
+                            params={"fields": "formatStreams,adaptiveFormats"},
                         )
                         inv_resp.raise_for_status()
                         inv_data = inv_resp.json()
+                        # Prefer itag 18 (360p combined)
                         for fmt in inv_data.get("formatStreams", []):
-                            if fmt.get("itag") == "18":
+                            if fmt.get("itag") in ("18", "22"):
                                 stream_url = fmt.get("url")
+                                media_type = "video/mp4"
+                                break
+                        if not stream_url:
+                            # Any combined format
+                            for fmt in inv_data.get("formatStreams", []):
+                                stream_url = fmt.get("url")
+                                media_type = "video/mp4"
                                 break
                         if stream_url:
-                            logger.info(
-                                f"Invidious video fallback succeeded via {instance}"
-                            )
+                            logger.info("proxy-video Invidious ok via %s", instance)
                             break
                 except Exception as inv_exc:
-                    logger.warning(
-                        f"Invidious video fallback {instance} failed: {inv_exc}"
-                    )
-                    continue
+                    logger.warning("proxy-video Invidious %s: %s", instance, inv_exc)
+
+            # Fallback 2: Piped API (returns streamingData-like response)
+            if not stream_url:
+                for piped in [
+                    "pipedapi.kavin.rocks",
+                    "pipedapi.adminforge.de",
+                    "piped-api.garudalinux.org",
+                ]:
+                    try:
+                        async with httpx.AsyncClient(
+                            timeout=8.0, follow_redirects=True
+                        ) as client:
+                            p_resp = await client.get(
+                                f"https://{piped}/streams/{v_id}"
+                            )
+                            p_resp.raise_for_status()
+                            p_data = p_resp.json()
+                            # Piped /streams returns videoStreams list
+                            for vs in p_data.get("videoStreams", []):
+                                if vs.get("videoOnly") is False or "mp4" in vs.get("mimeType", ""):
+                                    stream_url = vs.get("url")
+                                    media_type = "video/mp4"
+                                    break
+                            if stream_url:
+                                logger.info("proxy-video Piped ok via %s", piped)
+                                break
+                    except Exception as p_exc:
+                        logger.warning("proxy-video Piped %s: %s", piped, p_exc)
+
         if not stream_url:
             raise HTTPException(
                 status_code=503,
-                detail="Video stream unavailable. Please try again later.",
+                detail="Video stream unavailable — try a different video or try again.",
             )
 
-    if not stream_url:
-        raise HTTPException(
-            status_code=404, detail="Could not retrieve video stream URL"
+    # --- Step 2: range-aware proxy so browsers can seek ---
+    range_header = request.headers.get("range")
+    upstream_req_headers: dict[str, str] = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/124.0.0.0 Safari/537.36"
+        ),
+        "Accept": "*/*",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Referer": "https://www.youtube.com/",
+        "Origin": "https://www.youtube.com",
+        "Sec-Fetch-Dest": "video",
+        "Sec-Fetch-Mode": "no-cors",
+        "Sec-Fetch-Site": "cross-site",
+    }
+    if range_header:
+        upstream_req_headers["Range"] = range_header
+
+    client = httpx.AsyncClient(
+        timeout=httpx.Timeout(10.0, read=120.0),
+        follow_redirects=True,
+    )
+    try:
+        req = client.build_request("GET", stream_url, headers=upstream_req_headers)
+        upstream = await client.send(req, stream=True)
+
+        if upstream.status_code not in (200, 206):
+            await upstream.aclose()
+            await client.aclose()
+            raise HTTPException(
+                status_code=502,
+                detail=f"Upstream returned {upstream.status_code} — video expired, try again.",
+            )
+
+        response_headers: dict[str, str] = {
+            "Accept-Ranges": "bytes",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+            "Access-Control-Allow-Headers": "Range, Content-Type",
+            "Access-Control-Expose-Headers": "Content-Range, Content-Length, Accept-Ranges",
+            "Cross-Origin-Resource-Policy": "cross-origin",
+            "Cache-Control": "no-store",
+        }
+        for hdr in ("Content-Length", "Content-Range", "Content-Type"):
+            if hdr.lower() in upstream.headers:
+                response_headers[hdr] = upstream.headers[hdr.lower()]
+
+        # Use 206 when upstream responds with 206 (range satisfied)
+        status_code = upstream.status_code
+
+        async def stream_body():
+            try:
+                async for chunk in upstream.aiter_bytes(32768):
+                    yield chunk
+            finally:
+                await upstream.aclose()
+                await client.aclose()
+
+        return StreamingResponse(
+            stream_body(),
+            status_code=status_code,
+            media_type=media_type,
+            headers=response_headers,
         )
 
-    try:
-        return StreamingResponse(
-            iterfile(stream_url),
-            media_type=media_type,
-            headers={
-                "Access-Control-Allow-Origin": "*",
-                "Cross-Origin-Resource-Policy": "cross-origin",
-            },
-        )
+    except HTTPException:
+        await client.aclose()
+        raise
     except Exception as exc:
+        await client.aclose()
         logger.exception("/api/proxy-video stream error: %s", exc)
-        raise HTTPException(
-            status_code=500, detail="Stream unavailable. Please try again."
-        )
+        raise HTTPException(status_code=500, detail="Stream error — please try again.")
 
 
 @app.get("/api/audio")
