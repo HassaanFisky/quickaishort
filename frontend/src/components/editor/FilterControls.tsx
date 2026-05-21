@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { motion } from "framer-motion";
 import { useEditorStore } from "@/stores/editorStore";
 
 const FILTERS = [
@@ -18,12 +19,23 @@ export function FilterControls() {
     <div className="filter-controls">
       <div className="filter-header">
         <span className="filter-title">Adjustments</span>
-        <button className="filter-reset" onClick={resetFrameFilters}>
+        <motion.button
+          className="filter-reset"
+          onClick={resetFrameFilters}
+          whileTap={{ scale: 0.93 }}
+          whileHover={{ scale: 1.05 }}
+          transition={{ type: "spring", damping: 20, stiffness: 380 }}
+        >
           Reset
-        </button>
+        </motion.button>
       </div>
       {FILTERS.map((f) => (
-        <div key={f.key} className="filter-row">
+        <motion.div
+          key={f.key}
+          className="filter-row"
+          whileHover={{ x: 2 }}
+          transition={{ type: "spring", damping: 24, stiffness: 340 }}
+        >
           <label className="filter-label">{f.label}</label>
           <input
             type="range"
@@ -37,7 +49,7 @@ export function FilterControls() {
           <span className="filter-value">
             {f.key === "hue" ? `${frameFilters[f.key]}°` : frameFilters[f.key].toFixed(2)}
           </span>
-        </div>
+        </motion.div>
       ))}
     </div>
   );

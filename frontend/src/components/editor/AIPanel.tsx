@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, type Variants } from "framer-motion";
 import { useEditorStore } from "@/stores/editorStore";
 import { callGeminiEditor, getInitialSuggestions } from "@/lib/gemini-editor";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
@@ -147,6 +147,11 @@ export function AIPanel() {
           animate={{ x: 0, opacity: 1 }}
           exit={{ x: "100%", opacity: 0 }}
           transition={{ type: "spring", damping: 28, stiffness: 260 }}
+          style={{
+            backdropFilter: "blur(16px)",
+            WebkitBackdropFilter: "blur(16px)",
+            background: "rgba(255, 255, 255, 0.07)",
+          }}
         >
           <div className="ai-panel-header">
             <div className="ai-header-left">
@@ -186,7 +191,11 @@ export function AIPanel() {
               >
                 {msg.role === "assistant" && <span className="msg-gem-badge">✦</span>}
                 <div className="msg-content">
-                  <MessageText text={msg.content} />
+                  {msg.role === "assistant" ? (
+                    <StreamingText text={msg.content} />
+                  ) : (
+                    <MessageText text={msg.content} />
+                  )}
                   {msg.actions && msg.actions.length > 0 && (
                     <div className="action-tags">
                       {msg.actions.map((a, i) => (
@@ -291,5 +300,38 @@ function MessageText({ text }: { text: string }) {
         ),
       )}
     </p>
+  );
+}
+
+const streamContainerVariants: Variants = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.08, delayChildren: 0.02 } },
+};
+
+const streamLineVariants: Variants = {
+  hidden: { opacity: 0 },
+  show: { opacity: 1, transition: { duration: 0.3, ease: "easeOut" } },
+};
+
+function StreamingText({ text }: { text: string }) {
+  const lines = text.split(/\n+/).filter((l) => l.trim());
+  if (lines.length === 0) return <p className="msg-text">{text}</p>;
+  return (
+    <motion.div variants={streamContainerVariants} initial="hidden" animate="show">
+      {lines.map((line, i) => {
+        const parts = line.split(/(\*\*[^*]+\*\*)/);
+        return (
+          <motion.p key={i} className="msg-text" variants={streamLineVariants}>
+            {parts.map((part, j) =>
+              part.startsWith("**") ? (
+                <strong key={j}>{part.slice(2, -2)}</strong>
+              ) : (
+                <React.Fragment key={j}>{part}</React.Fragment>
+              ),
+            )}
+          </motion.p>
+        );
+      })}
+    </motion.div>
   );
 }

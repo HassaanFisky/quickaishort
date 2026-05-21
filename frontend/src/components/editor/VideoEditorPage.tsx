@@ -91,13 +91,17 @@ export function VideoEditorPage({ videoUrl, videoTitle }: VideoEditorPageProps) 
 
   return (
     <div className="editor-root">
-      <div className={`video-stage ${isPortrait ? "stage-portrait" : "stage-landscape"}`}>
+      <motion.div
+        className={`video-stage ${isPortrait ? "stage-portrait" : "stage-landscape"}`}
+        animate={aiPanelOpen ? { scale: 0.98, borderRadius: "24px" } : { scale: 1, borderRadius: "12px" }}
+        transition={{ type: "spring", damping: 32, stiffness: 280 }}
+      >
         <div className="video-wrapper" style={{ aspectRatio }}>
           <video
             ref={videoRef}
             src={videoUrl}
             className="video-element"
-            style={{ filter: filterString }}
+            style={{ filter: filterString, willChange: "transform, filter" }}
             onLoadedMetadata={handleLoadedMetadata}
             onPlay={() => setIsPlaying(true)}
             onPause={() => setIsPlaying(false)}
@@ -129,7 +133,7 @@ export function VideoEditorPage({ videoUrl, videoTitle }: VideoEditorPageProps) 
         </div>
 
         <VideoControls videoRef={videoRef} isPlaying={isPlaying} />
-      </div>
+      </motion.div>
 
       <FilterControls />
 
@@ -181,10 +185,21 @@ function VideoControls({
 
   return (
     <div className="video-controls">
-      <button className="ctrl-btn play-btn" onClick={toggle}>
+      <motion.button
+        className="ctrl-btn play-btn"
+        onClick={toggle}
+        whileTap={{ scale: 0.9 }}
+        whileHover={{ scale: 1.08 }}
+        transition={{ type: "spring", damping: 18, stiffness: 400 }}
+      >
         {isPlaying ? "⏸" : "▶"}
-      </button>
-      <div className="seek-track">
+      </motion.button>
+      <motion.div
+        className="seek-track"
+        whileHover={{ scale: 1.01 }}
+        whileTap={{ scale: 0.99 }}
+        transition={{ type: "spring", damping: 22, stiffness: 380 }}
+      >
         <input
           type="range"
           min={0}
@@ -194,7 +209,7 @@ function VideoControls({
           onChange={seek}
           className="seek-slider"
         />
-      </div>
+      </motion.div>
       <span className="time-display">
         {fmt(currentTime)} / {fmt(duration)}
       </span>

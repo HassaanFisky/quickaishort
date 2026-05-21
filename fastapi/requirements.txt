@@ -2,7 +2,7 @@ fastapi==0.115.5
 uvicorn[standard]>=0.34.0
 gunicorn==23.0.0
 python-multipart==0.0.29
-yt-dlp>=2025.4.0
+yt-dlp>=2026.3.17
 requests==2.32.3
 pydantic==2.10.3
 python-dotenv==1.0.1
