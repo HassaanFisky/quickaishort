@@ -1,24 +1,66 @@
-import os
-import tempfile
+import atexit
+import base64
 import logging
+import os
+import stat
+import tempfile
 
 logger = logging.getLogger(__name__)
 
-_COOKIE_FILE_PATH = None
+# Module-level cache: cookie file is written once per process from env var.
+_cached_cookie_path: str | None = None
+_cookie_path_initialized: bool = False
 
 
-def get_cookie_file():
-    import tempfile, os
-
-    cookies = os.environ.get("YOUTUBE_COOKIES", "")
-    if not cookies:
-        return None
+def _secure_delete(path: str) -> None:
+    """Overwrite then delete the cookie file so content is not recoverable."""
     try:
-        f = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
-        f.write(cookies)
-        f.close()
-        return f.name
+        if os.path.exists(path):
+            with open(path, "w") as fh:
+                fh.write("DELETED" * 128)
+            os.unlink(path)
     except Exception:
+        pass
+
+
+def get_cookie_file() -> str | None:
+    """
+    Returns path to a temp cookie file populated from YOUTUBE_COOKIES env var.
+    YOUTUBE_COOKIES must be base64-encoded Netscape cookie file content.
+    File is created once per process, chmod 0o600, and deleted on process exit.
+    Returns None when the env var is absent or empty.
+    """
+    global _cached_cookie_path, _cookie_path_initialized
+
+    if _cookie_path_initialized:
+        return _cached_cookie_path
+
+    _cookie_path_initialized = True
+
+    cookies_b64 = os.environ.get("YOUTUBE_COOKIES", "").strip()
+    if not cookies_b64:
+        return None
+
+    try:
+        cookie_content = base64.b64decode(cookies_b64).decode("utf-8")
+    except Exception as exc:
+        logger.warning("YOUTUBE_COOKIES: base64 decode failed — %s", exc)
+        return None
+
+    try:
+        fd, path = tempfile.mkstemp(suffix=".txt", prefix="yt_cookies_")
+        # Restrict to owner-read/write only before writing sensitive content.
+        os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
+        with os.fdopen(fd, "w") as fh:
+            fh.write(cookie_content)
+        atexit.register(_secure_delete, path)
+        _cached_cookie_path = path
+        logger.info(
+            "YOUTUBE_COOKIES: cookie file ready (%d chars)", len(cookie_content)
+        )
+        return path
+    except Exception as exc:
+        logger.warning("YOUTUBE_COOKIES: failed to write cookie file — %s", exc)
         return None
 
 
@@ -26,11 +68,9 @@ def inject_ydl_bypass(opts: dict) -> dict:
     """Injects bot bypass options and cookies into yt-dlp opts."""
     new_opts = opts.copy()
 
-    # Use a composite of the most hardened mobile and creator clients
     if "extractor_args" not in new_opts:
         new_opts["extractor_args"] = {}
 
-    # Merging instead of overwriting to allow caller specific clients
     existing_yt_args = new_opts["extractor_args"].get("youtube", {})
     existing_clients = existing_yt_args.get("player_client", [])
 
@@ -46,19 +86,16 @@ def inject_ydl_bypass(opts: dict) -> dict:
         "mweb",
     ]
 
-    # Union of both
+    # Union of caller-supplied clients + hardened defaults, preserving order.
     unique_clients = list(dict.fromkeys(existing_clients + hardened_clients))
 
     # Do NOT include player_skip — it prevents yt-dlp from fetching page configs
     # needed to decrypt signed CDN URLs, causing upstream 403s.
-    new_opts["extractor_args"]["youtube"] = {
-        "player_client": unique_clients,
-    }
+    new_opts["extractor_args"]["youtube"] = {"player_client": unique_clients}
 
     new_opts["nocheckcertificate"] = True
     new_opts["no_warnings"] = True
 
-    # Support for proxy rotation if provided in environment
     proxy = os.environ.get("YOUTUBE_PROXY")
     if proxy:
         new_opts["proxy"] = proxy
