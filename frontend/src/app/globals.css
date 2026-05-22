@@ -52,9 +52,14 @@
   --radius-3xl: calc(var(--radius) + 12px);
   --radius-4xl: calc(var(--radius) + 16px);
 
-  /* Custom Easing for "Greatestness" Motion */
+  /* Apple-style easing: smooth deceleration (matches NSAnimationEaseInOut) */
   --ease-magnetic: cubic-bezier(0.4, 0, 0.2, 1);
   --ease-fluid: cubic-bezier(0.34, 1.56, 0.64, 1);
+  /* Additional Apple-system easings */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);      /* Material You / Apple standard */
+  --ease-decelerate: cubic-bezier(0, 0, 0.2, 1);     /* Enter animations */
+  --ease-accelerate: cubic-bezier(0.3, 0, 1, 1);     /* Exit animations */
+  --ease-spring:     cubic-bezier(0.5, 1.5, 0.5, 1); /* Springy pop */
 
   /* === Spec type scale (Phase 5, additive) ===
      Exposed as Tailwind v4 utilities (text-12 .. text-44). Line heights
@@ -106,9 +111,13 @@
     --status-warning: #f59e0b;
     --status-error:   #ef4444;
 
-    --font-sans:      'Inter', system-ui, sans-serif;
-    --font-display:   'Outfit', 'Inter', system-ui, sans-serif;
-    --font-mono:      'JetBrains Mono', monospace;
+    /* SF Pro Display is bundled with macOS/iOS; on other platforms the OS
+       system-ui sans (Segoe UI, Roboto, etc.) provides a clean neutral fallback.
+       'Inter' is the web-font supplement loaded via next/font for cross-platform
+       consistency. */
+    --font-sans:      -apple-system, "SF Pro Display", BlinkMacSystemFont, "Segoe UI", 'Inter', system-ui, sans-serif;
+    --font-display:   -apple-system, "SF Pro Display", BlinkMacSystemFont, "Segoe UI", 'Inter', system-ui, sans-serif;
+    --font-mono:      "SF Mono", 'JetBrains Mono', "Fira Code", monospace;
 
     --radius-token-sm:   0.375rem;
     --radius-token:      0.625rem;

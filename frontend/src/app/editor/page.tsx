@@ -155,7 +155,7 @@ export default function EditorPage() {
         onClick={() => setAIPanelOpen(!aiPanelOpen)}
         aria-label="Toggle Gemini AI Editor"
       >
-        <span className="ai-toggle-gem-wrap">✦</span>
+        <span className="ai-toggle-gem-wrap" aria-hidden="true">✦</span>
         <span className="ai-toggle-content">
           <span className="ai-toggle-brand">QuickAI Short</span>
           <span className="ai-toggle-label">Gemini Editor</span>

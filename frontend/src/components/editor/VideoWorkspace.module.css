@@ -1,0 +1,382 @@
+/* VideoWorkspace — Hydro-Glass design system
+   Design tokens (locked in CLAUDE.md):
+     bg: #0a0a0a | surface: #111113 | surface-2: #17171a
+     accent: #a855f7 | accent-2: #ec4899
+     border: #26262b | text: #f4f4f5 | muted: #a1a1aa
+     radius: 0.75rem
+*/
+
+/* ── Root workspace grid ──────────────────────────────────────────────────────
+   Columns: [fixed 9:16 canvas pane] [flexible control panel]
+   Rows:    [canvas + controls] [timeline]                                       */
+.workspace {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: 1fr auto;
+  grid-template-areas:
+    "canvas controls"
+    "timeline timeline";
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  background-color: #0a0a0a;
+  color: #f4f4f5;
+  font-family: "Inter", system-ui, sans-serif;
+  overflow: hidden;
+}
+
+/* ── Canvas pane (left column) ───────────────────────────────────────────────── */
+.canvasPane {
+  grid-area: canvas;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  background-color: #0a0a0a;
+}
+
+/* Outer ring around the canvas — Hydro-Glass glow border */
+.canvasFrame {
+  position: relative;
+  border-radius: 0.75rem;
+  padding: 2px;
+  background: linear-gradient(135deg, #a855f7 0%, #ec4899 50%, #a855f7 100%);
+  box-shadow:
+    0 0 30px rgba(168, 85, 247, 0.25),
+    0 0 60px rgba(168, 85, 247, 0.10),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+
+/* The raw canvas element — CSS display size keeps aspect ratio; internal
+   resolution stays at 1080 × 1920 (set via .width / .height attributes). */
+.canvas {
+  display: block;
+  border-radius: calc(0.75rem - 2px);
+  background-color: #000;
+  /* width + height set inline from DISPLAY_W / DISPLAY_H constants */
+}
+
+/* State badge overlaid top-right on the canvas frame */
+.stateBadge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background-color: rgba(0, 0, 0, 0.7);
+  color: #a1a1aa;
+  backdrop-filter: blur(4px);
+  border: 1px solid #26262b;
+  pointer-events: none;
+}
+.stateBadge[data-state="PLAYING"] { color: #4ade80; border-color: rgba(74, 222, 128, 0.3); }
+.stateBadge[data-state="LOADING"] { color: #f59e0b; border-color: rgba(245, 158, 11, 0.3); }
+.stateBadge[data-state="EXPORTING"] { color: #a855f7; border-color: rgba(168, 85, 247, 0.3); }
+.stateBadge[data-state="ERROR"] { color: #f87171; border-color: rgba(248, 113, 113, 0.3); }
+
+/* ── Playback transport ───────────────────────────────────────────────────────── */
+.transport {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  max-width: 360px;
+}
+
+.transportBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid #26262b;
+  background-color: #17171a;
+  color: #f4f4f5;
+  cursor: pointer;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
+  flex-shrink: 0;
+}
+.transportBtn:hover:not(:disabled) {
+  background-color: #1f1f24;
+  box-shadow: 0 0 12px rgba(168, 85, 247, 0.3);
+}
+.transportBtn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.timecode {
+  font-size: 13px;
+  font-family: "JetBrains Mono", monospace;
+  color: #a1a1aa;
+  letter-spacing: 0.03em;
+}
+
+/* ── Control panel (right column) ────────────────────────────────────────────── */
+.controlPanel {
+  grid-area: controls;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 16px;
+  overflow-y: auto;
+  background-color: #111113;
+  border-left: 1px solid #26262b;
+  scrollbar-width: thin;
+  scrollbar-color: #26262b transparent;
+}
+
+.controlSection {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px 0;
+  border-bottom: 1px solid #26262b;
+}
+.controlSection:last-child {
+  border-bottom: none;
+}
+
+.sectionTitle {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: #a1a1aa;
+  margin: 0 0 4px;
+}
+
+.sliderLabel {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  color: #f4f4f5;
+}
+
+.sliderValue {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 12px;
+  color: #a855f7;
+}
+
+/* Slider styles inherit from Radix UI shadcn component; override track/thumb */
+.slider {
+  width: 100%;
+}
+
+/* Text input row */
+.textInputRow {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.textInput {
+  width: 100%;
+  padding: 6px 10px;
+  border-radius: 0.5rem;
+  border: 1px solid #26262b;
+  background-color: #17171a;
+  color: #f4f4f5;
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+.textInput:focus {
+  border-color: #a855f7;
+  box-shadow: 0 0 0 2px rgba(168, 85, 247, 0.2);
+}
+
+/* ── Action buttons ───────────────────────────────────────────────────────────── */
+.actionBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 9px 16px;
+  border-radius: 0.75rem;
+  border: 1px solid transparent;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s ease, box-shadow 0.15s ease;
+}
+.actionBtn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.actionBtnPrimary {
+  background-color: #17171a;
+  border-color: #26262b;
+  color: #f4f4f5;
+}
+.actionBtnPrimary:hover:not(:disabled) {
+  border-color: #a855f7;
+  box-shadow: 0 0 12px rgba(168, 85, 247, 0.25);
+}
+
+.actionBtnAccent {
+  background: linear-gradient(135deg, #a855f7 0%, #ec4899 100%);
+  color: #fff;
+  box-shadow: 0 4px 16px rgba(168, 85, 247, 0.35);
+}
+.actionBtnAccent:hover:not(:disabled) {
+  opacity: 0.9;
+  box-shadow: 0 4px 24px rgba(168, 85, 247, 0.5);
+}
+
+.actionBtnDanger {
+  background-color: #17171a;
+  border-color: rgba(248, 113, 113, 0.4);
+  color: #f87171;
+}
+.actionBtnDanger:hover:not(:disabled) {
+  border-color: #f87171;
+  box-shadow: 0 0 12px rgba(248, 113, 113, 0.2);
+}
+
+.actionBtnGhost {
+  background: none;
+  border: none;
+  color: #a1a1aa;
+  font-size: 12px;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 2px 0;
+  text-underline-offset: 3px;
+}
+.actionBtnGhost:hover { color: #f4f4f5; }
+
+/* ── Progress bar ─────────────────────────────────────────────────────────────── */
+.progressBar {
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background-color: #26262b;
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #a855f7 0%, #ec4899 100%);
+  transition: width 0.1s linear;
+  will-change: width;
+}
+
+.hint {
+  font-size: 11px;
+  color: #a1a1aa;
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* ── Timeline pane (bottom row) ──────────────────────────────────────────────── */
+.timelinePane {
+  grid-area: timeline;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 16px;
+  background-color: #111113;
+  border-top: 1px solid #26262b;
+}
+
+.timelineTrack {
+  position: relative;
+  width: 100%;
+  height: 32px;
+  display: flex;
+  align-items: center;
+}
+
+/* Tick marks along the timeline */
+.timelineTick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background-color: #26262b;
+  pointer-events: none;
+}
+
+.tickLabel {
+  position: absolute;
+  bottom: 100%;
+  left: 2px;
+  font-size: 9px;
+  font-family: "JetBrains Mono", monospace;
+  color: #a1a1aa;
+  white-space: nowrap;
+  transform: translateY(-2px);
+}
+
+/* The scrub slider spans the full track */
+.timelineSlider {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0.8;
+  z-index: 1;
+}
+
+/* Playhead — sharp vertical line follows currentTime */
+.playhead {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 2px;
+  background-color: #a855f7;
+  border-radius: 1px;
+  pointer-events: none;
+  box-shadow: 0 0 8px rgba(168, 85, 247, 0.6);
+  z-index: 2;
+  transition: left 0.03s linear;
+  will-change: left;
+}
+
+/* Timeline footer: left = current time, right = total duration */
+.timelineFooter {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.timelineTimecode {
+  font-size: 11px;
+  font-family: "JetBrains Mono", monospace;
+  color: #a855f7;
+}
+
+.timelineDuration {
+  font-size: 11px;
+  font-family: "JetBrains Mono", monospace;
+  color: #a1a1aa;
+}
+
+/* ── Responsive: collapse control panel to a drawer on narrow viewports ──────── */
+@media (max-width: 740px) {
+  .workspace {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "canvas"
+      "controls"
+      "timeline";
+  }
+
+  .controlPanel {
+    border-left: none;
+    border-top: 1px solid #26262b;
+    max-height: 320px;
+  }
+}

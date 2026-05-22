@@ -1,0 +1,31 @@
+# Cloud Build configuration for QuickAI Shorts backend.
+# Dockerfile lives in fastapi/ — this file lets any Cloud Build trigger
+# (including push-to-main triggers) build correctly from the repo root.
+
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    id: build-backend
+    args:
+      - 'build'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/backend:${SHORT_SHA}'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/backend:latest'
+      # Explicitly point at fastapi/Dockerfile — prevents "no Dockerfile found
+      # in root" failures when the trigger sources the whole repo.
+      - '-f'
+      - 'fastapi/Dockerfile'
+      # Build context is the fastapi/ subdirectory only to keep the image lean.
+      - 'fastapi'
+
+images:
+  - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/backend:${SHORT_SHA}'
+  - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/backend:latest'
+
+substitutions:
+  _REGION: us-central1
+  _REPO: quickai-repo
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: E2_HIGHCPU_8

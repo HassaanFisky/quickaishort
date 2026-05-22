@@ -15,12 +15,17 @@ SAFE_MODE = os.getenv("SAFE_MODE", "false").lower() == "true"
 
 redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379")
 
-# Sync connection for RQ
+# Sync connection for RQ.
+# socket_timeout is raised to 10 s (was 2 s) to survive Cloud Run cold-starts:
+# Upstash/Memorystore can take 3-8 s to accept the first connection on a fresh
+# instance. retry_on_timeout=True prevents immediate crashes on transient
+# timeouts without masking genuine connection failures.
 redis_conn = redis.Redis.from_url(
     redis_url,
-    socket_timeout=2.0,
-    socket_connect_timeout=2.0,
-    retry_on_timeout=False,
+    socket_timeout=10.0,
+    socket_connect_timeout=10.0,
+    retry_on_timeout=True,
+    health_check_interval=30,
 )
 
 # Async connection for ExtractorService and other async paths
@@ -28,9 +33,10 @@ import redis.asyncio as async_redis
 
 async_redis_conn = async_redis.from_url(
     redis_url,
-    socket_timeout=2.0,
-    socket_connect_timeout=2.0,
-    retry_on_timeout=False,
+    socket_timeout=10.0,
+    socket_connect_timeout=10.0,
+    retry_on_timeout=True,
+    health_check_interval=30,
 )
 
 render_queue = Queue(

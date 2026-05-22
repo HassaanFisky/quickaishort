@@ -453,13 +453,14 @@ export default function VideoCanvas() {
             <Button
               variant="ghost"
               size="icon"
+              aria-label={isPlaying ? "Pause video" : "Play video"}
               className="w-20 h-20 rounded-full text-white hover:bg-white/10 interactive-scale backdrop-blur-md border border-white/10 shadow-2xl"
               onClick={togglePlay}
             >
               {isPlaying ? (
-                <Pause className="w-10 h-10 fill-current" />
+                <Pause className="w-10 h-10 fill-current" aria-hidden="true" />
               ) : (
-                <Play className="w-10 h-10 fill-current pl-1.5" />
+                <Play className="w-10 h-10 fill-current pl-1.5" aria-hidden="true" />
               )}
             </Button>
           </div>
@@ -471,31 +472,32 @@ export default function VideoCanvas() {
           <Button
             variant="ghost"
             size="icon"
+            aria-label="Skip back 10 seconds"
             className="text-muted-foreground hover:text-primary hover:bg-foreground/5 rounded-full w-10 h-10 interactive"
             onClick={() => skip(-10)}
-            title="Back 10s"
           >
-            <SkipBack className="w-4 h-4" strokeWidth={1.5} />
+            <SkipBack className="w-4 h-4" strokeWidth={1.5} aria-hidden="true" />
           </Button>
 
           {/* Play/Pause — slide-up icon/text on hover */}
           <Button
             variant="default"
             size="icon"
+            aria-label={isPlaying ? "Pause" : "Play"}
             className="relative w-14 h-14 rounded-full bg-primary text-white hover:scale-110 active:scale-95 shadow-[0_0_20px_hsl(var(--primary)/0.3)] transition-all interactive overflow-hidden group"
             onClick={togglePlay}
             disabled={isBuffering}
           >
             {/* Icon layer — default visible, slides up on hover */}
-            <span className="absolute inset-0 flex items-center justify-center transition-transform duration-300 ease-in-out group-hover:-translate-y-full">
+            <span className="absolute inset-0 flex items-center justify-center transition-transform duration-300 ease-in-out group-hover:-translate-y-full" aria-hidden="true">
               {isPlaying ? (
                 <Pause className="w-6 h-6 fill-current" />
               ) : (
                 <Play className="w-6 h-6 fill-current pl-1" />
               )}
             </span>
-            {/* Text label — slides up from below on hover */}
-            <span className="absolute inset-0 flex items-center justify-center transition-transform duration-300 ease-in-out translate-y-full group-hover:translate-y-0 text-[8px] font-black uppercase tracking-widest pointer-events-none">
+            {/* Visible text label on hover — already conveys the action */}
+            <span className="absolute inset-0 flex items-center justify-center transition-transform duration-300 ease-in-out translate-y-full group-hover:translate-y-0 text-[8px] font-black uppercase tracking-widest pointer-events-none" aria-hidden="true">
               {isPlaying ? "Pause" : "Play"}
             </span>
           </Button>
@@ -503,11 +505,11 @@ export default function VideoCanvas() {
           <Button
             variant="ghost"
             size="icon"
+            aria-label="Skip forward 10 seconds"
             className="text-muted-foreground hover:text-primary hover:bg-foreground/5 rounded-full w-10 h-10 interactive"
             onClick={() => skip(10)}
-            title="Forward 10s"
           >
-            <SkipForward className="w-4 h-4" strokeWidth={1.5} />
+            <SkipForward className="w-4 h-4" strokeWidth={1.5} aria-hidden="true" />
           </Button>
         </div>
       )}

@@ -17,6 +17,7 @@ import {
   X,
   AlertCircle,
   Upload,
+  Wand2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -34,6 +35,7 @@ import { TimelineLoader } from "@/components/ui/TimelineLoader";
 import { LiquidThemeToggle } from "@/components/shared/LiquidThemeToggle";
 import { AIPanel } from "@/components/ai/AIPanel";
 import axios from "axios";
+import VideoWorkspace from "./VideoWorkspace";
 
 export default function EditorLayout() {
   const {
@@ -57,6 +59,7 @@ export default function EditorLayout() {
   const [urlValid, setUrlValid] = useState<boolean | null>(null);
   const [youtubePreviewId, setYoutubePreviewId] = useState<string | null>(null);
   const [backendFailed, setBackendFailed] = useState(false);
+  const [centerMode, setCenterMode] = useState<"preview" | "effects">("preview");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isAnalysing = (
@@ -290,16 +293,29 @@ export default function EditorLayout() {
             </h1>
           </div>
           <div className="flex items-center gap-3">
+            {/* Effects Studio toggle */}
+            <button
+              onClick={() => setCenterMode(centerMode === "effects" ? "preview" : "effects")}
+              aria-label={centerMode === "effects" ? "Switch to Preview" : "Open Effects Studio"}
+              className={cn(
+                "h-9 w-9 rounded-lg flex items-center justify-center border transition-colors",
+                centerMode === "effects"
+                  ? "bg-primary/20 border-primary/40 text-primary"
+                  : "bg-[hsl(var(--bg-elevated))] border-[hsl(var(--border))] text-[hsl(var(--fg-muted))] hover:bg-[hsl(var(--bg-muted))] hover:text-foreground"
+              )}
+            >
+              <Wand2 size={15} aria-hidden="true" />
+            </button>
             {/* AI Panel toggle */}
             <button
               onClick={() => setAIPanelOpen(true)}
-              title="Open AI Assistant"
+              aria-label="Open AI Assistant"
               className="h-9 w-9 rounded-lg flex items-center justify-center
                          bg-[hsl(var(--bg-elevated))] border border-[hsl(var(--border))]
                          hover:bg-[hsl(var(--bg-muted))] transition-colors
                          text-[hsl(var(--fg-muted))] hover:text-[hsl(var(--accent-indigo))]"
             >
-              <Sparkles size={15} />
+              <Sparkles size={15} aria-hidden="true" />
             </button>
             <LiquidThemeToggle />
           </div>
@@ -375,7 +391,10 @@ export default function EditorLayout() {
                   </AnimatePresence>
 
                   <div className="flex items-center gap-2 p-1.5">
-                    {/* URL input */}
+                    {/* URL input — label is visually hidden but announced by screen readers */}
+                    <label htmlFor="youtube-url-input" className="sr-only">
+                      YouTube video URL
+                    </label>
                     <div className="neon-url-container flex-1" data-analyzing={isAnalysing || undefined}>
                       <div className="neon-url-spin-layer" aria-hidden="true" />
                       <div className="neon-url-glow-layer" aria-hidden="true" />
@@ -540,6 +559,16 @@ export default function EditorLayout() {
                       className="max-w-lg w-full"
                     />
                   </motion.div>
+                ) : centerMode === "effects" ? (
+                  <motion.div
+                    key="stage-effects"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="w-full h-full overflow-auto"
+                  >
+                    <VideoWorkspace />
+                  </motion.div>
                 ) : (
                   <motion.div
                     key="stage-canvas"
@@ -645,13 +674,13 @@ function FloatingControls() {
         <motion.button
           key={i}
           onClick={action}
-          title={title}
+          aria-label={title}
           whileHover={{ scale: 1.1, x: -5 }}
           whileTap={{ scale: 0.95 }}
           className="w-14 h-14 rounded-2xl glass-surface border-foreground/10 flex items-center justify-center hover:border-primary/50 transition-all cursor-pointer group shadow-2xl overflow-hidden relative"
         >
-          <div className="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-          <Icon className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors relative z-10" />
+          <div className="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity" aria-hidden="true" />
+          <Icon className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors relative z-10" aria-hidden="true" />
         </motion.button>
       ))}
     </>
