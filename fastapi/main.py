@@ -1361,96 +1361,9 @@ async def get_audio(url: str = Query(...)):
                 "audio [yt-dlp/%s] error vid=%s: %s", _attempt_label, video_id, e
             )
 
-    # TIER 2 — Cobalt API
-    if not success:
-        logger.info("audio [cobalt] starting vid=%s", video_id)
-        try:
-            stream_url = await VideoService._fetch_cobalt(url, mode="audio")
-            if stream_url:
-                async with httpx.AsyncClient(
-                    timeout=30.0, follow_redirects=True
-                ) as client:
-                    async with client.stream("GET", stream_url) as r:
-                        r.raise_for_status()
-                        with open(output_path, "wb") as f:
-                            async for chunk in r.aiter_bytes(chunk_size=8192):
-                                f.write(chunk)
-                if output_path.exists() and output_path.stat().st_size > 10000:
-                    success = True
-                    logger.info("audio [cobalt] success vid=%s", video_id)
-        except Exception as e:
-            last_error = f"Cobalt tier 2 failed: {e}"
-            logger.warning("audio [cobalt] failed vid=%s: %s", video_id, e)
-
-    # TIER 3 — Piped API
-    if not success:
-        PIPED_INSTANCES = [
-            "https://pipedapi.kavin.rocks",
-            "https://pipedapi.adminforge.de",
-            "https://piped-api.garudalinux.org",
-        ]
-        for instance in PIPED_INSTANCES:
-            try:
-                async with httpx.AsyncClient(timeout=15.0) as client:
-                    r = await client.get(f"{instance}/streams/{video_id}")
-                    if r.status_code != 200:
-                        continue
-                    data = r.json()
-                    audio_streams = data.get("audioStreams", [])
-                    if not audio_streams:
-                        continue
-                    best = max(audio_streams, key=lambda x: x.get("bitrate", 0))
-                    audio_url = best.get("url", "")
-                    if not audio_url:
-                        continue
-                    async with client.stream("GET", audio_url) as stream:
-                        with open(output_path, "wb") as f:
-                            async for chunk in stream.aiter_bytes(8192):
-                                f.write(chunk)
-                    if output_path.exists() and output_path.stat().st_size > 10000:
-                        success = True
-                        break
-            except Exception as e:
-                logger.warning(f"Piped {instance} failed: {e}")
-                continue
-
-    # TIER 4 — Invidious API
-    if not success:
-        INVIDIOUS_INSTANCES = [
-            "https://yewtu.be",
-            "https://invidious.kavin.rocks",
-            "https://vid.priv.au",
-        ]
-        for instance in INVIDIOUS_INSTANCES:
-            try:
-                async with httpx.AsyncClient(timeout=15.0) as client:
-                    r = await client.get(f"{instance}/api/v1/videos/{video_id}")
-                    if r.status_code != 200:
-                        continue
-                    data = r.json()
-                    formats = [
-                        f
-                        for f in data.get("adaptiveFormats", [])
-                        if "audio" in f.get("type", "")
-                    ]
-                    if not formats:
-                        formats = data.get("formatStreams", [])
-                    if not formats:
-                        continue
-                    best = max(formats, key=lambda x: x.get("bitrate", 0))
-                    audio_url = best.get("url", "")
-                    if not audio_url:
-                        continue
-                    async with client.stream("GET", audio_url) as stream:
-                        with open(output_path, "wb") as f:
-                            async for chunk in stream.aiter_bytes(8192):
-                                f.write(chunk)
-                    if output_path.exists() and output_path.stat().st_size > 10000:
-                        success = True
-                        break
-            except Exception as e:
-                logger.warning(f"Invidious {instance} failed: {e}")
-                continue
+    # NOTE: Cobalt v10 now requires JWT auth (error.api.auth.jwt.missing) and
+    # Piped/Invidious instances are down as of 2026-05. All removed to avoid
+    # wasting 45+ seconds on guaranteed failures before the final 503.
 
     if not success:
         shutil.rmtree(tmpdir, ignore_errors=True)

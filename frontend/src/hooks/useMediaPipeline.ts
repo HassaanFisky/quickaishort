@@ -95,19 +95,22 @@ export function useMediaPipeline() {
       const msg = error instanceof Error ? error.message : String(error);
       console.error("Pipeline error:", msg);
       
-      let displayMsg = "Could not process this video — please try a different YouTube URL";
+      let displayMsg = "Could not process this video — try a different YouTube URL or try again.";
       const lowerMsg = msg.toLowerCase();
-      
+
       if (error instanceof Error && error.name === "AbortError") {
         displayMsg = "Audio processing timed out — video may be too long";
       } else if (lowerMsg.includes("504") || lowerMsg.includes("timed out") || lowerMsg.includes("timeout")) {
         displayMsg = "Video processing timed out — try a shorter clip or try again";
-      } else if (lowerMsg.includes("503") || lowerMsg.includes("unavailable")) {
-        displayMsg = "YouTube is blocking video access from our servers — try a different video or try again in a moment.";
+      } else if (lowerMsg.includes("audio extraction failed")) {
+        // Backend returned 503 after yt-dlp exhausted all clients.
+        displayMsg = "Could not download audio — this video may be unavailable on our servers. Try a different video.";
+      } else if (lowerMsg.includes("network error") || lowerMsg.includes("unreachable")) {
+        displayMsg = "Could not reach the server — check your connection and try again.";
       } else if (lowerMsg.includes("private")) {
-        displayMsg = "This video is private — try a public YouTube video";
-      } else if (lowerMsg.includes("yt-dlp")) {
-        displayMsg = "YouTube is blocking this video — try a different video.";
+        displayMsg = "This video is private — try a public YouTube video.";
+      } else if (lowerMsg.includes("video unavailable") || lowerMsg.includes("yt-dlp")) {
+        displayMsg = "This video is unavailable — it may be private, deleted, or region-locked.";
       }
       
       toast.error(displayMsg);
