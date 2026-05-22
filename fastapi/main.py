@@ -1129,27 +1129,24 @@ async def proxy_video_stream(url: str):
 
     redirect_url: str | None = None
 
-    # ── Tier 1: yt-dlp with ios + tv_embedded ──────────────────────────────
-    # ios client gives non-IP-bound signed URLs; tv_embedded is reliable in
-    # server environments. Combined formats only (no muxing needed in browser).
-    FMT = "18/22/best[height<=480][vcodec^=avc1][acodec!='none'][ext=mp4]/best[height<=480][ext=mp4]/best[ext=mp4]/best"
-    ydl_opts: dict = {
-        "format": FMT,
-        "quiet": True,
-        "no_warnings": True,
-        "nocheckcertificate": True,
-        "extractor_args": {
-            "youtube": {
-                "player_client": ["ios", "tv_embedded"],
-            }
-        },
-    }
-    proxy = os.environ.get("YOUTUBE_PROXY")
-    if proxy:
-        ydl_opts["proxy"] = proxy
-    cookie_path = get_cookie_file()
-    if cookie_path:
-        ydl_opts["cookiefile"] = cookie_path
+    # ── Tier 1: yt-dlp — full hardened client list, simple format selector ──
+    # Combined H.264+AAC formats only (no muxing in browser).
+    # tv_embedded + web_creator reliably expose format 18/22.
+    # ios gives less-IP-bound URLs for the redirect to work from browser IP.
+    FMT = "18/22/best[ext=mp4]/best"
+    ydl_opts = inject_ydl_bypass(
+        {
+            "format": FMT,
+            "quiet": True,
+            "no_warnings": True,
+        }
+    )
+    # Override to prioritise clients that give combined-stream URLs
+    ydl_opts["extractor_args"]["youtube"]["player_client"] = [
+        "tv_embedded", "ios", "android", "web_creator", "mweb"
+    ]
+    # Remove player_skip — it hides available formats
+    ydl_opts["extractor_args"]["youtube"].pop("player_skip", None)
 
     try:
         loop = asyncio.get_event_loop()
@@ -1178,35 +1175,35 @@ async def proxy_video_stream(url: str):
         logger.warning("proxy-video tier1 yt-dlp failed: %s", exc)
 
     # ── Tier 2: Invidious /latest_version?local=true ───────────────────────
-    # local=true → Invidious proxies the stream itself, handles range requests,
-    # no IP-binding because Invidious fetches fresh on every browser request.
+    # local=true → Invidious proxies the video on each browser request.
+    # Handles range requests natively; no IP-binding issue.
+    # We probe with follow_redirects=True so 301 chains resolve correctly.
     if not redirect_url:
         for inv_host in [
-            "invidious.privacyredirect.com",
+            "inv.tux.pizza",
+            "invidious.nerdvpn.de",
+            "iv.melmac.space",
+            "invidious.fdn.fr",
             "yewtu.be",
-            "invidious.kavin.rocks",
+            "invidious.privacyredirect.com",
             "iv.datura.network",
-            "vid.priv.au",
         ]:
             try:
-                async with httpx.AsyncClient(timeout=5.0, follow_redirects=False) as c:
-                    # Probe the instance to make sure it's up before redirecting
-                    probe = await c.get(
-                        f"https://{inv_host}/latest_version",
-                        params={"id": v_id, "itag": "18", "local": "true"},
-                    )
-                    # Accept 200 OR 302 (some instances redirect to CDN)
-                    if probe.status_code in (200, 206, 302):
-                        if probe.status_code in (302,):
-                            # Instance redirected us to CDN — use that CDN URL directly
-                            redirect_url = probe.headers.get("location", "")
-                        else:
-                            # Instance is streaming — redirect browser to it directly
-                            redirect_url = (
-                                f"https://{inv_host}/latest_version"
-                                f"?id={v_id}&itag=18&local=true"
-                            )
-                        logger.info("proxy-video tier2 Invidious ok: %s (HTTP %s)", inv_host, probe.status_code)
+                inv_url = (
+                    f"https://{inv_host}/latest_version"
+                    f"?id={v_id}&itag=18&local=true"
+                )
+                async with httpx.AsyncClient(timeout=6.0, follow_redirects=True) as c:
+                    probe = await c.get(inv_url)
+                    if probe.status_code in (200, 206):
+                        # Instance is up and returning video bytes — redirect browser here
+                        redirect_url = inv_url
+                        logger.info("proxy-video tier2 Invidious ok: %s", inv_host)
+                        break
+                    elif probe.status_code in (301, 302, 303, 307, 308):
+                        # Final redirect target after following chain
+                        redirect_url = str(probe.url)
+                        logger.info("proxy-video tier2 Invidious chain→%s: %s", probe.status_code, inv_host)
                         break
             except Exception as inv_exc:
                 logger.warning("proxy-video tier2 Invidious %s: %s", inv_host, inv_exc)
