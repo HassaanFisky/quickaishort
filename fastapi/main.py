@@ -43,7 +43,6 @@ from fastapi.responses import (
     FileResponse,
     JSONResponse,
     StreamingResponse,
-    RedirectResponse,
 )
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
@@ -1104,21 +1103,18 @@ async def proxy_video(url: str):
 
 
 @app.get("/api/proxy-video")
-async def proxy_video_stream(url: str):
+async def proxy_video_stream(url: str, request: Request):
     """
-    Resolves a YouTube URL to a playable video stream.
+    Range-aware YouTube video proxy.
 
-    Strategy (2026):
-      1. yt-dlp with ios+tv_embedded clients → 302 to YouTube CDN
-         (ios URLs are typically not IP-bound, so the browser can fetch directly)
-      2. Invidious /latest_version?local=true → 302 to Invidious proxy
-         (Invidious re-fetches from YouTube on each browser request, handles range natively)
-      3. Piped /streams → 302 to Piped stream URL
-      4. 503 if all fail
+    YouTube CDN signed URLs are IP-bound to the server that requested them.
+    Redirect-to-CDN is not viable — the browser IP != Cloud Run IP → 403.
+    Instead: Cloud Run resolves the URL with yt-dlp, then proxies the bytes
+    using the same IP.  The proxy forwards Range headers so seeking works.
 
-    The browser fetches the final URL directly — no full-stream proxy through Cloud Run.
-    crossOrigin is NOT set on the <video> element so YouTube CDN CORS restrictions
-    are irrelevant.
+    Format preference: 18 (360p combined) → 22 (720p combined) →
+    best combined MP4 → best MP4.  Combined = single URL with audio+video,
+    no muxing required.
     """
     _require_youtube_url(url)
 
@@ -1127,27 +1123,16 @@ async def proxy_video_stream(url: str):
     if not v_id:
         raise HTTPException(status_code=400, detail="Could not parse video ID from URL")
 
-    redirect_url: str | None = None
-
-    # ── Tier 1: yt-dlp — full hardened client list, simple format selector ──
-    # Combined H.264+AAC formats only (no muxing in browser).
-    # tv_embedded + web_creator reliably expose format 18/22.
-    # ios gives less-IP-bound URLs for the redirect to work from browser IP.
     FMT = "18/22/best[ext=mp4]/best"
     ydl_opts = inject_ydl_bypass(
-        {
-            "format": FMT,
-            "quiet": True,
-            "no_warnings": True,
-        }
+        {"format": FMT, "quiet": True, "no_warnings": True}
     )
-    # Override to prioritise clients that give combined-stream URLs
-    ydl_opts["extractor_args"]["youtube"]["player_client"] = [
-        "tv_embedded", "ios", "android", "web_creator", "mweb"
-    ]
-    # Remove player_skip — it hides available formats
-    ydl_opts["extractor_args"]["youtube"].pop("player_skip", None)
+    # Remove player_skip — it prevents yt-dlp from seeing all available formats
+    ydl_opts.get("extractor_args", {}).get("youtube", {}).pop("player_skip", None)
 
+    stream_url: str | None = None
+
+    # ── Tier 1: yt-dlp ────────────────────────────────────────────────────
     try:
         loop = asyncio.get_event_loop()
 
@@ -1164,84 +1149,121 @@ async def proxy_video_stream(url: str):
                 detail="Videos longer than 30 minutes are not supported.",
             )
 
-        cdn_url = info.get("url")
-        if cdn_url:
-            redirect_url = cdn_url
-            logger.info("proxy-video tier1 yt-dlp ok: fmt=%s", info.get("format_id", "?"))
+        stream_url = info.get("url")
+        if not stream_url:
+            raise ValueError("yt-dlp returned no URL")
+        logger.info("proxy-video yt-dlp ok: fmt=%s vid=%s", info.get("format_id"), v_id)
 
     except HTTPException:
         raise
     except Exception as exc:
-        logger.warning("proxy-video tier1 yt-dlp failed: %s", exc)
+        logger.warning("proxy-video yt-dlp failed (%s), trying fallbacks", exc)
 
-    # ── Tier 2: Invidious /latest_version?local=true ───────────────────────
-    # local=true → Invidious proxies the video on each browser request.
-    # Handles range requests natively; no IP-binding issue.
-    # We probe with follow_redirects=True so 301 chains resolve correctly.
-    if not redirect_url:
+    # ── Tier 2: Invidious API (get stream URL, proxy it ourselves) ─────────
+    if not stream_url:
         for inv_host in [
-            "inv.tux.pizza",
-            "invidious.nerdvpn.de",
-            "iv.melmac.space",
-            "invidious.fdn.fr",
-            "yewtu.be",
             "invidious.privacyredirect.com",
+            "yewtu.be",
+            "invidious.kavin.rocks",
+            "vid.priv.au",
             "iv.datura.network",
         ]:
             try:
-                inv_url = (
-                    f"https://{inv_host}/latest_version"
-                    f"?id={v_id}&itag=18&local=true"
-                )
-                async with httpx.AsyncClient(timeout=6.0, follow_redirects=True) as c:
-                    probe = await c.get(inv_url)
-                    if probe.status_code in (200, 206):
-                        # Instance is up and returning video bytes — redirect browser here
-                        redirect_url = inv_url
-                        logger.info("proxy-video tier2 Invidious ok: %s", inv_host)
-                        break
-                    elif probe.status_code in (301, 302, 303, 307, 308):
-                        # Final redirect target after following chain
-                        redirect_url = str(probe.url)
-                        logger.info("proxy-video tier2 Invidious chain→%s: %s", probe.status_code, inv_host)
-                        break
-            except Exception as inv_exc:
-                logger.warning("proxy-video tier2 Invidious %s: %s", inv_host, inv_exc)
-
-    # ── Tier 3: Piped /streams ─────────────────────────────────────────────
-    if not redirect_url:
-        for piped_host in [
-            "pipedapi.kavin.rocks",
-            "pipedapi.adminforge.de",
-            "piped-api.garudalinux.org",
-        ]:
-            try:
                 async with httpx.AsyncClient(timeout=8.0, follow_redirects=True) as c:
-                    p = await c.get(f"https://{piped_host}/streams/{v_id}")
-                    p.raise_for_status()
-                    p_data = p.json()
-                    for vs in p_data.get("videoStreams", []):
-                        # Prefer combined (non-video-only) MP4 streams
-                        if not vs.get("videoOnly", True) and "mp4" in vs.get("mimeType", ""):
-                            redirect_url = vs["url"]
+                    r = await c.get(
+                        f"https://{inv_host}/api/v1/videos/{v_id}",
+                        params={"fields": "formatStreams"},
+                    )
+                    r.raise_for_status()
+                    for fmt in r.json().get("formatStreams", []):
+                        if fmt.get("itag") in ("18", "22"):
+                            stream_url = fmt["url"]
                             break
-                    if redirect_url:
-                        logger.info("proxy-video tier3 Piped ok: %s", piped_host)
+                    if not stream_url:
+                        fmts = r.json().get("formatStreams", [])
+                        if fmts:
+                            stream_url = fmts[0]["url"]
+                    if stream_url:
+                        logger.info("proxy-video Invidious ok: %s", inv_host)
                         break
-            except Exception as p_exc:
-                logger.warning("proxy-video tier3 Piped %s: %s", piped_host, p_exc)
+            except Exception as e:
+                logger.warning("proxy-video Invidious %s: %s", inv_host, e)
 
-    if not redirect_url:
+    if not stream_url:
         raise HTTPException(
             status_code=503,
             detail="Video stream unavailable — try a different video or try again later.",
         )
 
-    return RedirectResponse(
-        url=redirect_url,
-        status_code=302,
-        headers={"Cache-Control": "no-store"},
+    # ── Proxy the stream with range-request forwarding ────────────────────
+    # Cloud Run proxies from the same IP that obtained the signed URL,
+    # so YouTube CDN accepts the request regardless of IP binding.
+    range_header = request.headers.get("range")
+    upstream_headers: dict[str, str] = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/124.0.0.0 Safari/537.36"
+        ),
+        "Accept": "*/*",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Referer": "https://www.youtube.com/",
+        "Origin": "https://www.youtube.com",
+    }
+    if range_header:
+        upstream_headers["Range"] = range_header
+
+    client = httpx.AsyncClient(
+        timeout=httpx.Timeout(15.0, read=120.0),
+        follow_redirects=True,
     )
+    try:
+        req = client.build_request("GET", stream_url, headers=upstream_headers)
+        upstream = await client.send(req, stream=True)
+
+        if upstream.status_code not in (200, 206):
+            await upstream.aclose()
+            await client.aclose()
+            raise HTTPException(
+                status_code=502,
+                detail=f"Upstream returned HTTP {upstream.status_code} — try again.",
+            )
+
+        resp_headers: dict[str, str] = {
+            "Accept-Ranges": "bytes",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+            "Access-Control-Allow-Headers": "Range, Content-Type",
+            "Access-Control-Expose-Headers": "Content-Range, Content-Length, Accept-Ranges",
+            "Cross-Origin-Resource-Policy": "cross-origin",
+            "Cache-Control": "no-store",
+        }
+        for hdr in ("Content-Length", "Content-Range", "Content-Type"):
+            if hdr.lower() in upstream.headers:
+                resp_headers[hdr] = upstream.headers[hdr.lower()]
+
+        async def stream_body():
+            try:
+                async for chunk in upstream.aiter_bytes(32768):
+                    yield chunk
+            finally:
+                await upstream.aclose()
+                await client.aclose()
+
+        return StreamingResponse(
+            stream_body(),
+            status_code=upstream.status_code,
+            media_type="video/mp4",
+            headers=resp_headers,
+        )
+
+    except HTTPException:
+        await client.aclose()
+        raise
+    except Exception as exc:
+        await client.aclose()
+        logger.exception("proxy-video stream error: %s", exc)
+        raise HTTPException(status_code=500, detail="Stream error — please try again.")
 
 
 @app.get("/api/audio")
