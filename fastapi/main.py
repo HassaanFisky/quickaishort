@@ -1370,10 +1370,22 @@ async def get_audio(url: str = Query(...)):
         logger.error(
             "audio all tiers failed vid=%s last_error=%s", video_id, last_error
         )
-        raise HTTPException(
-            status_code=503,
-            detail="Audio extraction failed — server could not download this video. Try a different video or try again.",
-        )
+        # Surface a specific message so the frontend shows the real cause.
+        _err_lower = last_error.lower()
+        if "sign in" in _err_lower or "bot" in _err_lower or "confirm" in _err_lower:
+            _detail = (
+                "Bot detection: this video requires browser cookies to access from our servers. "
+                "Try a different video — most videos work without cookies."
+            )
+        elif "video unavailable" in _err_lower or "unavailable" in _err_lower:
+            _detail = "This video is unavailable — it may be private, deleted, or region-locked."
+        elif "timed out" in _err_lower:
+            _detail = (
+                "Audio extraction timed out — video may be too long or slow to access."
+            )
+        else:
+            _detail = "Audio extraction failed — server could not download this video. Try a different video or try again."
+        raise HTTPException(status_code=503, detail=_detail)
 
     return FileResponse(
         path=output_path,
