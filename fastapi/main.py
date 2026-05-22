@@ -68,7 +68,7 @@ except ImportError:
 except Exception as _sentry_err:
     print(f"[ERROR] Sentry initialization failed: {_sentry_err}")
 
-from app.utils.youtube_auth import get_cookie_file, inject_ydl_bypass
+from app.utils.youtube_auth import inject_ydl_bypass
 from agent.viral_agent import get_viral_agent
 from models.user_stats import StatsIncrement
 from services.db import (
@@ -1297,44 +1297,54 @@ async def get_audio(url: str = Query(...)):
     success = False
     last_error = ""
 
-    # TIER 1 — yt-dlp (hardened mobile/creator clients + cookies)
+    # TIER 1 — yt-dlp (hardened clients: tv_embedded + ios + android + web)
+    # No player_skip — page config fetch is needed to decrypt signed CDN URLs.
     try:
-        ydl_opts = {
-            "format": "bestaudio[ext=m4a]/bestaudio/best",
-            "outtmpl": str(output_path),
-            "quiet": True,
-            "no_warnings": True,
-            "extractor_args": {
-                "youtube": {
-                    "player_client": ["android", "web_creator", "ios"],
-                    "player_skip": ["configs"],
-                }
-            },
-            "http_headers": {
-                "User-Agent": "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
-            },
-            "socket_timeout": 30,
-            "retries": 3,
-        }
-
-        cookie_file = get_cookie_file()
-        if cookie_file:
-            ydl_opts["cookiefile"] = cookie_file
-
-        ydl_opts = inject_ydl_bypass(ydl_opts)
+        ydl_opts = inject_ydl_bypass(
+            {
+                "format": "bestaudio[ext=m4a]/bestaudio/best",
+                "outtmpl": str(output_path),
+                "quiet": True,
+                "no_warnings": True,
+                "extractor_args": {
+                    "youtube": {
+                        "player_client": ["tv_embedded", "ios", "android"],
+                    }
+                },
+                "http_headers": {
+                    "User-Agent": (
+                        "Mozilla/5.0 (Linux; Android 13; Pixel 7) "
+                        "AppleWebKit/537.36 (KHTML, like Gecko) "
+                        "Chrome/120.0.0.0 Mobile Safari/537.36"
+                    ),
+                },
+                "socket_timeout": 30,
+                "retries": 2,
+            }
+        )
 
         loop = asyncio.get_event_loop()
+        logger.info("audio [tier1/yt-dlp] starting vid=%s", video_id)
 
         def _run_yt():
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([url])
 
-        await loop.run_in_executor(None, _run_yt)
+        await asyncio.wait_for(loop.run_in_executor(None, _run_yt), timeout=60.0)
+
         if output_path.exists() and output_path.stat().st_size > 10000:
             success = True
+            logger.info(
+                "audio [tier1/yt-dlp] success vid=%s size=%d",
+                video_id,
+                output_path.stat().st_size,
+            )
+    except asyncio.TimeoutError:
+        last_error = f"yt-dlp download timed out (60s) vid={video_id}"
+        logger.warning("audio [tier1/yt-dlp] timeout vid=%s", video_id)
     except Exception as e:
-        last_error = f"yt-dlp tier 1 failed: {str(e)}"
-        logger.warning(last_error)
+        last_error = f"yt-dlp tier 1 failed vid={video_id}: {e}"
+        logger.warning("audio [tier1/yt-dlp] failed vid=%s: %s", video_id, e)
 
     # TIER 2 — Cobalt API (with retry logic)
     if not success:
@@ -1427,7 +1437,13 @@ async def get_audio(url: str = Query(...)):
 
     if not success:
         shutil.rmtree(tmpdir, ignore_errors=True)
-        raise HTTPException(status_code=500, detail="Video unavailable on all sources")
+        logger.error(
+            "audio all tiers failed vid=%s last_error=%s", video_id, last_error
+        )
+        raise HTTPException(
+            status_code=503,
+            detail="Audio extraction failed — server could not download this video. Try a different video or try again.",
+        )
 
     return FileResponse(
         path=output_path,
