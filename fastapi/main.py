@@ -1124,9 +1124,7 @@ async def proxy_video_stream(url: str, request: Request):
         raise HTTPException(status_code=400, detail="Could not parse video ID from URL")
 
     FMT = "18/22/best[ext=mp4]/best"
-    ydl_opts = inject_ydl_bypass(
-        {"format": FMT, "quiet": True, "no_warnings": True}
-    )
+    ydl_opts = inject_ydl_bypass({"format": FMT, "quiet": True, "no_warnings": True})
     # Remove player_skip — it prevents yt-dlp from seeing all available formats
     ydl_opts.get("extractor_args", {}).get("youtube", {}).pop("player_skip", None)
 
