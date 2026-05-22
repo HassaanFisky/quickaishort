@@ -81,14 +81,18 @@ async def close_storage() -> None:
 def get_gridfs_exports() -> motor.motor_asyncio.AsyncIOMotorGridFSBucket:
     """Get GridFS bucket for exports."""
     if _gridfs_exports is None:
-        raise RuntimeError("GridFS exports bucket not initialized. Did init_storage() run?")
+        raise RuntimeError(
+            "GridFS exports bucket not initialized. Did init_storage() run?"
+        )
     return _gridfs_exports
 
 
 def get_gridfs_uploads() -> motor.motor_asyncio.AsyncIOMotorGridFSBucket:
     """Get GridFS bucket for uploads."""
     if _gridfs_uploads is None:
-        raise RuntimeError("GridFS uploads bucket not initialized. Did init_storage() run?")
+        raise RuntimeError(
+            "GridFS uploads bucket not initialized. Did init_storage() run?"
+        )
     return _gridfs_uploads
 
 

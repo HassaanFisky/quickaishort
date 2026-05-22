@@ -32,7 +32,9 @@ class VideoUploadResponse(BaseModel):
     request_id: str = Field(description="Unique upload request ID")
     file_id: str = Field(description="GridFS ObjectId for uploaded file")
     filename: str = Field(description="Uploaded filename")
-    task_id: Optional[str] = Field(default=None, description="Celery task ID if processing requested")
+    task_id: Optional[str] = Field(
+        default=None, description="Celery task ID if processing requested"
+    )
     message: str = Field(description="Status message")
 
 
@@ -115,10 +117,14 @@ async def upload_video(
                     try:
                         adjustments = json.loads(frame_adjustments)
                     except json.JSONDecodeError:
-                        logger.warning("Invalid frame_adjustments JSON: %s", frame_adjustments)
+                        logger.warning(
+                            "Invalid frame_adjustments JSON: %s", frame_adjustments
+                        )
 
                 # Validate adjustment values
-                frame_adj = FrameAdjustment(**adjustments) if adjustments else FrameAdjustment()
+                frame_adj = (
+                    FrameAdjustment(**adjustments) if adjustments else FrameAdjustment()
+                )
                 adjustment_dict = frame_adj.model_dump()
 
                 # Dispatch async task (non-blocking)
@@ -157,9 +163,8 @@ async def upload_video(
             file_id=file_id,
             filename=file.filename or "untitled.mp4",
             task_id=task_id,
-            message="Video uploaded successfully" + (
-                f"; processing task {task_id} enqueued" if task_id else ""
-            ),
+            message="Video uploaded successfully"
+            + (f"; processing task {task_id} enqueued" if task_id else ""),
         )
 
     except HTTPException:

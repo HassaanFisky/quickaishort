@@ -297,7 +297,9 @@ Return ONLY valid JSON."""
             persona_id=persona_id,
             persona_name=persona_name,
             would_watch_full=vote_data.get("would_watch_full", True),
-            predicted_retention_pct=float(vote_data.get("predicted_retention_pct", 60.0)),
+            predicted_retention_pct=float(
+                vote_data.get("predicted_retention_pct", 60.0)
+            ),
             drop_off_second=vote_data.get("drop_off_second"),
             hook_verdict=vote_data.get("hook_verdict", "neutral"),
             share_likelihood=float(vote_data.get("share_likelihood", 0.5)),
@@ -367,12 +369,12 @@ def calculate_weighted_consensus(persona_votes: list[PersonaVote]) -> tuple[floa
         # Build composite score from persona vote
         retention_component = vote.predicted_retention_pct
         share_component = vote.share_likelihood * 100
-        hook_bonus = {"strong": 15, "neutral": 0, "weak": -15}.get(
-            vote.hook_verdict, 0
-        )
+        hook_bonus = {"strong": 15, "neutral": 0, "weak": -15}.get(vote.hook_verdict, 0)
         watch_bonus = 20 if vote.would_watch_full else -10
 
-        vote_score = (retention_component + share_component) / 2 + hook_bonus + watch_bonus
+        vote_score = (
+            (retention_component + share_component) / 2 + hook_bonus + watch_bonus
+        )
         vote_score = max(0, min(100, vote_score))  # Clamp to 0-100
 
         weighted_score += vote_score * weight

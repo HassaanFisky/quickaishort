@@ -139,14 +139,13 @@ async def _process_video_async(
         else:
             stream = ffmpeg.input("pipe:0")
 
-        process = (
-            stream.output("pipe:1", format="mp4", vcodec="libx264", acodec="aac")
-            .run_async(
-                cmd="ffmpeg",
-                stdin=ffmpeg.subprocess.PIPE,
-                stdout=ffmpeg.subprocess.PIPE,
-                stderr=ffmpeg.subprocess.PIPE,
-            )
+        process = stream.output(
+            "pipe:1", format="mp4", vcodec="libx264", acodec="aac"
+        ).run_async(
+            cmd="ffmpeg",
+            stdin=ffmpeg.subprocess.PIPE,
+            stdout=ffmpeg.subprocess.PIPE,
+            stderr=ffmpeg.subprocess.PIPE,
         )
 
         stdout, stderr = process.communicate(input=input_buffer.getvalue())

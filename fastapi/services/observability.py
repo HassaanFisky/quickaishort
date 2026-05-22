@@ -197,11 +197,14 @@ def capture_ffmpeg_error(
         with sentry_sdk.push_scope() as scope:
             scope.set_tag("error_type", error_type)
             scope.set_tag("filter_type", filter_type)
-            scope.set_context("ffmpeg", {
-                "stderr": stderr[:1000],
-                "input_file_id": str(input_file_id),
-                "filter_type": filter_type,
-            })
+            scope.set_context(
+                "ffmpeg",
+                {
+                    "stderr": stderr[:1000],
+                    "input_file_id": str(input_file_id),
+                    "filter_type": filter_type,
+                },
+            )
 
             if extra_context:
                 scope.set_context("processing", extra_context)
