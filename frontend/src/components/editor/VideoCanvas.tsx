@@ -61,6 +61,7 @@ export default function VideoCanvas() {
   
   const [isBuffering, setIsBuffering] = useState(false);
   const [videoError, setVideoError] = useState(false);
+  const [proxyRetry, setProxyRetry] = useState(0);
 
   // YouTube IFrame mode — activated when sourceUrl is a YouTube URL.
   // Local state drives the IFrame player; store state is synced for clip marking.
@@ -148,6 +149,7 @@ export default function VideoCanvas() {
       return;
     }
     setVideoError(false);
+    setProxyRetry(0);
     const ytId = extractYtVideoId(sourceUrl);
     if (ytId) {
       setYtVideoId(ytId);  // always sync to store for clip marking
@@ -360,23 +362,28 @@ export default function VideoCanvas() {
               <>
                 <video
                   ref={videoRef}
-                  src={displayUrl || sourceUrl}
+                  src={
+                    displayUrl
+                      ? proxyRetry > 0
+                        ? `${displayUrl}&_r=${proxyRetry}`
+                        : displayUrl
+                      : sourceUrl
+                  }
                   className={cn(
                     "w-full h-full object-cover interactive will-change-[object-position] transition-all duration-500",
                     isBuffering && "blur-md scale-105 opacity-50"
                   )}
                   style={{
                     objectPosition: getObjectPosition(),
-                    filter: getCssFilter()
+                    filter: getCssFilter(),
                   }}
                   controls={false}
                   loop
+                  preload="auto"
                   onLoadedMetadata={() => {
                     if (!videoRef.current) return;
                     const v = videoRef.current;
                     setDuration(v.duration);
-                    // Patch real native dimensions into videoMetadata so the AI panel
-                    // can reference them in its prompts (set initially with defaults in EditorLayout)
                     if (videoMetadata) {
                       setVideoMetadata({
                         ...videoMetadata,
@@ -387,13 +394,23 @@ export default function VideoCanvas() {
                     }
                   }}
                   onWaiting={() => setIsBuffering(true)}
-                  onCanPlay={() => setIsBuffering(false)}
+                  onCanPlay={() => {
+                    setIsBuffering(false);
+                    setVideoError(false);
+                  }}
                   onPlay={() => setIsPlaying(true)}
                   onPause={() => setIsPlaying(false)}
                   onTimeUpdate={() => {
                     if (videoRef.current) setCurrentTime(videoRef.current.currentTime);
                   }}
-                  onError={() => setVideoError(true)}
+                  onError={() => {
+                    // Retry once after 4 s — handles cold-start latency on Cloud Run.
+                    if (proxyRetry < 1 && displayUrl) {
+                      setTimeout(() => setProxyRetry((r) => r + 1), 4000);
+                    } else {
+                      setVideoError(true);
+                    }
+                  }}
                 />
                 {isBuffering && (
                   <div className="absolute inset-0 flex items-center justify-center z-10">

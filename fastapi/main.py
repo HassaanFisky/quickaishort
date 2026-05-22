@@ -1109,12 +1109,12 @@ async def proxy_video_stream(url: str, request: Request):
 
     YouTube CDN signed URLs are IP-bound to the server that requested them.
     Redirect-to-CDN is not viable — the browser IP != Cloud Run IP → 403.
-    Instead: Cloud Run resolves the URL with yt-dlp, then proxies the bytes
-    using the same IP.  The proxy forwards Range headers so seeking works.
+    Cloud Run resolves the URL with yt-dlp then proxies bytes from the same IP.
+    Range headers are forwarded so the browser can seek and detect duration.
 
-    Format preference: 18 (360p combined) → 22 (720p combined) →
-    best combined MP4 → best MP4.  Combined = single URL with audio+video,
-    no muxing required.
+    Two-tier extraction:
+      Tier 1 — combined formats (18/22) so a single URL serves audio+video.
+      Tier 2 — any best MP4 ≤720p if combined formats are unavailable.
     """
     _require_youtube_url(url)
 
@@ -1123,79 +1123,84 @@ async def proxy_video_stream(url: str, request: Request):
     if not v_id:
         raise HTTPException(status_code=400, detail="Could not parse video ID from URL")
 
-    FMT = "18/22/best[ext=mp4]/best"
-    ydl_opts = inject_ydl_bypass({"format": FMT, "quiet": True, "no_warnings": True})
-    # Remove player_skip — it prevents yt-dlp from seeing all available formats
-    ydl_opts.get("extractor_args", {}).get("youtube", {}).pop("player_skip", None)
-
     stream_url: str | None = None
+    found_format_id: str | None = None
 
-    # ── Tier 1: yt-dlp ────────────────────────────────────────────────────
-    try:
-        loop = asyncio.get_event_loop()
+    # ── yt-dlp extraction — two format tiers, 45 s timeout each ──────────
+    _tiers = [
+        # Tier 1: itag 18 (360p+audio) or 22 (720p+audio) — single muxed file.
+        ("18/22/best[ext=mp4][acodec!=none]/best[ext=mp4]/best", "combined"),
+        # Tier 2: anything ≤720p MP4 — last resort if combined not available.
+        ("best[height<=720][ext=mp4]/best[ext=mp4]/best", "fallback"),
+    ]
 
-        def _extract():
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                return ydl.extract_info(url, download=False)
+    loop = asyncio.get_event_loop()
 
-        info = await loop.run_in_executor(None, _extract)
+    for fmt, tier_label in _tiers:
+        if stream_url:
+            break
 
-        duration = info.get("duration", 0)
-        if duration and duration > 1800:
-            raise HTTPException(
-                status_code=400,
-                detail="Videos longer than 30 minutes are not supported.",
-            )
-
-        stream_url = info.get("url")
-        if not stream_url:
-            raise ValueError("yt-dlp returned no URL")
-        logger.info("proxy-video yt-dlp ok: fmt=%s vid=%s", info.get("format_id"), v_id)
-
-    except HTTPException:
-        raise
-    except Exception as exc:
-        logger.warning("proxy-video yt-dlp failed (%s), trying fallbacks", exc)
-
-    # ── Tier 2: Invidious API (get stream URL, proxy it ourselves) ─────────
-    if not stream_url:
-        for inv_host in [
-            "invidious.privacyredirect.com",
-            "yewtu.be",
-            "invidious.kavin.rocks",
-            "vid.priv.au",
-            "iv.datura.network",
-        ]:
-            try:
-                async with httpx.AsyncClient(timeout=8.0, follow_redirects=True) as c:
-                    r = await c.get(
-                        f"https://{inv_host}/api/v1/videos/{v_id}",
-                        params={"fields": "formatStreams"},
-                    )
-                    r.raise_for_status()
-                    for fmt in r.json().get("formatStreams", []):
-                        if fmt.get("itag") in ("18", "22"):
-                            stream_url = fmt["url"]
-                            break
-                    if not stream_url:
-                        fmts = r.json().get("formatStreams", [])
-                        if fmts:
-                            stream_url = fmts[0]["url"]
-                    if stream_url:
-                        logger.info("proxy-video Invidious ok: %s", inv_host)
-                        break
-            except Exception as e:
-                logger.warning("proxy-video Invidious %s: %s", inv_host, e)
-
-    if not stream_url:
-        raise HTTPException(
-            status_code=503,
-            detail="Video stream unavailable — try a different video or try again later.",
+        ydl_opts = inject_ydl_bypass(
+            {
+                "format": fmt,
+                "quiet": True,
+                "no_warnings": True,
+                "socket_timeout": 20,
+                "retries": 2,
+            }
         )
 
-    # ── Proxy the stream with range-request forwarding ────────────────────
-    # Cloud Run proxies from the same IP that obtained the signed URL,
-    # so YouTube CDN accepts the request regardless of IP binding.
+        try:
+
+            def _extract(opts=ydl_opts):
+                with yt_dlp.YoutubeDL(opts) as ydl:
+                    return ydl.extract_info(url, download=False)
+
+            info = await asyncio.wait_for(
+                loop.run_in_executor(None, _extract), timeout=45.0
+            )
+
+            vid_duration = info.get("duration", 0)
+            if vid_duration and vid_duration > 1800:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Videos longer than 30 minutes are not supported.",
+                )
+
+            candidate = info.get("url")
+            if not candidate:
+                raise ValueError("yt-dlp returned no URL")
+
+            stream_url = candidate
+            found_format_id = info.get("format_id", "?")
+            logger.info(
+                "proxy-video [%s] yt-dlp ok — fmt=%s vid=%s",
+                tier_label,
+                found_format_id,
+                v_id,
+            )
+
+        except HTTPException:
+            raise
+        except asyncio.TimeoutError:
+            logger.warning(
+                "proxy-video [%s] yt-dlp timed out (45 s) vid=%s", tier_label, v_id
+            )
+        except Exception as exc:
+            logger.warning(
+                "proxy-video [%s] yt-dlp error vid=%s: %s", tier_label, v_id, exc
+            )
+
+    if not stream_url:
+        logger.error("proxy-video all tiers exhausted for vid=%s", v_id)
+        raise HTTPException(
+            status_code=503,
+            detail="Video stream unavailable — YouTube may be blocking server access. Try again in a moment.",
+        )
+
+    # ── Proxy the stream with full Range-request forwarding ──────────────
+    # Using the same Cloud Run IP that obtained the signed URL — YouTube CDN
+    # accepts it even though the URL contains an embedded server IP.
     range_header = request.headers.get("range")
     upstream_headers: dict[str, str] = {
         "User-Agent": (
@@ -1212,7 +1217,7 @@ async def proxy_video_stream(url: str, request: Request):
         upstream_headers["Range"] = range_header
 
     client = httpx.AsyncClient(
-        timeout=httpx.Timeout(15.0, read=120.0),
+        timeout=httpx.Timeout(30.0, read=180.0),
         follow_redirects=True,
     )
     try:
@@ -1222,9 +1227,15 @@ async def proxy_video_stream(url: str, request: Request):
         if upstream.status_code not in (200, 206):
             await upstream.aclose()
             await client.aclose()
+            logger.error(
+                "proxy-video upstream HTTP %s for vid=%s fmt=%s",
+                upstream.status_code,
+                v_id,
+                found_format_id,
+            )
             raise HTTPException(
                 status_code=502,
-                detail=f"Upstream returned HTTP {upstream.status_code} — try again.",
+                detail=f"Upstream CDN returned HTTP {upstream.status_code} — please try again.",
             )
 
         resp_headers: dict[str, str] = {
@@ -1239,6 +1250,14 @@ async def proxy_video_stream(url: str, request: Request):
         for hdr in ("Content-Length", "Content-Range", "Content-Type"):
             if hdr.lower() in upstream.headers:
                 resp_headers[hdr] = upstream.headers[hdr.lower()]
+
+        logger.info(
+            "proxy-video streaming vid=%s fmt=%s status=%s range=%s",
+            v_id,
+            found_format_id,
+            upstream.status_code,
+            range_header or "none",
+        )
 
         async def stream_body():
             try:
@@ -1260,7 +1279,7 @@ async def proxy_video_stream(url: str, request: Request):
         raise
     except Exception as exc:
         await client.aclose()
-        logger.exception("proxy-video stream error: %s", exc)
+        logger.exception("proxy-video stream error vid=%s: %s", v_id, exc)
         raise HTTPException(status_code=500, detail="Stream error — please try again.")
 
 

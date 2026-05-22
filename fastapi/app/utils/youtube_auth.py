@@ -34,11 +34,13 @@ def inject_ydl_bypass(opts: dict) -> dict:
     existing_yt_args = new_opts["extractor_args"].get("youtube", {})
     existing_clients = existing_yt_args.get("player_client", [])
 
-    # tv_embedded and ios first — most reliable in server/CI environments
+    # tv_embedded and ios first — most reliable in server/CI environments.
+    # web added for widest format compatibility.
     hardened_clients = [
         "tv_embedded",
         "ios",
         "android",
+        "web",
         "android_music",
         "web_creator",
         "mweb",
@@ -47,9 +49,10 @@ def inject_ydl_bypass(opts: dict) -> dict:
     # Union of both
     unique_clients = list(dict.fromkeys(existing_clients + hardened_clients))
 
+    # Do NOT include player_skip — it prevents yt-dlp from fetching page configs
+    # needed to decrypt signed CDN URLs, causing upstream 403s.
     new_opts["extractor_args"]["youtube"] = {
         "player_client": unique_clients,
-        "player_skip": ["webpage", "configs"],
     }
 
     new_opts["nocheckcertificate"] = True
