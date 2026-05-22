@@ -100,14 +100,19 @@ export default function VideoCanvas() {
     const audioBoost = exportSettings.audioBoost;
     
     if (!audioContextRef.current) {
-      const AudioCtx =
-        window.AudioContext ??
-        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      audioContextRef.current = new AudioCtx();
-      const source = audioContextRef.current.createMediaElementSource(videoRef.current);
-      gainNodeRef.current = audioContextRef.current.createGain();
-      source.connect(gainNodeRef.current);
-      gainNodeRef.current.connect(audioContextRef.current.destination);
+      try {
+        const AudioCtx =
+          window.AudioContext ??
+          (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+        audioContextRef.current = new AudioCtx();
+        const source = audioContextRef.current.createMediaElementSource(videoRef.current);
+        gainNodeRef.current = audioContextRef.current.createGain();
+        source.connect(gainNodeRef.current);
+        gainNodeRef.current.connect(audioContextRef.current.destination);
+      } catch {
+        // Cross-origin video without CORS headers — audio boost unavailable for this source
+        audioContextRef.current = null;
+      }
     }
     
     if (gainNodeRef.current) {
@@ -115,7 +120,7 @@ export default function VideoCanvas() {
       gainNodeRef.current.gain.value = (audioBoost / 100) * 1.5; 
     }
     
-    if (isPlaying && audioContextRef.current.state === "suspended") {
+    if (isPlaying && audioContextRef.current?.state === "suspended") {
       audioContextRef.current.resume();
     }
   }, [exportSettings.audioBoost, isPlaying]);
@@ -356,7 +361,6 @@ export default function VideoCanvas() {
                 <video
                   ref={videoRef}
                   src={displayUrl || sourceUrl}
-                  crossOrigin="anonymous"
                   className={cn(
                     "w-full h-full object-cover interactive will-change-[object-position] transition-all duration-500",
                     isBuffering && "blur-md scale-105 opacity-50"
