@@ -1297,57 +1297,73 @@ async def get_audio(url: str = Query(...)):
     success = False
     last_error = ""
 
-    # TIER 1 — yt-dlp (hardened clients: tv_embedded + ios + android + web)
-    # No player_skip — page config fetch is needed to decrypt signed CDN URLs.
-    try:
-        ydl_opts = inject_ydl_bypass(
-            {
-                "format": "bestaudio[ext=m4a]/bestaudio/best",
-                "outtmpl": str(output_path),
-                "quiet": True,
-                "no_warnings": True,
-                "extractor_args": {
-                    "youtube": {
-                        "player_client": ["tv_embedded", "ios", "android"],
-                    }
-                },
-                "http_headers": {
-                    "User-Agent": (
-                        "Mozilla/5.0 (Linux; Android 13; Pixel 7) "
-                        "AppleWebKit/537.36 (KHTML, like Gecko) "
-                        "Chrome/120.0.0.0 Mobile Safari/537.36"
-                    ),
-                },
-                "socket_timeout": 30,
-                "retries": 2,
-            }
-        )
+    # TIER 1 — yt-dlp with two client-set attempts (no player_skip).
+    # Attempt A: tv_embedded + ios — most reliable without PO token on server IPs.
+    # Attempt B: android + web + web_creator — different client stack as retry.
+    _YDL_CLIENT_SETS = [
+        ("A", ["tv_embedded", "ios"]),
+        ("B", ["android", "web", "web_creator"]),
+    ]
+    loop = asyncio.get_event_loop()
 
-        loop = asyncio.get_event_loop()
-        logger.info("audio [tier1/yt-dlp] starting vid=%s", video_id)
+    for _attempt_label, _clients in _YDL_CLIENT_SETS:
+        if success:
+            break
+        # Remove stale partial file from a previous attempt.
+        if output_path.exists():
+            output_path.unlink(missing_ok=True)
 
-        def _run_yt():
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([url])
-
-        await asyncio.wait_for(loop.run_in_executor(None, _run_yt), timeout=60.0)
-
-        if output_path.exists() and output_path.stat().st_size > 10000:
-            success = True
-            logger.info(
-                "audio [tier1/yt-dlp] success vid=%s size=%d",
-                video_id,
-                output_path.stat().st_size,
+        try:
+            ydl_opts = inject_ydl_bypass(
+                {
+                    "format": "bestaudio/best",
+                    "outtmpl": str(output_path),
+                    "quiet": True,
+                    "no_warnings": True,
+                    "extractor_args": {"youtube": {"player_client": _clients}},
+                    "socket_timeout": 30,
+                    "retries": 2,
+                }
             )
-    except asyncio.TimeoutError:
-        last_error = f"yt-dlp download timed out (60s) vid={video_id}"
-        logger.warning("audio [tier1/yt-dlp] timeout vid=%s", video_id)
-    except Exception as e:
-        last_error = f"yt-dlp tier 1 failed vid={video_id}: {e}"
-        logger.warning("audio [tier1/yt-dlp] failed vid=%s: %s", video_id, e)
 
-    # TIER 2 — Cobalt API (with retry logic)
+            logger.info(
+                "audio [yt-dlp/%s] starting clients=%s vid=%s",
+                _attempt_label,
+                _clients,
+                video_id,
+            )
+
+            def _run_yt(opts=ydl_opts):
+                with yt_dlp.YoutubeDL(opts) as ydl:
+                    ydl.download([url])
+
+            await asyncio.wait_for(loop.run_in_executor(None, _run_yt), timeout=60.0)
+
+            if output_path.exists() and output_path.stat().st_size > 10000:
+                success = True
+                logger.info(
+                    "audio [yt-dlp/%s] success vid=%s size=%d",
+                    _attempt_label,
+                    video_id,
+                    output_path.stat().st_size,
+                )
+            else:
+                last_error = f"yt-dlp/{_attempt_label} produced empty file"
+                logger.warning(
+                    "audio [yt-dlp/%s] empty output vid=%s", _attempt_label, video_id
+                )
+        except asyncio.TimeoutError:
+            last_error = f"yt-dlp/{_attempt_label} timed out (60s)"
+            logger.warning("audio [yt-dlp/%s] timeout vid=%s", _attempt_label, video_id)
+        except Exception as e:
+            last_error = f"yt-dlp/{_attempt_label} failed: {e}"
+            logger.warning(
+                "audio [yt-dlp/%s] error vid=%s: %s", _attempt_label, video_id, e
+            )
+
+    # TIER 2 — Cobalt API
     if not success:
+        logger.info("audio [cobalt] starting vid=%s", video_id)
         try:
             stream_url = await VideoService._fetch_cobalt(url, mode="audio")
             if stream_url:
@@ -1361,9 +1377,10 @@ async def get_audio(url: str = Query(...)):
                                 f.write(chunk)
                 if output_path.exists() and output_path.stat().st_size > 10000:
                     success = True
+                    logger.info("audio [cobalt] success vid=%s", video_id)
         except Exception as e:
-            last_error = f"Cobalt tier 2 failed: {str(e)}"
-            logger.warning(last_error)
+            last_error = f"Cobalt tier 2 failed: {e}"
+            logger.warning("audio [cobalt] failed vid=%s: %s", video_id, e)
 
     # TIER 3 — Piped API
     if not success:
