@@ -404,11 +404,20 @@ export default function VideoCanvas() {
                     if (videoRef.current) setCurrentTime(videoRef.current.currentTime);
                   }}
                   onError={() => {
-                    // Retry once after 4 s — handles cold-start latency on Cloud Run.
                     if (proxyRetry < 1 && displayUrl) {
+                      // Retry once after 4 s — handles cold-start latency on Cloud Run.
                       setTimeout(() => setProxyRetry((r) => r + 1), 4000);
                     } else {
-                      setVideoError(true);
+                      // Proxy exhausted retries. For YouTube URLs, fall back to the
+                      // IFrame player — works even when yt-dlp is blocked by bot detection.
+                      const ytId = sourceUrl ? extractYtVideoId(sourceUrl) : null;
+                      if (ytId && displayUrl?.includes("proxy-video")) {
+                        setLocalYtId(ytId);
+                        setDisplayUrl(null);
+                        setProxyRetry(0);
+                      } else {
+                        setVideoError(true);
+                      }
                     }
                   }}
                 />

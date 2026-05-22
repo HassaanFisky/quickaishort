@@ -909,96 +909,88 @@ async def stats_ws(websocket: WebSocket, user_id: str):
 
 @app.get("/api/info")
 async def get_video_info(url: str):
+    """
+    Returns video metadata for a YouTube URL.
+
+    Priority:
+      1. YouTube oEmbed API  — no key required, always fast, works for all public videos
+      2. YouTube Data API v3 — adds duration when YOUTUBE_API_KEY env var is set
+      3. Static fallback     — returns thumbnail from i.ytimg.com when everything else fails
+
+    yt-dlp is intentionally NOT used here: it is slow, fails on bot-detected videos,
+    and the pipeline only needs title + thumbnail + duration at submission time.
+    """
     video_id = _require_youtube_url(url)
+    thumb_fallback = f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
 
+    # ── Tier 1: YouTube oEmbed (no API key, sub-second, public videos only) ──
+    oembed_title: str | None = None
+    oembed_thumb: str | None = None
+    try:
+        oembed_url = (
+            f"https://www.youtube.com/oembed"
+            f"?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3D{video_id}"
+            f"&format=json"
+        )
+        async with httpx.AsyncClient(timeout=6.0) as client:
+            resp = await client.get(oembed_url)
+        if resp.status_code == 200:
+            oe = resp.json()
+            oembed_title = oe.get("title")
+            oembed_thumb = oe.get("thumbnail_url")
+    except Exception as exc:
+        logger.debug("oEmbed failed for %s: %s", video_id, exc)
+
+    # ── Tier 2: YouTube Data API v3 (adds precise duration) ──────────────────
     api_key = os.environ.get("YOUTUBE_API_KEY")
-
-    if api_key and video_id:
+    if api_key:
         try:
-            # Use official YouTube Data API v3
-            api_url = f"https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id={video_id}&key={api_key}"
-            headers = {"Referer": "https://www.quickaishort.online"}
-
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.get(api_url, headers=headers)
-                response.raise_for_status()
-                data = response.json()
+            api_url = (
+                f"https://www.googleapis.com/youtube/v3/videos"
+                f"?part=snippet,contentDetails&id={video_id}&key={api_key}"
+            )
+            async with httpx.AsyncClient(timeout=8.0) as client:
+                resp = await client.get(
+                    api_url, headers={"Referer": "https://www.quickaishort.online"}
+                )
+                resp.raise_for_status()
+                data = resp.json()
 
             if data.get("items"):
                 item = data["items"][0]
-                # Parse duration (ISO 8601 to seconds)
                 duration_iso = item["contentDetails"]["duration"]
                 duration_sec = 0
-                time_match = re.match(
-                    r"PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?", duration_iso
+                m = re.match(r"PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?", duration_iso)
+                if m:
+                    h, mn, s = m.groups()
+                    duration_sec = int(h or 0) * 3600 + int(mn or 0) * 60 + int(s or 0)
+                thumbs = item["snippet"]["thumbnails"]
+                best = thumbs.get(
+                    "maxres", thumbs.get("high", thumbs.get("default", {}))
                 )
-                if time_match:
-                    h, m, s = time_match.groups()
-                    duration_sec = int(h or 0) * 3600 + int(m or 0) * 60 + int(s or 0)
-
-                thumbnails = item["snippet"]["thumbnails"]
-                best_thumb = thumbnails.get(
-                    "maxres", thumbnails.get("high", thumbnails.get("default", {}))
-                )
-
                 return {
                     "id": video_id,
                     "title": item["snippet"]["title"],
                     "duration": duration_sec,
-                    "thumbnail": best_thumb.get("url", ""),
+                    "thumbnail": best.get("url", thumb_fallback),
                     "formats": [],
                     "url": f"https://www.youtube.com/watch?v={video_id}",
                     "source": "youtube_data_api",
                 }
         except Exception as exc:
-            logger.warning(f"YouTube Data API failed, falling back to yt-dlp: {exc}")
+            logger.warning("YouTube Data API failed for %s: %s", video_id, exc)
 
-    # Fallback to yt-dlp
-    ydl_opts = inject_ydl_bypass(
-        {
-            "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
-            "quiet": True,
-            "no_warnings": True,
-        }
-    )
-
-    try:
-        loop = asyncio.get_event_loop()
-
-        def _extract():
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                return ydl.extract_info(url, download=False)
-
-        info = await loop.run_in_executor(None, _extract)
-        return {
-            "id": info.get("id"),
-            "title": info.get("title"),
-            "duration": info.get("duration"),
-            "thumbnail": info.get("thumbnail"),
-            "formats": info.get("formats"),
-            "url": info.get("url"),
-            "source": "yt-dlp",
-        }
-    except Exception as exc:
-        logger.warning(
-            f"yt-dlp info extraction failed, returning structured error: {exc}"
-        )
-        video_id_match = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{11})", url)
-        v_id = video_id_match.group(1) if video_id_match else video_id
-        # Return a structured error the frontend detects via code field.
-        # HTTP 200 so the client's axios error handler doesn't swallow the payload.
-        return {
-            "code": "YOUTUBE_FETCH_FAILED",
-            "detail": "Server-side YouTube extraction failed. Use the iframe preview or upload an MP4.",
-            "fallback": "upload_mp4",
-            "id": v_id,
-            "title": "YouTube Video",
-            "duration": 0,
-            "thumbnail": f"https://i.ytimg.com/vi/{v_id}/hqdefault.jpg",
-            "formats": [],
-            "url": url,
-            "source": "fallback",
-        }
+    # ── Tier 3: Return oEmbed data (or static fallback) ──────────────────────
+    # Never return YOUTUBE_FETCH_FAILED for public videos — oEmbed always works.
+    return {
+        "id": video_id,
+        "title": oembed_title or "YouTube Video",
+        "duration": 0,
+        "thumbnail": oembed_thumb or thumb_fallback,
+        "formats": [],
+        "url": f"https://www.youtube.com/watch?v={video_id}",
+        "source": "oembed" if oembed_title else "fallback",
+    }
 
 
 @app.get("/api/proxy")
@@ -1100,6 +1092,27 @@ async def proxy_video(url: str):
         raise HTTPException(
             status_code=500, detail="Stream unavailable. Please try again."
         )
+
+
+@app.head("/api/proxy-video")
+async def proxy_video_stream_head(url: str):
+    """
+    Immediate HEAD response — lets browsers probe the endpoint without triggering
+    a full yt-dlp extraction. Returns Accept-Ranges so browsers know seeking works.
+    """
+    _require_youtube_url(url)
+    return Response(
+        status_code=200,
+        headers={
+            "Accept-Ranges": "bytes",
+            "Content-Type": "video/mp4",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+            "Access-Control-Allow-Headers": "Range, Content-Type",
+            "Access-Control-Expose-Headers": "Content-Range, Content-Length, Accept-Ranges",
+            "Cross-Origin-Resource-Policy": "cross-origin",
+        },
+    )
 
 
 @app.get("/api/proxy-video")
