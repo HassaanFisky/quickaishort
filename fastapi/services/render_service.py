@@ -267,6 +267,20 @@ class RenderService:
     def _download_segment(self, job: RenderJob, workdir: Path) -> Path:
         """Sync download for use inside RQ worker. No event loop created."""
         try:
+            from services.video_acquisition import acquire_video
+
+            result = acquire_video(job.video_id, job.start_sec, job.end_sec, workdir)
+            if result["status"] == "ready":
+                return Path(result["video_path"])
+            raise RuntimeError(result.get("error", "acquisition failed"))
+        except ImportError:
+            # Fallback if video_acquisition not importable (e.g. missing dep)
+            pass
+        except Exception as e:
+            logger.error("[RenderService] Tiered acquisition failed for %s: %s", job.video_id, e)
+            raise RuntimeError(f"YouTube download blocked after all fallbacks: {e}")
+
+        try:
             return VideoService.download_segment_sync(
                 job.video_id, job.start_sec, job.end_sec, workdir
             )

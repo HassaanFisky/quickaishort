@@ -24,12 +24,29 @@ from datetime import datetime
 from typing import Any, AsyncIterator, Literal, Optional
 
 from pydantic import BaseModel
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+    before_sleep_log,
+)
 
 from services.gemini_client import DEFAULT_MODEL
 
 MODEL = DEFAULT_MODEL
 
 logger = logging.getLogger(__name__)
+
+# Retry decorator for transient Gemini 500/503/timeout failures.
+# ValueError (bad input) is NOT retried — it is excluded by retry_if_exception_type.
+_pipeline_retry = retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=2, max=16),
+    retry=retry_if_exception_type((TimeoutError, ConnectionError, OSError)),
+    before_sleep=before_sleep_log(logger, logging.WARNING),
+    reraise=True,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -770,27 +787,41 @@ async def run_preflight_pipeline(
         ],
     )
 
-    async for event in runner.run_async(
-        user_id=user_id,
-        session_id=session_id,
-        new_message=message,
-    ):
-        logger.info(
-            "Pipeline event: author=%s, content=%s",
-            event.author,
-            getattr(event, "content", "N/A"),
-        )
-        if event.is_final_response():
-            # Check if we actually have some results in state before breaking,
-            # as is_final_response might trigger on intermediate sequential steps in some ADK versions.
-            session = await runner.session_service.get_session(
-                app_name="QuickAIShort_PreFlight",
-                user_id=user_id,
-                session_id=session_id,
+    @_pipeline_retry
+    async def _run_pipeline_with_retry() -> None:
+        async for event in runner.run_async(
+            user_id=user_id,
+            session_id=session_id,
+            new_message=message,
+        ):
+            logger.info(
+                "Pipeline event: author=%s, content=%s",
+                event.author,
+                getattr(event, "content", "N/A"),
             )
-            if session.state.get("preflight_done") == "true":
-                logger.info("Final response received and preflight is marked as done.")
-                break
+            if event.is_final_response():
+                # Check if we actually have some results in state before breaking,
+                # as is_final_response might trigger on intermediate sequential steps in some ADK versions.
+                session_check = await runner.session_service.get_session(
+                    app_name="QuickAIShort_PreFlight",
+                    user_id=user_id,
+                    session_id=session_id,
+                )
+                if session_check.state.get("preflight_done") == "true":
+                    logger.info("Final response received and preflight is marked as done.")
+                    return
+
+    # Pipeline monitoring
+    from services.pipeline_monitor import start_run, end_run
+    import time as _time
+    _run_id = await start_run("preflight", user_id, youtube_url)
+    _t0 = _time.time()
+    try:
+        await _run_pipeline_with_retry()
+        await end_run(_run_id, "success", (_time.time() - _t0) * 1000)
+    except Exception as _pipeline_exc:
+        await end_run(_run_id, "failed", (_time.time() - _t0) * 1000, str(_pipeline_exc))
+        raise
 
     session = await runner.session_service.get_session(
         app_name="QuickAIShort_PreFlight",

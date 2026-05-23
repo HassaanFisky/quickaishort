@@ -18,6 +18,13 @@ from typing import List, Optional
 
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+    before_sleep_log,
+)
 
 from services.gemini_client import (
     DEFAULT_MODEL,
@@ -28,6 +35,14 @@ from services.gemini_client import (
 
 load_dotenv()
 logger = logging.getLogger(__name__)
+
+_pipeline_retry = retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=2, max=16),
+    retry=retry_if_exception_type((TimeoutError, ConnectionError, OSError)),
+    before_sleep=before_sleep_log(logger, logging.WARNING),
+    reraise=True,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -467,20 +482,37 @@ async def run_viral_pipeline(
     )
 
     try:
+        import time as _time
+        from services.pipeline_monitor import start_run as _pm_start, end_run as _pm_end
+        _run_id = await _pm_start("viral", user_id, video_id or "")
+        _t0 = _time.time()
+
         final_text = "[]"
-        async for event in runner.run_async(
-            user_id=user_id,
-            session_id=session_id,
-            new_message=message,
-        ):
-            if event.is_final_response():
-                txt = getattr(event, "text", None)
-                if not txt and hasattr(event, "content"):
-                    parts = getattr(event.content, "parts", [])
-                    if parts and hasattr(parts[0], "text"):
-                        txt = parts[0].text
-                if txt:
-                    final_text = txt
+
+        @_pipeline_retry
+        async def _run_viral_with_retry() -> str:
+            _result = "[]"
+            async for event in runner.run_async(
+                user_id=user_id,
+                session_id=session_id,
+                new_message=message,
+            ):
+                if event.is_final_response():
+                    txt = getattr(event, "text", None)
+                    if not txt and hasattr(event, "content"):
+                        parts = getattr(event.content, "parts", [])
+                        if parts and hasattr(parts[0], "text"):
+                            txt = parts[0].text
+                    if txt:
+                        _result = txt
+            return _result
+
+        try:
+            final_text = await _run_viral_with_retry()
+            await _pm_end(_run_id, "success", (_time.time() - _t0) * 1000)
+        except Exception as _retry_exc:
+            await _pm_end(_run_id, "failed", (_time.time() - _t0) * 1000, str(_retry_exc))
+            raise
 
         suggestions = _coerce_suggestions(final_text)
 

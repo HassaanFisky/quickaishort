@@ -340,6 +340,10 @@ from routers.video import router as video_router
 
 app.include_router(video_router)
 
+from routers.admin_cookies import router as admin_cookies_router
+
+app.include_router(admin_cookies_router)
+
 
 def get_real_ip(request: Request) -> str:
     """
@@ -822,6 +826,116 @@ async def export_status(job_id: str, user_id: str):
         )
 
     return response
+
+
+@app.get("/api/render/status/{job_id}")
+async def render_stream_status(job_id: str):
+    """Rich status from the Redis Streams tracking layer."""
+    from services.render_queue import get_render_status
+    return get_render_status(job_id)
+
+
+@app.get("/api/render/dead")
+async def render_dead_jobs(
+    x_admin_secret: Optional[str] = Header(None, alias="X-Admin-Secret"),
+):
+    """List all dead-lettered render jobs."""
+    if x_admin_secret != os.getenv("ADMIN_SECRET"):
+        raise HTTPException(status_code=403, detail="Invalid admin secret")
+    from services.render_queue import get_dead_jobs
+    return {"dead_jobs": get_dead_jobs()}
+
+
+@app.post("/api/render/retry/{job_id}")
+async def render_retry_dead(
+    job_id: str,
+    x_admin_secret: Optional[str] = Header(None, alias="X-Admin-Secret"),
+):
+    """Re-queue a dead render job."""
+    if x_admin_secret != os.getenv("ADMIN_SECRET"):
+        raise HTTPException(status_code=403, detail="Invalid admin secret")
+    from services.render_queue import retry_dead_job
+    from render_worker import process_render_task
+    from rq import Retry as RqRetry
+
+    requeued = retry_dead_job(job_id)
+    if not requeued:
+        raise HTTPException(status_code=404, detail="Job not found or not in dead state")
+    # Re-enqueue with a minimal placeholder so worker re-runs from idempotency cache
+    try:
+        render_queue.enqueue(
+            process_render_task,
+            job_id, "", 0.0, 0.0, "", {},
+            job_id=job_id,
+            job_timeout=JOB_TIMEOUT_SECONDS,
+            result_ttl=JOB_RESULT_TTL_SECONDS,
+            failure_ttl=JOB_FAILURE_TTL_SECONDS,
+            retry=RqRetry(max=2, interval=[30, 60]),
+        )
+    except Exception as exc:
+        logger.warning("render_retry_enqueue_failed job_id=%s error=%s", job_id, exc)
+    return {"status": "requeued", "job_id": job_id}
+
+
+@app.get("/api/render/dlq/stats")
+async def render_dlq_stats(
+    x_admin_secret: Optional[str] = Header(None, alias="X-Admin-Secret"),
+):
+    """Dead-letter queue summary statistics."""
+    if x_admin_secret != os.getenv("ADMIN_SECRET"):
+        raise HTTPException(status_code=403, detail="Invalid admin secret")
+    from services.render_queue import get_dlq_stats
+    return get_dlq_stats()
+
+
+# ---- Admin analytics --------------------------------------------------------
+
+
+def _require_admin(secret: Optional[str]) -> None:
+    if secret != os.getenv("ADMIN_SECRET"):
+        raise HTTPException(status_code=403, detail="Invalid admin secret")
+
+
+@app.get("/api/admin/analytics/latency")
+async def admin_analytics_latency(
+    agent: Optional[str] = None,
+    hours: int = 24,
+    x_admin_secret: Optional[str] = Header(None, alias="X-Admin-Secret"),
+):
+    _require_admin(x_admin_secret)
+    from services.analytics_queries import get_agent_latency
+    return await get_agent_latency(agent_name=agent, hours=hours)
+
+
+@app.get("/api/admin/analytics/errors")
+async def admin_analytics_errors(
+    hours: int = 24,
+    x_admin_secret: Optional[str] = Header(None, alias="X-Admin-Secret"),
+):
+    _require_admin(x_admin_secret)
+    from services.analytics_queries import get_tool_errors
+    return await get_tool_errors(hours=hours)
+
+
+@app.get("/api/admin/analytics/tokens")
+async def admin_analytics_tokens(
+    hours: int = 24,
+    x_admin_secret: Optional[str] = Header(None, alias="X-Admin-Secret"),
+):
+    _require_admin(x_admin_secret)
+    from services.analytics_queries import get_token_usage
+    return await get_token_usage(hours=hours)
+
+
+@app.get("/api/admin/pipeline/health")
+async def admin_pipeline_health(
+    hours: int = 24,
+    x_admin_secret: Optional[str] = Header(None, alias="X-Admin-Secret"),
+):
+    """Pipeline run success rate, avg duration, and top errors."""
+    _require_admin(x_admin_secret)
+    from services.pipeline_monitor import get_health
+    return await get_health(hours=hours)
 
 
 @app.get("/api/download/{job_id}")

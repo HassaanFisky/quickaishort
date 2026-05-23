@@ -64,8 +64,25 @@ def get_cookie_file() -> str | None:
         return None
 
 
+_startup_cookie_checked: bool = False
+
+
+def _check_cookies_once() -> None:
+    """Validate cookies once per process at first yt-dlp call. Non-blocking."""
+    global _startup_cookie_checked
+    if _startup_cookie_checked:
+        return
+    _startup_cookie_checked = True
+    try:
+        from services.cookie_rotator import get_cookie_status
+        get_cookie_status()  # result cached; CRITICAL logged if invalid
+    except Exception as exc:
+        logger.warning("Cookie startup check failed: %s", exc)
+
+
 def inject_ydl_bypass(opts: dict) -> dict:
     """Injects bot bypass options and cookies into yt-dlp opts."""
+    _check_cookies_once()
     new_opts = opts.copy()
 
     if "extractor_args" not in new_opts:
