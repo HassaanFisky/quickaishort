@@ -95,6 +95,8 @@ export default function VideoWorkspace() {
   const [encodeProgress, setEncodeProgress] = useState(0);
   const [workerReady, setWorkerReady] = useState(false);
   const [workerLoadError, setWorkerLoadError] = useState<string | null>(null);
+  const [exportComplete, setExportComplete] = useState(false);
+  const [captureDone, setCaptureDone] = useState(false);
 
   // ── Engine config controls ──────────────────────────────────────────────────
   const [captionBlurMs, setCaptionBlurMs] = useState(300);
@@ -256,6 +258,7 @@ export default function VideoWorkspace() {
         case "complete":
           setIsEncoding(false);
           setEncodeProgress(0);
+          setExportComplete(true);
           const buf = payload.artifact as ArrayBuffer;
           triggerDownload(buf, `quickai-export-${Date.now()}.mp4`);
           toast.success("Export complete — MP4 downloaded");
@@ -335,6 +338,8 @@ export default function VideoWorkspace() {
     lastCaptureMsRef.current = 0;
     setIsRecording(true);
     setRecordProgress(0);
+    setCaptureDone(false);
+    setExportComplete(false);
 
     workerRef.current?.postMessage({
       type: "startRecording",
@@ -380,6 +385,7 @@ export default function VideoWorkspace() {
     cancelAnimationFrame(captureRafRef.current);
     captureRafRef.current = 0;
     setIsRecording(false);
+    setCaptureDone(true);
     engineRef.current?.pause();
     setIsPlaying(false);
     setIsEncoding(true);
@@ -397,6 +403,8 @@ export default function VideoWorkspace() {
     setIsEncoding(false);
     setRecordProgress(0);
     setEncodeProgress(0);
+    setCaptureDone(false);
+    setExportComplete(false);
     workerRef.current?.postMessage({ type: "cancel", payload: {} });
     engineRef.current?.pause();
     setIsPlaying(false);
@@ -589,13 +597,13 @@ export default function VideoWorkspace() {
             <span className={`${styles.exportStage} ${workerReady || workerLoadError ? styles.exportStageDone : styles.exportStageActive}`}>
               1 · Load
             </span>
-            <span className={`${styles.exportStage} ${isRecording ? styles.exportStageActive : isEncoding || (!isRecording && !isEncoding && workerReady) ? styles.exportStageDone : ""}`}>
+            <span className={`${styles.exportStage} ${isRecording ? styles.exportStageActive : captureDone ? styles.exportStageDone : ""}`}>
               2 · Capture
             </span>
-            <span className={`${styles.exportStage} ${isEncoding ? styles.exportStageActive : ""}`}>
+            <span className={`${styles.exportStage} ${isEncoding ? styles.exportStageActive : exportComplete ? styles.exportStageDone : ""}`}>
               3 · Encode
             </span>
-            <span className={`${styles.exportStage} ${!isRecording && !isEncoding && workerReady && encodeProgress === 0 && recordProgress === 0 ? "" : ""}`}>
+            <span className={`${styles.exportStage} ${exportComplete ? styles.exportStageDone : ""}`}>
               4 · Save
             </span>
           </div>
