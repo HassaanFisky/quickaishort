@@ -147,11 +147,6 @@ export function AIPanel() {
           animate={{ x: 0, opacity: 1 }}
           exit={{ x: "100%", opacity: 0 }}
           transition={{ type: "spring", damping: 28, stiffness: 260 }}
-          style={{
-            backdropFilter: "blur(16px)",
-            WebkitBackdropFilter: "blur(16px)",
-            background: "rgba(255, 255, 255, 0.07)",
-          }}
         >
           <div className="ai-panel-header">
             <div className="ai-header-left">
