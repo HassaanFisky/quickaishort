@@ -647,7 +647,20 @@ export default function ADKPage() {
       toast.info("Short queued — rendering on the server…");
       subscribeRealtime(result.job_id, userId);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Generation failed";
+      let msg = "Generation failed. Please try again.";
+      if (axios.isAxiosError(err)) {
+        if (err.response?.status === 401 || err.response?.status === 403) {
+          msg = "Sign in to use ADK Studio.";
+        } else if (err.response?.status === 503) {
+          msg = "Server is starting up — wait a moment and try again.";
+        } else if (err.response?.data?.detail) {
+          msg = String(err.response.data.detail);
+        } else if (err.code === "ERR_NETWORK") {
+          msg = "Could not reach the server — check your connection.";
+        }
+      } else if (err instanceof Error) {
+        msg = err.message;
+      }
       store.setError(msg);
       toast.error(msg);
     } finally {

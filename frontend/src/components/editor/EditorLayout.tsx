@@ -49,8 +49,26 @@ export default function EditorLayout() {
     aiPanelOpen,
     setVideoMetadata,
   } = useEditorStore();
+
   const { runPipeline, cancelPipeline, status } = useMediaPipeline();
   const { isOpen: aiPanelStoreOpen, setOpen: setAIPanelOpen, setVideoContext } = useAIPanel();
+
+  // When the pipeline finishes transcription, sync it to the AI panel context.
+  // Must come AFTER setVideoContext is declared above.
+  const storeTranscript = useEditorStore((s) => s.transcript);
+  const storeVideoMetadata = useEditorStore((s) => s.videoMetadata);
+  useEffect(() => {
+    if (!storeTranscript || !storeVideoMetadata) return;
+    const transcriptText = storeTranscript.chunks
+      .map((c) => c.text)
+      .join(" ")
+      .slice(0, 3000);
+    setVideoContext({
+      id: storeVideoMetadata.id,
+      title: storeVideoMetadata.title ?? "YouTube Video",
+      transcript: transcriptText,
+    });
+  }, [storeTranscript, storeVideoMetadata, setVideoContext]);
 
   const anyPanelOpen = aiPanelOpen || aiPanelStoreOpen;
 
@@ -141,23 +159,12 @@ export default function EditorLayout() {
         fps: 30,
       });
 
-      // Store the raw YouTube URL — VideoCanvas handles building /api/proxy-video internally
+      // Store the raw YouTube URL — VideoCanvas handles building /api/proxy-video internally.
+      // runPipeline fires in the background so VideoCanvas mounts immediately without
+      // waiting for audio extraction (which can take 30–60s). Transcript→AI panel sync
+      // happens via the useEffect above when transcription completes.
       setSourceUrl(url);
-      await runPipeline();
-
-      // Update AI panel with transcript once pipeline completes
-      const { transcript } = useEditorStore.getState();
-      if (transcript) {
-        const transcriptText = transcript.chunks
-          .map((c) => c.text)
-          .join(" ")
-          .slice(0, 3000);
-        setVideoContext({
-          id: info.id ?? videoId ?? "",
-          title: info.title ?? "YouTube Video",
-          transcript: transcriptText,
-        });
-      }
+      void runPipeline();
     } catch (error: unknown) {
       console.error(error);
 

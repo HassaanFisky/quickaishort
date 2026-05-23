@@ -43,9 +43,7 @@ export function useMediaPipeline() {
       return;
     }
 
-    // Route YouTube URLs through the backend proxy to avoid CORS.
-    // Guard against double-wrapping: skip if sourceUrl was already set to the
-    // proxy endpoint by EditorLayout.handleAnalyze.
+    // Route YouTube URLs through the backend audio endpoint.
     if (typeof source === "string") {
       const isAlreadyProxied = API_URL && source.startsWith(API_URL);
       const isYouTube =
@@ -61,62 +59,74 @@ export function useMediaPipeline() {
       }
     }
 
-    // Extended to 120 seconds to handle long-form content (podcasts, lectures)
     const controller = new AbortController();
     abortControllerRef.current = controller;
     const timeoutId = setTimeout(() => controller.abort(), 120000);
 
+    setProcessing(true, "loading");
+    setAgentState("ingestion", { status: "working", progress: 10 });
+    setProgress(10);
+
+    // ── 1. Audio Extraction — optional enhancement, failure is non-fatal ───────
+    // VideoCanvas already shows the video via /api/proxy-video regardless of
+    // whether audio extraction succeeds. Failure here means no AI waveform/
+    // transcript, but the editor remains fully usable for manual clip marking.
+    let audioData: Float32Array;
+    let sampleRate: number;
+    let duration: number;
+
     try {
-      setProcessing(true, "loading");
-      setAgentState("ingestion", { status: "working", progress: 10 });
-      setProgress(10);
-
-      // 1. Extract Audio
       toast.info("Preparing content for viral analysis...");
-      const { audioData, sampleRate, duration } =
-        await extractAudioData(source, controller.signal);
+      const result = await extractAudioData(source, controller.signal);
+      audioData = result.audioData;
+      sampleRate = result.sampleRate;
+      duration = result.duration;
       clearTimeout(timeoutId);
-
-      // Update duration in store if it was 0
-      if (useEditorStore.getState().duration === 0) {
-        useEditorStore.setState({ duration });
-      }
-
-      setAgentState("ingestion", { status: "done", progress: 100 });
-      setProgress(20);
-
-      // 2. Transcription
-      setProcessing(true, "transcribing");
-      setAgentState("transcription", { status: "working", progress: 0 });
-      toast.info("Reading video content...");
-      transcription.transcribe(audioData, sampleRate);
-    } catch (error) {
+    } catch (audioError) {
       clearTimeout(timeoutId);
-      const msg = error instanceof Error ? error.message : String(error);
-      console.error("Pipeline error:", msg);
-      
-      let displayMsg = "Could not process this video — try a different YouTube URL or try again.";
+      const msg = audioError instanceof Error ? audioError.message : String(audioError);
       const lowerMsg = msg.toLowerCase();
 
-      if (error instanceof Error && error.name === "AbortError") {
-        displayMsg = "Audio processing timed out — video may be too long";
-      } else if (lowerMsg.includes("504") || lowerMsg.includes("timed out") || lowerMsg.includes("timeout")) {
-        displayMsg = "Video processing timed out — try a shorter clip or try again";
-      } else if (lowerMsg.includes("audio extraction failed")) {
-        // Backend returned 503 after yt-dlp exhausted all clients.
-        displayMsg = "Could not download audio — this video may be unavailable on our servers. Try a different video.";
+      let infoMsg =
+        "Video loaded — AI analysis unavailable. Mark clips manually or upload an MP4 for full analysis.";
+
+      if (audioError instanceof Error && audioError.name === "AbortError") {
+        infoMsg = "Analysis timed out — video is ready for manual editing.";
+      } else if (
+        lowerMsg.includes("bot detection") ||
+        lowerMsg.includes("sign in") ||
+        lowerMsg.includes("audio extraction failed")
+      ) {
+        infoMsg =
+          "Auto-analysis unavailable for this video (server-side restriction). The video is still loaded — mark clips manually or upload an MP4.";
       } else if (lowerMsg.includes("network error") || lowerMsg.includes("unreachable")) {
-        displayMsg = "Could not reach the server — check your connection and try again.";
+        infoMsg = "Could not reach the server — check your connection and try again.";
       } else if (lowerMsg.includes("private")) {
-        displayMsg = "This video is private — try a public YouTube video.";
+        infoMsg = "This video is private. Try a public YouTube video.";
       } else if (lowerMsg.includes("video unavailable") || lowerMsg.includes("yt-dlp")) {
-        displayMsg = "This video is unavailable — it may be private, deleted, or region-locked.";
+        infoMsg = "This video is unavailable — it may be region-locked. Try uploading the MP4 directly.";
       }
-      
-      toast.error(displayMsg);
+
+      // Soft failure — informational, not alarming. Video still plays in VideoCanvas.
+      toast.info(infoMsg, { duration: 6000 });
       setAgentState("ingestion", { status: "error" });
       setProcessing(false, "idle");
+      return;
     }
+
+    // Update duration in store if it was 0
+    if (useEditorStore.getState().duration === 0) {
+      useEditorStore.setState({ duration });
+    }
+
+    setAgentState("ingestion", { status: "done", progress: 100 });
+    setProgress(20);
+
+    // ── 2. Transcription ───────────────────────────────────────────────────────
+    setProcessing(true, "transcribing");
+    setAgentState("transcription", { status: "working", progress: 0 });
+    toast.info("Reading video content...");
+    transcription.transcribe(audioData, sampleRate);
   }, [setProcessing, setProgress, setAgentState, transcription]);
 
   // Handle Transcription Complete
@@ -126,8 +136,8 @@ export function useMediaPipeline() {
       transcription.lastMessage.stage === "process"
     ) {
       const transcript = transcription.lastMessage.payload.transcript;
-      if (!transcript) return; 
-      
+      if (!transcript) return;
+
       setTranscript(transcript);
       setAgentState("transcription", { status: "done", progress: 100 });
 
@@ -137,7 +147,7 @@ export function useMediaPipeline() {
       toast.info("Finding the best clips...");
 
       const { sourceUrl } = useEditorStore.getState();
-      
+
       interface AnalysisResponse {
         suggestedClips?: Partial<Clip>[];
       }

@@ -25,6 +25,7 @@ import {
 } from "@/lib/videoEngine";
 import type { FrameInfo } from "@/lib/videoEngine";
 import type { WordToken } from "@/lib/videoEngine/KineticCaptionEngine";
+import { API_URL } from "@/lib/api";
 import styles from "./VideoWorkspace.module.css";
 
 // ── Display dimensions (CSS): 9:16 portrait scaled down to fit the viewport ───
@@ -182,7 +183,12 @@ export default function VideoWorkspace() {
   // ── Load source URL when it changes ─────────────────────────────────────────
   useEffect(() => {
     if (!sourceUrl || !engineRef.current) return;
-    engineRef.current.load(sourceUrl).catch((err: Error) => {
+    // YouTube URLs aren't directly playable — route through the proxy like VideoCanvas does.
+    const isYouTube = sourceUrl.includes("youtube.com") || sourceUrl.includes("youtu.be");
+    const effectiveUrl = isYouTube
+      ? `${API_URL}/api/proxy-video?url=${encodeURIComponent(sourceUrl)}`
+      : sourceUrl;
+    engineRef.current.load(effectiveUrl).catch((err: Error) => {
       toast.error(`Video load failed: ${err.message}`);
     });
   }, [sourceUrl]);
