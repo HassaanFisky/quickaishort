@@ -78,11 +78,30 @@ export default function EditorLayout() {
   const [youtubePreviewId, setYoutubePreviewId] = useState<string | null>(null);
   const [backendFailed, setBackendFailed] = useState(false);
   const [centerMode, setCenterMode] = useState<"preview" | "effects">("preview");
+  const [panelCollapsed, setPanelCollapsed] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isAnalysing = (
     ["analyzing", "loading", "transcribing"] as string[]
   ).includes(status || "");
+
+  // Collapse the URL input panel 1.5 s after the video loads (Bug 9)
+  // Must come AFTER isAnalysing is declared above.
+  useEffect(() => {
+    if (!sourceUrl || isAnalysing) {
+      setPanelCollapsed(false);
+      return;
+    }
+    const timer = setTimeout(() => setPanelCollapsed(true), 1500);
+    return () => clearTimeout(timer);
+  }, [sourceUrl, isAnalysing]);
+
+  // Allow LeftPanel retry button to re-trigger the pipeline (Bug 10)
+  useEffect(() => {
+    const handler = () => void runPipeline();
+    window.addEventListener("retry-analysis", handler);
+    return () => window.removeEventListener("retry-analysis", handler);
+  }, [runPipeline]);
 
   const handleUrlChange = (e: ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
@@ -329,10 +348,10 @@ export default function EditorLayout() {
         </header>
 
         {/* Central Workspace Grid */}
-        <main className="flex-1 grid grid-cols-1 lg:grid-cols-[minmax(240px,20%)_1fr_minmax(280px,25%)] gap-6 overflow-hidden">
+        <main className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[minmax(240px,20%)_1fr_minmax(280px,25%)] gap-6 overflow-hidden">
 
           {/* Left: Viral Suggestions & Source */}
-          <section className="depth-card glass-surface rounded-[2.5rem] p-6 border-foreground/5 shadow-2xl flex flex-col overflow-hidden">
+          <section className="depth-card glass-surface rounded-[2.5rem] p-6 border-foreground/5 shadow-2xl flex flex-col overflow-hidden min-h-0">
             <LeftPanel />
           </section>
 
@@ -350,9 +369,36 @@ export default function EditorLayout() {
 
             {/* The Intelligence Bar (Search Island) */}
             <div className="absolute top-0 left-1/2 -translate-x-1/2 z-40 w-full max-w-xl px-6">
+              <AnimatePresence mode="wait">
+              {panelCollapsed ? (
+                /* Collapsed mini-bar — shown after video loads (Bug 9) */
+                <motion.div
+                  key="panel-collapsed"
+                  initial={{ y: -10, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  exit={{ y: -10, opacity: 0 }}
+                  transition={{ type: "spring", damping: 24, stiffness: 200 }}
+                  className="glass-surface rounded-2xl px-4 py-2.5 flex items-center justify-between gap-3 border border-white/10 backdrop-blur-3xl shadow-xl"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    <span className="text-[10px] font-black text-foreground/70 uppercase tracking-widest truncate">
+                      {storeVideoMetadata?.title ?? urlInput.slice(0, 50) ?? "Video loaded"}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => setPanelCollapsed(false)}
+                    className="text-[9px] font-black text-primary/70 hover:text-primary uppercase tracking-widest shrink-0 transition-colors"
+                  >
+                    Change
+                  </button>
+                </motion.div>
+              ) : (
               <motion.div
+                key="panel-expanded"
                 initial={{ y: -30, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
+                exit={{ y: -10, opacity: 0 }}
                 transition={{ type: "spring", damping: 20, stiffness: 100 }}
                 className="group relative"
               >
@@ -500,6 +546,8 @@ export default function EditorLayout() {
                   </AnimatePresence>
                 </div>
               </motion.div>
+              )}
+              </AnimatePresence>
             </div>
 
             {/* The Stage */}
@@ -610,7 +658,7 @@ export default function EditorLayout() {
           </section>
 
           {/* Right: Property Inspector & AI Results */}
-          <section className="depth-card glass-surface rounded-[2.5rem] p-6 border-foreground/5 shadow-2xl flex flex-col overflow-hidden">
+          <section className="depth-card glass-surface rounded-[2.5rem] p-6 border-foreground/5 shadow-2xl flex flex-col overflow-hidden min-h-0">
             <RightPanel />
           </section>
         </main>

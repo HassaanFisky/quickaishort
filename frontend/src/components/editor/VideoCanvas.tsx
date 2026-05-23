@@ -58,6 +58,7 @@ export default function VideoCanvas() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const gainNodeRef = useRef<GainNode | null>(null);
+  const noiseFilterRef = useRef<BiquadFilterNode | null>(null);
   
   const [isBuffering, setIsBuffering] = useState(false);
   const [videoError, setVideoError] = useState(false);
@@ -94,12 +95,12 @@ export default function VideoCanvas() {
 
   const [displayUrl, setDisplayUrl] = useState<string | null>(null);
 
-  // Web Audio API for Live Audio Boost
+  // Web Audio API — initialise once per video source, then keep in sync
   useEffect(() => {
     if (!videoRef.current) return;
-    
+
     const audioBoost = exportSettings.audioBoost;
-    
+
     if (!audioContextRef.current) {
       try {
         const AudioCtx =
@@ -107,31 +108,48 @@ export default function VideoCanvas() {
           (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
         audioContextRef.current = new AudioCtx();
         const source = audioContextRef.current.createMediaElementSource(videoRef.current);
+
+        // Highpass filter for live noise suppression (Bug 4)
+        noiseFilterRef.current = audioContextRef.current.createBiquadFilter();
+        noiseFilterRef.current.type = "highpass";
+        noiseFilterRef.current.frequency.value = 80;
+
         gainNodeRef.current = audioContextRef.current.createGain();
-        source.connect(gainNodeRef.current);
+        source.connect(noiseFilterRef.current);
+        noiseFilterRef.current.connect(gainNodeRef.current);
         gainNodeRef.current.connect(audioContextRef.current.destination);
       } catch {
-        // Cross-origin video without CORS headers — audio boost unavailable for this source
+        // Cross-origin video without CORS headers — Web Audio unavailable for this source
         audioContextRef.current = null;
       }
     }
-    
+
     if (gainNodeRef.current) {
-      // 0-200% -> 0.0-2.0. Base is 85% in store.
-      gainNodeRef.current.gain.value = (audioBoost / 100) * 1.5; 
+      // 0-200% → 0.0-3.0 gain. Base 85% → 1.275 (slightly above unity). (Bug 3)
+      gainNodeRef.current.gain.value = (audioBoost / 100) * 1.5;
+    } else if (videoRef.current) {
+      // Fallback: set native element volume when Web Audio isn't available (Bug 3)
+      videoRef.current.volume = Math.min(1, audioBoost / 100);
     }
-    
+
     if (isPlaying && audioContextRef.current?.state === "suspended") {
       audioContextRef.current.resume();
     }
   }, [exportSettings.audioBoost, isPlaying]);
 
-  // Live Playback Speed
+  // Live Noise Suppression — update highpass filter frequency (Bug 4)
+  useEffect(() => {
+    if (!noiseFilterRef.current) return;
+    // 0% = 80 Hz (nearly flat), 100% = 400 Hz (aggressively cuts low-freq rumble)
+    noiseFilterRef.current.frequency.value = 80 + (exportSettings.noiseSuppression / 100) * 320;
+  }, [exportSettings.noiseSuppression]);
+
+  // Live Playback Speed — apply on mount and on source change (Bug 2)
   useEffect(() => {
     if (videoRef.current) {
       videoRef.current.playbackRate = exportSettings.playbackSpeed / 100;
     }
-  }, [exportSettings.playbackSpeed]);
+  }, [exportSettings.playbackSpeed, displayUrl]);
 
   const getCssFilter = () => {
     const filter = exportSettings.filter;
@@ -257,6 +275,30 @@ export default function VideoCanvas() {
     videoRef.current.currentTime = next;
     setCurrentTime(next);
   }, [currentTime, duration, setCurrentTime]);
+
+  // Keyboard navigation for seek and play/pause (Bug 5)
+  // Must come AFTER skip and togglePlay are declared above.
+  useEffect(() => {
+    if (!sourceUrl) return;
+    const handler = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.contentEditable === "true"
+      ) return;
+      switch (e.key) {
+        case "ArrowLeft": e.preventDefault(); skip(-5); break;
+        case "ArrowRight": e.preventDefault(); skip(5); break;
+        case " ": e.preventDefault(); togglePlay(); break;
+        case "j": e.preventDefault(); skip(-10); break;
+        case "k": e.preventDefault(); togglePlay(); break;
+        case "l": e.preventDefault(); skip(10); break;
+      }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [sourceUrl, skip, togglePlay]);
 
   // Respond to external seek requests (e.g. from Timeline slider)
   useEffect(() => {
@@ -384,6 +426,8 @@ export default function VideoCanvas() {
                     if (!videoRef.current) return;
                     const v = videoRef.current;
                     setDuration(v.duration);
+                    // Re-apply playback rate when a new video loads (Bug 2)
+                    v.playbackRate = useEditorStore.getState().exportSettings.playbackSpeed / 100;
                     if (videoMetadata) {
                       setVideoMetadata({
                         ...videoMetadata,

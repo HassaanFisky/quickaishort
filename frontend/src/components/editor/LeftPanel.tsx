@@ -148,9 +148,16 @@ function DraggableClip({
 }
 
 export default function LeftPanel() {
-  const { suggestions, selectedClipId, selectClip, setSuggestions, sourceFile, currentStage, addCanvasElement } =
+  const { suggestions, selectedClipId, selectClip, setSuggestions, sourceFile, sourceUrl, currentStage, agentStates, addCanvasElement } =
     useEditorStore();
   const [activeTab, setActiveTab] = useState<Tab>("clips");
+
+  const analysisErrored = agentStates.viralAnalysis.status === "error";
+  const hasSource = !!(sourceFile || sourceUrl);
+
+  const handleRetry = () => {
+    window.dispatchEvent(new Event("retry-analysis"));
+  };
   const hasSuggestions = suggestions.length > 0;
 
   function handleDragEnd(event: DragEndEvent) {
@@ -221,6 +228,23 @@ export default function LeftPanel() {
                     </div>
                   </SortableContext>
                 </DndContext>
+              ) : analysisErrored && hasSource ? (
+                /* Analysis failed — show retry button (Bug 10) */
+                <div className="h-[400px] flex flex-col items-center justify-center text-center p-10 rounded-3xl glass-surface border-red-500/20 group">
+                  <div className="w-20 h-20 rounded-full bg-red-500/10 flex items-center justify-center border border-red-500/20 mb-6">
+                    <Zap className="w-10 h-10 text-red-400" strokeWidth={1} />
+                  </div>
+                  <h3 className="text-sm font-black text-foreground tracking-tight mb-2">Analysis Failed</h3>
+                  <p className="text-[11px] text-muted-foreground font-medium max-w-[180px] mb-6">
+                    Could not generate clip suggestions. The video may be restricted, or the server timed out.
+                  </p>
+                  <button
+                    onClick={handleRetry}
+                    className="px-5 py-2 rounded-full bg-primary/10 border border-primary/30 text-[10px] font-black text-primary uppercase tracking-widest hover:bg-primary/20 transition-colors"
+                  >
+                    Retry Analysis
+                  </button>
+                </div>
               ) : (
                 <div className="h-[400px] flex flex-col items-center justify-center text-center p-10 rounded-3xl glass-surface border-white/5 group">
                   <div className="w-20 h-20 rounded-full bg-foreground/5 flex items-center justify-center border border-foreground/10 mb-6">

@@ -130,6 +130,11 @@ export async function POST(req: NextRequest) {
       chatHistory.pop();
     }
 
+    // Google AI requires history to start with a "user" turn (Bug 7)
+    while (chatHistory.length > 0 && chatHistory[0].role !== "user") {
+      chatHistory.shift();
+    }
+
     const chat = model.startChat({ history: chatHistory });
     const result = await chat.sendMessage(message);
     const raw = result.response.text().trim();

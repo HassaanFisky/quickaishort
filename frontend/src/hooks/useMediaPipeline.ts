@@ -21,6 +21,7 @@ export function useMediaPipeline() {
     setTranscript,
     setSuggestions,
     setAgentState,
+    setAudioData,
   } = useEditorStore();
 
   const transcription = useTranscription();
@@ -82,6 +83,7 @@ export function useMediaPipeline() {
       sampleRate = result.sampleRate;
       duration = result.duration;
       clearTimeout(timeoutId);
+      setAudioData(audioData);
     } catch (audioError) {
       clearTimeout(timeoutId);
       const msg = audioError instanceof Error ? audioError.message : String(audioError);
@@ -127,7 +129,7 @@ export function useMediaPipeline() {
     setAgentState("transcription", { status: "working", progress: 0 });
     toast.info("Reading video content...");
     transcription.transcribe(audioData, sampleRate);
-  }, [setProcessing, setProgress, setAgentState, transcription]);
+  }, [setProcessing, setProgress, setAgentState, setAudioData, transcription]);
 
   // Handle Transcription Complete
   useEffect(() => {

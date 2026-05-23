@@ -94,6 +94,7 @@ export default function VideoWorkspace() {
   const [isEncoding, setIsEncoding] = useState(false);
   const [encodeProgress, setEncodeProgress] = useState(0);
   const [workerReady, setWorkerReady] = useState(false);
+  const [workerLoadError, setWorkerLoadError] = useState<string | null>(null);
 
   // ── Engine config controls ──────────────────────────────────────────────────
   const [captionBlurMs, setCaptionBlurMs] = useState(300);
@@ -282,6 +283,15 @@ export default function VideoWorkspace() {
       workerRef.current = null;
     };
   }, []);
+
+  // FFmpeg load timeout — if not ready after 15 s, show a clear error (Bug 8)
+  useEffect(() => {
+    if (workerReady || workerLoadError) return;
+    const timer = setTimeout(() => {
+      setWorkerLoadError("FFmpeg failed to load — CDN may be blocked. Local MP4 export unavailable.");
+    }, 15_000);
+    return () => clearTimeout(timer);
+  }, [workerReady, workerLoadError]);
 
   // ── Playback controls ────────────────────────────────────────────────────────
   const handlePlayPause = useCallback(() => {
@@ -574,8 +584,14 @@ export default function VideoWorkspace() {
         <section className={styles.controlSection}>
           <h3 className={styles.sectionTitle}>Local MP4 Export</h3>
 
-          {!workerReady && (
+          {!workerReady && !workerLoadError && (
             <p className={styles.hint}>Loading FFmpeg.wasm…</p>
+          )}
+
+          {workerLoadError && (
+            <p className={styles.hint} style={{ color: "var(--color-destructive, #ef4444)" }}>
+              {workerLoadError}
+            </p>
           )}
 
           {workerReady && !isRecording && !isEncoding && (
