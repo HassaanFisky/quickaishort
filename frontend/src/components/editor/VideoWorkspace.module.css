@@ -364,6 +364,38 @@
   color: #a1a1aa;
 }
 
+/* ── Export stage indicator ────────────────────────────────────────────────────── */
+.exportStages {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.exportStage {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #4b4b55;
+  padding: 2px 6px;
+  border-radius: 999px;
+  border: 1px solid #26262b;
+  transition: color 0.2s ease, border-color 0.2s ease;
+}
+
+.exportStageActive {
+  color: #a855f7;
+  border-color: rgba(168, 85, 247, 0.4);
+  background-color: rgba(168, 85, 247, 0.08);
+}
+
+.exportStageDone {
+  color: #4ade80;
+  border-color: rgba(74, 222, 128, 0.25);
+  background-color: rgba(74, 222, 128, 0.06);
+}
+
 /* ── Responsive: collapse control panel to a drawer on narrow viewports ──────── */
 @media (max-width: 740px) {
   .workspace {

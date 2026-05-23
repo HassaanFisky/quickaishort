@@ -65,13 +65,14 @@ export function AIPanel() {
           exit={{ x: '100%' }}
           transition={{ type: 'spring', stiffness: 220, damping: 30 }}
           className="fixed right-0 top-0 z-40 h-screen w-[340px]
-                     bg-[hsl(var(--bg-elevated))] border-l border-[hsl(var(--border))]
+                     bg-[hsl(var(--bg-subtle))] border-l border-[hsl(var(--border-strong))]
                      flex flex-col shadow-2xl"
         >
           {/* Header */}
           <header
             className="flex items-center justify-between px-4 py-3
-                       border-b border-[hsl(var(--border))]"
+                       border-b border-[hsl(var(--border-strong))]
+                       bg-[hsl(var(--bg-elevated))]"
           >
             <div className="flex items-center gap-2">
               <span

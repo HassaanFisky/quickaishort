@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useEditorStore } from "@/stores/editorStore";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Sparkles, Clock, Film, Zap, Info, Type, Shapes, Scissors, Plus } from "lucide-react";
+import { Sparkles, Clock, Film, Zap, Info, Type, Shapes, Scissors, Plus, Flame, Rocket, Lightbulb, Target, CheckCircle2, XCircle, Diamond, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DndContext, closestCenter, type DragEndEvent } from "@dnd-kit/core";
 import {
@@ -147,10 +147,30 @@ function DraggableClip({
   );
 }
 
+const TEXT_COLORS = [
+  { label: "White", value: "text-white" },
+  { label: "Yellow", value: "text-yellow-400" },
+  { label: "Purple", value: "text-purple-400" },
+  { label: "Pink", value: "text-pink-400" },
+  { label: "Emerald", value: "text-emerald-400" },
+] as const;
+
+const ELEMENT_ICONS = [
+  { Icon: Flame,        label: "Fire",    color: "text-orange-400" },
+  { Icon: Rocket,       label: "Rocket",  color: "text-blue-400" },
+  { Icon: Lightbulb,    label: "Idea",    color: "text-yellow-400" },
+  { Icon: Target,       label: "Target",  color: "text-red-400" },
+  { Icon: Sparkles,     label: "Shine",   color: "text-primary" },
+  { Icon: CheckCircle2, label: "Check",   color: "text-emerald-400" },
+  { Icon: XCircle,      label: "Stop",    color: "text-destructive" },
+  { Icon: Diamond,      label: "Diamond", color: "text-cyan-400" },
+] as const;
+
 export default function LeftPanel() {
   const { suggestions, selectedClipId, selectClip, setSuggestions, sourceFile, sourceUrl, currentStage, agentStates, addCanvasElement } =
     useEditorStore();
   const [activeTab, setActiveTab] = useState<Tab>("clips");
+  const [textColor, setTextColor] = useState("text-white");
 
   const analysisErrored = agentStates.viralAnalysis.status === "error";
   const hasSource = !!(sourceFile || sourceUrl);
@@ -263,13 +283,34 @@ export default function LeftPanel() {
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 20 }}
-              className="space-y-4"
+              className="space-y-5"
             >
-              <div className="grid grid-cols-1 gap-3">
+              {/* Color swatches */}
+              <div className="space-y-2">
+                <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/60 px-1">Text Color</span>
+                <div className="flex gap-2 px-1">
+                  {TEXT_COLORS.map((c) => (
+                    <button
+                      key={c.value}
+                      onClick={() => setTextColor(c.value)}
+                      title={c.label}
+                      className={cn(
+                        "w-7 h-7 rounded-full border-2 transition-all duration-200 flex items-center justify-center",
+                        textColor === c.value ? "border-primary scale-110 shadow-[0_0_10px_hsl(var(--primary)/0.4)]" : "border-white/10 hover:border-white/30"
+                      )}
+                    >
+                      <div className={cn("w-4 h-4 rounded-full", c.value === "text-white" ? "bg-white" : c.value === "text-yellow-400" ? "bg-yellow-400" : c.value === "text-purple-400" ? "bg-purple-400" : c.value === "text-pink-400" ? "bg-pink-400" : "bg-emerald-400")} />
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Text style buttons */}
+              <div className="grid grid-cols-1 gap-2.5">
                 {[
-                  { label: "Add Heading", size: "text-2xl font-black", content: "ADD HEADING" },
-                  { label: "Add Subheading", size: "text-lg font-bold", content: "Add subheading" },
-                  { label: "Add Body Text", size: "text-sm font-medium", content: "Add body text" },
+                  { label: "Heading", size: "text-2xl font-black", content: "ADD HEADING", y: 80 },
+                  { label: "Subheading", size: "text-lg font-bold", content: "Subheading", y: 200 },
+                  { label: "Body Text", size: "text-sm font-medium", content: "Body text here", y: 320 },
                 ].map((item, i) => (
                   <button
                     key={i}
@@ -277,15 +318,15 @@ export default function LeftPanel() {
                       type: "text",
                       content: item.content,
                       x: 100,
-                      y: 100,
+                      y: item.y,
                       scale: 1,
                       rotation: 0,
-                      style: { className: item.size }
+                      style: { className: cn(item.size, textColor) }
                     })}
-                    className="w-full p-6 rounded-2xl border border-white/5 hover:border-primary/40 hover:bg-primary/5 transition-all duration-300 text-left group"
+                    className="w-full p-4 rounded-xl border border-white/5 hover:border-primary/40 hover:bg-primary/5 transition-all duration-200 text-left group flex items-center justify-between"
                   >
-                    <span className={cn("block mb-1", item.size)}>{item.label}</span>
-                    <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">Click to add</span>
+                    <span className={cn(item.size, textColor, "leading-none")}>{item.label}</span>
+                    <span className="text-[8px] font-bold text-muted-foreground/40 uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-2">+ Add</span>
                   </button>
                 ))}
               </div>
@@ -298,24 +339,32 @@ export default function LeftPanel() {
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 20 }}
-              className="grid grid-cols-2 gap-3"
+              className="space-y-3"
             >
-              {["🔥", "🚀", "💡", "🎯", "✨", "✅", "❌", "💎"].map((emoji, i) => (
-                <button
-                  key={i}
-                  onClick={() => addCanvasElement({
-                    type: "sticker",
-                    content: emoji,
-                    x: 150,
-                    y: 150,
-                    scale: 1,
-                    rotation: 0
-                  })}
-                  className="aspect-square rounded-2xl border border-white/5 flex items-center justify-center text-3xl hover:bg-white/5 hover:border-primary/20 transition-all duration-300 group"
-                >
-                  <span className="group-hover:scale-125 transition-transform">{emoji}</span>
-                </button>
-              ))}
+              <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/60 px-1">Icon Overlays</span>
+              <div className="grid grid-cols-2 gap-2.5">
+                {ELEMENT_ICONS.map(({ Icon, label, color }, i) => (
+                  <button
+                    key={i}
+                    onClick={() => addCanvasElement({
+                      type: "sticker",
+                      content: label,
+                      x: 140,
+                      y: 140 + i * 30,
+                      scale: 1,
+                      rotation: 0
+                    })}
+                    className="flex items-center gap-3 p-3.5 rounded-xl border border-white/5 hover:border-primary/30 hover:bg-primary/5 transition-all duration-200 group"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-foreground/5 flex items-center justify-center group-hover:bg-primary/10 transition-colors shrink-0">
+                      <Icon className={cn("w-4 h-4", color)} />
+                    </div>
+                    <span className="text-[10px] font-bold text-muted-foreground group-hover:text-foreground transition-colors uppercase tracking-widest">
+                      {label}
+                    </span>
+                  </button>
+                ))}
+              </div>
             </motion.div>
           )}
         </AnimatePresence>

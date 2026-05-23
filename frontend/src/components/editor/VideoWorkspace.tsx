@@ -584,8 +584,24 @@ export default function VideoWorkspace() {
         <section className={styles.controlSection}>
           <h3 className={styles.sectionTitle}>Local MP4 Export</h3>
 
+          {/* Stage indicator */}
+          <div className={styles.exportStages}>
+            <span className={`${styles.exportStage} ${workerReady || workerLoadError ? styles.exportStageDone : styles.exportStageActive}`}>
+              1 · Load
+            </span>
+            <span className={`${styles.exportStage} ${isRecording ? styles.exportStageActive : isEncoding || (!isRecording && !isEncoding && workerReady) ? styles.exportStageDone : ""}`}>
+              2 · Capture
+            </span>
+            <span className={`${styles.exportStage} ${isEncoding ? styles.exportStageActive : ""}`}>
+              3 · Encode
+            </span>
+            <span className={`${styles.exportStage} ${!isRecording && !isEncoding && workerReady && encodeProgress === 0 && recordProgress === 0 ? "" : ""}`}>
+              4 · Save
+            </span>
+          </div>
+
           {!workerReady && !workerLoadError && (
-            <p className={styles.hint}>Loading FFmpeg.wasm…</p>
+            <p className={styles.hint}>Initialising FFmpeg — may take up to 15 s on first load…</p>
           )}
 
           {workerLoadError && (
@@ -600,7 +616,7 @@ export default function VideoWorkspace() {
               onClick={startCapture}
               disabled={engineState === "IDLE" || engineState === "LOADING"}
             >
-              Record &amp; Export MP4
+              ● Record &amp; Export MP4
             </button>
           )}
 
@@ -613,13 +629,13 @@ export default function VideoWorkspace() {
                 />
               </div>
               <p className={styles.hint}>
-                Capturing frames… {recordProgress}% ({captureFrameRef.current}/{MAX_RECORD_FRAMES})
+                Capturing… {recordProgress}% · {captureFrameRef.current}/{MAX_RECORD_FRAMES} frames
               </p>
               <button
                 className={`${styles.actionBtn} ${styles.actionBtnDanger}`}
                 onClick={stopCapture}
               >
-                Stop &amp; Encode
+                ■ Stop &amp; Encode
               </button>
               <button
                 className={styles.actionBtnGhost}
@@ -638,7 +654,7 @@ export default function VideoWorkspace() {
                   style={{ width: `${encodeProgress}%` }}
                 />
               </div>
-              <p className={styles.hint}>Encoding H.264… {encodeProgress}%</p>
+              <p className={styles.hint}>Encoding H.264… {encodeProgress}% — your download will start automatically</p>
             </>
           )}
         </section>

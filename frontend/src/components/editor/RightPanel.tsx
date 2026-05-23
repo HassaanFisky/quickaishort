@@ -181,14 +181,14 @@ export default function RightPanel() {
 
             <div className="p-5 rounded-2xl bg-foreground/[0.02] border border-foreground/5 space-y-5 backdrop-blur-sm">
               <div className="flex justify-between items-center px-1">
-                <span className="text-[11px] font-bold text-foreground tracking-widest tabular-nums">
-                  {selectedClip ? formatTime(selectedClip.start) : "0:00"}
+                <span className={cn("text-[11px] font-bold tracking-widest tabular-nums", selectedClip ? "text-foreground" : "text-muted-foreground/30")}>
+                  {selectedClip ? formatTime(selectedClip.start) : "—"}
                 </span>
-                <span className="text-[10px] text-muted-foreground/40 font-medium">
+                <span className={cn("text-[10px] font-medium", selectedClip ? "text-muted-foreground/40" : "text-muted-foreground/20")}>
                   {selectedClip ? `${Math.max(0, Math.round(selectedClip.end - selectedClip.start))}s` : "—"}
                 </span>
-                <span className="text-[11px] font-bold text-foreground tracking-widest tabular-nums">
-                  {selectedClip ? formatTime(selectedClip.end) : "0:00"}
+                <span className={cn("text-[11px] font-bold tracking-widest tabular-nums", selectedClip ? "text-foreground" : "text-muted-foreground/30")}>
+                  {selectedClip ? formatTime(selectedClip.end) : "—"}
                 </span>
               </div>
               {selectedClip ? (
@@ -203,8 +203,10 @@ export default function RightPanel() {
                   className="py-2"
                 />
               ) : (
-                <div className="h-10 flex items-center px-2">
-                  <div className="w-full h-2 bg-foreground/5 rounded-full" />
+                <div className="h-10 flex items-center justify-center px-2">
+                  <span className="text-[9px] text-muted-foreground/40 uppercase tracking-widest font-bold">
+                    Select a clip above to trim
+                  </span>
                 </div>
               )}
             </div>
