@@ -3,7 +3,7 @@ set -e
 
 echo "[$(date -u)] Starting bgutil PoToken server on port 4416..."
 cd /bgutil/server
-node dist/server.js &
+node build/main.js &
 BGUTIL_PID=$!
 
 echo "[$(date -u)] Waiting 6s for bgutil to initialize..."
