@@ -15,7 +15,9 @@ redis==5.0.4
 rq==1.16.2
 pusher==3.3.2
 ffmpeg-python==0.2.0
-# motor and pymongo removed — backend migrated to Firestore (google-cloud-firestore)
+motor==3.5.0
+pymongo==4.8.0
+google-cloud-bigquery>=3.25.0
 google-cloud-storage>=2.14.0
 httpx==0.28.1
 python-jose[cryptography]==3.3.0
