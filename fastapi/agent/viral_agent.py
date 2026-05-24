@@ -116,6 +116,27 @@ except Exception as _adk_err:
     genai_types = None  # type: ignore[assignment]
 
 
+# BigQuery Agent Analytics Plugin — optional, requires google-adk[bigquery]>=1.21.0
+_BQ_PLUGIN = None
+if _ADK_OK:
+    try:
+        from google.adk.plugins.bigquery_agent_analytics_plugin import (
+            BigQueryAgentAnalyticsPlugin,
+            BigQueryLoggerConfig,
+        )
+        _BQ_PLUGIN = BigQueryAgentAnalyticsPlugin(
+            project_id="quickaishort-agent-494304",
+            dataset_id="adk_analytics",
+            config=BigQueryLoggerConfig(batch_size=1, shutdown_timeout=10.0),
+        )
+        logger.info("BigQueryAgentAnalyticsPlugin initialised for viral agent (dataset=adk_analytics)")
+    except Exception as _bq_err:
+        logger.warning(
+            "BigQueryAgentAnalyticsPlugin not available for viral agent (%s) — analytics disabled",
+            _bq_err,
+        )
+
+
 # ---------------------------------------------------------------------------
 # FunctionTool: Redis-backed viral score cache
 # Zero new dependencies — uses Redis already required by queue_service.
@@ -235,10 +256,12 @@ def _build_viral_pipeline():
             fs_err,
         )
         session_service = InMemorySessionService()
+    _runner_plugins = [_BQ_PLUGIN] if _BQ_PLUGIN is not None else []
     return Runner(
         agent=root_agent,
         session_service=session_service,
         app_name="QuickAIShort_ViralEngine",
+        plugins=_runner_plugins,
     )
 
 

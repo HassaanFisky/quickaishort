@@ -29,7 +29,7 @@ async def _get_pipeline_collection():
 
 
 async def get_agent_latency(agent_name: Optional[str] = None, hours: int = 24) -> dict[str, Any]:
-    """Average pipeline duration from MongoDB pipeline_runs."""
+    """Average pipeline duration from Firestore pipeline_runs."""
     try:
         from services.db import get_db
         import asyncio
@@ -38,36 +38,51 @@ async def get_agent_latency(agent_name: Optional[str] = None, hours: int = 24) -
 
         def _query():
             col = get_db().collection("pipeline_runs")
-            match: dict = {"started_at": {"$gt": cutoff_ts}, "status": "success"}
-            if agent_name:
-                match["pipeline_type"] = agent_name
-            pipeline = [
-                {"$match": match},
-                {
-                    "$group": {
-                        "_id": "$pipeline_type",
-                        "avg_duration_ms": {"$avg": "$duration_ms"},
-                        "count": {"$sum": 1},
-                        "p95_duration_ms": {"$percentile": {"input": "$duration_ms", "p": [0.95], "method": "approximate"}},
-                    }
-                },
-            ]
-            try:
-                return list(col.aggregate(pipeline))
-            except Exception:
-                # $percentile may not be available on older MongoDB — simplified fallback
-                pipeline[-1]["$group"].pop("p95_duration_ms", None)
-                return list(col.aggregate(pipeline))
+            # Using single started_at range filter to avoid any composite index requirements
+            docs = col.where("started_at", ">", cutoff_ts).stream()
+            
+            rows = []
+            for d in docs:
+                data = d.to_dict()
+                if data.get("status") != "success":
+                    continue
+                if agent_name and data.get("pipeline_type") != agent_name:
+                    continue
+                rows.append(data)
+                
+            groups: dict[str, list[float]] = {}
+            for r in rows:
+                pt = r.get("pipeline_type", "unknown")
+                dur = r.get("duration_ms")
+                if dur is not None:
+                    groups.setdefault(pt, []).append(float(dur))
+                    
+            rows_aggregated = []
+            for pt, durs in groups.items():
+                if not durs:
+                    continue
+                durs_sorted = sorted(durs)
+                n = len(durs)
+                avg_dur = sum(durs) / n
+                p95_idx = min(int(n * 0.95), n - 1)
+                p95_dur = durs_sorted[p95_idx]
+                rows_aggregated.append({
+                    "_id": pt,
+                    "avg_duration_ms": round(avg_dur, 1),
+                    "count": n,
+                    "p95_duration_ms": [round(p95_dur, 1)],
+                })
+            return rows_aggregated
 
         rows = await asyncio.to_thread(_query)
-        return {"latency": rows, "hours": hours, "source": "mongodb"}
+        return {"latency": rows, "hours": hours, "source": "firestore"}
     except Exception as exc:
         logger.warning("get_agent_latency failed: %s", exc)
-        return {"latency": [], "error": str(exc), "source": "mongodb"}
+        return {"latency": [], "error": str(exc), "source": "firestore"}
 
 
 async def get_tool_errors(hours: int = 24) -> dict[str, Any]:
-    """Failed pipeline runs from MongoDB pipeline_runs."""
+    """Failed pipeline runs from Firestore pipeline_runs."""
     try:
         from services.db import get_db
         import asyncio
@@ -76,19 +91,27 @@ async def get_tool_errors(hours: int = 24) -> dict[str, Any]:
 
         def _query():
             col = get_db().collection("pipeline_runs")
-            rows = list(
-                col.find(
-                    {"started_at": {"$gt": cutoff_ts}, "status": "failed"},
-                    {"pipeline_type": 1, "error_details": 1, "started_at": 1, "_id": 0},
-                ).sort("started_at", -1).limit(50)
-            )
-            return rows
+            docs = col.where("started_at", ">", cutoff_ts).stream()
+            
+            rows = []
+            for d in docs:
+                data = d.to_dict()
+                if data.get("status") != "failed":
+                    continue
+                rows.append({
+                    "pipeline_type": data.get("pipeline_type"),
+                    "error_details": data.get("error_details"),
+                    "started_at": data.get("started_at"),
+                })
+            # Sort descending by started_at
+            rows.sort(key=lambda x: x.get("started_at", 0), reverse=True)
+            return rows[:50]
 
         rows = await asyncio.to_thread(_query)
-        return {"errors": rows, "hours": hours, "source": "mongodb"}
+        return {"errors": rows, "hours": hours, "source": "firestore"}
     except Exception as exc:
         logger.warning("get_tool_errors failed: %s", exc)
-        return {"errors": [], "error": str(exc), "source": "mongodb"}
+        return {"errors": [], "error": str(exc), "source": "firestore"}
 
 
 async def get_token_usage(hours: int = 24) -> dict[str, Any]:

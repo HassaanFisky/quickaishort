@@ -1,6 +1,6 @@
 """Pipeline run tracking for Pre-Flight and Viral agent pipelines.
 
-Writes to MongoDB collection `pipeline_runs`. Each document records:
+Writes to Firestore collection `pipeline_runs`. Each document records:
   pipeline_type, user_id, video_id, status, duration_ms, error_details, started_at.
 
 Used by /api/admin/pipeline/health and analytics_queries.py.
