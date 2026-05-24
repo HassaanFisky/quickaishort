@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 
-const PROTECTED_PREFIXES = ["/dashboard", "/editor", "/settings", "/history"];
+const PROTECTED_PREFIXES = ["/dashboard", "/editor", "/settings", "/history", "/adk"];
 const AUTH_REDIRECT_FROM = ["/signin"];
 
 export async function middleware(req: NextRequest) {
@@ -54,6 +54,8 @@ export const config = {
     "/editor/:path*",
     "/settings/:path*",
     "/history/:path*",
+    "/adk/:path*",
+    "/adk",
     "/signin",
   ],
 };

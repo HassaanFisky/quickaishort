@@ -95,8 +95,24 @@ function ScriptStep() {
       } else {
         toast.info("No enhancements returned — your script looks good.");
       }
-    } catch {
-      toast.error("AI generation failed. Check your credits or try again.");
+    } catch (err: unknown) {
+      let msg = "AI generation failed — please try again.";
+      if (axios.isAxiosError(err)) {
+        const status = err.response?.status;
+        if (!err.response) {
+          msg = "Connection lost — check your internet.";
+        } else if (status === 401 || status === 403) {
+          msg = "Sign in to use ADK Studio.";
+        } else if (status === 429) {
+          msg = "Rate limit exceeded — try again later.";
+        } else if (status === 503) {
+          msg = "AI service not configured — GEMINI_API_KEY missing on server.";
+        } else if (status && status >= 500) {
+          const detail = (err.response.data as { detail?: string })?.detail;
+          msg = detail ? `AI error: ${detail}` : `Server error (${status}) — please try again.`;
+        }
+      }
+      toast.error(msg);
     } finally {
       setGenerating(false);
     }

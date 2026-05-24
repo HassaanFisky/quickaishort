@@ -123,6 +123,28 @@ export const authOptions: NextAuthOptions = {
     strategy: "jwt",
     maxAge: 30 * 24 * 60 * 60, // 30 days
   },
+  jwt: {
+    maxAge: 30 * 24 * 60 * 60, // 30 days
+  },
+  cookies: {
+    sessionToken: {
+      name:
+        process.env.NODE_ENV === "production"
+          ? "__Secure-next-auth.session-token"
+          : "next-auth.session-token",
+      options: {
+        httpOnly: true,
+        sameSite: "lax" as const,
+        path: "/",
+        secure: process.env.NODE_ENV === "production",
+        // Cover both www and apex on quickaishort.online
+        domain:
+          process.env.NODE_ENV === "production"
+            ? ".quickaishort.online"
+            : undefined,
+      },
+    },
+  },
   pages: {
     signIn: "/signin",
   },

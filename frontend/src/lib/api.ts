@@ -18,6 +18,25 @@ export const API_URL =
 // Default timeout: 30 s. Long-running inference calls override per-request.
 axios.defaults.timeout = 30_000;
 
+// Global network-error response interceptor — shows a toast for connectivity
+// failures. 401 is intentionally excluded: the SessionExpiryModal handles it.
+if (typeof window !== "undefined") {
+  axios.interceptors.response.use(
+    (response) => response,
+    async (err) => {
+      const status: number | undefined = err?.response?.status;
+      if (!status && err?.code === "ERR_NETWORK") {
+        const { toast } = await import("sonner");
+        toast.error("Connection lost — check your internet and try again.", { id: "network-error" });
+      } else if (!status && err?.code === "ECONNABORTED") {
+        const { toast } = await import("sonner");
+        toast.error("Request timed out — the server took too long to respond.", { id: "timeout-error" });
+      }
+      return Promise.reject(err);
+    },
+  );
+}
+
 // Attach NextAuth session JWT to every request so FastAPI can verify user identity
 if (typeof window !== "undefined") {
   axios.interceptors.request.use(async (config) => {

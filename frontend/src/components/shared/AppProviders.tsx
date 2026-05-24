@@ -9,6 +9,7 @@ import { PusherProvider } from "@/components/providers/PusherProvider";
 import SplashScreen from "@/components/shared/SplashScreen";
 import PageTransition from "@/components/shared/PageTransition";
 import { SessionExpiryModal } from "@/components/shared/SessionExpiryModal";
+import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 
 export function AppProviders({ children }: { children: ReactNode }) {
   const [queryClient] = useState(
@@ -35,7 +36,9 @@ export function AppProviders({ children }: { children: ReactNode }) {
             themes={["dark", "light", "crystal", "neon", "magma", "aurora", "nano"]}
           >
             <SplashScreen />
-            <PageTransition>{children}</PageTransition>
+            <ErrorBoundary>
+              <PageTransition>{children}</PageTransition>
+            </ErrorBoundary>
             <Toaster position="top-center" richColors />
             <SessionExpiryModal />
           </ThemeProvider>

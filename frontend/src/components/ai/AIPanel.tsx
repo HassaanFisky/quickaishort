@@ -44,12 +44,25 @@ export function AIPanel() {
         }),
       });
       const data = await res.json();
-      addMessage({
-        role: 'assistant',
-        content: data.content ?? data.message ?? 'Something went wrong.',
-      });
+
+      let content: string;
+      if (data.content) {
+        content = data.content;
+      } else if (res.status === 401) {
+        content = 'Sign in to use AI suggestions.';
+      } else if (res.status === 503) {
+        content = 'AI service not configured — contact support.';
+      } else if (res.status === 429) {
+        content = 'Rate limit exceeded — try again in a moment.';
+      } else if (res.status >= 500) {
+        content = `AI error (${res.status}) — please try again.`;
+      } else {
+        content = data.message ?? 'Something went wrong.';
+      }
+
+      addMessage({ role: 'assistant', content });
     } catch {
-      addMessage({ role: 'assistant', content: 'Network error — please try again.' });
+      addMessage({ role: 'assistant', content: 'Connection lost — check your internet and try again.' });
     } finally {
       setLoading(false);
     }
