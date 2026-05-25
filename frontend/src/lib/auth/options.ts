@@ -116,6 +116,20 @@ export const authOptions: NextAuthOptions = {
         session.user.id = token.id ?? "";
         session.user.isPro = token.isPro ?? false;
       }
+      // Re-encode the NextAuth JWT payload as a compact HS256 token that the
+      // FastAPI backend can verify with NEXTAUTH_SECRET.  The session cookie is
+      // httpOnly and unreachable from document.cookie, so we expose the token
+      // here and the axios interceptor reads session.backendToken instead.
+      try {
+        const { encode } = await import("next-auth/jwt");
+        session.backendToken = await encode({
+          token,
+          secret: process.env.NEXTAUTH_SECRET!,
+          maxAge: 30 * 24 * 60 * 60,
+        });
+      } catch {
+        // encode failure is non-fatal; API calls will receive 401 until resolved
+      }
       return session;
     },
   },

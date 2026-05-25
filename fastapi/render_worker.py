@@ -98,6 +98,14 @@ class HealthCheckHandler(http.server.SimpleHTTPRequestHandler):
             self.send_response(404)
             self.end_headers()
 
+    def do_POST(self):
+        # Absorb POST probes from GCP metadata server (169.254.169.126) and
+        # any other internal lifecycle checks — always 200 so Cloud Run does
+        # not flag the container as unhealthy.
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b'{"status": "ok"}')
+
 
 def run_health_server():
     port = int(os.environ.get("PORT", 8080))

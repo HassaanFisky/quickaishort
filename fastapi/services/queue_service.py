@@ -3,6 +3,9 @@
 import os
 import redis
 import logging
+from redis.retry import Retry
+from redis.backoff import ExponentialBackoff
+from redis.exceptions import TimeoutError as RedisTimeoutError, ConnectionError as RedisConnectionError
 from rq import Queue
 
 logger = logging.getLogger(__name__)
@@ -15,16 +18,24 @@ SAFE_MODE = os.getenv("SAFE_MODE", "false").lower() == "true"
 
 redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379")
 
-# Sync connection for RQ.
-# socket_timeout is raised to 10 s (was 2 s) to survive Cloud Run cold-starts:
-# Upstash/Memorystore can take 3-8 s to accept the first connection on a fresh
-# instance. retry_on_timeout=True prevents immediate crashes on transient
-# timeouts without masking genuine connection failures.
+# Upstash and many managed Redis providers close idle connections after ~60s.
+# socket_keepalive=True sends TCP-level keepalive probes so the OS detects the
+# drop and reconnects instead of letting the worker silently quit.
+# Retry(ExponentialBackoff) retries up to 6 times (cap=60s) on transient errors.
+_retry_policy = Retry(
+    ExponentialBackoff(cap=60, base=1),
+    retries=6,
+)
+_retry_errors = [RedisTimeoutError, RedisConnectionError]
+
 redis_conn = redis.Redis.from_url(
     redis_url,
-    socket_timeout=10.0,
+    socket_timeout=30.0,
     socket_connect_timeout=10.0,
+    socket_keepalive=True,
     retry_on_timeout=True,
+    retry=_retry_policy,
+    retry_on_error=_retry_errors,
     health_check_interval=30,
 )
 
@@ -33,8 +44,9 @@ import redis.asyncio as async_redis
 
 async_redis_conn = async_redis.from_url(
     redis_url,
-    socket_timeout=10.0,
+    socket_timeout=30.0,
     socket_connect_timeout=10.0,
+    socket_keepalive=True,
     retry_on_timeout=True,
     health_check_interval=30,
 )

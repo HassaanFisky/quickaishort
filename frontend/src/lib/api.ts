@@ -37,35 +37,22 @@ if (typeof window !== "undefined") {
   );
 }
 
-// Attach NextAuth session JWT to every request so FastAPI can verify user identity
+// Attach NextAuth session JWT to every request so FastAPI can verify user identity.
+// The session cookie is httpOnly and inaccessible via document.cookie; instead we
+// read session.backendToken which auth/options.ts re-encodes server-side and exposes
+// on the session object via the session() callback.
 if (typeof window !== "undefined") {
   axios.interceptors.request.use(async (config) => {
     try {
-      // next-auth/react getSession reads the session cookie
       const { getSession } = await import("next-auth/react");
       const session = await getSession();
-      if (session) {
-        // The NextAuth session token is in the cookie; we use the user id as X-User-Id
-        // and send the raw session cookie value as the Bearer token.
-        // next-auth encodes the JWT in the __Secure-next-auth.session-token cookie.
-        const cookieName =
-          window.location.protocol === "https:"
-            ? "__Secure-next-auth.session-token"
-            : "next-auth.session-token";
-        const cookies = document.cookie.split(";");
-        const sessionCookie = cookies
-          .map((c) => c.trim())
-          .find((c) => c.startsWith(`${cookieName}=`));
-        // Use slice instead of split("=") to correctly handle base64url tokens with "=" padding
-        const token = sessionCookie ? sessionCookie.slice(cookieName.length + 1) : "";
-        if (token) {
-          config.headers = config.headers || {};
-          config.headers["Authorization"] = `Bearer ${token}`;
-        }
-        if (session.user?.id) {
-          config.headers = config.headers || {};
-          config.headers["X-User-Id"] = session.user.id;
-        }
+      if (session?.backendToken) {
+        config.headers = config.headers || {};
+        config.headers["Authorization"] = `Bearer ${session.backendToken}`;
+      }
+      if (session?.user?.id) {
+        config.headers = config.headers || {};
+        config.headers["X-User-Id"] = session.user.id;
       }
     } catch {
       // Silently continue — auth dependency on backend will reject if required

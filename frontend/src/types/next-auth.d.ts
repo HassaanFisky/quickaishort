@@ -17,6 +17,7 @@ declare module "next-auth" {
       image?: string | null;
       settings?: UserSettings;
     };
+    backendToken?: string;
   }
 
   interface UserSettings {
