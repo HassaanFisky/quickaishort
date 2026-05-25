@@ -396,6 +396,48 @@
   background-color: rgba(74, 222, 128, 0.06);
 }
 
+/* ── Zoom controls ────────────────────────────────────────────────────────────── */
+.zoomControls {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background-color: rgba(0, 0, 0, 0.7);
+  border: 1px solid #26262b;
+  border-radius: 999px;
+  padding: 3px 8px;
+  backdrop-filter: blur(4px);
+}
+
+.zoomBtn {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: none;
+  background: none;
+  color: #f4f4f5;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+.zoomBtn:hover:not(:disabled) { background-color: rgba(168, 85, 247, 0.2); }
+.zoomBtn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+.zoomLabel {
+  font-size: 10px;
+  font-family: "JetBrains Mono", monospace;
+  color: #a1a1aa;
+  min-width: 32px;
+  text-align: center;
+}
+
 /* ── Responsive: collapse control panel to a drawer on narrow viewports ──────── */
 @media (max-width: 740px) {
   .workspace {

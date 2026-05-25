@@ -113,9 +113,16 @@ def inject_ydl_bypass(opts: dict) -> dict:
     new_opts["nocheckcertificate"] = True
     new_opts["no_warnings"] = True
 
-    proxy = os.environ.get("YOUTUBE_PROXY")
-    if proxy:
-        new_opts["proxy"] = proxy
+    proxy_url = os.environ.get("YOUTUBE_PROXY")
+    if not proxy_url:
+        decodo_user = os.environ.get("DECODO_USERNAME")
+        decodo_pass = os.environ.get("DECODO_PASSWORD")
+        decodo_host = os.environ.get("DECODO_ENDPOINT", "gate.decodo.com")
+        decodo_port = os.environ.get("DECODO_PORT", "7000")
+        if decodo_user and decodo_pass:
+            proxy_url = f"http://{decodo_user}:{decodo_pass}@{decodo_host}:{decodo_port}"
+    if proxy_url:
+        new_opts["proxy"] = proxy_url
 
     cookie_path = get_cookie_file()
     if cookie_path:

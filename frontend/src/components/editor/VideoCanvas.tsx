@@ -187,6 +187,23 @@ export default function VideoCanvas() {
     }
   }, [sourceUrl, duration]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // IFrame fallback timeout — if proxy video never reaches readyState >= 2 within
+  // 10s, fall back to the YT IFrame player (handles yt-dlp bot-detection blocks).
+  useEffect(() => {
+    if (!displayUrl || localYtId) return;
+    const timer = setTimeout(() => {
+      if (videoRef.current && videoRef.current.readyState < 2) {
+        const ytId = sourceUrl ? extractYtVideoId(sourceUrl) : null;
+        if (ytId) {
+          setLocalYtId(ytId);
+          setDisplayUrl(null);
+          setProxyRetry(0);
+        }
+      }
+    }, 10_000);
+    return () => clearTimeout(timer);
+  }, [displayUrl, localYtId, sourceUrl]);
+
   // Load the YouTube IFrame Player API script once and create a player
   // instance when a YouTube video ID is available.
   useEffect(() => {

@@ -103,6 +103,24 @@ export default function EditorLayout() {
     return () => window.removeEventListener("retry-analysis", handler);
   }, [runPipeline]);
 
+  // Watchdog: if transcription stage hangs for >30s without completing, auto-cancel.
+  // Whisper.wasm occasionally stalls when CDN assets are blocked or SharedArrayBuffer
+  // is unavailable; this surfaces a recoverable error instead of spinning forever.
+  useEffect(() => {
+    if (currentStage !== "transcribing") return;
+    const watchdog = setTimeout(() => {
+      if (useEditorStore.getState().currentStage === "transcribing") {
+        cancelPipeline();
+        setProcessing(false, "idle");
+        toast.warning(
+          "Transcription timed out — try uploading an MP4 for faster processing.",
+          { duration: 8000 },
+        );
+      }
+    }, 30_000);
+    return () => clearTimeout(watchdog);
+  }, [currentStage, cancelPipeline, setProcessing]);
+
   const handleUrlChange = (e: ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setUrlInput(val);
@@ -351,7 +369,7 @@ export default function EditorLayout() {
         <main className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[minmax(240px,20%)_1fr_minmax(280px,25%)] gap-6 overflow-hidden">
 
           {/* Left: Viral Suggestions & Source */}
-          <section className="depth-card glass-surface rounded-[2.5rem] p-6 border-foreground/5 shadow-2xl flex flex-col overflow-hidden min-h-0">
+          <section className="rounded-[2.5rem] p-6 bg-[#141417] border border-foreground/5 shadow-2xl flex flex-col overflow-hidden min-h-0">
             <LeftPanel />
           </section>
 
@@ -658,13 +676,13 @@ export default function EditorLayout() {
           </section>
 
           {/* Right: Property Inspector & AI Results */}
-          <section className="depth-card glass-surface rounded-[2.5rem] p-6 border-foreground/5 shadow-2xl flex flex-col overflow-hidden min-h-0">
+          <section className="rounded-[2.5rem] p-6 bg-[#141417] border border-foreground/5 shadow-2xl flex flex-col overflow-hidden min-h-0">
             <RightPanel />
           </section>
         </main>
 
         {/* Bottom: Sequence Timeline */}
-        <footer className="h-44 glass-surface rounded-[3rem] p-6 border-foreground/5 shadow-2xl flex flex-col overflow-hidden relative">
+        <footer className="h-44 rounded-[3rem] p-6 bg-[#141417] border border-foreground/5 shadow-2xl flex flex-col overflow-hidden relative">
           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-20 h-1 bg-foreground/5 rounded-full mt-2" />
           <BottomDock />
         </footer>

@@ -156,21 +156,69 @@ export default function BottomDock() {
     deleteClip,
   } = useEditorStore();
 
-  const waveformBars = useMemo(() => {
-    if (!audioData || audioData.length === 0) {
-      return Array(80).fill(4);
-    }
-    const barCount = 80;
+  const waveformCanvasRef = useRef<HTMLCanvasElement>(null);
+
+  // Amplitude peaks per pixel column — used to draw the canvas waveform.
+  const waveformPeaks = useMemo(() => {
+    if (!audioData || audioData.length === 0) return null;
+    const barCount = 120;
     const step = Math.floor(audioData.length / barCount);
     return Array.from({ length: barCount }, (_, i) => {
       let sum = 0;
       for (let j = i * step; j < (i + 1) * step && j < audioData.length; j++) {
         sum += Math.abs(audioData[j]);
       }
-      const avg = sum / step;
-      return Math.max(3, Math.min(60, avg * 400));
+      return Math.max(0.01, Math.min(1, (sum / step) * 10));
     });
   }, [audioData]);
+
+  // Redraw waveform canvas whenever peaks, playhead, or silence segments change.
+  useEffect(() => {
+    const canvas = waveformCanvasRef.current;
+    if (!canvas || !waveformPeaks) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const w = canvas.offsetWidth;
+    const h = canvas.offsetHeight;
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, w, h);
+
+    const barW = w / waveformPeaks.length;
+    const playedPct = duration > 0 ? currentTime / duration : 0;
+
+    waveformPeaks.forEach((amp, i) => {
+      const x = i * barW;
+      const barH = Math.max(2, amp * h * 0.85);
+      const y = (h - barH) / 2;
+      const timePct = i / waveformPeaks.length;
+      const inSilence = silenceSegments.some(
+        (seg) => timePct * duration >= seg.start && timePct * duration <= seg.end,
+      );
+
+      ctx.fillStyle = inSilence
+        ? "rgba(239,68,68,0.45)"
+        : timePct < playedPct
+          ? "rgba(168,85,247,0.85)"
+          : "rgba(168,85,247,0.35)";
+
+      ctx.fillRect(x + 0.5, y, Math.max(1, barW - 1), barH);
+    });
+
+    // Playhead line
+    if (duration > 0) {
+      const px = playedPct * w;
+      ctx.strokeStyle = "rgba(255,255,255,0.7)";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(px, 0);
+      ctx.lineTo(px, h);
+      ctx.stroke();
+    }
+  }, [waveformPeaks, currentTime, duration, silenceSegments]);
 
 
   const stopPlayback = () => {
@@ -297,40 +345,44 @@ export default function BottomDock() {
             size="icon"
             onClick={() => undo()}
             title="Undo — Ctrl+Z"
+            aria-label="Undo"
             disabled={undoStack.length === 0}
             className="undo-btn h-8 w-8 text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            <Undo2 className="undo-icon w-4 h-4" />
+            <Undo2 className="undo-icon w-4 h-4" aria-hidden="true" />
           </Button>
           <Button
             variant="ghost"
             size="icon"
             onClick={() => redo()}
             title="Redo — Ctrl+Shift+Z"
+            aria-label="Redo"
             disabled={redoStack.length === 0}
             className="redo-btn h-8 w-8 text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            <Redo2 className="redo-icon w-4 h-4" />
+            <Redo2 className="redo-icon w-4 h-4" aria-hidden="true" />
           </Button>
           <Button
             variant="ghost"
             size="icon"
+            aria-label={isPlaying ? "Pause" : "Play"}
             className="w-8 h-8 text-foreground/60 hover:text-primary transition-colors"
             onClick={() => setIsPlaying(!isPlaying)}
           >
             {isPlaying ? (
-              <Pause className="w-4 h-4 fill-current" />
+              <Pause className="w-4 h-4 fill-current" aria-hidden="true" />
             ) : (
-              <Play className="w-4 h-4 fill-current" />
+              <Play className="w-4 h-4 fill-current" aria-hidden="true" />
             )}
           </Button>
           <Button
             variant="ghost"
             size="icon"
+            aria-label="Stop"
             className="w-8 h-8 text-foreground/60 hover:text-primary transition-colors"
             onClick={stopPlayback}
           >
-            <Square className="w-3.5 h-3.5 fill-current" />
+            <Square className="w-3.5 h-3.5 fill-current" aria-hidden="true" />
           </Button>
           <span className="text-[10px] font-mono text-muted-foreground/60 tabular-nums select-none">
             {formatTime(currentTime)} / {formatTime(duration)}
@@ -343,9 +395,10 @@ export default function BottomDock() {
               key={label}
               onClick={action}
               title={tooltip}
+              aria-label={tooltip}
               className="flex items-center gap-2 group cursor-pointer focus:outline-none"
             >
-              <Icon className="w-4 h-4 text-foreground/40 group-hover:text-primary transition-colors" />
+              <Icon className="w-4 h-4 text-foreground/40 group-hover:text-primary transition-colors" aria-hidden="true" />
               <span className="text-[10px] font-black text-foreground/40 uppercase tracking-widest group-hover:text-primary transition-colors">
                 {label}
               </span>
@@ -460,29 +513,15 @@ export default function BottomDock() {
           <span className="w-16 text-[9px] font-black text-muted-foreground/40 uppercase tracking-widest text-right shrink-0">
             Audio
           </span>
-          <div className="flex-1 h-7 rounded-lg bg-foreground/5 border border-foreground/5 relative flex gap-1 p-0.5">
-            {audioData ? (
-              <div className="absolute inset-0 flex items-end gap-[1px] px-1 py-1">
-                {waveformBars.map((h, i) => {
-                  const timePct = i / waveformBars.length;
-                  const time = timePct * duration;
-                  const inSilence = silenceSegments.some(
-                    (seg) => time >= seg.start && time <= seg.end,
-                  );
-                  return (
-                    <div
-                      key={i}
-                      className={cn(
-                        "flex-1 rounded-t-sm transition-colors duration-150",
-                        inSilence ? "bg-red-500/40" : "bg-primary/50",
-                      )}
-                      style={{ height: `${h}%` }}
-                    />
-                  );
-                })}
-              </div>
+          <div className="flex-1 h-7 rounded-lg bg-foreground/5 border border-foreground/5 relative overflow-hidden">
+            {waveformPeaks ? (
+              <canvas
+                ref={waveformCanvasRef}
+                className="absolute inset-0 w-full h-full"
+                aria-hidden="true"
+              />
             ) : (
-              <div className="flex items-center justify-center flex-1 h-full">
+              <div className="flex items-center justify-center w-full h-full">
                 <span className="text-[8px] text-muted-foreground/30 uppercase tracking-widest">
                   No audio data
                 </span>

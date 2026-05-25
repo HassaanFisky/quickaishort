@@ -317,6 +317,8 @@ export default function RightPanel() {
               </span>
             </div>
             <button
+              aria-label={exportSettings.voiceoverEnabled ? "Disable AI Voiceover" : "Enable AI Voiceover"}
+              aria-pressed={exportSettings.voiceoverEnabled}
               onClick={() => setExportSetting("voiceoverEnabled", !exportSettings.voiceoverEnabled)}
               className={cn(
                 "relative w-12 h-6 rounded-full transition-all duration-500 overflow-hidden",
@@ -347,6 +349,8 @@ export default function RightPanel() {
               </span>
             </div>
             <button
+              aria-label={exportSettings.transitionEnabled ? "Disable Smart Transitions" : "Enable Smart Transitions"}
+              aria-pressed={exportSettings.transitionEnabled}
               onClick={() => setExportSetting("transitionEnabled", !exportSettings.transitionEnabled)}
               className={cn(
                 "relative w-12 h-6 rounded-full transition-all duration-500 overflow-hidden",
@@ -377,6 +381,8 @@ export default function RightPanel() {
               </span>
             </div>
             <button
+              aria-label={captionsEnabled ? "Disable Auto Subtitles" : "Enable Auto Subtitles"}
+              aria-pressed={captionsEnabled}
               onClick={() => setCaptionsEnabled(!captionsEnabled)}
               className={cn(
                 "relative w-12 h-6 rounded-full transition-all duration-500 overflow-hidden",

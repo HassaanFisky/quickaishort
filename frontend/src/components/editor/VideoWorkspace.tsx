@@ -88,6 +88,11 @@ export default function VideoWorkspace() {
   const [durationSec, setDurationSec] = useState(0);
   const [isSeeking, setIsSeeking] = useState(false);
 
+  // ── Canvas zoom (0.5×–2×, steps of 0.25) ────────────────────────────────────
+  const [canvasZoom, setCanvasZoom] = useState(1);
+  const zoomIn = useCallback(() => setCanvasZoom((z) => Math.min(2, z + 0.25)), []);
+  const zoomOut = useCallback(() => setCanvasZoom((z) => Math.max(0.5, z - 0.25)), []);
+
   // ── Export state ────────────────────────────────────────────────────────────
   const [isRecording, setIsRecording] = useState(false);
   const [recordProgress, setRecordProgress] = useState(0);
@@ -95,6 +100,7 @@ export default function VideoWorkspace() {
   const [encodeProgress, setEncodeProgress] = useState(0);
   const [workerReady, setWorkerReady] = useState(false);
   const [workerLoadError, setWorkerLoadError] = useState<string | null>(null);
+  const [workerLoadSlow, setWorkerLoadSlow] = useState(false);
   const [exportComplete, setExportComplete] = useState(false);
   const [captureDone, setCaptureDone] = useState(false);
 
@@ -287,13 +293,17 @@ export default function VideoWorkspace() {
     };
   }, []);
 
-  // FFmpeg load timeout — if not ready after 15 s, show a clear error (Bug 8)
+  // Progressive FFmpeg load UX: warn at 10s, error at 15s
   useEffect(() => {
     if (workerReady || workerLoadError) return;
-    const timer = setTimeout(() => {
-      setWorkerLoadError("FFmpeg failed to load — CDN may be blocked. Local MP4 export unavailable.");
+    const slowTimer = setTimeout(() => setWorkerLoadSlow(true), 10_000);
+    const errorTimer = setTimeout(() => {
+      setWorkerLoadError("FFmpeg blocked — CDN assets unavailable. Use Server Export instead.");
     }, 15_000);
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(slowTimer);
+      clearTimeout(errorTimer);
+    };
   }, [workerReady, workerLoadError]);
 
   // ── Playback controls ────────────────────────────────────────────────────────
@@ -433,12 +443,32 @@ export default function VideoWorkspace() {
             width={ENGINE_W}
             height={ENGINE_H}
             className={styles.canvas}
-            style={{ width: DISPLAY_W, height: DISPLAY_H }}
+            style={{ width: DISPLAY_W * canvasZoom, height: DISPLAY_H * canvasZoom }}
           />
           {/* Engine state badge */}
           <span className={styles.stateBadge} data-state={engineState}>
             {engineState}
           </span>
+          {/* Zoom controls */}
+          <div className={styles.zoomControls}>
+            <button
+              onClick={zoomOut}
+              disabled={canvasZoom <= 0.5}
+              aria-label="Zoom out"
+              className={styles.zoomBtn}
+            >
+              −
+            </button>
+            <span className={styles.zoomLabel}>{Math.round(canvasZoom * 100)}%</span>
+            <button
+              onClick={zoomIn}
+              disabled={canvasZoom >= 2}
+              aria-label="Zoom in"
+              className={styles.zoomBtn}
+            >
+              +
+            </button>
+          </div>
         </div>
 
         {/* Playback transport below canvas */}
@@ -608,14 +638,27 @@ export default function VideoWorkspace() {
             </span>
           </div>
 
-          {!workerReady && !workerLoadError && (
+          {!workerReady && !workerLoadError && !workerLoadSlow && (
             <p className={styles.hint}>Initialising FFmpeg — may take up to 15 s on first load…</p>
           )}
 
-          {workerLoadError && (
-            <p className={styles.hint} style={{ color: "var(--color-destructive, #ef4444)" }}>
-              {workerLoadError}
+          {workerLoadSlow && !workerLoadError && !workerReady && (
+            <p className={styles.hint} style={{ color: "var(--color-warning, #f59e0b)" }}>
+              Loading slowly — CDN may be throttled. Switch to Preview mode and use
+              {" "}<strong>Save Your Short</strong> in the Inspector panel for server-side rendering.
             </p>
+          )}
+
+          {workerLoadError && (
+            <>
+              <p className={styles.hint} style={{ color: "var(--color-destructive, #ef4444)" }}>
+                {workerLoadError}
+              </p>
+              <p className={styles.hint}>
+                Switch to <strong>Preview</strong> mode (top bar) → select a clip →
+                {" "}<strong>Save Your Short</strong> in the right panel.
+              </p>
+            </>
           )}
 
           {workerReady && !isRecording && !isEncoding && (
