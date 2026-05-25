@@ -832,6 +832,7 @@ async def export_status(job_id: str, user_id: str):
 async def render_stream_status(job_id: str):
     """Rich status from the Redis Streams tracking layer."""
     from services.render_queue import get_render_status
+
     return get_render_status(job_id)
 
 
@@ -843,6 +844,7 @@ async def render_dead_jobs(
     if x_admin_secret != os.getenv("ADMIN_SECRET"):
         raise HTTPException(status_code=403, detail="Invalid admin secret")
     from services.render_queue import get_dead_jobs
+
     return {"dead_jobs": get_dead_jobs()}
 
 
@@ -860,12 +862,19 @@ async def render_retry_dead(
 
     requeued = retry_dead_job(job_id)
     if not requeued:
-        raise HTTPException(status_code=404, detail="Job not found or not in dead state")
+        raise HTTPException(
+            status_code=404, detail="Job not found or not in dead state"
+        )
     # Re-enqueue with a minimal placeholder so worker re-runs from idempotency cache
     try:
         render_queue.enqueue(
             process_render_task,
-            job_id, "", 0.0, 0.0, "", {},
+            job_id,
+            "",
+            0.0,
+            0.0,
+            "",
+            {},
             job_id=job_id,
             job_timeout=JOB_TIMEOUT_SECONDS,
             result_ttl=JOB_RESULT_TTL_SECONDS,
@@ -885,6 +894,7 @@ async def render_dlq_stats(
     if x_admin_secret != os.getenv("ADMIN_SECRET"):
         raise HTTPException(status_code=403, detail="Invalid admin secret")
     from services.render_queue import get_dlq_stats
+
     return get_dlq_stats()
 
 
@@ -904,6 +914,7 @@ async def admin_analytics_latency(
 ):
     _require_admin(x_admin_secret)
     from services.analytics_queries import get_agent_latency
+
     return await get_agent_latency(agent_name=agent, hours=hours)
 
 
@@ -914,6 +925,7 @@ async def admin_analytics_errors(
 ):
     _require_admin(x_admin_secret)
     from services.analytics_queries import get_tool_errors
+
     return await get_tool_errors(hours=hours)
 
 
@@ -924,6 +936,7 @@ async def admin_analytics_tokens(
 ):
     _require_admin(x_admin_secret)
     from services.analytics_queries import get_token_usage
+
     return await get_token_usage(hours=hours)
 
 
@@ -935,6 +948,7 @@ async def admin_pipeline_health(
     """Pipeline run success rate, avg duration, and top errors."""
     _require_admin(x_admin_secret)
     from services.pipeline_monitor import get_health
+
     return await get_health(hours=hours)
 
 

@@ -75,6 +75,7 @@ def _check_cookies_once() -> None:
     _startup_cookie_checked = True
     try:
         from services.cookie_rotator import get_cookie_status
+
         get_cookie_status()  # result cached; CRITICAL logged if invalid
     except Exception as exc:
         logger.warning("Cookie startup check failed: %s", exc)
@@ -120,7 +121,9 @@ def inject_ydl_bypass(opts: dict) -> dict:
         decodo_host = os.environ.get("DECODO_ENDPOINT", "gate.decodo.com")
         decodo_port = os.environ.get("DECODO_PORT", "7000")
         if decodo_user and decodo_pass:
-            proxy_url = f"http://{decodo_user}:{decodo_pass}@{decodo_host}:{decodo_port}"
+            proxy_url = (
+                f"http://{decodo_user}:{decodo_pass}@{decodo_host}:{decodo_port}"
+            )
     if proxy_url:
         new_opts["proxy"] = proxy_url
 

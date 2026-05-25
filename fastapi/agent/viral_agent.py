@@ -124,12 +124,15 @@ if _ADK_OK:
             BigQueryAgentAnalyticsPlugin,
             BigQueryLoggerConfig,
         )
+
         _BQ_PLUGIN = BigQueryAgentAnalyticsPlugin(
             project_id="quickaishort-agent-494304",
             dataset_id="adk_analytics",
             config=BigQueryLoggerConfig(batch_size=1, shutdown_timeout=10.0),
         )
-        logger.info("BigQueryAgentAnalyticsPlugin initialised for viral agent (dataset=adk_analytics)")
+        logger.info(
+            "BigQueryAgentAnalyticsPlugin initialised for viral agent (dataset=adk_analytics)"
+        )
     except Exception as _bq_err:
         logger.warning(
             "BigQueryAgentAnalyticsPlugin not available for viral agent (%s) — analytics disabled",
@@ -507,6 +510,7 @@ async def run_viral_pipeline(
     try:
         import time as _time
         from services.pipeline_monitor import start_run as _pm_start, end_run as _pm_end
+
         _run_id = await _pm_start("viral", user_id, video_id or "")
         _t0 = _time.time()
 
@@ -534,7 +538,9 @@ async def run_viral_pipeline(
             final_text = await _run_viral_with_retry()
             await _pm_end(_run_id, "success", (_time.time() - _t0) * 1000)
         except Exception as _retry_exc:
-            await _pm_end(_run_id, "failed", (_time.time() - _t0) * 1000, str(_retry_exc))
+            await _pm_end(
+                _run_id, "failed", (_time.time() - _t0) * 1000, str(_retry_exc)
+            )
             raise
 
         suggestions = _coerce_suggestions(final_text)

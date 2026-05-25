@@ -5,7 +5,10 @@ import redis
 import logging
 from redis.retry import Retry
 from redis.backoff import ExponentialBackoff
-from redis.exceptions import TimeoutError as RedisTimeoutError, ConnectionError as RedisConnectionError
+from redis.exceptions import (
+    TimeoutError as RedisTimeoutError,
+    ConnectionError as RedisConnectionError,
+)
 from rq import Queue
 
 logger = logging.getLogger(__name__)

@@ -390,7 +390,9 @@ async def _async_process_render_task(
         )
 
         _rq_push_result(
-            job_id, user_id, "success",
+            job_id,
+            user_id,
+            "success",
             rendered_url=f"exports/{user_id}/{job_id}.mp4",
             duration_ms=(time.time() - started_at) * 1000,
         )
@@ -432,12 +434,15 @@ async def _async_process_render_task(
         # Stream-layer DLQ tracking (attempt count from RQ job header when available)
         try:
             from rq import get_current_job as _gcj
+
             _rq_job = _gcj()
             _attempt = (_rq_job.retries_left if _rq_job else 0) or 0
-            _attempt_number = (3 - _attempt)  # retries_left counts down from max
+            _attempt_number = 3 - _attempt  # retries_left counts down from max
         except Exception:
             _attempt_number = 3  # treat as final attempt if RQ context unavailable
-        _rq_push_result(job_id, user_id, "failed", error=str(exc), attempt=_attempt_number)
+        _rq_push_result(
+            job_id, user_id, "failed", error=str(exc), attempt=_attempt_number
+        )
 
         # Dead Letter Persistence (Atomic Recovery)
         await persist_failed_job(

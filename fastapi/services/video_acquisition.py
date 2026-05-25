@@ -41,7 +41,10 @@ def _read_cache(video_id: str, start_sec: float, end_sec: float) -> Optional[dic
         raw = redis_conn.get(key)
         if raw:
             data = json.loads(raw)
-            if data.get("status") == "ready" and Path(data.get("video_path", "")).exists():
+            if (
+                data.get("status") == "ready"
+                and Path(data.get("video_path", "")).exists()
+            ):
                 return data
     except Exception:
         pass

@@ -178,6 +178,7 @@ if _ADK_OK:
             BigQueryAgentAnalyticsPlugin,
             BigQueryLoggerConfig,
         )
+
         _BQ_PLUGIN = BigQueryAgentAnalyticsPlugin(
             project_id="quickaishort-agent-494304",
             dataset_id="adk_analytics",
@@ -830,19 +831,24 @@ async def run_preflight_pipeline(
                     session_id=session_id,
                 )
                 if session_check.state.get("preflight_done") == "true":
-                    logger.info("Final response received and preflight is marked as done.")
+                    logger.info(
+                        "Final response received and preflight is marked as done."
+                    )
                     return
 
     # Pipeline monitoring
     from services.pipeline_monitor import start_run, end_run
     import time as _time
+
     _run_id = await start_run("preflight", user_id, youtube_url)
     _t0 = _time.time()
     try:
         await _run_pipeline_with_retry()
         await end_run(_run_id, "success", (_time.time() - _t0) * 1000)
     except Exception as _pipeline_exc:
-        await end_run(_run_id, "failed", (_time.time() - _t0) * 1000, str(_pipeline_exc))
+        await end_run(
+            _run_id, "failed", (_time.time() - _t0) * 1000, str(_pipeline_exc)
+        )
         raise
 
     session = await runner.session_service.get_session(

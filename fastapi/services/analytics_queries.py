@@ -28,7 +28,9 @@ async def _get_pipeline_collection():
     return get_db().collection("pipeline_runs")
 
 
-async def get_agent_latency(agent_name: Optional[str] = None, hours: int = 24) -> dict[str, Any]:
+async def get_agent_latency(
+    agent_name: Optional[str] = None, hours: int = 24
+) -> dict[str, Any]:
     """Average pipeline duration from Firestore pipeline_runs."""
     try:
         from services.db import get_db
@@ -40,7 +42,7 @@ async def get_agent_latency(agent_name: Optional[str] = None, hours: int = 24) -
             col = get_db().collection("pipeline_runs")
             # Using single started_at range filter to avoid any composite index requirements
             docs = col.where("started_at", ">", cutoff_ts).stream()
-            
+
             rows = []
             for d in docs:
                 data = d.to_dict()
@@ -49,14 +51,14 @@ async def get_agent_latency(agent_name: Optional[str] = None, hours: int = 24) -
                 if agent_name and data.get("pipeline_type") != agent_name:
                     continue
                 rows.append(data)
-                
+
             groups: dict[str, list[float]] = {}
             for r in rows:
                 pt = r.get("pipeline_type", "unknown")
                 dur = r.get("duration_ms")
                 if dur is not None:
                     groups.setdefault(pt, []).append(float(dur))
-                    
+
             rows_aggregated = []
             for pt, durs in groups.items():
                 if not durs:
@@ -66,12 +68,14 @@ async def get_agent_latency(agent_name: Optional[str] = None, hours: int = 24) -
                 avg_dur = sum(durs) / n
                 p95_idx = min(int(n * 0.95), n - 1)
                 p95_dur = durs_sorted[p95_idx]
-                rows_aggregated.append({
-                    "_id": pt,
-                    "avg_duration_ms": round(avg_dur, 1),
-                    "count": n,
-                    "p95_duration_ms": [round(p95_dur, 1)],
-                })
+                rows_aggregated.append(
+                    {
+                        "_id": pt,
+                        "avg_duration_ms": round(avg_dur, 1),
+                        "count": n,
+                        "p95_duration_ms": [round(p95_dur, 1)],
+                    }
+                )
             return rows_aggregated
 
         rows = await asyncio.to_thread(_query)
@@ -92,17 +96,19 @@ async def get_tool_errors(hours: int = 24) -> dict[str, Any]:
         def _query():
             col = get_db().collection("pipeline_runs")
             docs = col.where("started_at", ">", cutoff_ts).stream()
-            
+
             rows = []
             for d in docs:
                 data = d.to_dict()
                 if data.get("status") != "failed":
                     continue
-                rows.append({
-                    "pipeline_type": data.get("pipeline_type"),
-                    "error_details": data.get("error_details"),
-                    "started_at": data.get("started_at"),
-                })
+                rows.append(
+                    {
+                        "pipeline_type": data.get("pipeline_type"),
+                        "error_details": data.get("error_details"),
+                        "started_at": data.get("started_at"),
+                    }
+                )
             # Sort descending by started_at
             rows.sort(key=lambda x: x.get("started_at", 0), reverse=True)
             return rows[:50]

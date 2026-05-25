@@ -97,9 +97,7 @@ async def get_health(hours: int = 24) -> dict[str, Any]:
             success = [r for r in rows if r.get("status") == "success"]
             failed = [r for r in rows if r.get("status") == "failed"]
             durations = [
-                r["duration_ms"]
-                for r in success
-                if r.get("duration_ms") is not None
+                r["duration_ms"] for r in success if r.get("duration_ms") is not None
             ]
             avg_ms = round(sum(durations) / len(durations), 1) if durations else None
 
@@ -122,9 +120,7 @@ async def get_health(hours: int = 24) -> dict[str, Any]:
                 "failed_count": len(failed),
                 "success_rate_pct": round(len(success) / total * 100, 1),
                 "avg_duration_ms": avg_ms,
-                "top_errors": sorted(
-                    error_counts.items(), key=lambda x: -x[1]
-                )[:5],
+                "top_errors": sorted(error_counts.items(), key=lambda x: -x[1])[:5],
                 "by_pipeline_type": by_type,
                 "hours": hours,
             }

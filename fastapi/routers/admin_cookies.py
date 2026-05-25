@@ -25,6 +25,7 @@ async def cookie_status(
     """Return cached cookie validity (safe to poll — cached for 1 hour)."""
     _check_admin(x_admin_secret)
     from services.cookie_rotator import get_cookie_status
+
     return get_cookie_status()
 
 
@@ -35,4 +36,5 @@ async def cookie_validate(
     """Force a live yt-dlp validation against the canary video (takes ~5s)."""
     _check_admin(x_admin_secret)
     from services.cookie_rotator import validate_cookies
+
     return validate_cookies()

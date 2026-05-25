@@ -277,7 +277,9 @@ class RenderService:
             # Fallback if video_acquisition not importable (e.g. missing dep)
             pass
         except Exception as e:
-            logger.error("[RenderService] Tiered acquisition failed for %s: %s", job.video_id, e)
+            logger.error(
+                "[RenderService] Tiered acquisition failed for %s: %s", job.video_id, e
+            )
             raise RuntimeError(f"YouTube download blocked after all fallbacks: {e}")
 
         try:
