@@ -174,6 +174,7 @@ export default function LeftPanel() {
 
   const analysisErrored = agentStates.viralAnalysis.status === "error";
   const hasSource = !!(sourceFile || sourceUrl);
+  const isAnalyzing = hasSource && ["loading", "analyzing", "transcribing"].includes(currentStage ?? "");
 
   const handleRetry = () => {
     window.dispatchEvent(new Event("retry-analysis"));
@@ -248,6 +249,21 @@ export default function LeftPanel() {
                     </div>
                   </SortableContext>
                 </DndContext>
+              ) : isAnalyzing ? (
+                /* Pipeline running — show progress indicator */
+                <div className="h-[400px] flex flex-col items-center justify-center text-center p-10 rounded-3xl glass-surface border-white/5">
+                  <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center border border-primary/20 mb-6 animate-pulse">
+                    <Zap className="w-10 h-10 text-primary" strokeWidth={1} />
+                  </div>
+                  <h3 className="text-sm font-black text-foreground tracking-tight mb-2">
+                    {currentStage === "transcribing" ? "Transcribing Audio..." : "Analyzing Video..."}
+                  </h3>
+                  <p className="text-[11px] text-muted-foreground font-medium max-w-[180px]">
+                    {currentStage === "transcribing"
+                      ? "Running Whisper transcription — this takes 20–60 s."
+                      : "Viral Intelligence Engine is scoring your clips."}
+                  </p>
+                </div>
               ) : analysisErrored && hasSource ? (
                 /* Analysis failed — show retry button (Bug 10) */
                 <div className="h-[400px] flex flex-col items-center justify-center text-center p-10 rounded-3xl glass-surface border-red-500/20 group">

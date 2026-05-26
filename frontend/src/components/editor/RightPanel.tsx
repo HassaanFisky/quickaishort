@@ -179,7 +179,7 @@ export default function RightPanel() {
               )}
             </div>
 
-            <div className="p-5 rounded-2xl bg-foreground/[0.02] border border-foreground/5 space-y-5 backdrop-blur-sm">
+            <div className="p-5 rounded-2xl bg-foreground/[0.02] border border-foreground/5 space-y-5">
               <div className="flex justify-between items-center px-1">
                 <span className={cn("text-[11px] font-bold tracking-widest tabular-nums", selectedClip ? "text-foreground" : "text-muted-foreground/30")}>
                   {selectedClip ? formatTime(selectedClip.start) : "—"}

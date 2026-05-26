@@ -111,16 +111,21 @@ export function AIPanel() {
         console.error("[AIPanel] Gemini request failed:", errMsg);
 
         let displayMsg = "Request failed — please try again.";
-        if (/api[_\s]?key|not configured|gemini.*auth|401|403/i.test(errMsg)) {
+        if (/api[_\s]?key|not configured|gemini.*auth|unauthorized|401|403/i.test(errMsg)) {
           displayMsg = "API key error — Gemini is not configured on this server.";
         } else if (/400|invalid argument|alternates/i.test(errMsg)) {
           displayMsg = "Invalid request — try rephrasing your message.";
-        } else if (/429|quota|RESOURCE_EXHAUSTED/i.test(errMsg)) {
+        } else if (/rate.?limit|quota|RESOURCE_EXHAUSTED|429/i.test(errMsg)) {
           displayMsg = "Rate limit reached — wait a moment and try again.";
         } else if (/network|fetch|failed to fetch/i.test(errMsg)) {
           displayMsg = "Network error — check your connection and retry.";
         } else if (/parse|JSON/i.test(errMsg)) {
           displayMsg = "Unexpected response from Gemini — try again.";
+        } else if (/5\d\d|server error|internal/i.test(errMsg)) {
+          const clean = errMsg.replace(/^HTTP \d+[:\s]*/i, "").trim();
+          displayMsg = clean || "Gemini server error — please try again.";
+        } else if (errMsg && errMsg !== "Request failed") {
+          displayMsg = errMsg;
         }
 
         addAIMessage({ role: "assistant", content: displayMsg, actions: [] });
