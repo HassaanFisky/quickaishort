@@ -491,7 +491,7 @@ export default function EditorLayout() {
                         <input
                           id="youtube-url-input"
                           type="text"
-                          placeholder="Paste video URL or upload MP4..."
+                          placeholder="Paste a YouTube URL to start editing..."
                           className="bg-transparent border-none outline-none text-sm w-full text-foreground placeholder:text-muted-foreground/20 h-11 pl-3 pr-4 font-bold tracking-tight"
                           value={urlInput}
                           onChange={handleUrlChange}

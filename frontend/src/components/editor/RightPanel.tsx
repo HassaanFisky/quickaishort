@@ -511,10 +511,10 @@ export default function RightPanel() {
                   </div>
                   <button
                     onClick={() => { resetExportState(); handleExport(); }}
-                    className="w-full h-12 rounded-lg overflow-hidden hover:brightness-110 transition-all flex items-center justify-center gap-3 bg-red-500/15 border border-red-500/30"
+                    className="btn btn-danger w-full h-12"
                   >
-                    <RefreshCw className="w-4 h-4 text-red-400" />
-                    <span className="text-[11px] font-black text-red-400 uppercase tracking-[0.25em]">
+                    <RefreshCw className="w-4 h-4" />
+                    <span className="text-[11px] font-black uppercase tracking-[0.25em]">
                       Retry Export
                     </span>
                   </button>

@@ -513,18 +513,22 @@ html.liquid-transition::view-transition-new(root) {
 
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: hsl(var(--foreground) / 0.1);
-  border-radius: 100px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--foreground) / 0.2);
+  background: rgba(255, 255, 255, 0.18);
+}
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
 }
 
 /* =============================================
@@ -1911,4 +1915,128 @@ nav:has(.nav-link:hover) .nav-link:not(:hover) {
   color: #fca5a5;
   font-size: 13px;
 }
+
+/* ── Typography scale ────────────────────────────────── */
+.text-display {
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+.text-title {
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+  color: var(--text-primary);
+}
+.text-heading {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+.text-subheading {
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--text-primary);
+}
+.text-body {
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+.text-caption {
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--text-tertiary);
+}
+.text-micro {
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+/* ── Elevation system ────────────────────────────────── */
+.elevation-0 { box-shadow: none; }
+.elevation-1 { box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25), 0 1px 2px rgba(0, 0, 0, 0.2); }
+.elevation-2 { box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35), 0 2px 4px rgba(0, 0, 0, 0.2); }
+.elevation-3 { box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45), 0 4px 8px rgba(0, 0, 0, 0.25); }
+.elevation-4 { box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6), 0 8px 16px rgba(0, 0, 0, 0.3); }
+
+/* ── Button danger variant ───────────────────────────── */
+.btn-danger {
+  background: #dc2626;
+  border-color: #dc2626;
+  color: white;
+}
+.btn-danger:hover:not(:disabled) { background: #b91c1c; border-color: #b91c1c; }
+
+/* ── Input hover / disabled states ──────────────────── */
+.input:hover:not(:focus):not(:disabled) {
+  border-color: var(--border-secondary);
+}
+.input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: var(--bg-secondary);
+}
+
+/* ── Panel body / footer ─────────────────────────────── */
+.panel-body   { padding: 16px 18px; }
+.panel-footer { padding: 12px 18px; border-top: 1px solid var(--border-primary); background: var(--bg-secondary); }
+
+/* ── Spacing utilities (4px grid) ───────────────────── */
+.pad-1 { padding: 4px; }
+.pad-2 { padding: 8px; }
+.pad-3 { padding: 12px; }
+.pad-4 { padding: 16px; }
+.pad-5 { padding: 20px; }
+.pad-6 { padding: 24px; }
+
+/* ── Transition utilities ────────────────────────────── */
+.transition-fast   { transition: all 0.1s ease; }
+.transition-normal { transition: all 0.2s ease; }
+.transition-slow   { transition: all 0.35s ease; }
+
+/* ── Animation keyframes + utilities ────────────────── */
+@keyframes fadeIn  { from { opacity: 0; } to { opacity: 1; } }
+@keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+@keyframes slideUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+.fade-in  { animation: fadeIn  0.2s ease forwards; }
+.fade-out { animation: fadeOut 0.2s ease forwards; }
+.slide-up { animation: slideUp 0.25s ease forwards; }
+
+/* ── Empty state overrides ───────────────────────────── */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 48px 24px;
+  text-align: center;
+}
+.empty-state-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: rgba(168, 85, 247, 0.06);
+  border: 1px solid rgba(168, 85, 247, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.empty-state-title       { font-size: 14px; font-weight: 600; color: var(--text-primary); margin: 0; }
+.empty-state-description { font-size: 12px; color: var(--text-tertiary); max-width: 220px; line-height: 1.5; margin: 0; }
 

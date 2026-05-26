@@ -491,16 +491,14 @@ export default function VideoCanvas() {
             )}
           </>
         ) : (
-          <div className="flex flex-col items-center justify-center gap-6 px-8 text-center select-none">
-            <div className="w-24 h-24 rounded-full bg-primary/5 border border-primary/10 flex items-center justify-center group-hover:scale-105 transition-transform duration-700 shadow-inner">
-              <PlayCircle className="w-12 h-12 text-primary/20" strokeWidth={1} />
+          <div className="empty-state select-none">
+            <div className="empty-state-icon">
+              <PlayCircle className="w-8 h-8 text-primary/20" strokeWidth={1} />
             </div>
-            <div className="space-y-2">
-              <p className="text-sm font-black text-foreground/50 tracking-tight">
-                Paste a YouTube URL to get started
-              </p>
-              <p className="text-[11px] text-muted-foreground/30 font-medium max-w-[200px] leading-relaxed">
-                We&apos;ll analyze the video and suggest the best viral clips
+            <div>
+              <p className="empty-state-title">Paste a YouTube URL to get started</p>
+              <p className="empty-state-description">
+                We&apos;ll analyze the video and suggest the best viral clips automatically
               </p>
             </div>
           </div>
