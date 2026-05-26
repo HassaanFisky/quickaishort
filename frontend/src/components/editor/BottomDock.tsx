@@ -103,7 +103,7 @@ function TimelineClip({
     >
       {/* Left Trim Handle */}
       <div
-        className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-primary/50 rounded-l-md"
+        className="absolute left-0 top-0 bottom-0 w-3 cursor-ew-resize hover:bg-primary/50 rounded-l-md"
         onMouseDown={(e) => handleMouseDown(e, "start")}
       />
       
@@ -122,7 +122,7 @@ function TimelineClip({
 
       {/* Right Trim Handle */}
       <div
-        className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-primary/50 rounded-r-md"
+        className="absolute right-0 top-0 bottom-0 w-3 cursor-ew-resize hover:bg-primary/50 rounded-r-md"
         onMouseDown={(e) => handleMouseDown(e, "end")}
       />
     </div>
@@ -157,6 +157,9 @@ export default function BottomDock() {
   } = useEditorStore();
 
   const waveformCanvasRef = useRef<HTMLCanvasElement>(null);
+  const [hoverTime, setHoverTime] = useState<number | null>(null);
+  const [hoverX, setHoverX] = useState(0);
+  const isDraggingPlayhead = useRef(false);
 
   // Amplitude peaks per pixel column — used to draw the canvas waveform.
   const waveformPeaks = useMemo(() => {
@@ -230,14 +233,32 @@ export default function BottomDock() {
   const playheadPct = duration > 0 ? (currentTime / duration) * 100 : 0;
   const videoTrackRef = useRef<HTMLDivElement>(null);
 
-  const handleTrackClick = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
+  const seekToEvent = useCallback(
+    (clientX: number) => {
       if (!videoTrackRef.current || duration === 0) return;
       const rect = videoTrackRef.current.getBoundingClientRect();
-      const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+      const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
       setPendingSeek(pct * duration);
     },
     [duration, setPendingSeek],
+  );
+
+  const handleTrackMouseDown = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      seekToEvent(e.clientX);
+      isDraggingPlayhead.current = true;
+      const onMove = (ev: MouseEvent) => {
+        if (isDraggingPlayhead.current) seekToEvent(ev.clientX);
+      };
+      const onUp = () => {
+        isDraggingPlayhead.current = false;
+        window.removeEventListener("mousemove", onMove);
+        window.removeEventListener("mouseup", onUp);
+      };
+      window.addEventListener("mousemove", onMove);
+      window.addEventListener("mouseup", onUp);
+    },
+    [seekToEvent],
   );
 
   const handleSplit = useCallback(() => {
@@ -435,8 +456,16 @@ export default function BottomDock() {
           <div
             id="video-track-area"
             ref={videoTrackRef}
-            onClick={handleTrackClick}
-            className="flex-1 h-8 rounded-lg bg-foreground/5 border border-foreground/5 relative overflow-hidden cursor-crosshair"
+            onMouseDown={handleTrackMouseDown}
+            onMouseMove={(e) => {
+              if (!videoTrackRef.current || duration === 0) return;
+              const rect = videoTrackRef.current.getBoundingClientRect();
+              const x = e.clientX - rect.left;
+              setHoverX(x);
+              setHoverTime((x / rect.width) * duration);
+            }}
+            onMouseLeave={() => setHoverTime(null)}
+            className="flex-1 h-8 rounded-lg bg-foreground/5 border border-foreground/5 relative overflow-visible cursor-crosshair"
           >
             {isProcessing ? (
               /* Pulsing skeleton while pipeline is running */
@@ -503,6 +532,16 @@ export default function BottomDock() {
                 style={{ left: `${playheadPct}%` }}
               >
                 <div className="absolute -top-1 -left-[3px] w-2 h-2 bg-foreground rotate-45 shadow-[0_0_10px_white/30]" />
+              </div>
+            )}
+
+            {/* Hover time indicator */}
+            {hoverTime !== null && duration > 0 && (
+              <div
+                className="absolute -top-7 z-40 px-1.5 py-0.5 rounded bg-foreground/90 text-background text-[9px] font-black pointer-events-none -translate-x-1/2 whitespace-nowrap"
+                style={{ left: hoverX }}
+              >
+                {formatTime(hoverTime)}
               </div>
             )}
           </div>

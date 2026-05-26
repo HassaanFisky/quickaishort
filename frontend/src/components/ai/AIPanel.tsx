@@ -22,6 +22,7 @@ export function AIPanel() {
   const { isOpen, setOpen, videoContext, messages, addMessage } = useAIPanel();
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [retryText, setRetryText] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const suggestions = videoContext ? WITH_VIDEO_SUGGESTIONS : NO_VIDEO_SUGGESTIONS;
 
@@ -30,16 +31,18 @@ export function AIPanel() {
   }, [messages]);
 
   async function send(text: string) {
-    if (!text.trim() || loading) return;
+    const trimmed = text.trim();
+    if (!trimmed || loading) return;
     setInput('');
-    addMessage({ role: 'user', content: text });
+    setRetryText(null);
+    addMessage({ role: 'user', content: trimmed });
     setLoading(true);
     try {
       const res = await fetch('/api/ai/chat', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          messages: [...messages, { role: 'user', content: text }],
+          messages: [...messages, { role: 'user', content: trimmed }],
           videoContext,
         }),
       });
@@ -56,6 +59,7 @@ export function AIPanel() {
         content = 'Rate limit exceeded — try again in a moment.';
       } else if (res.status >= 500) {
         content = `AI error (${res.status}) — please try again.`;
+        setRetryText(trimmed);
       } else {
         content = data.message ?? 'Something went wrong.';
       }
@@ -63,6 +67,7 @@ export function AIPanel() {
       addMessage({ role: 'assistant', content });
     } catch {
       addMessage({ role: 'assistant', content: 'Connection lost — check your internet and try again.' });
+      setRetryText(trimmed);
     } finally {
       setLoading(false);
     }
@@ -186,6 +191,19 @@ export function AIPanel() {
                     ))}
                   </span>
                 </div>
+              </div>
+            )}
+
+            {retryText && !loading && (
+              <div className="flex justify-end">
+                <button
+                  onClick={() => send(retryText)}
+                  className="text-xs px-3 py-1.5 rounded-lg border border-[hsl(var(--accent-indigo)/0.4)]
+                             text-[hsl(var(--accent-indigo))] hover:bg-[hsl(var(--accent-soft))]
+                             transition-all duration-150 font-medium"
+                >
+                  Try again ↺
+                </button>
               </div>
             )}
 

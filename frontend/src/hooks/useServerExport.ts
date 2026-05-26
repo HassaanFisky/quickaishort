@@ -39,6 +39,9 @@ export function useServerExport({ userId }: UseServerExportArgs) {
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState(0);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const [exportDone, setExportDone] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [lastDownloadUrl, setLastDownloadUrl] = useState<string | null>(null);
 
   const pusherRef = useRef<Pusher | null>(null);
   const channelRef = useRef<Channel | null>(null);
@@ -70,13 +73,23 @@ export function useServerExport({ userId }: UseServerExportArgs) {
     a.remove();
   }, []);
 
+  const resetExportState = useCallback(() => {
+    setExportDone(false);
+    setExportError(null);
+    setLastDownloadUrl(null);
+    setExportProgress(0);
+  }, []);
+
   const finishSuccess = useCallback(
     (jobId: string, downloadUrl: string) => {
       setIsExporting(false);
       setExportProgress(100);
       setActiveJobId(null);
+      setExportDone(true);
+      setExportError(null);
       cleanup();
       const absolute = buildExportDownloadUrl(downloadUrl);
+      setLastDownloadUrl(absolute);
       triggerDownload(absolute, `quickai-short-${jobId}.mp4`);
       toast.success("Export ready — downloading.");
 
@@ -111,6 +124,8 @@ export function useServerExport({ userId }: UseServerExportArgs) {
     (message: string) => {
       setIsExporting(false);
       setActiveJobId(null);
+      setExportDone(false);
+      setExportError(message || "Export failed.");
       cleanup();
       toast.error(message || "Export failed.");
     },
@@ -316,6 +331,10 @@ export function useServerExport({ userId }: UseServerExportArgs) {
     isExporting,
     exportProgress,
     activeJobId,
+    exportDone,
+    exportError,
+    lastDownloadUrl,
+    resetExportState,
     apiBase: API_URL,
   };
 }

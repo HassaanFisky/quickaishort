@@ -491,17 +491,17 @@ export default function VideoCanvas() {
             )}
           </>
         ) : (
-          <div className="text-muted-foreground text-sm flex flex-col items-center gap-6">
-            <div className="bg-foreground/5 p-8 rounded-full border border-foreground/10 shadow-inner group-hover:scale-110 transition-transform duration-700">
-              <PlayCircle className="w-12 h-12 opacity-20 text-foreground" strokeWidth={1} />
+          <div className="flex flex-col items-center justify-center gap-6 px-8 text-center select-none">
+            <div className="w-24 h-24 rounded-full bg-primary/5 border border-primary/10 flex items-center justify-center group-hover:scale-105 transition-transform duration-700 shadow-inner">
+              <PlayCircle className="w-12 h-12 text-primary/20" strokeWidth={1} />
             </div>
-            <div className="space-y-1 text-center">
-              <span className="opacity-40 tracking-[0.3em] text-[10px] uppercase font-black block">
-                No Signal
-              </span>
-              <span className="opacity-20 text-[9px] font-bold uppercase tracking-widest block">
-                Waiting for input...
-              </span>
+            <div className="space-y-2">
+              <p className="text-sm font-black text-foreground/50 tracking-tight">
+                Paste a YouTube URL to get started
+              </p>
+              <p className="text-[11px] text-muted-foreground/30 font-medium max-w-[200px] leading-relaxed">
+                We&apos;ll analyze the video and suggest the best viral clips
+              </p>
             </div>
           </div>
         )}

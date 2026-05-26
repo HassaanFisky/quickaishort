@@ -60,7 +60,10 @@ export default function RightPanel() {
   const { data: session } = useSession();
   const userId = session?.user?.id ?? "";
 
-  const { exportClip, isExporting, exportProgress } = useServerExport({ userId });
+  const {
+    exportClip, isExporting, exportProgress,
+    exportDone, exportError, lastDownloadUrl, resetExportState,
+  } = useServerExport({ userId });
   const {
     isRunning: isPreflightRunning,
     result: preflightResult,
@@ -454,40 +457,109 @@ export default function RightPanel() {
             </div>
           </div>
 
-          {/* Save Your Short */}
-          <div className="pt-4 pb-4">
-            <button
-              className={cn(
-                "w-full h-12 rounded-lg relative overflow-hidden transition-all duration-150",
-                isExporting || !selectedClip || (!sourceFile && !sourceUrl)
-                  ? "opacity-50 cursor-not-allowed"
-                  : "hover:brightness-110",
+          {/* Export Short */}
+          <div className="pt-4 pb-4 space-y-3">
+            <AnimatePresence mode="wait">
+              {exportDone ? (
+                <motion.div
+                  key="export-done"
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  className="space-y-2"
+                >
+                  <button
+                    onClick={() => {
+                      if (lastDownloadUrl) {
+                        const a = document.createElement("a");
+                        a.href = lastDownloadUrl;
+                        a.download = "quickai-short.mp4";
+                        a.target = "_blank";
+                        a.rel = "noopener";
+                        document.body.appendChild(a);
+                        a.click();
+                        a.remove();
+                      }
+                    }}
+                    className="w-full h-12 rounded-lg overflow-hidden hover:brightness-110 transition-all duration-150 flex items-center justify-center gap-3"
+                    style={{ background: "linear-gradient(135deg, #10b981, #059669)" }}
+                  >
+                    <CheckCircle className="w-5 h-5 text-white" />
+                    <span className="text-[11px] font-black text-white uppercase tracking-[0.25em]">
+                      Download Ready
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => resetExportState()}
+                    className="w-full h-8 text-[9px] font-black text-muted-foreground/40 hover:text-primary uppercase tracking-widest transition-colors"
+                  >
+                    Export again
+                  </button>
+                </motion.div>
+              ) : exportError ? (
+                <motion.div
+                  key="export-error"
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  className="space-y-3"
+                >
+                  <div className="p-3 rounded-lg border border-red-500/30 bg-red-500/10">
+                    <p className="text-[10px] font-bold text-red-400 text-center leading-relaxed">
+                      {exportError}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => { resetExportState(); handleExport(); }}
+                    className="w-full h-12 rounded-lg overflow-hidden hover:brightness-110 transition-all flex items-center justify-center gap-3 bg-red-500/15 border border-red-500/30"
+                  >
+                    <RefreshCw className="w-4 h-4 text-red-400" />
+                    <span className="text-[11px] font-black text-red-400 uppercase tracking-[0.25em]">
+                      Retry Export
+                    </span>
+                  </button>
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="export-idle"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                >
+                  <button
+                    className={cn(
+                      "w-full h-12 rounded-lg relative overflow-hidden transition-all duration-150",
+                      isExporting || !selectedClip || (!sourceFile && !sourceUrl)
+                        ? "opacity-50 cursor-not-allowed"
+                        : "hover:brightness-110",
+                    )}
+                    onClick={handleExport}
+                    disabled={isExporting || !selectedClip || (!sourceFile && !sourceUrl)}
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-r from-primary via-primary/80 to-accent animate-gradient-x" />
+                    <div className="relative z-10 flex items-center justify-center gap-3">
+                      {isExporting ? (
+                        <>
+                          <Loader2 className="w-5 h-5 animate-spin text-white" />
+                          <span className="text-[11px] font-black text-white uppercase tracking-[0.25em]">
+                            Rendering {exportProgress}%
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <Download className="w-5 h-5 text-white" />
+                          <span className="text-[11px] font-black text-white uppercase tracking-[0.25em]">
+                            Save Your Short
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  </button>
+                </motion.div>
               )}
-              onClick={handleExport}
-              disabled={isExporting || !selectedClip || (!sourceFile && !sourceUrl)}
-            >
-              <div className="absolute inset-0 bg-gradient-to-r from-primary via-primary/80 to-accent animate-gradient-x" />
-              <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-500" />
-              <div className="relative z-10 flex items-center justify-center gap-3">
-                {isExporting ? (
-                  <>
-                    <Loader2 className="w-5 h-5 animate-spin text-white" />
-                    <span className="text-[11px] font-black text-white uppercase tracking-[0.25em]">
-                      Rendering {exportProgress}%
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <Download className="w-5 h-5 text-white" />
-                    <span className="text-[11px] font-black text-white uppercase tracking-[0.25em]">
-                      Save Your Short
-                    </span>
-                  </>
-                )}
-              </div>
-            </button>
-            {!selectedClip && (
-              <p className="text-[9px] font-bold text-muted-foreground/40 text-center mt-3 uppercase tracking-widest">
+            </AnimatePresence>
+            {!exportDone && !exportError && !selectedClip && (
+              <p className="text-[9px] font-bold text-muted-foreground/40 text-center uppercase tracking-widest">
                 Select a clip above to export
               </p>
             )}
