@@ -57,7 +57,10 @@ Examples: "Add captions to first 30 seconds", "Trim intro to 0:05", "Apply warm 
     const text = result.response.text();
     const cleaned = text.replace(/^```json\n?|\n?```$/g, "").trim();
     const parsed = JSON.parse(cleaned);
-    return NextResponse.json({ suggestions: parsed.suggestions || DEFAULT_SUGGESTIONS });
+    return NextResponse.json(
+      { suggestions: parsed.suggestions || DEFAULT_SUGGESTIONS },
+      { headers: { "Cache-Control": "private, max-age=300" } },
+    );
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[/api/ai/suggestions] Gemini call failed:", msg);

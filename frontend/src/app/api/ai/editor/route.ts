@@ -141,7 +141,9 @@ export async function POST(req: NextRequest) {
 
     const cleaned = raw.replace(/^```json\n?|\n?```$/g, "").trim();
     const parsed: GeminiResponse = JSON.parse(cleaned);
-    return NextResponse.json(parsed);
+    return NextResponse.json(parsed, {
+      headers: { "Cache-Control": "private, no-cache" },
+    });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[/api/ai/editor] Gemini call failed:", msg);

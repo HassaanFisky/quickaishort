@@ -68,67 +68,56 @@ export function useMediaPipeline() {
     setAgentState("ingestion", { status: "working", progress: 10 });
     setProgress(10);
 
-    // ── 1. Audio Extraction — optional enhancement, failure is non-fatal ───────
-    // VideoCanvas already shows the video via /api/proxy-video regardless of
-    // whether audio extraction succeeds. Failure here means no AI waveform/
-    // transcript, but the editor remains fully usable for manual clip marking.
-    let audioData: Float32Array;
-    let sampleRate: number;
-    let duration: number;
+    // ── Audio extraction runs in background — video already shows via /api/proxy-video.
+    // Transcription and analysis follow when extraction completes.
+    toast.info("Preparing content for viral analysis...");
 
-    try {
-      toast.info("Preparing content for viral analysis...");
-      const result = await extractAudioData(source, controller.signal);
-      audioData = result.audioData;
-      sampleRate = result.sampleRate;
-      duration = result.duration;
-      clearTimeout(timeoutId);
-      setAudioData(audioData);
-    } catch (audioError) {
-      clearTimeout(timeoutId);
-      const msg = audioError instanceof Error ? audioError.message : String(audioError);
-      const lowerMsg = msg.toLowerCase();
+    void extractAudioData(source, controller.signal)
+      .then(({ audioData, sampleRate, duration }) => {
+        clearTimeout(timeoutId);
+        setAudioData(audioData);
 
-      let infoMsg =
-        "Video loaded — AI analysis unavailable. Mark clips manually or upload an MP4 for full analysis.";
+        if (useEditorStore.getState().duration === 0) {
+          useEditorStore.setState({ duration });
+        }
 
-      if (audioError instanceof Error && audioError.name === "AbortError") {
-        infoMsg = "Analysis timed out — video is ready for manual editing.";
-      } else if (
-        lowerMsg.includes("bot detection") ||
-        lowerMsg.includes("sign in") ||
-        lowerMsg.includes("audio extraction failed")
-      ) {
-        infoMsg =
-          "Auto-analysis unavailable for this video (server-side restriction). The video is still loaded — mark clips manually or upload an MP4.";
-      } else if (lowerMsg.includes("network error") || lowerMsg.includes("unreachable")) {
-        infoMsg = "Could not reach the server — check your connection and try again.";
-      } else if (lowerMsg.includes("private")) {
-        infoMsg = "This video is private. Try a public YouTube video.";
-      } else if (lowerMsg.includes("video unavailable") || lowerMsg.includes("yt-dlp")) {
-        infoMsg = "This video is unavailable — it may be region-locked. Try uploading the MP4 directly.";
-      }
+        setAgentState("ingestion", { status: "done", progress: 100 });
+        setProgress(20);
 
-      // Soft failure — informational, not alarming. Video still plays in VideoCanvas.
-      toast.info(infoMsg, { duration: 6000 });
-      setAgentState("ingestion", { status: "error" });
-      setProcessing(false, "idle");
-      return;
-    }
+        setProcessing(true, "transcribing");
+        setAgentState("transcription", { status: "working", progress: 0 });
+        toast.info("Reading video content...");
+        transcription.transcribe(audioData, sampleRate);
+      })
+      .catch((audioError: unknown) => {
+        clearTimeout(timeoutId);
+        const msg = audioError instanceof Error ? audioError.message : String(audioError);
+        const lowerMsg = msg.toLowerCase();
 
-    // Update duration in store if it was 0
-    if (useEditorStore.getState().duration === 0) {
-      useEditorStore.setState({ duration });
-    }
+        let infoMsg =
+          "Video loaded — AI analysis unavailable. Mark clips manually or upload an MP4 for full analysis.";
 
-    setAgentState("ingestion", { status: "done", progress: 100 });
-    setProgress(20);
+        if (audioError instanceof Error && audioError.name === "AbortError") {
+          infoMsg = "Analysis timed out — video is ready for manual editing.";
+        } else if (
+          lowerMsg.includes("bot detection") ||
+          lowerMsg.includes("sign in") ||
+          lowerMsg.includes("audio extraction failed")
+        ) {
+          infoMsg =
+            "Auto-analysis unavailable for this video (server-side restriction). The video is still loaded — mark clips manually or upload an MP4.";
+        } else if (lowerMsg.includes("network error") || lowerMsg.includes("unreachable")) {
+          infoMsg = "Could not reach the server — check your connection and try again.";
+        } else if (lowerMsg.includes("private")) {
+          infoMsg = "This video is private. Try a public YouTube video.";
+        } else if (lowerMsg.includes("video unavailable") || lowerMsg.includes("yt-dlp")) {
+          infoMsg = "This video is unavailable — it may be region-locked. Try uploading the MP4 directly.";
+        }
 
-    // ── 2. Transcription ───────────────────────────────────────────────────────
-    setProcessing(true, "transcribing");
-    setAgentState("transcription", { status: "working", progress: 0 });
-    toast.info("Reading video content...");
-    transcription.transcribe(audioData, sampleRate);
+        toast.info(infoMsg, { duration: 6000 });
+        setAgentState("ingestion", { status: "error" });
+        setProcessing(false, "idle");
+      });
   }, [setProcessing, setProgress, setAgentState, setAudioData, transcription]);
 
   // Handle Transcription Complete

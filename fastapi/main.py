@@ -119,6 +119,7 @@ logger = get_logger("api")
 from services.queue_service import is_overloaded, get_job_cost_est
 
 _STARTUP_COMPLETE = False
+_AUDIO_CACHE_DIR = Path("/tmp/audio_cache")
 
 
 # Validate required environment variables at startup
@@ -1433,6 +1434,21 @@ async def get_audio(url: str = Query(...)):
     if not video_id:
         raise HTTPException(status_code=400, detail="Invalid YouTube URL")
 
+    # ── Redis audio cache ─────────────────────────────────────────────────────
+    cache_key = f"audio_cache:{video_id}"
+    try:
+        cached_bytes = redis_conn.get(cache_key)
+        if cached_bytes:
+            cached_file = Path(cached_bytes.decode() if isinstance(cached_bytes, bytes) else cached_bytes)
+            if cached_file.exists() and cached_file.stat().st_size > 10000:
+                logger.info("audio [cache HIT] vid=%s", video_id)
+                return FileResponse(path=cached_file, media_type="audio/mpeg")
+            redis_conn.delete(cache_key)
+            logger.info("audio [cache STALE] vid=%s — re-extracting", video_id)
+    except Exception as _rc_err:
+        logger.warning("audio [cache] Redis lookup error vid=%s: %s", video_id, _rc_err)
+
+    _AUDIO_CACHE_DIR.mkdir(parents=True, exist_ok=True)
     tmpdir = tempfile.mkdtemp()
     output_path = Path(tmpdir) / f"{video_id}.m4a"
 
@@ -1542,6 +1558,15 @@ async def get_audio(url: str = Query(...)):
         else:
             _detail = "Audio extraction failed — server could not download this video. Try a different video or try again."
         raise HTTPException(status_code=503, detail=_detail)
+
+    # ── Persist to cache so next request is instant ───────────────────────────
+    cache_path = _AUDIO_CACHE_DIR / f"{video_id}.mp3"
+    try:
+        shutil.copy2(str(output_path), str(cache_path))
+        redis_conn.setex(cache_key, 3600, str(cache_path))
+        logger.info("audio [cache SET] vid=%s", video_id)
+    except Exception as _cw_err:
+        logger.warning("audio [cache SET] failed vid=%s: %s", video_id, _cw_err)
 
     return FileResponse(
         path=output_path,
