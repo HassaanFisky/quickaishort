@@ -1427,6 +1427,7 @@ async def proxy_video_stream(url: str, request: Request):
 @app.get("/api/audio")
 async def get_audio(url: str = Query(...)):
     """Serves the audio stream for a given YouTube URL with 100% reliability fallbacks."""
+    from services.cobalt_client import download_audio as cobalt_download
 
     video_id = VideoService.extract_video_id(url)
     if not video_id:
@@ -1437,6 +1438,20 @@ async def get_audio(url: str = Query(...)):
 
     success = False
     last_error = ""
+
+    # TIER 0 — Cobalt public API (fast, no cookies, no proxy needed).
+    try:
+        cobalt_path = Path(tmpdir) / f"{video_id}_cobalt.mp3"
+        if await cobalt_download(url, str(cobalt_path)):
+            output_path = cobalt_path
+            success = True
+            logger.info("audio [cobalt] success vid=%s", video_id)
+        else:
+            last_error = "cobalt returned no audio"
+            logger.info("audio [cobalt] failed vid=%s — falling back to yt-dlp", video_id)
+    except Exception as _cobalt_exc:
+        last_error = f"cobalt error: {_cobalt_exc}"
+        logger.warning("audio [cobalt] exception vid=%s: %s", video_id, _cobalt_exc)
 
     # TIER 1 — yt-dlp with two client-set attempts (no player_skip).
     # Attempt A: tv_embedded + ios — most reliable without PO token on server IPs.

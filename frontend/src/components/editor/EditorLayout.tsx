@@ -396,7 +396,7 @@ export default function EditorLayout() {
                   animate={{ y: 0, opacity: 1 }}
                   exit={{ y: -10, opacity: 0 }}
                   transition={{ type: "spring", damping: 24, stiffness: 200 }}
-                  className="glass-surface rounded-2xl px-4 py-2.5 flex items-center justify-between gap-3 border border-white/10 backdrop-blur-3xl shadow-xl"
+                  className="glass-surface rounded-2xl px-4 py-2.5 flex items-center justify-between gap-3 border border-white/10 shadow-xl"
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
@@ -422,7 +422,7 @@ export default function EditorLayout() {
               >
                 <div className="absolute inset-0 bg-primary/20 blur-2xl rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
 
-                <div className="relative glass-surface rounded-[1.5rem] p-2 flex flex-col gap-1 shadow-[0_0_50px_rgba(0,0,0,0.2)] border border-white/10 backdrop-blur-3xl overflow-hidden">
+                <div className="relative glass-surface rounded-[1.5rem] p-2 flex flex-col gap-1 shadow-[0_0_50px_rgba(0,0,0,0.2)] border border-white/10 overflow-hidden">
                   <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
 
                   <div className="text-[9px] font-black text-center uppercase tracking-[0.25em] pt-2 pb-1 transition-colors duration-300">
