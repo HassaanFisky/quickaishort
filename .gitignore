@@ -1,6 +1,11 @@
 # QuickAI Short - Official .gitignore
 # Senior Engineer approved security and professional standards
 
+# Local dev tooling artifacts
+.gemini/
+antigravity_trace.zip
+*.trace.zip
+
 # Dependencies
 node_modules/
 **/node_modules/
