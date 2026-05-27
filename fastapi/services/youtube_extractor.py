@@ -24,6 +24,7 @@ PoToken:
 
 from __future__ import annotations
 
+import base64
 import logging
 import os
 from typing import Any
@@ -31,6 +32,20 @@ from typing import Any
 import yt_dlp
 
 logger = logging.getLogger(__name__)
+
+
+def _classify_ydl_error(exc: Exception) -> str:
+    """Return a short reason string from a yt-dlp exception for logging/messaging."""
+    msg = str(exc).lower()
+    if "407" in msg or "proxy authentication" in msg:
+        return "proxy_auth_failure"
+    if "403" in msg or "bot" in msg or "sign in" in msg or "confirm your age" in msg:
+        return "bot_detection"
+    if "video unavailable" in msg or "private video" in msg:
+        return "video_unavailable"
+    if "timed out" in msg or "timeout" in msg:
+        return "timeout"
+    return "unknown"
 
 
 def get_proxy_url(session_suffix: str = "") -> str | None:
@@ -61,22 +76,41 @@ def _base_opts(*, skip_download: bool, session_suffix: str = "") -> dict[str, An
     opts: dict[str, Any] = {
         "quiet": True,
         "no_warnings": True,
+        "nocheckcertificate": True,
         "skip_download": skip_download,
         "extractor_args": {
             "youtube": {
-                # tv_embedded client sidesteps many bot-checks;
-                # web is a secondary fallback.
-                "player_client": ["tv_embedded", "web"],
+                # 'web' first: bgutil-ytdlp-pot-provider fires for 'web' only.
+                # tv_embedded/ios are fast fallbacks on healthy residential IPs.
+                "player_client": ["web", "tv_embedded", "ios"],
             }
         },
         # bgutil-ytdlp-pot-provider is auto-discovered as a yt-dlp plugin
-        # and injects PoTokens transparently — no explicit config needed.
+        # and injects PoTokens transparently for the 'web' client.
         "sleep_interval": 1,
         "max_sleep_interval": 3,
     }
     proxy = get_proxy_url(session_suffix=session_suffix)
     if proxy:
         opts["proxy"] = proxy
+        # Explicitly inject Proxy-Authorization so Python's transport layer
+        # sends credentials with the HTTPS CONNECT tunnel request.
+        # urllib omits inline URL credentials from CONNECT by default, causing
+        # 407 Proxy Authentication Required on every HTTPS YouTube request.
+        username = os.environ.get("DECODO_USERNAME", "")
+        password = os.environ.get("DECODO_PASSWORD", "")
+        if username and password:
+            raw = f"{username}{session_suffix}:{password}"
+            b64 = base64.b64encode(raw.encode("utf-8")).decode("ascii")
+            opts.setdefault("http_headers", {})["Proxy-Authorization"] = f"Basic {b64}"
+            logger.debug(
+                "Proxy-Authorization injected for session_suffix=%r", session_suffix
+            )
+        else:
+            logger.warning(
+                "Proxy URL set but DECODO_USERNAME/PASSWORD absent; "
+                "407 errors likely on HTTPS endpoints"
+            )
     return opts
 
 
@@ -112,11 +146,18 @@ def get_video_info(video_id: str) -> dict[str, Any]:
                 "uploader": info.get("uploader", ""),
             }
         except Exception as exc:
-            logger.warning("yt-dlp metadata %s failed for %s: %s", label, video_id, exc)
+            reason = _classify_ydl_error(exc)
+            logger.warning(
+                "yt-dlp metadata %s failed for %s [%s]: %s",
+                label, video_id, reason, exc,
+            )
             last_exc = exc
+            if reason == "video_unavailable":
+                # No point retrying — video is gone or private.
+                break
 
     raise RuntimeError(
-        f"yt-dlp metadata extraction failed after retry: {last_exc}"
+        f"yt-dlp metadata extraction failed [{_classify_ydl_error(last_exc)}]: {last_exc}"
     ) from last_exc
 
 
@@ -173,9 +214,17 @@ def download_clip(
         with yt_dlp.YoutubeDL(opts) as ydl:
             ydl.download([url])
     except Exception as exc:
-        raise RuntimeError(f"YouTube clip download failed: {exc}") from exc
+        reason = _classify_ydl_error(exc)
+        logger.error(
+            "yt-dlp clip download failed for %s [%s]: %s", video_id, reason, exc
+        )
+        raise RuntimeError(
+            f"YouTube clip download failed [{reason}]: {exc}"
+        ) from exc
 
     if not os.path.exists(output_path):
-        raise RuntimeError("yt-dlp reported success but output file is missing")
+        raise RuntimeError(
+            f"yt-dlp reported success but output file is missing: {output_path}"
+        )
 
     return output_path
