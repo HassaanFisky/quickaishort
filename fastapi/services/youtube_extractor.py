@@ -149,7 +149,10 @@ def get_video_info(video_id: str) -> dict[str, Any]:
             reason = _classify_ydl_error(exc)
             logger.warning(
                 "yt-dlp metadata %s failed for %s [%s]: %s",
-                label, video_id, reason, exc,
+                label,
+                video_id,
+                reason,
+                exc,
             )
             last_exc = exc
             if reason == "video_unavailable":
@@ -218,9 +221,7 @@ def download_clip(
         logger.error(
             "yt-dlp clip download failed for %s [%s]: %s", video_id, reason, exc
         )
-        raise RuntimeError(
-            f"YouTube clip download failed [{reason}]: {exc}"
-        ) from exc
+        raise RuntimeError(f"YouTube clip download failed [{reason}]: {exc}") from exc
 
     if not os.path.exists(output_path):
         raise RuntimeError(

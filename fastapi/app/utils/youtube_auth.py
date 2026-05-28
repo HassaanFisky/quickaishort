@@ -85,6 +85,7 @@ def _parse_proxy_credentials(proxy_url: str) -> tuple[str, str]:
     """Extract (username, password) from a proxy URL. Returns ('', '') on failure."""
     try:
         from urllib.parse import urlparse
+
         parsed = urlparse(proxy_url)
         return parsed.username or "", parsed.password or ""
     except Exception:
@@ -173,9 +174,9 @@ def inject_ydl_bypass(opts: dict) -> dict:
             # request, including CONNECT.
             raw_token = f"{cred_user}:{cred_pass}"
             b64_token = base64.b64encode(raw_token.encode("utf-8")).decode("ascii")
-            new_opts.setdefault("http_headers", {})["Proxy-Authorization"] = (
-                f"Basic {b64_token}"
-            )
+            new_opts.setdefault("http_headers", {})[
+                "Proxy-Authorization"
+            ] = f"Basic {b64_token}"
             logger.debug("Proxy-Authorization header injected (user=%s)", cred_user)
         else:
             logger.warning(

@@ -150,10 +150,9 @@ class StorageService:
         auth_req = google.auth.transport.requests.Request()
         await asyncio.to_thread(credentials.refresh, auth_req)
 
-        sa_email: str = (
-            getattr(credentials, "service_account_email", "")
-            or os.environ.get("GOOGLE_SERVICE_ACCOUNT_EMAIL", "")
-        )
+        sa_email: str = getattr(
+            credentials, "service_account_email", ""
+        ) or os.environ.get("GOOGLE_SERVICE_ACCOUNT_EMAIL", "")
         if not sa_email:
             raise RuntimeError(
                 "Cannot generate signed URL: set GOOGLE_SERVICE_ACCOUNT_EMAIL "

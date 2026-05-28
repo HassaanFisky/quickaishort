@@ -82,11 +82,16 @@ def _from_gcs(gcs_uri: str, start_sec: float, end_sec: float, workdir: Path) -> 
     trimmed_path = workdir / "source.mp4"
     subprocess.run(
         [
-            "ffmpeg", "-y",
-            "-i", str(raw_path),
-            "-ss", str(start_sec),
-            "-t", str(duration),
-            "-c", "copy",
+            "ffmpeg",
+            "-y",
+            "-i",
+            str(raw_path),
+            "-ss",
+            str(start_sec),
+            "-t",
+            str(duration),
+            "-c",
+            "copy",
             str(trimmed_path),
         ],
         check=True,
@@ -173,7 +178,11 @@ def acquire_video(
                 "status": "error",
                 "video_id": video_id,
                 "failed_tiers": [
-                    {"tier": 0, "error": str(exc)[:300], "elapsed_s": round(time.time() - t0, 2)}
+                    {
+                        "tier": 0,
+                        "error": str(exc)[:300],
+                        "elapsed_s": round(time.time() - t0, 2),
+                    }
                 ],
                 "error": f"GCS download failed: {exc}",
             }

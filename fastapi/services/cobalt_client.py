@@ -20,7 +20,9 @@ async def get_audio_url(youtube_url: str) -> Optional[str]:
     We accept both — the returned URL is suitable for streaming or downloading.
     """
     try:
-        async with httpx.AsyncClient(timeout=_COBALT_TIMEOUT, follow_redirects=True) as client:
+        async with httpx.AsyncClient(
+            timeout=_COBALT_TIMEOUT, follow_redirects=True
+        ) as client:
             resp = await client.post(
                 COBALT_API_URL,
                 json={
@@ -92,9 +94,12 @@ async def download_audio(youtube_url: str, dest_path: str) -> bool:
                         fh.write(chunk)
 
         import os
+
         size = os.path.getsize(dest_path)
         if size < 10_000:
-            logger.warning("cobalt: output too small (%d bytes) for %s", size, youtube_url)
+            logger.warning(
+                "cobalt: output too small (%d bytes) for %s", size, youtube_url
+            )
             return False
 
         logger.info("cobalt: downloaded %d bytes for %s", size, youtube_url)

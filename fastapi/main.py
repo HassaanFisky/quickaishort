@@ -1444,7 +1444,11 @@ async def get_audio(url: str = Query(...)):
     try:
         cached_bytes = redis_conn.get(cache_key)
         if cached_bytes:
-            cached_file = Path(cached_bytes.decode() if isinstance(cached_bytes, bytes) else cached_bytes)
+            cached_file = Path(
+                cached_bytes.decode()
+                if isinstance(cached_bytes, bytes)
+                else cached_bytes
+            )
             if cached_file.exists() and cached_file.stat().st_size > 10000:
                 logger.info("audio [cache HIT] vid=%s", video_id)
                 return FileResponse(path=cached_file, media_type="audio/mpeg")
@@ -1469,7 +1473,9 @@ async def get_audio(url: str = Query(...)):
             logger.info("audio [cobalt] success vid=%s", video_id)
         else:
             last_error = "cobalt returned no audio"
-            logger.info("audio [cobalt] failed vid=%s — falling back to yt-dlp", video_id)
+            logger.info(
+                "audio [cobalt] failed vid=%s — falling back to yt-dlp", video_id
+            )
     except Exception as _cobalt_exc:
         last_error = f"cobalt error: {_cobalt_exc}"
         logger.warning("audio [cobalt] exception vid=%s: %s", video_id, _cobalt_exc)
