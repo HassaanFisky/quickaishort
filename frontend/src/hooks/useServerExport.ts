@@ -204,6 +204,7 @@ export function useServerExport({ userId }: UseServerExportArgs) {
       const {
         sourceFile,
         sourceUrl,
+        sourceGcsPath,
         selectedClipId,
         suggestions,
         transcript,
@@ -220,7 +221,9 @@ export function useServerExport({ userId }: UseServerExportArgs) {
         return;
       }
 
-      const videoId = inferVideoId(sourceUrl, sourceFile?.name);
+      // GCS path takes priority: local file was uploaded to GCS during pipeline,
+      // so the render worker can read it directly without yt-dlp.
+      const videoId = sourceGcsPath || inferVideoId(sourceUrl, sourceFile?.name);
       if (!videoId) {
         // Local file — use client-side MediaRecorder trim
         if (!sourceFile) {
@@ -243,10 +246,10 @@ export function useServerExport({ userId }: UseServerExportArgs) {
           toast.success("Export ready — downloading.");
         } catch (err) {
           const msg = err instanceof Error ? err.message : "Local export failed";
-          if (msg.includes("captureStream")) {
-            toast.error("Local export requires Chrome or Firefox. Try a YouTube URL for other browsers.");
+          if (msg.includes("captureStream") || msg.includes("timeout") || msg.includes("CDN")) {
+            toast.error("Browser export engine unavailable — switching to Cloud Render.", { duration: 6000 });
           } else {
-            toast.error(`Local export failed: ${msg}`);
+            toast.error(`Browser export engine unavailable — switching to Cloud Render.`, { duration: 6000 });
           }
         } finally {
           setIsExporting(false);

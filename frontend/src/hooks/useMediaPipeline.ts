@@ -6,7 +6,7 @@ import { useTranscription } from "./useTranscription";
 import { useAnalysis } from "./useAnalysis";
 import { extractAudioData } from "@/lib/utils/audioExtractor";
 import { toast } from "sonner";
-import { API_URL, getAudioUrl } from "@/lib/api";
+import { API_URL, getAudioUrl, requestPresignedUploadUrl, uploadFileToGcs } from "@/lib/api";
 import { useSession } from "next-auth/react";
 import type { Clip, Transcript } from "@/types/pipeline";
 
@@ -22,6 +22,7 @@ export function useMediaPipeline() {
     setSuggestions,
     setAgentState,
     setAudioData,
+    setSourceGcsPath,
   } = useEditorStore();
 
   const transcription = useTranscription();
@@ -118,7 +119,25 @@ export function useMediaPipeline() {
         setAgentState("ingestion", { status: "error" });
         setProcessing(false, "idle");
       });
-  }, [setProcessing, setProgress, setAgentState, setAudioData, transcription]);
+
+    // ── GCS upload runs in parallel for local File sources only.
+    // Sets sourceGcsPath so the server render worker can read directly from GCS
+    // instead of downloading via yt-dlp.  Failure is silent — MediaRecorder
+    // fallback remains the safety net.
+    const fileSource = useEditorStore.getState().sourceFile;
+    if (fileSource instanceof File) {
+      void requestPresignedUploadUrl(fileSource.name, fileSource.type || "video/mp4")
+        .then(({ presigned_url, gcs_path }) =>
+          uploadFileToGcs(presigned_url, fileSource, fileSource.type || "video/mp4").then(
+            () => setSourceGcsPath(gcs_path),
+          ),
+        )
+        .catch((err: unknown) => {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.warn("[useMediaPipeline] GCS upload failed (non-fatal):", msg);
+        });
+    }
+  }, [setProcessing, setProgress, setAgentState, setAudioData, setSourceGcsPath, transcription]);
 
   // Handle Transcription Complete
   useEffect(() => {

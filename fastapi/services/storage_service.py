@@ -5,7 +5,9 @@ Sync methods are called directly from RQ render workers.
 """
 
 import asyncio
+import datetime
 import logging
+import os
 from pathlib import Path
 from typing import Optional, Literal
 
@@ -116,6 +118,66 @@ class StorageService:
             self._blob(remote_path).delete()
         except Exception:
             pass
+
+    # --------------------------------------------------- presigned upload URL
+
+    async def generate_presigned_upload_url(
+        self,
+        remote_path: str,
+        content_type: str = "video/mp4",
+        expiration_minutes: int = 15,
+    ) -> str:
+        """Generate a V4 PUT presigned URL for direct browser-to-GCS upload.
+
+        The caller PUTs the video bytes to this URL directly; the backend never
+        receives the raw video stream.  On Cloud Run the service account must
+        have roles/iam.serviceAccountTokenCreator on itself so the IAM signBlob
+        API can sign without a key file.  Set GOOGLE_SERVICE_ACCOUNT_EMAIL if
+        the credential object does not expose service_account_email.
+        """
+        import google.auth
+        import google.auth.transport.requests
+
+        if not is_ready():
+            raise RuntimeError("Storage not initialized")
+
+        bucket = get_gcs_bucket()
+        blob = bucket.blob(remote_path)
+
+        credentials, _ = google.auth.default(
+            scopes=["https://www.googleapis.com/auth/cloud-platform"]
+        )
+        auth_req = google.auth.transport.requests.Request()
+        await asyncio.to_thread(credentials.refresh, auth_req)
+
+        sa_email: str = (
+            getattr(credentials, "service_account_email", "")
+            or os.environ.get("GOOGLE_SERVICE_ACCOUNT_EMAIL", "")
+        )
+        if not sa_email:
+            raise RuntimeError(
+                "Cannot generate signed URL: set GOOGLE_SERVICE_ACCOUNT_EMAIL "
+                "on the Cloud Run service, or ensure the ADC credentials expose "
+                "service_account_email (compute engine / service account key)."
+            )
+
+        expiration = datetime.timedelta(minutes=expiration_minutes)
+        url: str = await asyncio.to_thread(
+            blob.generate_signed_url,
+            version="v4",
+            expiration=expiration,
+            method="PUT",
+            content_type=content_type,
+            service_account_email=sa_email,
+            access_token=getattr(credentials, "token", None),
+        )
+        logger.info(
+            "[Storage] Presigned PUT URL issued: path=%s content_type=%s expires=%dm",
+            remote_path,
+            content_type,
+            expiration_minutes,
+        )
+        return url
 
     # ----------------------------------------------------------- legacy compat
 

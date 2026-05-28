@@ -154,6 +154,7 @@ interface EditorState {
   sourceFile: File | null;
   sourceUrl: string | null;
   thumbnailUrl: string | null;
+  sourceGcsPath: string | null;
 
   // YouTube IFrame clip selection (Tier-3/4 flow).
   // Set when user marks a clip range in the IFrame player.
@@ -227,6 +228,7 @@ interface EditorState {
   selectClip: (id: string | null) => void;
   setYtVideoId: (id: string | null) => void;
   setClipRange: (startTime: number, endTime: number) => void;
+  setSourceGcsPath: (path: string | null) => void;
   updateClip: (id: string, updates: Partial<Clip>) => void;
   setExportSetting: <K extends keyof ExportSettings>(key: K, value: ExportSettings[K]) => void;
   
@@ -277,6 +279,7 @@ export const useEditorStore = create<EditorState>()(
       sourceFile: null,
       sourceUrl: null,
       thumbnailUrl: null,
+      sourceGcsPath: null,
       ytVideoId: null,
       clipStartTime: 0,
       clipEndTime: 0,
@@ -369,6 +372,7 @@ export const useEditorStore = create<EditorState>()(
       selectClip: (id) => set({ selectedClipId: id }),
       setYtVideoId: (id) => set({ ytVideoId: id }),
       setClipRange: (startTime, endTime) => set({ clipStartTime: startTime, clipEndTime: endTime }),
+      setSourceGcsPath: (path) => set({ sourceGcsPath: path }),
 
       updateClip: (id, updates) =>
         set((state) => ({
@@ -561,6 +565,7 @@ export const useEditorStore = create<EditorState>()(
           sourceFile: null,
           sourceUrl: null,
           thumbnailUrl: null,
+          sourceGcsPath: null,
           duration: 0,
           resolution: null,
           isProcessing: false,

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEditorStore } from "@/stores/editorStore";
+import { useUIStore } from "@/stores/uiStore";
 import { useMediaPipeline } from "@/hooks/useMediaPipeline";
 import { useAIPanel } from "@/stores/aiPanelStore";
 import React, { useState, useRef, useCallback, useEffect } from "react";
@@ -52,6 +53,7 @@ export default function EditorLayout() {
 
   const { runPipeline, cancelPipeline, status } = useMediaPipeline();
   const { isOpen: aiPanelStoreOpen, setOpen: setAIPanelOpen, setVideoContext } = useAIPanel();
+  const { isSidebarCollapsed } = useUIStore();
 
   // When the pipeline finishes transcription, sync it to the AI panel context.
   // Must come AFTER setVideoContext is declared above.
@@ -80,6 +82,7 @@ export default function EditorLayout() {
   const [centerMode, setCenterMode] = useState<"preview" | "effects">("preview");
   const [panelCollapsed, setPanelCollapsed] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const hasAutoImportedRef = useRef(false);
 
   const isAnalysing = (
     ["analyzing", "loading", "transcribing"] as string[]
@@ -120,6 +123,27 @@ export default function EditorLayout() {
     }, 30_000);
     return () => clearTimeout(watchdog);
   }, [currentStage, cancelPipeline, setProcessing]);
+
+  // Auto-import from Chrome extension: /editor?v=VIDEO_ID or /editor?url=ENCODED_URL
+  // useRef guards against React StrictMode double-fire.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (hasAutoImportedRef.current) return;
+    const params = new URLSearchParams(window.location.search);
+    const videoId = params.get("v");
+    const queryUrl = params.get("url");
+    let targetUrl = "";
+    if (videoId) {
+      targetUrl = `https://www.youtube.com/watch?v=${videoId}`;
+    } else if (queryUrl) {
+      targetUrl = decodeURIComponent(queryUrl);
+    }
+    if (targetUrl) {
+      hasAutoImportedRef.current = true;
+      setUrlInput(targetUrl);
+      void handleAnalyze(targetUrl);
+    }
+  }, []); // mount-only — handleAnalyze is stable within this render cycle
 
   const handleUrlChange = (e: ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
@@ -282,9 +306,9 @@ export default function EditorLayout() {
       onDrop={handleDrop}
       onDragOver={handleDragOver}
       className={cn(
-        "relative h-screen w-full overflow-hidden bg-background flex flex-col items-center p-6 md:pl-[256px] pb-8 selection:bg-primary/30 font-sans",
-        "transition-[padding-right] duration-[350ms] ease-out",
-        anyPanelOpen ? "pr-[clamp(320px,30vw,420px)]" : "pr-6"
+        "relative h-screen w-full overflow-hidden bg-background flex flex-col items-center p-6 pb-8 pr-6 selection:bg-primary/30 font-sans",
+        "transition-[padding-left] duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)]",
+        isSidebarCollapsed ? "md:pl-20" : "md:pl-[256px]",
       )}
     >
       {/* Dynamic Ambient Background */}
@@ -365,8 +389,13 @@ export default function EditorLayout() {
           </div>
         </header>
 
-        {/* Central Workspace Grid */}
-        <main className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[minmax(240px,20%)_1fr_minmax(280px,25%)] gap-6 overflow-hidden">
+        {/* Central Workspace Grid — expands to 4 columns when AI panel is open */}
+        <main className={cn(
+          "flex-1 min-h-0 grid grid-cols-1 gap-6 overflow-hidden",
+          anyPanelOpen
+            ? "lg:grid-cols-[minmax(240px,20%)_1fr_minmax(280px,25%)_340px]"
+            : "lg:grid-cols-[minmax(240px,20%)_1fr_minmax(280px,25%)]",
+        )}>
 
           {/* Left: Viral Suggestions & Source */}
           <section className="rounded-[2.5rem] p-6 bg-[#141417] border border-foreground/5 shadow-2xl flex flex-col overflow-hidden min-h-0">
@@ -374,7 +403,7 @@ export default function EditorLayout() {
           </section>
 
           {/* Center: Creative Engine */}
-          <section className="relative flex flex-col items-center justify-center gap-4">
+          <section className="relative flex flex-col items-center justify-center gap-4 min-h-0">
             {/* Dot grid background */}
             <div
               className="absolute inset-0 pointer-events-none rounded-[2.5rem]"
@@ -679,6 +708,22 @@ export default function EditorLayout() {
           <section className="rounded-[2.5rem] p-6 bg-[#141417] border border-foreground/5 shadow-2xl flex flex-col overflow-hidden min-h-0">
             <RightPanel />
           </section>
+
+          {/* AI Panel — 4th grid column on lg+, hidden on mobile (fixed overlay handles mobile) */}
+          <AnimatePresence>
+            {anyPanelOpen && (
+              <motion.section
+                key="ai-grid-column"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="hidden lg:flex rounded-[2.5rem] bg-[#141417] border border-foreground/5 shadow-2xl flex-col overflow-hidden min-h-0"
+              >
+                <AIPanel embedded />
+              </motion.section>
+            )}
+          </AnimatePresence>
         </main>
 
         {/* Bottom: Sequence Timeline */}
@@ -693,8 +738,10 @@ export default function EditorLayout() {
         <FloatingControls />
       </div>
 
-      {/* Context-aware AI Panel */}
-      <AIPanel />
+      {/* Mobile AI Panel — fixed overlay, only shown below lg breakpoint */}
+      <div className="lg:hidden">
+        <AIPanel />
+      </div>
     </div>
   );
 }

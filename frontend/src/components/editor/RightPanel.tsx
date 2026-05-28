@@ -309,6 +309,30 @@ export default function RightPanel() {
             </div>
           </div>
 
+          {/* Aspect Ratio Picker */}
+          <div className="space-y-4">
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground px-1">
+              Aspect Ratio
+            </span>
+            <div className="flex gap-1 p-1 bg-secondary/40 rounded-lg border border-border">
+              {(["9:16", "16:9", "1:1"] as const).map((ratio) => (
+                <button
+                  key={ratio}
+                  onClick={() => setExportSetting("aspectRatio", ratio)}
+                  aria-pressed={exportSettings.aspectRatio === ratio}
+                  className={cn(
+                    "flex-1 h-10 rounded-md text-[10px] font-black tracking-widest transition-all duration-150",
+                    exportSettings.aspectRatio === ratio
+                      ? "bg-primary text-white shadow-sm"
+                      : "text-muted-foreground hover:text-foreground hover:bg-secondary",
+                  )}
+                >
+                  {ratio}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* AI Voiceover Toggle */}
           <div className="flex items-center justify-between p-4 rounded-lg bg-secondary/40 border border-border group">
             <div className="flex flex-col gap-0.5">

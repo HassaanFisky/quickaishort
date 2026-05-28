@@ -348,9 +348,16 @@ export default function VideoCanvas() {
     return `${(x * 100).toFixed(1)}% ${(y * 100).toFixed(1)}%`;
   };
 
+  const aspectContainerClass: Record<string, string> = {
+    "9:16": "aspect-[9/16] h-full max-h-[75vh] w-auto",
+    "16:9": "aspect-video w-full max-h-[60vh] h-auto",
+    "1:1":  "aspect-square max-h-[65vh] w-auto",
+  };
+  const aspectClass = aspectContainerClass[exportSettings.aspectRatio] ?? aspectContainerClass["9:16"];
+
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-6 h-full animate-in fade-in zoom-in-95 duration-1000">
-      <div className="relative aspect-9/16 h-full max-h-[75vh] depth-card glass-surface rounded-[2.5rem] overflow-hidden flex items-center justify-center group w-auto border border-foreground/5 shadow-2xl">
+      <div className={cn("relative depth-card glass-surface rounded-[2.5rem] overflow-hidden flex items-center justify-center group border border-foreground/5 shadow-2xl", aspectClass)}>
         <div className="absolute top-6 right-6 z-50 flex flex-col items-end gap-2">
           {(!isReady || isBuffering) && (
             <div className="flex items-center gap-2 glass-surface border border-foreground/10 px-3 py-1.5 rounded-full text-[10px] font-black text-muted-foreground uppercase tracking-widest shadow-xl">

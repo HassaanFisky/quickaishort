@@ -33,6 +33,13 @@ export interface VideoTaskStatus {
   total?: number;
 }
 
+export interface PresignedUrlResponse {
+  presigned_url: string;
+  gcs_path: string;
+  job_id: string;
+  expires_in_seconds: number;
+}
+
 export interface VideoUploadState {
   file: File | null;
   fileName: string;

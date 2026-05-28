@@ -66,6 +66,38 @@ def _write_cache(
         pass
 
 
+def _from_gcs(gcs_uri: str, start_sec: float, end_sec: float, workdir: Path) -> Path:
+    """Download a GCS asset directly, bypassing all yt-dlp tiers."""
+    import subprocess
+
+    from services.storage_service import get_storage_service
+
+    raw_path = workdir / "gcs_raw.mp4"
+    storage = get_storage_service()
+    ok = storage.download_gcs_file(gcs_uri, raw_path)
+    if not ok or not raw_path.exists():
+        raise RuntimeError(f"GCS asset not found or download failed: {gcs_uri}")
+
+    duration = end_sec - start_sec
+    trimmed_path = workdir / "source.mp4"
+    subprocess.run(
+        [
+            "ffmpeg", "-y",
+            "-i", str(raw_path),
+            "-ss", str(start_sec),
+            "-t", str(duration),
+            "-c", "copy",
+            str(trimmed_path),
+        ],
+        check=True,
+        capture_output=True,
+    )
+    raw_path.unlink(missing_ok=True)
+    size_mb = trimmed_path.stat().st_size / 1_048_576
+    logger.info("gcs_fast_path uri=%s size=%.1fMB tier=0", gcs_uri, size_mb)
+    return trimmed_path
+
+
 def _try_tier1(video_id: str, start_sec: float, end_sec: float, workdir: Path) -> Path:
     """yt-dlp with cookies + PoToken (full bypass stack)."""
     from services.video_service import VideoService
@@ -120,6 +152,32 @@ def acquire_video(
         {"status": "ready", "video_path": str, "tier": int, "metadata": {...}}
         {"status": "error", "failed_tiers": [...], "error": str}
     """
+    if video_id.startswith("gcs://"):
+        t0 = time.time()
+        try:
+            video_path = _from_gcs(video_id, start_sec, end_sec, workdir)
+            return {
+                "status": "ready",
+                "video_path": str(video_path),
+                "tier": 0,
+                "metadata": {
+                    "gcs_uri": video_id,
+                    "start_sec": start_sec,
+                    "end_sec": end_sec,
+                    "elapsed_s": round(time.time() - t0, 2),
+                    "acquired_at": time.time(),
+                },
+            }
+        except Exception as exc:
+            return {
+                "status": "error",
+                "video_id": video_id,
+                "failed_tiers": [
+                    {"tier": 0, "error": str(exc)[:300], "elapsed_s": round(time.time() - t0, 2)}
+                ],
+                "error": f"GCS download failed: {exc}",
+            }
+
     if not skip_cache:
         cached = _read_cache(video_id, start_sec, end_sec)
         if cached:

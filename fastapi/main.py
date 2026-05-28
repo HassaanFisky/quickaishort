@@ -501,6 +501,11 @@ class ExportRequest(BaseModel):
     voiceover_enabled: bool = False
 
 
+class PresignedUrlRequest(BaseModel):
+    filename: str
+    content_type: str = "video/mp4"
+
+
 # ---- YouTube URL validation --------------------------------------------------
 
 _YT_PATTERN = re.compile(
@@ -2254,6 +2259,46 @@ async def agent_trace(
     except Exception as e:
         logger.error("Trace fetch error session %s: %s", session_id, e)
         raise HTTPException(status_code=500, detail="Could not retrieve session trace.")
+
+
+# ---- Presigned upload URL ----------------------------------------------------
+
+
+@app.post("/api/video/presigned-url")
+async def get_presigned_upload_url(
+    body: PresignedUrlRequest,
+    verified_user_id: str = Depends(get_verified_user_id),
+):
+    """Generate a GCS V4 presigned PUT URL for direct browser-to-GCS upload.
+
+    The browser PUTs the video file directly; the backend never receives the
+    raw stream.  On completion the client passes `gcs_path` as the videoId
+    in the export request so the render worker reads directly from GCS.
+    """
+    job_id = uuid.uuid4().hex
+    ext = Path(body.filename).suffix.lower() or ".mp4"
+    remote_path = f"uploads/{verified_user_id}/{job_id}{ext}"
+
+    try:
+        storage = get_storage_service()
+        url = await storage.generate_presigned_upload_url(
+            remote_path=remote_path,
+            content_type=body.content_type,
+            expiration_minutes=15,
+        )
+    except RuntimeError as exc:
+        logger.error("presigned_url_failed user=%s: %s", verified_user_id, exc)
+        raise HTTPException(status_code=503, detail=str(exc))
+    except Exception as exc:
+        logger.exception("presigned_url_unexpected user=%s: %s", verified_user_id, exc)
+        raise HTTPException(status_code=500, detail="Could not generate upload URL")
+
+    return {
+        "presigned_url": url,
+        "gcs_path": f"gs://{remote_path}",
+        "job_id": job_id,
+        "expires_in_seconds": 900,
+    }
 
 
 # ---- Music Endpoints ---------------------------------------------------------

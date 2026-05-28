@@ -10,6 +10,7 @@ import type {
   VideoUploadResponse,
   VideoTaskStatus,
   FrameAdjustment,
+  PresignedUrlResponse,
 } from "@/types/video";
 
 export const API_URL =
@@ -179,6 +180,43 @@ export async function searchStockVideos(q: string): Promise<{ videos: StockClip[
 export async function runADKGenerate(payload: ADKGeneratePayload): Promise<ADKGenerateResponse> {
   const { data } = await axios.post<ADKGenerateResponse>(`${API_URL}/api/adk/generate`, payload);
   return data;
+}
+
+// ---- Presigned GCS upload ----------------------------------------------------
+
+export async function requestPresignedUploadUrl(
+  filename: string,
+  contentType: string = "video/mp4",
+): Promise<PresignedUrlResponse> {
+  const { data } = await axios.post<PresignedUrlResponse>(
+    `${API_URL}/api/video/presigned-url`,
+    { filename, content_type: contentType },
+  );
+  return data;
+}
+
+export async function uploadFileToGcs(
+  presignedUrl: string,
+  file: File,
+  contentType: string = "video/mp4",
+  onProgress?: (pct: number) => void,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", presignedUrl, true);
+    xhr.setRequestHeader("Content-Type", contentType);
+    if (onProgress) {
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
+      };
+    }
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) resolve();
+      else reject(new Error(`GCS upload failed with status ${xhr.status}`));
+    };
+    xhr.onerror = () => reject(new Error("GCS upload network error"));
+    xhr.send(file);
+  });
 }
 
 // ---- Video Upload & Processing API -------------------------------------------
