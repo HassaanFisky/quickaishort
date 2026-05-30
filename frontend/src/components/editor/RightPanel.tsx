@@ -315,7 +315,7 @@ export default function RightPanel() {
               Aspect Ratio
             </span>
             <div className="flex gap-1 p-1 bg-secondary/40 rounded-lg border border-border">
-              {(["9:16", "16:9", "1:1"] as const).map((ratio) => (
+              {(["9:16", "1:1"] as const).map((ratio) => (
                 <button
                   key={ratio}
                   onClick={() => setExportSetting("aspectRatio", ratio)}

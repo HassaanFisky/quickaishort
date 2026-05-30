@@ -350,7 +350,6 @@ export default function VideoCanvas() {
 
   const aspectContainerClass: Record<string, string> = {
     "9:16": "aspect-[9/16] h-full max-h-[75vh] w-auto",
-    "16:9": "aspect-video w-full max-h-[60vh] h-auto",
     "1:1":  "aspect-square max-h-[65vh] w-auto",
   };
   const aspectClass = aspectContainerClass[exportSettings.aspectRatio] ?? aspectContainerClass["9:16"];

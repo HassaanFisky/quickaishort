@@ -10,8 +10,6 @@ import {
   Film,
   Mic2,
   Rocket,
-  ChevronRight,
-  ChevronLeft,
   Wand2,
   Upload,
   X,
@@ -21,6 +19,8 @@ import {
   Download,
   RefreshCw,
   Sparkles,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TimelineLoader } from "@/components/ui/TimelineLoader";
@@ -39,13 +39,6 @@ import axios from "axios";
 // Constants
 // ---------------------------------------------------------------------------
 
-const STEPS = [
-  { label: "Script", icon: FileText, desc: "Write or generate your script" },
-  { label: "Media", icon: Film, desc: "Upload footage & find stock clips" },
-  { label: "Voice", icon: Mic2, desc: "Choose your AI narrator" },
-  { label: "Render", icon: Rocket, desc: "Configure & launch" },
-] as const;
-
 const VOICES = [
   { id: "en-US-Neural2-D", name: "Atlas", tag: "Professional", gender: "M" },
   { id: "en-US-Neural2-A", name: "Nova", tag: "Casual", gender: "M" },
@@ -62,7 +55,7 @@ const QUALITY_OPTIONS = [
 ] as const;
 
 // ---------------------------------------------------------------------------
-// Step 0 — Script
+// Script panel — internal logic unchanged
 // ---------------------------------------------------------------------------
 
 function ScriptStep() {
@@ -167,7 +160,7 @@ function ScriptStep() {
 }
 
 // ---------------------------------------------------------------------------
-// Step 1 — Media
+// Media panel — internal logic unchanged
 // ---------------------------------------------------------------------------
 
 function MediaStep() {
@@ -342,7 +335,7 @@ function MediaStep() {
 }
 
 // ---------------------------------------------------------------------------
-// Step 2 — Voice
+// Voice panel — internal logic unchanged
 // ---------------------------------------------------------------------------
 
 function VoiceStep() {
@@ -403,179 +396,111 @@ function VoiceStep() {
 }
 
 // ---------------------------------------------------------------------------
-// Step 3 — Render
+// WorkspacePanel — accordion wrapper for the three creator modules
 // ---------------------------------------------------------------------------
 
-function RenderStep({
-  onLaunch,
-  launching,
-}: {
-  onLaunch: (quality: "low" | "medium" | "high", aspect: "9:16" | "1:1") => void;
-  launching: boolean;
-}) {
-  const {
-    script, uploadedFiles, selectedStockClips, voiceId, status, progress, downloadUrl, errorMessage,
-    step, setStep, reset,
-  } = useADKStore();
-  const [quality, setQuality] = useState<"low" | "medium" | "high">("medium");
-  const [aspect, setAspect] = useState<"9:16" | "1:1">("9:16");
+type PanelId = "media" | "script" | "voice";
 
-  const wordCount = script.trim().split(/\s+/).filter(Boolean).length;
-  const selectedVoice = VOICES.find((v) => v.id === voiceId);
+interface WorkspacePanelProps {
+  icon: React.ElementType;
+  title: string;
+  badge?: string;
+  isOpen: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}
 
-  const isDone = status === "done";
-  const isError = status === "error";
-  const isRunning = status === "queued" || status === "processing" || launching;
-
-  function handleDownload() {
-    if (!downloadUrl) return;
-    const abs = buildExportDownloadUrl(downloadUrl);
-    const a = document.createElement("a");
-    a.href = abs;
-    a.download = `quickai-adk-short.mp4`;
-    a.target = "_blank";
-    a.rel = "noopener";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-  }
-
+function WorkspacePanel({ icon: Icon, title, badge, isOpen, onToggle, children }: WorkspacePanelProps) {
   return (
-    <div className="space-y-6">
-      {/* Summary */}
-      <div className="rounded-2xl border border-foreground/8 bg-secondary/20 divide-y divide-foreground/5">
-        {[
-          { label: "Script", value: `${wordCount} words · ${script.split("\n\n").filter(Boolean).length} segments` },
-          { label: "Media", value: `${uploadedFiles.length} uploads · ${selectedStockClips.length} stock clips` },
-          { label: "Voice", value: selectedVoice ? `${selectedVoice.name} (${selectedVoice.tag})` : voiceId },
-        ].map(({ label, value }) => (
-          <div key={label} className="flex items-center justify-between px-5 py-3">
-            <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground/60">{label}</span>
-            <span className="text-sm font-bold">{value}</span>
+    <div
+      className={cn(
+        "rounded-2xl border transition-[border-color,background-color] duration-200",
+        isOpen
+          ? "border-foreground/10 bg-secondary/10"
+          : "border-foreground/6 bg-secondary/5",
+      )}
+    >
+      {/* Panel header — always clickable */}
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center justify-between px-5 py-4 text-left group"
+      >
+        <div className="flex items-center gap-3">
+          <div
+            className={cn(
+              "w-8 h-8 rounded-xl flex items-center justify-center transition-colors duration-200",
+              isOpen
+                ? "bg-primary/20 text-primary"
+                : "bg-foreground/5 text-muted-foreground/50 group-hover:bg-primary/10 group-hover:text-primary/70",
+            )}
+          >
+            <Icon className="w-4 h-4" />
           </div>
-        ))}
-      </div>
-
-      {/* Quality */}
-      <div className="space-y-3">
-        <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Quality</p>
-        <div className="grid grid-cols-3 gap-3">
-          {QUALITY_OPTIONS.map((q) => (
-            <motion.button
-              key={q.id}
-              whileHover={{ y: -2, transition: { type: "spring", stiffness: 380, damping: 28 } }}
-              whileTap={{ scale: 0.96 }}
-              onClick={() => setQuality(q.id as typeof quality)}
-              className={cn(
-                "rounded-xl border p-3 text-left transition-[border-color,background-color] duration-[160ms]",
-                quality === q.id
-                  ? "border-primary bg-primary/10"
-                  : "border-foreground/8 bg-secondary/20 hover:border-primary/30",
-              )}
-            >
-              <p className="text-sm font-black">{q.label}</p>
-              <p className="text-[11px] text-muted-foreground/60">{q.desc}</p>
-            </motion.button>
-          ))}
-        </div>
-      </div>
-
-      {/* Aspect Ratio */}
-      <div className="space-y-3">
-        <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Aspect Ratio</p>
-        <div className="flex gap-3">
-          {(["9:16", "1:1"] as const).map((r) => (
-            <motion.button
-              key={r}
-              whileHover={{ y: -2, transition: { type: "spring", stiffness: 380, damping: 28 } }}
-              whileTap={{ scale: 0.96 }}
-              onClick={() => setAspect(r)}
-              className={cn(
-                "rounded-xl border px-5 py-3 text-sm font-black transition-[border-color,background-color,color] duration-[160ms]",
-                aspect === r
-                  ? "border-primary bg-primary/10 text-primary"
-                  : "border-foreground/8 bg-secondary/20 hover:border-primary/30",
-              )}
-            >
-              {r}
-            </motion.button>
-          ))}
-        </div>
-      </div>
-
-      {/* Progress / Result */}
-      {isRunning && (
-        <div className="flex justify-center py-2">
-          <TimelineLoader
-            phases={["Scripting...", "Designing...", "Captioning...", "Rendering...", "Finishing..."]}
-          />
-        </div>
-      )}
-
-      {isDone && downloadUrl && (
-        <motion.button
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          onClick={handleDownload}
-          className="w-full flex items-center justify-center gap-3 rounded-2xl py-4 text-sm font-black text-white shadow-2xl shadow-emerald-500/20"
-          style={{ background: "linear-gradient(135deg, #10b981, #06b6d4)" }}
-        >
-          <Download className="w-5 h-5" />
-          Download Short
-        </motion.button>
-      )}
-
-      {isError && (
-        <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-400">
-          {errorMessage ?? "Render failed. Please try again."}
-        </div>
-      )}
-
-      {/* Launch */}
-      {!isDone && (
-        <button
-          onClick={() => onLaunch(quality, aspect)}
-          disabled={isRunning}
-          className={cn(
-            "w-full flex items-center justify-center gap-3 rounded-2xl py-4 text-sm font-black text-white transition-all shadow-2xl shadow-primary/20",
-            isRunning ? "opacity-60 cursor-not-allowed" : "hover:scale-[1.01] active:scale-[0.99]",
+          <span className="text-sm font-black">{title}</span>
+          {badge && (
+            <span className="text-[10px] font-bold text-muted-foreground/60 bg-foreground/6 rounded-full px-2 py-0.5 border border-foreground/6">
+              {badge}
+            </span>
           )}
-          style={{ background: "linear-gradient(135deg, #3b82f6 0%, #a855f7 60%, #ec4899 100%)" }}
-        >
-          {isRunning ? (
-            <><Loader2 className="w-5 h-5 animate-spin" /> Processing…</>
-          ) : (
-            <><Rocket className="w-5 h-5" /> Generate Short</>
-          )}
-        </button>
-      )}
+        </div>
+        {isOpen ? (
+          <ChevronUp className="w-4 h-4 text-muted-foreground/40 transition-transform" />
+        ) : (
+          <ChevronDown className="w-4 h-4 text-muted-foreground/40 transition-transform" />
+        )}
+      </button>
 
-      {isDone && (
-        <button
-          onClick={() => reset()}
-          className="w-full flex items-center justify-center gap-2 rounded-2xl py-3 text-sm font-bold text-muted-foreground border border-foreground/8 hover:bg-secondary/40 transition-colors"
-        >
-          <RefreshCw className="w-4 h-4" />
-          Start New Project
-        </button>
-      )}
+      {/* Animated panel body */}
+      <AnimatePresence initial={false}>
+        {isOpen && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
+            className="overflow-hidden"
+          >
+            <div className="px-5 pb-6 pt-1 border-t border-foreground/5">
+              {children}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Page
+// Page — non-linear creator workspace
 // ---------------------------------------------------------------------------
 
 export default function ADKPage() {
   const { data: session } = useSession();
   const store = useADKStore();
 
-  // Pusher subscription ref
+  // All three panels open by default — user can collapse any one
+  const [openPanels, setOpenPanels] = useState<Set<PanelId>>(
+    () => new Set<PanelId>(["media", "script", "voice"]),
+  );
+
+  // Render config — lives at page level (was inside old RenderStep)
+  const [quality, setQuality] = useState<"low" | "medium" | "high">("medium");
+  const [aspect, setAspect] = useState<"9:16" | "1:1">("9:16");
+  const [launching, setLaunching] = useState(false);
+
+  // Realtime refs — logic unchanged from original wizard
   const pusherRef = useRef<Pusher | null>(null);
   const channelRef = useRef<Channel | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const [launching, setLaunching] = useState(false);
+
+  const togglePanel = useCallback((panel: PanelId) => {
+    setOpenPanels((prev) => {
+      const next = new Set(prev);
+      if (next.has(panel)) next.delete(panel);
+      else next.add(panel);
+      return next;
+    });
+  }, []);
 
   const cleanupRealtime = useCallback(() => {
     channelRef.current?.unbind_all();
@@ -591,7 +516,9 @@ export default function ADKPage() {
     const deadline = Date.now() + 10 * 60 * 1000;
     pollRef.current = setInterval(async () => {
       try {
-        const { data } = await axios.get(`${API_URL}/api/status/${jobId}`, { params: { user_id: userId } });
+        const { data } = await axios.get(`${API_URL}/api/status/${jobId}`, {
+          params: { user_id: userId },
+        });
         if (data.status === "finished" && data.download_url) {
           store.setProgress(100);
           store.setStatus("done");
@@ -604,7 +531,7 @@ export default function ADKPage() {
           store.setError("Timed out after 10 minutes.");
           cleanupRealtime();
         }
-      } catch { /* ignore */ }
+      } catch { /* transient network errors — keep polling */ }
     }, 3000);
   }
 
@@ -634,16 +561,20 @@ export default function ADKPage() {
       store.setError(d?.error ?? "Render failed");
       cleanupRealtime();
     });
+    // Always also start polling as a safety net
     startPolling(jobId, userId);
   }
 
-  async function handleLaunch(
-    quality: "low" | "medium" | "high",
-    aspect: "9:16" | "1:1",
-  ) {
-
+  // Payload builder — identical to original wizard's handleLaunch
+  async function handleLaunch() {
     const userId = session?.user?.id ?? session?.user?.email ?? "anonymous";
-    if (!store.script.trim()) { toast.error("Script is required."); store.setStep(0); return; }
+
+    if (!store.script.trim()) {
+      toast.error("Script is required — add one in the Script panel.");
+      // Auto-expand the script panel so the user sees it immediately
+      setOpenPanels((prev) => new Set([...prev, "script" as PanelId]));
+      return;
+    }
 
     setLaunching(true);
     store.setStatus("uploading");
@@ -684,15 +615,47 @@ export default function ADKPage() {
     }
   }
 
-  const canNext =
-    store.step === 0 ? store.script.trim().length >= 10 :
-    store.step === 1 ? true :
-    store.step === 2 ? true : false;
+  function handleDownload() {
+    if (!store.downloadUrl) return;
+    const abs = buildExportDownloadUrl(store.downloadUrl);
+    const a = document.createElement("a");
+    a.href = abs;
+    a.download = "quickai-adk-short.mp4";
+    a.target = "_blank";
+    a.rel = "noopener";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
+  // Minimum criteria: script has enough content OR footage has been provided.
+  // Voice is always optional (default is pre-selected).
+  const hasScript = store.script.trim().length >= 10;
+  const hasMedia =
+    store.uploadedFiles.length > 0 || store.selectedStockClips.length > 0;
+  const canGenerate = hasScript || hasMedia;
+
+  const isRunning =
+    store.status === "queued" || store.status === "processing" || launching;
+  const isDone = store.status === "done";
+  const isError = store.status === "error";
+
+  // Live badge values for each panel header
+  const scriptBadge = store.script.trim()
+    ? `${store.script.trim().split(/\s+/).length} words`
+    : undefined;
+  const mediaBadge =
+    store.uploadedFiles.length + store.selectedStockClips.length > 0
+      ? `${store.uploadedFiles.length + store.selectedStockClips.length} clips`
+      : undefined;
+  const voiceBadge = VOICES.find((v) => v.id === store.voiceId)?.name;
 
   return (
-    <div className="max-w-3xl mx-auto space-y-10 py-8 px-4">
-      {/* Header with animated hue gradient */}
-      <div className="relative rounded-3xl overflow-hidden p-8">
+    /* Extra bottom padding so the sticky bar never overlaps content */
+    <div className="max-w-3xl mx-auto py-8 px-4 pb-48">
+
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <div className="relative rounded-3xl overflow-hidden p-8 mb-6">
         <motion.div
           className="absolute inset-0"
           style={{
@@ -706,108 +669,206 @@ export default function ADKPage() {
         <div className="relative z-10">
           <div className="flex items-center gap-2 mb-2">
             <Sparkles className="w-4 h-4 text-primary animate-pulse" />
-            <span className="text-[10px] font-black uppercase tracking-[0.3em] text-primary">ADK Studio</span>
+            <span className="text-[10px] font-black uppercase tracking-[0.3em] text-primary">
+              ADK Studio
+            </span>
           </div>
           <h1 className="text-4xl font-black tracking-tighter text-white">
-            ADK Studio AI Generation
+            Creator Workspace
           </h1>
           <p className="text-sm text-white/50 mt-2">
-            Script → Footage → Voice → Render. Your short, fully orchestrated.
+            Build your short in any order — script, footage, voice. Generate whenever you&apos;re ready.
           </p>
         </div>
       </div>
 
-      {/* Stepper */}
-      <div className="flex items-center gap-2">
-        {STEPS.map((s, i) => {
-          const Icon = s.icon;
-          const done = i < store.step;
-          const active = i === store.step;
-          return (
-            <div key={i} className="flex items-center gap-2 flex-1 last:flex-none">
-              <button
-                onClick={() => done && store.setStep(i as 0 | 1 | 2 | 3)}
-                disabled={!done}
-                className={cn(
-                  "flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold transition-all whitespace-nowrap",
-                  active ? "bg-primary/15 text-primary border border-primary/30" :
-                  done ? "text-primary/60 hover:text-primary cursor-pointer" :
-                  "text-muted-foreground/30 cursor-default",
-                )}
+      {/* ── Three freely-navigable modules ──────────────────────────────────── */}
+      <div className="space-y-3">
+        <WorkspacePanel
+          icon={Film}
+          title="Media"
+          badge={mediaBadge}
+          isOpen={openPanels.has("media")}
+          onToggle={() => togglePanel("media")}
+        >
+          <MediaStep />
+        </WorkspacePanel>
+
+        <WorkspacePanel
+          icon={FileText}
+          title="Script"
+          badge={scriptBadge}
+          isOpen={openPanels.has("script")}
+          onToggle={() => togglePanel("script")}
+        >
+          <ScriptStep />
+        </WorkspacePanel>
+
+        <WorkspacePanel
+          icon={Mic2}
+          title="Voice"
+          badge={voiceBadge}
+          isOpen={openPanels.has("voice")}
+          onToggle={() => togglePanel("voice")}
+        >
+          <VoiceStep />
+        </WorkspacePanel>
+      </div>
+
+      {/* ── Sticky global generate bar ───────────────────────────────────────
+           Activates the moment minimum criteria (script ≥10 words OR footage)
+           are met. Lives outside the accordion so it is always reachable.
+      ────────────────────────────────────────────────────────────────────── */}
+      <div className="sticky bottom-4 z-50 mt-6">
+        <div className="rounded-2xl border border-foreground/10 bg-background/85 backdrop-blur-2xl p-4 shadow-2xl shadow-black/50 ring-1 ring-white/5">
+
+          {/* Running indicator */}
+          <AnimatePresence>
+            {isRunning && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                className="mb-4 flex justify-center overflow-hidden"
               >
-                <div className={cn(
-                  "w-6 h-6 rounded-full flex items-center justify-center shrink-0",
-                  active ? "bg-primary text-white" :
-                  done ? "bg-primary/20 text-primary" : "bg-foreground/5 text-muted-foreground/30",
-                )}>
-                  {done ? <Check className="w-3 h-3" /> : <Icon className="w-3 h-3" />}
-                </div>
-                <span className="hidden sm:block">{s.label}</span>
-              </button>
-              {i < STEPS.length - 1 && (
-                <div className={cn("flex-1 h-px", i < store.step ? "bg-primary/30" : "bg-foreground/8")} />
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Step content */}
-      <div className="relative min-h-[340px]">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={store.step}
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-            transition={{ duration: 0.2, ease: "easeOut" }}
-          >
-            {store.step === 0 && <ScriptStep />}
-            {store.step === 1 && <MediaStep />}
-            {store.step === 2 && <VoiceStep />}
-            {store.step === 3 && <RenderStep onLaunch={handleLaunch} launching={launching} />}
-          </motion.div>
-        </AnimatePresence>
-      </div>
-
-      {/* Navigation */}
-      {store.step < 3 && (
-        <div className="flex items-center justify-between pt-4 border-t border-foreground/5">
-          <button
-            onClick={() => store.step > 0 && store.setStep((store.step - 1) as 0 | 1 | 2 | 3)}
-            disabled={store.step === 0}
-            className="flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold text-muted-foreground border border-foreground/8 hover:bg-secondary/40 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-          >
-            <ChevronLeft className="w-4 h-4" />
-            Back
-          </button>
-          <button
-            onClick={() => store.setStep((store.step + 1) as 1 | 2 | 3)}
-            disabled={!canNext}
-            className={cn(
-              "flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-black text-white transition-all shadow-lg shadow-primary/20",
-              canNext ? "hover:scale-[1.02] active:scale-[0.98]" : "opacity-40 cursor-not-allowed",
+                <TimelineLoader
+                  phases={[
+                    "Scripting…",
+                    "Designing…",
+                    "Captioning…",
+                    "Rendering…",
+                    "Finishing…",
+                  ]}
+                />
+              </motion.div>
             )}
-            style={{ background: "linear-gradient(135deg, #a855f7, #ec4899)" }}
-          >
-            {store.step === 2 ? "Go to Render" : "Next"}
-            <ChevronRight className="w-4 h-4" />
-          </button>
-        </div>
-      )}
+          </AnimatePresence>
 
-      {/* Back from render step */}
-      {store.step === 3 && store.status === "idle" && (
-        <div className="flex pt-4 border-t border-foreground/5">
-          <button
-            onClick={() => store.setStep(2)}
-            className="flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold text-muted-foreground border border-foreground/8 hover:bg-secondary/40 transition-colors"
-          >
-            <ChevronLeft className="w-4 h-4" />
-            Back
-          </button>
+          {/* Error state */}
+          <AnimatePresence>
+            {isError && (
+              <motion.div
+                initial={{ opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                className="mb-3 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400"
+              >
+                {store.errorMessage ?? "Render failed — please try again."}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Download CTA when render is complete */}
+          <AnimatePresence>
+            {isDone && store.downloadUrl && (
+              <motion.button
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                onClick={handleDownload}
+                className="w-full flex items-center justify-center gap-3 rounded-xl py-3.5 mb-3 text-sm font-black text-white shadow-xl shadow-emerald-500/20"
+                style={{ background: "linear-gradient(135deg, #10b981, #06b6d4)" }}
+              >
+                <Download className="w-5 h-5" />
+                Download Short
+              </motion.button>
+            )}
+          </AnimatePresence>
+
+          {/* Controls row: quality · aspect · generate */}
+          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+
+            {/* Quality picker */}
+            <div className="flex gap-0.5 p-1 bg-secondary/50 rounded-xl border border-foreground/8 shrink-0">
+              {QUALITY_OPTIONS.map((q) => (
+                <button
+                  key={q.id}
+                  onClick={() => setQuality(q.id as typeof quality)}
+                  title={q.desc}
+                  className={cn(
+                    "px-3 py-1.5 rounded-lg text-[11px] font-black tracking-wide transition-all duration-150 whitespace-nowrap",
+                    quality === q.id
+                      ? "bg-primary text-white shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {q.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Aspect picker */}
+            <div className="flex gap-0.5 p-1 bg-secondary/50 rounded-xl border border-foreground/8 shrink-0">
+              {(["9:16", "1:1"] as const).map((r) => (
+                <button
+                  key={r}
+                  onClick={() => setAspect(r)}
+                  className={cn(
+                    "px-3 py-1.5 rounded-lg text-[11px] font-black tracking-wide transition-all duration-150",
+                    aspect === r
+                      ? "bg-primary text-white shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
+
+            {/* Primary CTA — fills remaining width */}
+            {!isDone ? (
+              <button
+                onClick={handleLaunch}
+                disabled={!canGenerate || isRunning}
+                className={cn(
+                  "flex-1 flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-black text-white transition-all duration-150 min-w-0",
+                  canGenerate && !isRunning
+                    ? "hover:scale-[1.01] active:scale-[0.99] shadow-lg shadow-primary/25"
+                    : "opacity-40 cursor-not-allowed",
+                )}
+                style={{
+                  background:
+                    "linear-gradient(135deg, #3b82f6 0%, #a855f7 60%, #ec4899 100%)",
+                }}
+              >
+                {isRunning ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                    <span className="truncate">Processing…</span>
+                  </>
+                ) : (
+                  <>
+                    <Rocket className="w-4 h-4 shrink-0" />
+                    <span className="truncate">Generate Short</span>
+                  </>
+                )}
+              </button>
+            ) : (
+              <button
+                onClick={() => store.reset()}
+                className="flex-1 flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-bold text-muted-foreground border border-foreground/8 hover:bg-secondary/40 transition-colors"
+              >
+                <RefreshCw className="w-4 h-4 shrink-0" />
+                <span className="truncate">New Project</span>
+              </button>
+            )}
+          </div>
+
+          {/* Inline hint when nothing is ready yet */}
+          <AnimatePresence>
+            {!canGenerate && !isRunning && !isDone && (
+              <motion.p
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="mt-2 text-center text-[11px] text-muted-foreground/40"
+              >
+                Add a script (10+ words) or upload footage to unlock generation
+              </motion.p>
+            )}
+          </AnimatePresence>
         </div>
-      )}
+      </div>
     </div>
   );
 }

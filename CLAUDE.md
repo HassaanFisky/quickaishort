@@ -94,11 +94,15 @@ NextAuth (`next-auth`) handles sessions on the frontend. `fastapi/app/auth/fireb
 
 | Store | Used for |
 | --- | --- |
-| MongoDB (motor) | User stats, credits, job history, GridFS for media |
+| MongoDB (motor) | User stats, credits, job history. Legacy GridFS bucket here is used ONLY by `/api/v1/video/*` (`routers/video.py`, `workers/tasks.py`). |
 | Firestore | ADK agent session state (`firestore_session.py`) — falls back to InMemory |
-| GridFS (MongoDB) | Media storage (rendered exports + uploaded assets) |
-| GCS | REMOVED (2026-05-09): Full migration to GridFS complete. Pruned all GCS logic. |
+| GridFS (MongoDB) | LEGACY media path — only `/api/v1/video/*` uses it. `/adk` + `/editor` exports use GCS (below). |
+| GCS (`services/db.py` + `storage_service.py`) | **PRIMARY media storage**: uploads `adk_uploads/`, exports `exports/`, TTS cache `tts_cache/`. Bucket `quickaishort-agent-494304-media`, project `quickaishort-agent-494304` (verified via bucket listing 2026-05-29). |
 | Redis | RQ job queue + Pub/Sub for Pusher fan-out |
+
+> **Storage correction (2026-05-29):** The 2026-05-09 "migrated to GridFS / removed GCS" note was inaccurate. **Verified source of truth = GCS** for all `/adk` + `/editor` media: `services/db.py` initializes the bucket, and `/api/adk/upload`, `render_worker.py`, and `/api/download` all read/write GCS. MongoDB GridFS (`services/storage.py`) survives only for the legacy `/api/v1/video/*` path. Fixed `adk_service.py` to emit correct `gs://` URIs (it previously emitted `gridfs://…mp4` with a hardcoded extension → non-mp4 uploads rendered as black frames).
+>
+> **Verified config + live blockers (2026-05-29 local bring-up):** Real project = `quickaishort-agent-494304`, bucket = `quickaishort-agent-494304-media` (code defaults in `db.py` + local `.env` corrected; the old `quickaishort-agent` / `qai-exports-quickaishort-agent` values were wrong and 404/'project not found'). Two account-level blockers found via live cURL, both requiring user action: (1) **GCP billing is DELINQUENT** on the project → GCS object writes return 403 `accountDisabled` (blocks the upload→render→download round-trip); (2) **GEMINI_API_KEY is INVALID** → `400 API_KEY_INVALID` from generativelanguage API, so all AI agents fall back to canned/echo output. Verified WORKING: YouTube Data API key (`/api/info` 200), Pexels (`/api/adk/stock`), Redis (managed Redis Cloud), NextAuth HS256 JWT auth on protected endpoints, GCS ADC auth (bucket exists). `GOOGLE_TTS_API_KEY` absent → voiceover silent.
 
 ---
 
@@ -244,7 +248,7 @@ TECH STACK LOCKED — DO NOT SWAP
 - Agent: Google ADK v1.0, gemini-2.5-flash (DEFAULT_MODEL in gemini_client.py)
 - Task Queue: Redis + RQ for background rendering and stats sync
 - Deploy: Vercel (frontend) + Google Cloud Run (backend)
-- Storage: MongoDB Atlas (GridFS) + Supabase (free tier)
+- Storage: GCS (primary media: uploads/exports/TTS, bucket quickaishort-agent-494304-media, project quickaishort-agent-494304) + MongoDB Atlas (stats/credits + legacy /api/v1/video GridFS) + Supabase (free tier)
 - Domain: quickaishort.online via Cloudflare DNS
 
 FORBIDDEN CHANGES
@@ -497,7 +501,7 @@ KEY DECISIONS (do not change without reason):
 - /api/audio: yt-dlp subprocess (bestaudio m4a/webm) → Cobalt v10 fallback → always returns audio/mpeg MP3
 - COEP/COOP headers scoped to /editor/:path* only — Google OAuth works on /signin
 - Browser export: MediaRecorder API (no FFmpeg.wasm — was never implemented; 15s timeout shows CDN block error instead of hanging)
-- Server export: ffmpeg-python via RQ worker (production path, stored in MongoDB GridFS)
+- Server export: ffmpeg-python via RQ worker (production path, stored in GCS at exports/{user}/{job}.mp4)
 - All protected endpoints use verified_user_id from JWT, not request body
 - 6 personas in preflight panel (genz, millennial, sports, tech, entertainment, news)
 - Startup probe: failureThreshold=20, periodSeconds=10, timeoutSeconds=5 — heavy deps (google-adk, google-genai, celery) take 13s+ to import before gunicorn workers are ready

@@ -1,5 +1,6 @@
 import os
 import uuid
+import asyncio
 import httpx
 import logging
 import tempfile
@@ -34,17 +35,18 @@ class ADKService:
             user=user_id,
         )
 
-        # 1. Resolve uploaded clips as GridFS URIs
-        # We no longer check local disk since uploads are persisted to GridFS.
-        # We assume the file exists if the ID was provided by the client (who got it from /api/adk/upload)
+        # 1. Resolve uploaded clips to their real GCS object URIs.
+        # /api/adk/upload stores each file at adk_uploads/{user_id}/{file_id}{ext}
+        # in GCS and preserves the original extension (.mp4/.mov/.avi/.webm/.mkv).
+        # We must resolve the actual blob — not assume .mp4 — otherwise the render
+        # worker can't find non-mp4 uploads and falls back to a black frame.
         clip_paths: List[str] = []
         for fid in uploaded_file_ids:
-            # We use a naming convention: gridfs://adk_uploads/{user_id}/{fid}{ext}
-            # Since we don't know the extension here for sure, we'll try to find it in GridFS
-            # or just use a standard .mp4 as per the upload endpoint's default.
-            # Best is to just use the path as constructed in main.py if possible.
-            # For now, we'll assume .mp4 or similar.
-            clip_paths.append(f"gridfs://adk_uploads/{user_id}/{fid}.mp4")
+            uri = await ADKService._resolve_upload_uri(user_id, fid)
+            if uri:
+                clip_paths.append(uri)
+            else:
+                logger.warning("adk_upload_not_found", user=user_id, file_id=fid)
 
         # 2. Pre-fetch Assets (Private GCS + Pexels)
         stock_clips: List[Dict[str, str]] = []
@@ -71,6 +73,28 @@ class ADKService:
             "aspect_ratio": aspect_ratio,
             "created_at": datetime.utcnow().isoformat(),
         }
+
+    @staticmethod
+    async def _resolve_upload_uri(user_id: str, file_id: str) -> Optional[str]:
+        """Return the gs:// URI of an ADK upload, resolving its real extension.
+
+        Uploads live at adk_uploads/{user_id}/{file_id}{ext} in the GCS bucket.
+        We list by prefix instead of guessing the extension so .mov/.webm/etc.
+        uploads resolve correctly for the render worker.
+        """
+        from services.db import get_uploads_bucket
+
+        prefix = f"adk_uploads/{user_id}/{file_id}"
+        try:
+            bucket = get_uploads_bucket()
+            blobs = await asyncio.to_thread(
+                lambda: list(bucket.list_blobs(prefix=prefix, max_results=1))
+            )
+            if blobs:
+                return f"gs://{bucket.name}/{blobs[0].name}"
+        except Exception as e:
+            logger.warning("adk_upload_resolve_failed", file_id=file_id, error=str(e))
+        return None
 
     @staticmethod
     async def _fetch_private_assets(query: str) -> List[Dict[str, str]]:
