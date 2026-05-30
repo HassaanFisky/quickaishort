@@ -1,176 +1,197 @@
-# 🚀 QuickAIShort.online — Enterprise Pre-Flight & Multi-Agent Engine
+<div align="center">
 
-[![Build Status](https://github.com/HassaanFisky/quickaishort/actions/workflows/ci.yml/badge.svg)](https://github.com/HassaanFisky/quickaishort/actions/workflows/ci.yml)
-[![Linting & Hygiene](https://github.com/HassaanFisky/quickaishort/actions/workflows/linter.yml/badge.svg)](https://github.com/HassaanFisky/quickaishort/actions/workflows/linter.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-emerald.svg)](LICENSE)
-[![Google AI Agents Challenge](https://img.shields.io/badge/Google%20AI%20Agents%20Challenge-2026-blue.svg)](https://ai.google.dev/)
-[![ADK Framework](https://img.shields.io/badge/ADK%20Framework-v1.0.0-orange.svg)](https://github.com/google/agent-development-kit)
-[![Stack Status](https://img.shields.io/badge/Production%20Status-Live-success.svg)](#)
+<img src="public/qs-logo.png" alt="QuickAI Shorts" width="96" />
 
-> **"OpusClip identifies which clips to extract. Pre-Flight tells you if they will actually go viral."**
+# QuickAI Shorts
 
----
+**The AI-native short-form video studio — from raw footage to publish-ready clips.**
 
-## 🌟 The Core Vision
+[![Live](https://img.shields.io/badge/Live%20at-quickaishort.online-6366f1?style=flat-square&logo=vercel&logoColor=white)](https://quickaishort.online)
+[![Build](https://github.com/HassaanFisky/quickaishort/actions/workflows/ci.yml/badge.svg?style=flat-square)](https://github.com/HassaanFisky/quickaishort/actions/workflows/ci.yml)
+[![Lint](https://github.com/HassaanFisky/quickaishort/actions/workflows/linter.yml/badge.svg?style=flat-square)](https://github.com/HassaanFisky/quickaishort/actions/workflows/linter.yml)
+[![Google ADK](https://img.shields.io/badge/Google%20ADK-v1.0-4285F4?style=flat-square&logo=google&logoColor=white)](https://github.com/google/agent-development-kit)
+[![Gemini](https://img.shields.io/badge/Gemini%202.5%20Flash-powered-8B5CF6?style=flat-square&logo=google&logoColor=white)](https://ai.google.dev/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-22c55e?style=flat-square)](LICENSE)
 
-Every short-form video generator on the market operates completely blind. Creators copy-paste a URL, hit export, and publish with zero context, hoping the algorithm picks it up. 
+> *"OpusClip shows you which clip. Pre-Flight shows you if it will actually work."*
 
-**QuickAI Short completely changes this.** We have shifted the paradigm from static clicking to an **interactive, conversational AI Video Editing Studio**. Creators are guided by an intelligent **Chatbot Co-Pilot** that handles everything from video cut boundaries and smart transcription-based clip adjustments to real-time high-fidelity voiceover synthesis and sidechain audio mixing.
+[**Live Demo →**](https://quickaishort.online) · [Docs](docs/DEPLOYMENT_README.md) · [Security](SECURITY.md)
 
----
-
-## 💬 The Conversational AI Editor Chatbot & Voice Pipeline
-
-The QuickAI Short Studio integrates a cutting-edge chatbot interface that acts as a real-time partner during the editing lifecycle:
-
-* **Interactive Natural Language Control**: Instruct the chatbot to split clips, apply filter presets, adjust aspect ratios, or shift focus parameters using natural conversational cues.
-* **Transcription-Based Dispatching**: The chatbot automatically analyzes video transcriptions and aligns edits (splits, trims, crops) to exact verbal cues.
-* **High-Fidelity AI Voiceovers**: Seamlessly generate synthetic voice narrations using a curated library of professional, emotionally-aware voices.
-* **Sidechain Compression Mixing**: The render worker applies standard broadcaster mixing: auto-lowering background music volume when narration is active, then boosting it back during breaks.
+</div>
 
 ---
 
-## 🏛️ Robust Agentic Architecture
+## What is this?
 
-At the heart of the Pre-Flight engine is an advanced multi-agent topology built exclusively on official Google ADK primitives:
+QuickAI Shorts is a full-stack AI video studio where creators paste a YouTube URL and get back a clip scored, validated, and ready to publish — not just exported.
+
+The core differentiator is **Pre-Flight**: a multi-agent pipeline built on Google ADK that simulates six audience personas in parallel, runs iterative quality gates, and produces a weighted consensus viral score before a single frame is rendered. Creators ship clips that are analytically validated, not blindly guessed.
+
+On top of Pre-Flight sits **ADK Studio** — a non-linear creator workspace where script, footage, and voice can be assembled in any order, then rendered server-side via a background RQ worker with real-time Pusher progress.
+
+---
+
+## Capabilities
+
+**Pre-Flight — Multi-Agent Clip Validation**
+Six audience personas (Gen Z, Millennial, Sports, Tech, Entertainment, News) run in parallel via `ParallelAgent`, score each clip candidate independently, and loop until a weighted consensus score hits the quality gate. You see the reasoning, not just a number.
+
+**Conversational AI Editor**
+A Gemini-backed chat interface in the editor lets creators instruct cuts, trims, and adjustments in natural language. Edits align to transcription timestamps — not arbitrary timecodes.
+
+**ADK Studio — Non-Linear Creator Workspace**
+Script, Media, and Voice panels are freely accessible in any order. The sticky Generate bar activates the moment a script is present, queues a full render job (voiceover synthesis → segment stitching → FFmpeg transcode → GCS upload), and streams progress in real time.
+
+**Server-Side Rendering Pipeline**
+No client-side FFmpeg hacks. Every export runs as a background RQ job: stream-clipped via yt-dlp, transcoded with ffmpeg-python, mixed with AI voiceover, and stored in Google Cloud Storage. Render results are signed and streamed back on demand.
+
+**Real-Time Everything**
+Job progress, dashboard stats, and agent reasoning traces are pushed via Pusher channels with a WebSocket polling fallback. The UI stays live without reloads.
+
+---
+
+## Architecture
+
+### Pre-Flight Multi-Agent Pipeline
 
 ```
-                          ┌───────────────────────────┐
-                          │    QuickAIShort Client    │
-                          └─────────────┬─────────────┘
-                                        │ (Video URL & Candidates)
-                                        ▼
-                          ┌───────────────────────────┐
-                          │   FastAPI Backend Core    │
-                          └─────────────┬─────────────┘
-                                        │
-                                        ▼
-         ┌─────────────────────────────────────────────────────────────┐
-         │             PreFlight_Orchestrator [SequentialAgent]        │
-         └──────┬───────────────────────┬───────────────────────┬──────┘
-                │                       │                       │
-      ┌─────────▼──────────┐  ┌─────────▼──────────┐  ┌─────────▼──────────┐
-      │ ClipCandidateAgent │  │ TrendGroundingAgent│  │ AnalyticsAgent     │
-      │   (Seeds State)    │  │ (SerpAPI Grounding)│  │(YouTube Analytics) │
-      └────────────────────┘  └────────────────────┘  └────────────────────┘
-                                        │
-                                        ▼
-         ┌─────────────────────────────────────────────────────────────┐
-         │             AudiencePanelLoop [LoopAgent]                   │
-         │             (Iterates until consensus score >= 65)          │
-         └──────┬───────────────────────────────────────────────┬──────┘
-                │                                               │
-      ┌─────────▼─────────────────────────────────────┐  ┌──────▼──────────────┐
-      │ ParallelAgent: "PersonaPanel" (6 Parallel)    │  │ VoteAggregatorAgent │
-      │ ┌───────────────────────────────────────────┐ │  │  (Pure Python)      │
-      │ │ 🕶️ Gen Z Creator           (Weight: 0.25) │ │  │                     │
-      │ │ 💼 Millennial Professional  (Weight: 0.25) │─┼─►│ Calculate weighted  │
-      │ │ ⚽ Sports Fan               (Weight: 0.15) │ │  │ consensus score     │
-      │ │ 💻 Tech Enthusiast          (Weight: 0.15) │ │  │                     │
-      │ │ 🎬 Entertainment Critic     (Weight: 0.10) │ │  │ Writes back to      │
-      │ │ 📰 News Analyst            (Weight: 0.10) │ │  │ session state.      │
-      │ └───────────────────────────────────────────┘ │  │                     │
-      └───────────────────────────────────────────────┘  └──────┬──────────────┘
-                                                                │
-                                                         ┌──────▼──────────────┐
-                                                         │  QualityGateAgent   │
-                                                         │ (Pass / Loop Exit)  │
-                                                         └──────┬──────────────┘
-                                                                │
-                                                         ┌──────▼──────────────┐
-                                                         │ ClipRefinementAgent │
-                                                         │  (AI-driven recut)  │
-                                                         └─────────────────────┘
+                        ┌─────────────────────────┐
+                        │     QuickAI Client      │
+                        └────────────┬────────────┘
+                                     │ Video URL + Candidates
+                                     ▼
+                        ┌─────────────────────────┐
+                        │    FastAPI Backend       │
+                        └────────────┬────────────┘
+                                     │
+                                     ▼
+        ┌────────────────────────────────────────────────────┐
+        │           PreFlight_Orchestrator [SequentialAgent] │
+        └──────┬─────────────────┬──────────────────┬────────┘
+               │                 │                  │
+     ┌─────────▼──────┐  ┌───────▼────────┐  ┌──────▼──────────┐
+     │ ClipCandidate  │  │ TrendGrounding │  │ Analytics       │
+     │ Agent          │  │ (SerpAPI)      │  │ (YouTube v2)    │
+     └────────────────┘  └────────────────┘  └─────────────────┘
+                                     │
+                                     ▼
+        ┌────────────────────────────────────────────────────┐
+        │         AudiencePanelLoop [LoopAgent]              │
+        │         iterates until consensus score ≥ 65        │
+        └──────┬────────────────────────────────────┬────────┘
+               │                                    │
+     ┌─────────▼──────────────────────────┐  ┌──────▼──────────┐
+     │  PersonaPanel [ParallelAgent × 6]  │  │ VoteAggregator  │
+     │                                    │  │                 │
+     │  Gen Z Creator       weight 0.25   │  │ weighted score  │
+     │  Millennial Pro      weight 0.25   ├─►│ → session state │
+     │  Sports Fan          weight 0.15   │  │                 │
+     │  Tech Enthusiast     weight 0.15   │  └────────┬────────┘
+     │  Entertainment Critic weight 0.10  │           │
+     │  News Analyst        weight 0.10   │           ▼
+     └────────────────────────────────────┘  ┌────────▼────────┐
+                                              │ QualityGate     │
+                                              │ pass / loop     │
+                                              └────────┬────────┘
+                                                       │
+                                              ┌────────▼────────┐
+                                              │ ClipRefinement  │
+                                              │ AI-driven recut │
+                                              └─────────────────┘
 ```
 
-### 🤖 Official ADK Primitives Used
-1. **`SequentialAgent`**: Manages step-by-step state preparation and execution pipeline.
-2. **`ParallelAgent`**: Runs 6 highly-calibrated audience personas in parallel.
-3. **`LoopAgent`**: Handles recursive improvement, modifying candidate parameters dynamically until quality conditions are satisfied.
-4. **`FunctionTool`**: Decorates analytical grounding layers (SerpAPI Google Trends engine, custom caching) seamlessly for automatic function calling.
-5. **`MCPToolset`**: Grounds the workforce with historical analytics via MongoDB Atlas and SerpAPI trend data.
+### ADK Primitives
+
+| Primitive | Role |
+| :--- | :--- |
+| `SequentialAgent` | State preparation and pipeline orchestration |
+| `ParallelAgent` | Runs all six audience personas concurrently |
+| `LoopAgent` | Recursive refinement until quality threshold is met |
+| `FunctionTool` | SerpAPI Google Trends grounding with result caching |
+| `MCPToolset` | MongoDB Atlas analytics + trend data for historical grounding |
 
 ---
 
-## ⚡ Production Tech Stack
+## Tech Stack
 
-| Layer | Technologies & Frameworks | Enterprise Utility |
+| Layer | Technology | Why |
 | :--- | :--- | :--- |
-| **Frontend** | React, Next.js 14 (App Router), Zustand, Framer Motion | High perceived speed, client-side web workers, dynamic UI. |
-| **Backend** | Python 3.12, FastAPI, Celery/RQ, MoviePy, FFmpeg | Dual-process decoupled queue architecture for heavy video manipulation. |
-| **AI Layer** | Google ADK 1.0.0, Gemini 2.5 Flash, `google-genai` SDK | Multimodal frame processing and lightning-fast agentic consensus. |
-| **Realtime Sync** | Pusher (Channels API), WebSockets | Real-time push updates for video generation lifecycle status. |
-| **Caching** | Redis Cloud, Custom Hashing | Millisecond metadata fetching and global agent task queues. |
-| **Databases** | MongoDB Atlas, GridFS Storage | High-availability documents and raw binary storage with no local FS dependency. |
+| **Frontend** | Next.js 14 (App Router) · Zustand · Framer Motion · Tailwind v4 | Web Workers for in-browser processing; zero layout shift |
+| **Backend** | Python 3.12 · FastAPI · RQ · ffmpeg-python | Decoupled render queue; async endpoints throughout |
+| **AI** | Google ADK 1.0 · Gemini 2.5 Flash · google-genai SDK | Multi-agent orchestration + multimodal frame analysis |
+| **Storage** | GCS (media) · MongoDB Atlas (state, credits, history) | No local FS dependency; horizontally scalable |
+| **Realtime** | Pusher Channels · WebSocket fallback | Sub-second job progress to every connected client |
+| **Cache / Queue** | Redis Cloud | Agent task queues + yt-dlp stream URL caching |
+| **Auth** | NextAuth (HS256 JWT) ↔ FastAPI dependency | Single shared secret; every protected endpoint verified |
+| **Deploy** | Vercel (frontend) · Google Cloud Run (API + Worker) | Auto-scaled; zero cold-start penalty on the worker |
 
 ---
 
-## 💼 Business Model & Opportunity
+## Quick Start
 
-QuickAI Short addresses a **$117 Billion creator economy** and a rapidly expanding **$59 Billion short-form video market**.
+### Backend
 
-| Plan | Features | Price |
-| :--- | :--- | :--- |
-| **Free Tier** | Basic editing, 3 standard exports/month, watermarked videos | **$0** |
-| **Pro Tier** | Unlimited high-speed renders, full 6-persona Pre-Flight panel, advanced analytics grounding, zero watermarks | **$12 / Month** |
-
----
-
-## 🛠️ Automated CI/CD & Hygiene Checks
-
-Our codebase operates under strict professional compliance:
-1. **Linting Actions:** Automatic code layout checks via `Black` and `Flake8` protect backend clean architectures.
-2. **TypeScript Compilation:** Automated CI gates ensure client-side components build cleanly before merging to production branches.
-3. **Smoke Tests:** Backend module imports and pipeline binaries are validated synchronously inside the action runner on every pull request.
-
----
-
-## 🚀 Elite Local Setup Guidelines
-
-### 🐍 Backend Deployment
 ```bash
-# Navigate to API root
 cd fastapi
 
-# Create isolated Python runtime
 python -m venv venv
-source venv/bin/activate  # venv\Scripts\activate on Windows
+source venv/bin/activate        # Windows: venv\Scripts\activate
 
-# Install locked dependencies
 pip install -r requirements.txt
 
-# Seed environment vars
-cp .env.example .env  # Add your API credentials
+cp .env.example .env            # fill in your credentials
 
-# Spin up FastAPI microservice
 uvicorn main:app --reload --port 8000
+
+# In a separate terminal — render worker (needs Redis)
+python render_worker.py
 ```
 
-### 💻 Frontend Deployment
+### Frontend
+
 ```bash
-# Navigate to web root
-cd ../frontend
+cd frontend
 
-# Safe package installation
-npm install --no-fund --no-audit
+pnpm install
 
-# Configure local env
-cp .env.example .env.local
+cp .env.example .env.local      # fill in your credentials
 
-# Run production-grade Next.js development server
-npm run dev
+pnpm dev                         # → http://localhost:3000
 ```
 
+### Minimum required env vars
+
+| Variable | Where | Purpose |
+| :--- | :--- | :--- |
+| `GEMINI_API_KEY` | `fastapi/.env` | ADK agents + AI editor |
+| `GOOGLE_CLOUD_PROJECT` | `fastapi/.env` | GCS + Firestore (`quickaishort-agent-494304`) |
+| `GCS_BUCKET_NAME` | `fastapi/.env` | Media bucket (`quickaishort-agent-494304-media`) |
+| `REDIS_URL` | `fastapi/.env` | Render job queue |
+| `MONGODB_URI` | `fastapi/.env` | Job history, credits, user stats |
+| `NEXTAUTH_SECRET` | both `.env` files | Must match exactly on frontend and backend |
+| `NEXT_PUBLIC_API_URL` | `frontend/.env.local` | FastAPI base URL |
+
+All optional vars (Pexels stock, Google TTS voiceover, Pusher realtime, SerpAPI trends) are documented in `fastapi/.env.example`.
+
 ---
 
-## 🔒 Security & Safe Exception Architectures
+## CI
 
-* **Credential Hardening:** Secrets are segregated using environment configurations. No production API keys, MongoDB Atlas connection strings, or third-party webhooks are committed to the public tree.
-* **Input Protection:** Safe wrappers wrap external command executions (`yt-dlp`, `ffmpeg`) protecting against malicious remote command injection vectors.
-* **Safe Failures:** System operations fail gracefully, masking internal stack details from external users while maintaining structured debugging logs.
+Every pull request runs two gates before merge:
+
+- **Lint + Type Check** — `black`, `flake8` (Python) and `tsc --noEmit` (TypeScript)
+- **Build Gate** — `next build` must exit zero
+
+No test suite currently. CI validates correctness via type safety and a full production build.
 
 ---
 
-## 📝 License & Open Source
+## License
 
-This repository is certified under the **MIT License**. For deep system breakdowns, see the official [ARCHITECTURE.md](ARCHITECTURE.md) and [SECURITY.md](SECURITY.md) guides.
+MIT — see [LICENSE](LICENSE).
+
+---
+
+<div align="center">
+  <sub>Built for the <a href="https://ai.google.dev/">Google for Startups AI Agents Challenge 2026</a></sub>
+</div>
