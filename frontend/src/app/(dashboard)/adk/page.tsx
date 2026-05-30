@@ -628,12 +628,12 @@ export default function ADKPage() {
     a.remove();
   }
 
-  // Minimum criteria: script has enough content OR footage has been provided.
-  // Voice is always optional (default is pre-selected).
+  // Script is always required (handleLaunch guards it; backend requires it too).
+  // Media and voice are optional — stock clips are auto-fetched if none are uploaded.
   const hasScript = store.script.trim().length >= 10;
   const hasMedia =
     store.uploadedFiles.length > 0 || store.selectedStockClips.length > 0;
-  const canGenerate = hasScript || hasMedia;
+  const canGenerate = hasScript; // media is optional; script is not
 
   const isRunning =
     store.status === "queued" || store.status === "processing" || launching;
@@ -863,7 +863,7 @@ export default function ADKPage() {
                 exit={{ opacity: 0 }}
                 className="mt-2 text-center text-[11px] text-muted-foreground/40"
               >
-                Add a script (10+ words) or upload footage to unlock generation
+                Add a script (10+ words) to unlock generation
               </motion.p>
             )}
           </AnimatePresence>
