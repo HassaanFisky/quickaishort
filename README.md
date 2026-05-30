@@ -88,7 +88,7 @@ At the heart of the Pre-Flight engine is an advanced multi-agent topology built 
 2. **`ParallelAgent`**: Runs 6 highly-calibrated audience personas in parallel.
 3. **`LoopAgent`**: Handles recursive improvement, modifying candidate parameters dynamically until quality conditions are satisfied.
 4. **`FunctionTool`**: Decorates analytical grounding layers (SerpAPI Google Trends engine, custom caching) seamlessly for automatic function calling.
-5. **`MCPToolset`**: Empowers the workforce with historical local/Supabase database profiles via `@supabase/mcp-server-supabase`.
+5. **`MCPToolset`**: Grounds the workforce with historical analytics via MongoDB Atlas and SerpAPI trend data.
 
 ---
 
@@ -112,7 +112,7 @@ QuickAI Short addresses a **$117 Billion creator economy** and a rapidly expandi
 | Plan | Features | Price |
 | :--- | :--- | :--- |
 | **Free Tier** | Basic editing, 3 standard exports/month, watermarked videos | **$0** |
-| **Pro Tier** | Unlimited high-speed renders, full 6-persona Pre-Flight panel, historical Supabase MCP grounding, zero watermarks | **$12 / Month** |
+| **Pro Tier** | Unlimited high-speed renders, full 6-persona Pre-Flight panel, advanced analytics grounding, zero watermarks | **$12 / Month** |
 
 ---
 

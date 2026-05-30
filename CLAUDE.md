@@ -225,7 +225,7 @@ FILE EDITING
 
 BROWSER AGENT
 - Use for: navigating Google Cloud Console, Vercel dashboard, GitHub, 
-  Cloudflare DNS, Supabase dashboard, Devpost submission.
+  Cloudflare DNS, Devpost submission.
 - Before clicking: take screenshot to confirm the element is visible.
 - Before typing credentials: confirm the correct page in the URL bar.
 - Never auto-submit forms with payment info, legal agreements, or account 
@@ -248,7 +248,7 @@ TECH STACK LOCKED — DO NOT SWAP
 - Agent: Google ADK v1.0, gemini-2.5-flash (DEFAULT_MODEL in gemini_client.py)
 - Task Queue: Redis + RQ for background rendering and stats sync
 - Deploy: Vercel (frontend) + Google Cloud Run (backend)
-- Storage: GCS (primary media: uploads/exports/TTS, bucket quickaishort-agent-494304-media, project quickaishort-agent-494304) + MongoDB Atlas (stats/credits + legacy /api/v1/video GridFS) + Supabase (free tier)
+- Storage: GCS (primary media: uploads/exports/TTS, bucket quickaishort-agent-494304-media, project quickaishort-agent-494304) + MongoDB Atlas (stats/credits + legacy /api/v1/video GridFS)
 - Domain: quickaishort.online via Cloudflare DNS
 
 FORBIDDEN CHANGES
@@ -381,7 +381,7 @@ SKILLS (.antigravity/skills/)
 - ALL secrets live in .env files that are gitignored
 - Reference env vars in code: os.environ["KEY"] (backend), 
   process.env.NEXT_PUBLIC_* (frontend — only for public values)
-- Private keys (GEMINI_API_KEY, SUPABASE_SERVICE_ROLE) NEVER prefixed with 
+- Private keys (GEMINI_API_KEY, GCS service-account credentials) NEVER prefixed with 
   NEXT_PUBLIC_
 - Before pushing to GitHub, run: `git diff --cached | grep -iE 
   "(api_key|secret|token|password)"` — if any match, abort commit
@@ -423,7 +423,7 @@ The agent must treat these as acceptance tests before any "shipping" claim:
 
 - [x] Uses Google Gemini model (not OpenAI/Claude) for core AI logic — gemini-2.5-flash via gemini_client.py
 - [x] Uses Google ADK v1.0+ for agent orchestration — confirmed by /health: "adk":true
-- [x] Integrates Supabase MCP server (SupabaseMCPAgent in GroundingDAG — MCPToolset + StdioServerParams)
+- [ ] Supabase removed — project uses MongoDB Atlas + GCS exclusively (Supabase linked account disconnected)
 - [x] Has deployed, publicly accessible URL at quickaishort.online — live 2026-05-06
 - [x] Has public GitHub repo with MIT LICENSE file — github.com/HassaanFisky/quickaishort
 - [ ] Has 2:50–3:00 demo video showing live pipeline (not mock) — NEEDS RECORDING
