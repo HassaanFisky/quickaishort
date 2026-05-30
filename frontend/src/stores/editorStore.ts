@@ -108,7 +108,7 @@ export interface AgentState {
 
 export interface ExportSettings {
   quality: "low" | "medium" | "high";
-  aspectRatio: "9:16" | "16:9" | "1:1";
+  aspectRatio: "9:16" | "1:1";
   filter: "None" | "Urban" | "Retro" | "Cinematic";
   audioBoost: number;
   playbackSpeed: number;

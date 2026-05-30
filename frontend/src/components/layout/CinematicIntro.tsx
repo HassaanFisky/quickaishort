@@ -12,44 +12,33 @@ export const CinematicIntro = ({ onComplete }: { onComplete: () => void }) => {
   const [phase, setPhase] = useState<"entry" | "hold" | "sweep" | "end">("entry");
   const logoWrapRef = useRef<HTMLDivElement>(null);
   const textWrapRef = useRef<HTMLDivElement>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Constants from intro.html
   const T_ENTRY = 1000;
   const T_HOLD = 600;
   const T_SWEEP = 1300;
 
+  // Preload the blade-slice audio on mount so it fires instantly on wipe.
+  // The file must be placed at: frontend/public/sounds/blade-slice-wipe.mp3
+  useEffect(() => {
+    const audio = new Audio("/sounds/blade-slice-wipe.mp3");
+    audio.preload = "auto";
+    audioRef.current = audio;
+    return () => {
+      audioRef.current = null;
+    };
+  }, []);
+
   const playSound = () => {
-    try {
-      if (!audioContextRef.current) {
-        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-      }
-      const ctx = audioContextRef.current;
-      const duration = 0.8;
-      const buf = ctx.createBuffer(1, ctx.sampleRate * duration, ctx.sampleRate);
-      const data = buf.getChannelData(0);
-      for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
-
-      const source = ctx.createBufferSource();
-      source.buffer = buf;
-
-      const filter = ctx.createBiquadFilter();
-      filter.type = "highpass";
-      filter.frequency.setValueAtTime(1500, ctx.currentTime);
-      filter.frequency.exponentialRampToValueAtTime(800, ctx.currentTime + duration);
-
-      const gain = ctx.createGain();
-      gain.gain.setValueAtTime(0, ctx.currentTime);
-      gain.gain.linearRampToValueAtTime(0.15, ctx.currentTime + 0.05);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
-
-      source.connect(filter);
-      filter.connect(gain);
-      gain.connect(ctx.destination);
-      source.start();
-    } catch (e) {
-      console.error("Audio error:", e);
-    }
+    const audio = audioRef.current;
+    if (!audio) return;
+    // Reset to the start so re-plays are always tight to the visual.
+    audio.currentTime = 0;
+    audio.play().catch(() => {
+      // Silently swallow autoplay-policy blocks (no prior user gesture on
+      // the landing page). Visual wipe still plays; audio is best-effort.
+    });
   };
 
   useEffect(() => {
@@ -129,14 +118,14 @@ export const CinematicIntro = ({ onComplete }: { onComplete: () => void }) => {
             opacity: { duration: phase === "end" ? 0.5 : T_ENTRY / 1000 },
             x: { 
               duration: phase === "sweep" ? T_SWEEP / 1000 : phase === "end" ? 0 : T_ENTRY / 1000,
-              ease: phase === "sweep" ? [0.645, 0.045, 0.355, 1] : "easeOut"
+              ease: phase === "sweep" ? [0.16, 1, 0.3, 1] : "easeOut"
             },
             y: { duration: T_ENTRY / 1000, ease: "easeOut" }
           }}
           className="absolute z-20 flex items-center justify-center"
           style={{ 
             left: phase === "entry" || phase === "hold" ? "-130px" : undefined,
-            filter: "drop-shadow(0 0 30px rgba(168, 85, 247, 0.4))" 
+            filter: "drop-shadow(0 0 10px rgba(168, 85, 247, 0.15))"
           }}
         >
           <div className="relative">

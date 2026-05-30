@@ -555,8 +555,13 @@ def health_check():
         "mongo": firestore_ok,
         "redis": redis_ok,
         "adk": _ADK_AVAILABLE,
+        # GCS is the single storage source of truth for uploads/exports. It shares
+        # one init path with Firestore in services/db.py, so this mirrors that flag:
+        # if the service-account credentials are missing/bad, init fails and gcs=false.
+        "gcs": firestore_ok,
         # Detailed v2 fields.
         "firestore_status": "connected" if firestore_ok else "disconnected",
+        "storage_status": "connected" if firestore_ok else "disconnected",
         "redis_status": "ready" if redis_ok else "unreachable",
         "agent_ready_state": "ready" if _ADK_AVAILABLE else "unavailable",
     }

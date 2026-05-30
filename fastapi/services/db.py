@@ -14,7 +14,7 @@ from google.cloud import storage as gcs
 
 logger = logging.getLogger(__name__)
 
-GCS_BUCKET_NAME = os.environ.get("GCS_BUCKET_NAME", "qai-exports-quickaishort-agent")
+GCS_BUCKET_NAME = os.environ.get("GCS_BUCKET_NAME", "quickaishort-agent-494304-media")
 
 # Path-prefix constants kept for callers that import them (unchanged semantics).
 EXPORTS_BUCKET = "exports"
@@ -28,7 +28,7 @@ _ready: bool = False
 
 def _init() -> None:
     global _db, _gcs_client, _gcs_bucket, _ready
-    project = os.environ.get("GOOGLE_CLOUD_PROJECT", "quickaishort-agent")
+    project = os.environ.get("GOOGLE_CLOUD_PROJECT", "quickaishort-agent-494304")
     try:
         _db = firestore.Client(project=project)
         _gcs_client = gcs.Client(project=project)

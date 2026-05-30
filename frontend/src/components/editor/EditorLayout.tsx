@@ -749,7 +749,7 @@ export default function EditorLayout() {
 function FloatingControls() {
   const { exportSettings, setExportSetting } = useEditorStore();
 
-  const ASPECT_CYCLE = ["9:16", "16:9", "1:1"] as const;
+  const ASPECT_CYCLE = ["9:16", "1:1"] as const;
   type AspectOption = (typeof ASPECT_CYCLE)[number];
 
   const cycleAspectRatio = () => {

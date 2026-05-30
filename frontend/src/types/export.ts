@@ -1,5 +1,5 @@
 export type ExportQuality = "low" | "medium" | "high";
-export type ExportAspect = "9:16" | "16:9" | "1:1";
+export type ExportAspect = "9:16" | "1:1";
 
 /** A text or sticker overlay composited by FFmpeg drawtext/overlay. */
 export interface CanvasOverlay {
