@@ -87,7 +87,7 @@ export default function VideoCanvas() {
   const { isReady, reframingData, detect } = useFaceTracker();
   const [displayUrl, setDisplayUrl] = useState<string | null>(null);
 
-  // Web Audio API chain — MediaElementSource → BiquadFilter → GainNode
+  // Web Audio API chain â€” MediaElementSource â†’ BiquadFilter â†’ GainNode
   useEffect(() => {
     if (!videoRef.current) return;
     const audioBoost = exportSettings.audioBoost;
@@ -119,7 +119,7 @@ export default function VideoCanvas() {
     }
   }, [exportSettings.audioBoost, isPlaying]);
 
-  // Live noise suppression — update highpass filter frequency
+  // Live noise suppression â€” update highpass filter frequency
   useEffect(() => {
     if (!noiseFilterRef.current) return;
     noiseFilterRef.current.frequency.value = 80 + (exportSettings.noiseSuppression / 100) * 320;
@@ -270,7 +270,7 @@ export default function VideoCanvas() {
     [currentTime, duration, setCurrentTime]
   );
 
-  // Keyboard navigation — placed after skip and togglePlay declarations
+  // Keyboard navigation â€” placed after skip and togglePlay declarations
   useEffect(() => {
     if (!sourceUrl) return;
     const handler = (e: KeyboardEvent) => {
@@ -342,12 +342,12 @@ export default function VideoCanvas() {
         <div className="absolute top-4 right-4 z-50 flex flex-col items-end gap-2">
           {(!isReady || isBuffering) && (
             <div className="flex items-center gap-2 bg-zinc-900/90 border border-white/10 px-3 py-1.5 rounded-full text-[10px] font-black text-zinc-400 uppercase tracking-widest">
-              <Loader2 className="w-3 h-3 animate-spin text-violet-400" />
+              <Loader2 className="w-3 h-3 animate-spin text-primary" />
               {isBuffering ? "Buffering..." : "Vision Active"}
             </div>
           )}
           {exportSettings.noiseSuppression > 0 && (
-            <div className="flex items-center gap-2 bg-violet-500/10 border border-violet-500/20 px-3 py-1.5 rounded-full text-[9px] font-black text-violet-400 uppercase tracking-widest">
+            <div className="flex items-center gap-2 bg-primary/10 border border-primary/20 px-3 py-1.5 rounded-full text-[9px] font-black text-primary uppercase tracking-widest">
               Noise reduction: applied on export
             </div>
           )}
@@ -362,7 +362,7 @@ export default function VideoCanvas() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-8 gap-2 text-[10px] font-black uppercase tracking-widest text-violet-400 hover:bg-violet-500/10 border border-violet-500/20"
+                    className="h-8 gap-2 text-[10px] font-black uppercase tracking-widest text-primary hover:bg-primary/10 border border-primary/20"
                     onClick={handleMarkStart}
                   >
                     <Flag className="w-3.5 h-3.5" />
@@ -371,7 +371,7 @@ export default function VideoCanvas() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-8 gap-2 text-[10px] font-black uppercase tracking-widest text-violet-400 hover:bg-violet-500/10 border border-violet-500/20"
+                    className="h-8 gap-2 text-[10px] font-black uppercase tracking-widest text-primary hover:bg-primary/10 border border-primary/20"
                     onClick={handleMarkEnd}
                   >
                     <Scissors className="w-3.5 h-3.5" />
@@ -460,7 +460,7 @@ export default function VideoCanvas() {
                 {isBuffering && (
                   <div className="absolute inset-0 flex items-center justify-center z-10">
                     <Loader2
-                      className="w-10 h-10 animate-spin text-violet-400 opacity-60"
+                      className="w-10 h-10 animate-spin text-primary opacity-60"
                       strokeWidth={1}
                     />
                   </div>
@@ -491,7 +491,7 @@ export default function VideoCanvas() {
         />
         <CanvasLayer />
 
-        {/* Playback controls — visible on hover when video is loaded */}
+        {/* Playback controls â€” visible on hover when video is loaded */}
         {sourceUrl && !localYtId && !isBuffering && !videoError && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none group-hover:pointer-events-auto">
             <div className="flex items-center gap-3">

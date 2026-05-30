@@ -108,7 +108,7 @@ export default function EditorLayout() {
         cancelPipeline();
         setProcessing(false, "idle");
         toast.warning(
-          "Transcription timed out — try uploading an MP4 for faster processing.",
+          "Transcription timed out â€” try uploading an MP4 for faster processing.",
           { duration: 8000 }
         );
       }
@@ -309,7 +309,7 @@ export default function EditorLayout() {
             </span>
           </div>
           <h1 className="text-xl font-black tracking-tighter text-zinc-100 leading-none">
-            QuickAI <span className="text-violet-400 italic">Studio</span>
+            QuickAI <span className="text-primary italic">Studio</span>
           </h1>
         </div>
 
@@ -324,7 +324,7 @@ export default function EditorLayout() {
             className={cn(
               "h-9 w-9 rounded-lg flex items-center justify-center border transition-colors",
               centerMode === "effects"
-                ? "bg-violet-500/20 border-violet-500/30 text-violet-400"
+                ? "bg-primary/20 border-primary/30 text-primary"
                 : "bg-zinc-900 border-white/5 text-zinc-400 hover:text-zinc-100"
             )}
           >
@@ -334,7 +334,7 @@ export default function EditorLayout() {
           <button
             onClick={() => setAICopilotOpen(true)}
             aria-label="Open AI Copilot"
-            className="h-9 w-9 rounded-lg flex items-center justify-center bg-zinc-900 border border-white/5 text-zinc-400 hover:text-violet-400 transition-colors"
+            className="h-9 w-9 rounded-lg flex items-center justify-center bg-zinc-900 border border-white/5 text-zinc-400 hover:text-primary transition-colors"
           >
             <Sparkles size={15} />
           </button>
@@ -346,14 +346,14 @@ export default function EditorLayout() {
       {/* Main 3-column workspace */}
       <main className="flex-1 min-h-0 grid grid-cols-1 gap-4 overflow-hidden lg:grid-cols-[minmax(220px,18%)_1fr_minmax(260px,22%)]">
 
-        {/* Left — Viral Suggestions */}
+        {/* Left â€” Viral Suggestions */}
         <section className="bg-zinc-900 border border-white/5 rounded-2xl flex flex-col overflow-hidden min-h-0">
           <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-full">
             <LeftPanel />
           </div>
         </section>
 
-        {/* Center — Stage */}
+        {/* Center â€” Stage */}
         <section className="relative flex flex-col items-center justify-center gap-4 min-h-0">
           {/* URL import bar */}
           <div className="absolute top-0 left-1/2 -translate-x-1/2 z-40 w-full max-w-xl px-4">
@@ -375,7 +375,7 @@ export default function EditorLayout() {
                   </div>
                   <button
                     onClick={() => setPanelCollapsed(false)}
-                    className="text-[9px] font-black text-violet-400 hover:text-violet-300 uppercase tracking-widest shrink-0 transition-colors"
+                    className="text-[9px] font-black text-primary hover:text-primary/80 uppercase tracking-widest shrink-0 transition-colors"
                   >
                     Change
                   </button>
@@ -391,7 +391,7 @@ export default function EditorLayout() {
                 >
                   <div className="text-[9px] font-black text-center uppercase tracking-[0.25em] pt-2 pb-1">
                     {urlValid === true ? (
-                      <span className="text-emerald-400">Video Ready — Hit Generate</span>
+                      <span className="text-emerald-400">Video Ready â€” Hit Generate</span>
                     ) : (
                       <span className="text-zinc-500">Import Your Video</span>
                     )}
@@ -597,7 +597,7 @@ export default function EditorLayout() {
           </div>
         </section>
 
-        {/* Right — Property Inspector */}
+        {/* Right â€” Property Inspector */}
         <section className="bg-zinc-900 border border-white/5 rounded-2xl flex flex-col overflow-hidden min-h-0">
           <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-full">
             <RightPanel />
@@ -610,12 +610,12 @@ export default function EditorLayout() {
         <BottomDock />
       </footer>
 
-      {/* Floating macro controls — 2xl+ only */}
+      {/* Floating macro controls â€” 2xl+ only */}
       <div className="fixed right-10 top-1/2 -translate-y-1/2 flex flex-col gap-4 z-40 hidden 2xl:flex">
         <FloatingControls />
       </div>
 
-      {/* AI Copilot — fixed overlay, zero layout impact when closed */}
+      {/* AI Copilot â€” fixed overlay, zero layout impact when closed */}
       <AICopilot />
     </div>
   );
@@ -644,7 +644,7 @@ function FloatingControls() {
   };
 
   const buttons = [
-    { icon: Smartphone, title: `Aspect Ratio — ${exportSettings.aspectRatio}`, action: cycleAspectRatio },
+    { icon: Smartphone, title: `Aspect Ratio â€” ${exportSettings.aspectRatio}`, action: cycleAspectRatio },
     { icon: Zap, title: "Auto-Enhance", action: triggerAutoEnhance },
     { icon: Sparkles, title: "AI Pre-Flight", action: triggerPreFlight },
   ];

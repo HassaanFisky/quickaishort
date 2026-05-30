@@ -21,14 +21,14 @@ const WITH_VIDEO_SUGGESTIONS = [
 ];
 
 /**
- * AICopilot — fixed overlay panel, zero layout impact when closed.
+ * AICopilot â€” fixed overlay panel, zero layout impact when closed.
  *
  * Manages two concerns:
- * 1. AI Chat — powered by /api/ai/chat, state in aiPanelStore
- * 2. AI Creative Direction — scriptPrompt from editorStore, sent to export pipeline
+ * 1. AI Chat â€” powered by /api/ai/chat, state in aiPanelStore
+ * 2. AI Creative Direction â€” scriptPrompt from editorStore, sent to export pipeline
  *
  * Opens via setOpen(true) from the Sparkles button in EditorLayout header.
- * When closed: unmounted entirely — consumes zero layout space.
+ * When closed: unmounted entirely â€” consumes zero layout space.
  */
 export function AICopilot() {
   const { isOpen, setOpen, videoContext, messages, addMessage } = useAIPanel();
@@ -68,11 +68,11 @@ export function AICopilot() {
       } else if (res.status === 401) {
         content = "Sign in to use AI suggestions.";
       } else if (res.status === 503) {
-        content = "AI service not configured — contact support.";
+        content = "AI service not configured â€” contact support.";
       } else if (res.status === 429) {
-        content = "Rate limit exceeded — try again in a moment.";
+        content = "Rate limit exceeded â€” try again in a moment.";
       } else if (res.status >= 500) {
-        content = `AI error (${res.status}) — please try again.`;
+        content = `AI error (${res.status}) â€” please try again.`;
         setRetryText(trimmed);
       } else {
         content = data.message ?? "Something went wrong.";
@@ -81,7 +81,7 @@ export function AICopilot() {
     } catch {
       addMessage({
         role: "assistant",
-        content: "Connection lost — check your internet and try again.",
+        content: "Connection lost â€” check your internet and try again.",
       });
       setRetryText(trimmed);
     } finally {
@@ -103,7 +103,7 @@ export function AICopilot() {
           {/* Header */}
           <header className="flex items-center justify-between px-4 py-3 border-b border-white/5 shrink-0">
             <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-md bg-violet-500 flex items-center justify-center">
+              <div className="w-6 h-6 rounded-md bg-primary flex items-center justify-center">
                 <Sparkles size={12} className="text-white" />
               </div>
               <span className="text-sm font-black text-zinc-100">
@@ -126,12 +126,12 @@ export function AICopilot() {
                 Editing:{" "}
                 <strong className="text-zinc-300">
                   {videoContext.title.length > 45
-                    ? videoContext.title.slice(0, 45) + "…"
+                    ? videoContext.title.slice(0, 45) + "â€¦"
                     : videoContext.title}
                 </strong>
               </>
             ) : (
-              "No video loaded — ask me anything about short-form strategy."
+              "No video loaded â€” ask me anything about short-form strategy."
             )}
           </div>
 
@@ -146,7 +146,7 @@ export function AICopilot() {
                   <button
                     key={s}
                     onClick={() => send(s)}
-                    className="w-full text-left text-xs px-3 py-2 rounded-lg border border-white/5 hover:border-violet-500/30 hover:bg-violet-500/8 text-zinc-400 hover:text-zinc-100 transition-all duration-150"
+                    className="w-full text-left text-xs px-3 py-2 rounded-lg border border-white/5 hover:border-primary/30 hover:bg-primary/8 text-zinc-400 hover:text-zinc-100 transition-all duration-150"
                   >
                     {s}
                   </button>
@@ -162,7 +162,7 @@ export function AICopilot() {
                 <div
                   className={`max-w-[85%] text-xs px-3 py-2 rounded-xl leading-relaxed ${
                     m.role === "user"
-                      ? "bg-violet-600 text-white"
+                      ? "bg-primary text-white"
                       : "bg-zinc-800 text-zinc-100"
                   }`}
                 >
@@ -191,9 +191,9 @@ export function AICopilot() {
               <div className="flex justify-end">
                 <button
                   onClick={() => send(retryText)}
-                  className="text-xs px-3 py-1.5 rounded-lg border border-violet-500/30 text-violet-400 hover:bg-violet-500/10 transition-all duration-150 font-medium"
+                  className="text-xs px-3 py-1.5 rounded-lg border border-primary/30 text-primary hover:bg-primary/10 transition-all duration-150 font-medium"
                 >
-                  Try again ↺
+                  Try again â†º
                 </button>
               </div>
             )}
@@ -209,22 +209,22 @@ export function AICopilot() {
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder={videoContext ? "Ask about this video…" : "Ask anything…"}
-              className="flex-1 text-xs rounded-lg px-3 py-2 bg-zinc-800 border border-white/5 text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-violet-500/40 transition-colors"
+              placeholder={videoContext ? "Ask about this videoâ€¦" : "Ask anythingâ€¦"}
+              className="flex-1 text-xs rounded-lg px-3 py-2 bg-zinc-800 border border-white/5 text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-primary/40 transition-colors"
             />
             <button
               type="submit"
               disabled={!input.trim() || loading}
-              className="px-2.5 py-2 rounded-lg bg-violet-600 text-white disabled:opacity-30 disabled:cursor-not-allowed hover:bg-violet-500 transition-colors"
+              className="px-2.5 py-2 rounded-lg bg-primary text-white disabled:opacity-30 disabled:cursor-not-allowed hover:bg-primary/90 transition-colors"
             >
               <Send size={14} />
             </button>
           </form>
 
-          {/* AI Creative Direction — render pipeline control */}
+          {/* AI Creative Direction â€” render pipeline control */}
           <div className="border-t border-white/5 p-4 flex flex-col gap-3 shrink-0">
             <div className="flex items-center gap-2">
-              <MessageSquareQuote className="w-3.5 h-3.5 text-violet-400" />
+              <MessageSquareQuote className="w-3.5 h-3.5 text-primary" />
               <span className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400">
                 AI Creative Direction
               </span>
@@ -233,7 +233,7 @@ export function AICopilot() {
               value={scriptPrompt}
               onChange={(e) => setScriptPrompt(e.target.value)}
               placeholder="e.g. Make it high-energy and focus on the technical details..."
-              className="w-full h-20 bg-zinc-800 border border-white/5 rounded-xl p-3 text-[11px] text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-violet-500/40 transition-colors resize-none [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-white/10"
+              className="w-full h-20 bg-zinc-800 border border-white/5 rounded-xl p-3 text-[11px] text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-primary/40 transition-colors resize-none [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-white/10"
             />
             <p className="text-[9px] text-zinc-600 leading-relaxed">
               This prompt is applied by the render pipeline when exporting. It influences

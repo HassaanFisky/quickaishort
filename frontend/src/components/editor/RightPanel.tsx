@@ -56,7 +56,7 @@ function Toggle({
       onClick={onToggle}
       className={cn(
         "relative w-10 h-5 rounded-full transition-colors duration-300",
-        enabled ? "bg-violet-500" : "bg-white/10"
+        enabled ? "bg-primary" : "bg-white/10"
       )}
     >
       <div
@@ -214,7 +214,7 @@ export default function RightPanel() {
   }
 
   // ------------------------------------------------------------------
-  // ACTIVE STATE — Accordion inspector
+  // ACTIVE STATE â€” Accordion inspector
   // ------------------------------------------------------------------
   return (
     <div className="flex flex-col gap-1 p-4 pb-6">
@@ -230,14 +230,14 @@ export default function RightPanel() {
           <div className="flex items-center gap-2 text-[10px] text-zinc-500 mt-0.5">
             <Clock3 className="w-3 h-3" />
             <span>
-              {formatTime(selectedClip.start)} – {formatTime(selectedClip.end)}
+              {formatTime(selectedClip.start)} â€“ {formatTime(selectedClip.end)}
             </span>
-            <span className="text-violet-400">{clipDuration}s</span>
+            <span className="text-primary">{clipDuration}s</span>
           </div>
         )}
       </div>
 
-      {/* ── Group 1: Basic & Audio ─────────────────────────────────── */}
+      {/* â”€â”€ Group 1: Basic & Audio â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div className="rounded-xl border border-white/5 overflow-hidden">
         <AccordionHeader
           label="Basic & Audio"
@@ -258,19 +258,19 @@ export default function RightPanel() {
                 {/* Precision Trim */}
                 <div className="flex flex-col gap-3">
                   <div className="flex items-center gap-2">
-                    <Scissors className="w-3.5 h-3.5 text-violet-400" />
+                    <Scissors className="w-3.5 h-3.5 text-primary" />
                     <span className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400">
                       Precision Trim
                     </span>
                   </div>
                   <div className="flex justify-between text-[10px] font-bold text-zinc-400 tabular-nums">
-                    <span>{selectedClip ? formatTime(selectedClip.start) : "—"}</span>
+                    <span>{selectedClip ? formatTime(selectedClip.start) : "â€”"}</span>
                     <span className="text-zinc-600">
                       {selectedClip
                         ? `${Math.max(0, Math.round(selectedClip.end - selectedClip.start))}s`
-                        : "—"}
+                        : "â€”"}
                     </span>
-                    <span>{selectedClip ? formatTime(selectedClip.end) : "—"}</span>
+                    <span>{selectedClip ? formatTime(selectedClip.end) : "â€”"}</span>
                   </div>
                   {selectedClip ? (
                     <Slider
@@ -330,7 +330,7 @@ export default function RightPanel() {
         </AnimatePresence>
       </div>
 
-      {/* ── Group 2: Captions & Visuals ───────────────────────────── */}
+      {/* â”€â”€ Group 2: Captions & Visuals â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div className="rounded-xl border border-white/5 overflow-hidden">
         <AccordionHeader
           label="Captions & Visuals"
@@ -385,7 +385,7 @@ export default function RightPanel() {
                 {/* Visual Style */}
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center gap-2">
-                    <Palette className="w-3.5 h-3.5 text-violet-400" />
+                    <Palette className="w-3.5 h-3.5 text-primary" />
                     <span className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400">
                       Visual Style
                     </span>
@@ -398,7 +398,7 @@ export default function RightPanel() {
                         className={cn(
                           "h-9 justify-center rounded-lg text-[10px] font-black tracking-widest border transition-colors uppercase",
                           activeFilter === filter
-                            ? "bg-violet-500/15 border-violet-500/30 text-violet-400"
+                            ? "bg-primary/15 border-primary/30 text-primary"
                             : "bg-zinc-800 border-white/5 text-zinc-400 hover:text-zinc-100"
                         )}
                         onClick={() =>
@@ -416,7 +416,7 @@ export default function RightPanel() {
         </AnimatePresence>
       </div>
 
-      {/* ── Group 3: Export ───────────────────────────────────────── */}
+      {/* â”€â”€ Group 3: Export â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div className="rounded-xl border border-white/5 overflow-hidden">
         <AccordionHeader
           label="Export"
@@ -447,7 +447,7 @@ export default function RightPanel() {
                         className={cn(
                           "flex-1 h-8 rounded-md text-[10px] font-black uppercase tracking-widest transition-colors",
                           quality === q
-                            ? "bg-violet-500 text-white"
+                            ? "bg-primary text-white"
                             : "text-zinc-400 hover:text-zinc-100"
                         )}
                       >
@@ -471,7 +471,7 @@ export default function RightPanel() {
                         className={cn(
                           "flex-1 h-8 rounded-md text-[10px] font-black tracking-widest transition-colors",
                           exportSettings.aspectRatio === ratio
-                            ? "bg-violet-500 text-white"
+                            ? "bg-primary text-white"
                             : "text-zinc-400 hover:text-zinc-100"
                         )}
                       >
@@ -514,7 +514,7 @@ export default function RightPanel() {
                       </button>
                       <button
                         onClick={() => resetExportState()}
-                        className="w-full h-8 text-[9px] font-black text-zinc-500 hover:text-violet-400 uppercase tracking-widest transition-colors"
+                        className="w-full h-8 text-[9px] font-black text-zinc-500 hover:text-primary uppercase tracking-widest transition-colors"
                       >
                         Export again
                       </button>
@@ -557,7 +557,7 @@ export default function RightPanel() {
                           "w-full h-11 rounded-xl relative overflow-hidden transition-colors",
                           isExporting || !selectedClip || (!sourceFile && !sourceUrl)
                             ? "opacity-40 cursor-not-allowed bg-zinc-800"
-                            : "bg-violet-600 hover:bg-violet-500"
+                            : "bg-primary hover:bg-primary"
                         )}
                         onClick={handleExport}
                         disabled={
@@ -591,12 +591,12 @@ export default function RightPanel() {
         </AnimatePresence>
       </div>
 
-      {/* ── Pre-Flight — shown below accordion when clip is selected ── */}
+      {/* â”€â”€ Pre-Flight â€” shown below accordion when clip is selected â”€â”€ */}
       {hasClip && (
         <div className="mt-2 pt-4 border-t border-white/5 flex flex-col gap-4">
           <div className="flex items-center justify-between px-1">
             <div className="flex items-center gap-2">
-              <Sparkles className="w-3.5 h-3.5 text-violet-400" />
+              <Sparkles className="w-3.5 h-3.5 text-primary" />
               <span className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400">
                 Audience Preview
               </span>
@@ -611,8 +611,8 @@ export default function RightPanel() {
               className="p-6 rounded-xl bg-zinc-800/50 border border-white/5 flex flex-col items-center gap-4 cursor-pointer hover:bg-zinc-800 transition-colors"
               onClick={handleRunPreflight}
             >
-              <div className="w-12 h-12 rounded-full bg-violet-500/10 border border-violet-500/20 flex items-center justify-center">
-                <Rocket className="w-5 h-5 text-violet-400" />
+              <div className="w-12 h-12 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center">
+                <Rocket className="w-5 h-5 text-primary" />
               </div>
               <div className="text-center space-y-1">
                 <p className="text-xs font-black text-zinc-100 uppercase tracking-widest">
@@ -700,7 +700,7 @@ function SliderRow({
         <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">
           {label}
         </span>
-        <span className="text-[10px] font-bold text-violet-400 tabular-nums">{display}</span>
+        <span className="text-[10px] font-bold text-primary tabular-nums">{display}</span>
       </div>
       <Slider
         value={[value]}
@@ -774,18 +774,18 @@ function RecommendationBadge({ rec }: { rec: Recommendation }) {
 }
 
 const PERSONA_LABELS: Record<string, { name: string; emoji: string }> = {
-  genz:          { name: "Gen Z",         emoji: "⚡" },
-  millennial:    { name: "Millennial",    emoji: "💼" },
-  sports:        { name: "Sports Fan",    emoji: "🏆" },
-  tech:          { name: "Tech Nerd",     emoji: "🖥️" },
-  entertainment: { name: "Entertainment", emoji: "🎬" },
-  news:          { name: "News Reader",   emoji: "📰" },
+  genz:          { name: "Gen Z",         emoji: "âš¡" },
+  millennial:    { name: "Millennial",    emoji: "ðŸ’¼" },
+  sports:        { name: "Sports Fan",    emoji: "ðŸ†" },
+  tech:          { name: "Tech Nerd",     emoji: "ðŸ–¥ï¸" },
+  entertainment: { name: "Entertainment", emoji: "ðŸŽ¬" },
+  news:          { name: "News Reader",   emoji: "ðŸ“°" },
 };
 
 function PersonaCard({ vote, index }: { vote: PersonaVote; index: number }) {
   const scoreStyle = viralScoreColor(vote.predicted_retention_pct);
   const isViral = vote.predicted_retention_pct >= 90;
-  const label = PERSONA_LABELS[vote.persona_id] ?? { name: vote.persona_id, emoji: "👤" };
+  const label = PERSONA_LABELS[vote.persona_id] ?? { name: vote.persona_id, emoji: "ðŸ‘¤" };
   const hookColor =
     vote.hook_verdict === "strong"
       ? "text-emerald-400"
@@ -902,8 +902,8 @@ function PreflightResultsPanel({
           <div className="relative h-1.5 rounded-full overflow-hidden bg-white/5">
             <div className="absolute inset-y-0 left-0 w-[40%] bg-zinc-600/40" />
             <div className="absolute inset-y-0 left-[40%] w-[30%] bg-amber-500/40" />
-            <div className="absolute inset-y-0 left-[70%] w-[19%] bg-violet-500/40" />
-            <div className="absolute inset-y-0 left-[89%] right-0 bg-gradient-to-r from-pink-500 to-violet-500 opacity-50" />
+            <div className="absolute inset-y-0 left-[70%] w-[19%] bg-primary/40" />
+            <div className="absolute inset-y-0 left-[89%] right-0 bg-gradient-to-r from-pink-500 to-primary opacity-50" />
             <motion.div
               initial={{ left: "0%" }}
               animate={{ left: `calc(${Math.min(result.weighted_consensus_score, 99)}% - 4px)` }}
@@ -931,18 +931,18 @@ function PreflightResultsPanel({
 
       {/* Smart trim */}
       {result.refined_clip && (
-        <div className="p-4 rounded-xl bg-violet-500/8 border border-violet-500/20 flex flex-col gap-2">
-          <p className="text-[10px] font-black uppercase tracking-widest text-violet-400">
+        <div className="p-4 rounded-xl bg-primary/8 border border-primary/20 flex flex-col gap-2">
+          <p className="text-[10px] font-black uppercase tracking-widest text-primary">
             Smart Trim Suggestion
           </p>
           <div className="flex items-center gap-2 text-[11px] font-black">
             <span className="text-zinc-500">
-              {result.clip_candidate.start_sec.toFixed(1)}s –{" "}
+              {result.clip_candidate.start_sec.toFixed(1)}s â€“{" "}
               {result.clip_candidate.end_sec.toFixed(1)}s
             </span>
-            <span className="text-violet-400">→</span>
+            <span className="text-primary">â†’</span>
             <span className="text-zinc-100">
-              {result.refined_clip.start_sec.toFixed(1)}s –{" "}
+              {result.refined_clip.start_sec.toFixed(1)}s â€“{" "}
               {result.refined_clip.end_sec.toFixed(1)}s
             </span>
           </div>
@@ -955,7 +955,7 @@ function PreflightResultsPanel({
                 });
                 toast.success("Smart trim applied to clip.");
               }}
-              className="w-full h-8 rounded-lg bg-violet-500/15 border border-violet-500/20 text-[10px] font-black uppercase tracking-widest text-violet-400 hover:bg-violet-500/25 transition-colors"
+              className="w-full h-8 rounded-lg bg-primary/15 border border-primary/20 text-[10px] font-black uppercase tracking-widest text-primary hover:bg-primary/25 transition-colors"
             >
               Apply Smart Trim
             </button>
@@ -967,12 +967,12 @@ function PreflightResultsPanel({
       {result.bigquery_insight ? (
         <div className="p-3 rounded-xl bg-zinc-800 border border-white/5 flex flex-col gap-2">
           <div className="flex items-center gap-1.5">
-            <BarChart3 className="w-3 h-3 text-violet-400" />
-            <p className="text-[9px] font-black uppercase tracking-[0.2em] text-violet-400">
+            <BarChart3 className="w-3 h-3 text-primary" />
+            <p className="text-[9px] font-black uppercase tracking-[0.2em] text-primary">
               Trend Context
             </p>
           </div>
-          <p className="text-[10px] text-zinc-400 leading-relaxed border-l-2 border-violet-500/20 pl-2">
+          <p className="text-[10px] text-zinc-400 leading-relaxed border-l-2 border-primary/20 pl-2">
             {result.bigquery_insight}
           </p>
         </div>
