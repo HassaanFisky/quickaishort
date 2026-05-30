@@ -8,62 +8,47 @@ import { useEditorStore } from "@/stores/editorStore";
 import { TelemetryDock } from "@/components/editor/TelemetryDock";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import { extractAudioData } from "@/lib/utils/audioExtractor";
-import { AIPanel } from "@/components/editor/AIPanel";
 
 export default function EditorPage() {
   const transcription = useTranscription();
   const analysis = useAnalysis();
 
-  const setSilenceSegments = useEditorStore(
-    (state) => state.setSilenceSegments,
-  );
-  const setAudioData = useEditorStore((state) => state.setAudioData);
-  const sourceFile = useEditorStore((state) => state.sourceFile);
-  const sourceUrl = useEditorStore((state) => state.sourceUrl);
+  const setSilenceSegments = useEditorStore((s) => s.setSilenceSegments);
+  const setAudioData = useEditorStore((s) => s.setAudioData);
+  const sourceFile = useEditorStore((s) => s.sourceFile);
+  const sourceUrl = useEditorStore((s) => s.sourceUrl);
 
+  // Silence detection triggered by FloatingControls "Auto-Enhance" action
   useEffect(() => {
     const handleSilenceTrigger = async () => {
       let source: File | string | null = sourceFile || sourceUrl;
-      if (!source) {
-        console.warn("No source to analyze");
-        return;
-      }
-
+      if (!source) return;
       try {
-        console.log("Starting silence detection...");
-        
-        // If it's a YouTube URL, use proxy to bypass CORS for audio extraction
-        if (typeof source === "string" && (source.includes("youtube.com") || source.includes("youtu.be"))) {
+        if (
+          typeof source === "string" &&
+          (source.includes("youtube.com") || source.includes("youtu.be"))
+        ) {
           const { getProxyUrl } = await import("@/lib/api");
           source = getProxyUrl(source);
         }
-
         const { audioData, sampleRate } = await extractAudioData(source);
-        setAudioData(audioData); // Store for visualization
+        setAudioData(audioData);
         analysis.detectSilence({ audioData, sampleRate });
       } catch (err) {
         console.error("Failed to extract audio for silence detection:", err);
       }
     };
-
     window.addEventListener("trigger-silence-detect", handleSilenceTrigger);
     return () =>
-      window.removeEventListener(
-        "trigger-silence-detect",
-        handleSilenceTrigger,
-      );
+      window.removeEventListener("trigger-silence-detect", handleSilenceTrigger);
   }, [sourceFile, sourceUrl, analysis, setAudioData]);
 
+  // Global keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't intercept when typing in input/textarea/contenteditable
       const target = e.target as HTMLElement;
       const tag = target?.tagName;
-      if (
-        tag === "INPUT" ||
-        tag === "TEXTAREA" ||
-        target?.isContentEditable
-      )
+      if (tag === "INPUT" || tag === "TEXTAREA" || target?.isContentEditable)
         return;
 
       const store = useEditorStore.getState();
@@ -74,9 +59,7 @@ export default function EditorPage() {
       }
       if (e.key === "s" && !e.metaKey && !e.ctrlKey) {
         e.preventDefault();
-        if (store.suggestions.length > 0) {
-          store.splitClipAtTime(store.currentTime);
-        }
+        if (store.suggestions.length > 0) store.splitClipAtTime(store.currentTime);
       }
       if (e.key === "Delete" || e.key === "Backspace") {
         if (store.selectedClipId) {
@@ -95,14 +78,12 @@ export default function EditorPage() {
       if (e.key === "ArrowLeft") {
         e.preventDefault();
         const delta = e.shiftKey ? 5 : 1;
-        const newTime = Math.max(0, store.currentTime - delta);
-        store.setPendingSeek(newTime);
+        store.setPendingSeek(Math.max(0, store.currentTime - delta));
       }
       if (e.key === "ArrowRight") {
         e.preventDefault();
         const delta = e.shiftKey ? 5 : 1;
-        const newTime = Math.min(store.duration, store.currentTime + delta);
-        store.setPendingSeek(newTime);
+        store.setPendingSeek(Math.min(store.duration, store.currentTime + delta));
       }
       if (e.key === "t" && !e.metaKey && !e.ctrlKey) {
         e.preventDefault();
@@ -117,25 +98,22 @@ export default function EditorPage() {
         });
       }
     };
-
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  // Push detected silence segments into store
   useEffect(() => {
     if (analysis.lastMessage?.type === "silence_detected") {
       const segments = analysis.lastMessage.payload.segments;
-      if (segments) {
-        setSilenceSegments(segments);
-        console.log("Silence segments detected:", segments);
-      }
+      if (segments) setSilenceSegments(segments);
     }
   }, [analysis.lastMessage, setSilenceSegments]);
 
+  // Init / teardown Web Workers
   useEffect(() => {
     transcription.init();
     analysis.init();
-
     return () => {
       transcription.terminate();
       analysis.terminate();
@@ -143,25 +121,10 @@ export default function EditorPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const { aiPanelOpen, setAIPanelOpen, videoMetadata } = useEditorStore();
-
   return (
     <ErrorBoundary>
       <EditorLayout />
       <TelemetryDock />
-      <AIPanel />
-      <button
-        className="ai-panel-toggle"
-        onClick={() => setAIPanelOpen(!aiPanelOpen)}
-        aria-label="Toggle Gemini AI Editor"
-      >
-        <span className="ai-toggle-gem-wrap" aria-hidden="true">✦</span>
-        <span className="ai-toggle-content">
-          <span className="ai-toggle-brand">QuickAI Short</span>
-          <span className="ai-toggle-label">Gemini Editor</span>
-        </span>
-        {videoMetadata && <span className="ai-toggle-ready-dot" />}
-      </button>
     </ErrorBoundary>
   );
 }

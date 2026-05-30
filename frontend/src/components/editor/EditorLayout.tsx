@@ -25,7 +25,6 @@ import { cn } from "@/lib/utils";
 import { getVideoInfo } from "@/lib/api";
 import { parseYouTubeId } from "@/lib/youtube-utils";
 
-// Components
 import LeftPanel from "./LeftPanel";
 import RightPanel from "./RightPanel";
 import BottomDock from "./BottomDock";
@@ -34,9 +33,9 @@ import { YouTubePlayer } from "./YouTubePlayer";
 import Sidebar from "@/components/layout/Sidebar";
 import { TimelineLoader } from "@/components/ui/TimelineLoader";
 import { LiquidThemeToggle } from "@/components/shared/LiquidThemeToggle";
-import { AIPanel } from "@/components/ai/AIPanel";
-import axios from "axios";
+import { AICopilot } from "@/components/editor/AICopilot";
 import VideoWorkspace from "./VideoWorkspace";
+import axios from "axios";
 
 export default function EditorLayout() {
   const {
@@ -47,16 +46,14 @@ export default function EditorLayout() {
     currentStage,
     sourceUrl,
     setThumbnailUrl: storeThumbnail,
-    aiPanelOpen,
     setVideoMetadata,
   } = useEditorStore();
 
   const { runPipeline, cancelPipeline, status } = useMediaPipeline();
-  const { isOpen: aiPanelStoreOpen, setOpen: setAIPanelOpen, setVideoContext } = useAIPanel();
+  const { setOpen: setAICopilotOpen, setVideoContext } = useAIPanel();
   const { isSidebarCollapsed } = useUIStore();
 
-  // When the pipeline finishes transcription, sync it to the AI panel context.
-  // Must come AFTER setVideoContext is declared above.
+  // Sync transcript to AI panel context after pipeline completes
   const storeTranscript = useEditorStore((s) => s.transcript);
   const storeVideoMetadata = useEditorStore((s) => s.videoMetadata);
   useEffect(() => {
@@ -72,8 +69,6 @@ export default function EditorLayout() {
     });
   }, [storeTranscript, storeVideoMetadata, setVideoContext]);
 
-  const anyPanelOpen = aiPanelOpen || aiPanelStoreOpen;
-
   const [urlInput, setUrlInput] = useState("");
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
   const [urlValid, setUrlValid] = useState<boolean | null>(null);
@@ -84,31 +79,28 @@ export default function EditorLayout() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const hasAutoImportedRef = useRef(false);
 
-  const isAnalysing = (
-    ["analyzing", "loading", "transcribing"] as string[]
-  ).includes(status || "");
+  const isAnalysing = (["analyzing", "loading", "transcribing"] as string[]).includes(
+    status || ""
+  );
 
-  // Collapse the URL input panel 1.5 s after the video loads (Bug 9)
-  // Must come AFTER isAnalysing is declared above.
+  // Collapse URL bar 1.5s after video loads
   useEffect(() => {
     if (!sourceUrl || isAnalysing) {
       setPanelCollapsed(false);
       return;
     }
-    const timer = setTimeout(() => setPanelCollapsed(true), 1500);
-    return () => clearTimeout(timer);
+    const t = setTimeout(() => setPanelCollapsed(true), 1500);
+    return () => clearTimeout(t);
   }, [sourceUrl, isAnalysing]);
 
-  // Allow LeftPanel retry button to re-trigger the pipeline (Bug 10)
+  // Allow LeftPanel to re-trigger pipeline on retry
   useEffect(() => {
     const handler = () => void runPipeline();
     window.addEventListener("retry-analysis", handler);
     return () => window.removeEventListener("retry-analysis", handler);
   }, [runPipeline]);
 
-  // Watchdog: if transcription stage hangs for >30s without completing, auto-cancel.
-  // Whisper.wasm occasionally stalls when CDN assets are blocked or SharedArrayBuffer
-  // is unavailable; this surfaces a recoverable error instead of spinning forever.
+  // Watchdog: auto-cancel transcription after 30s if stalled
   useEffect(() => {
     if (currentStage !== "transcribing") return;
     const watchdog = setTimeout(() => {
@@ -117,15 +109,14 @@ export default function EditorLayout() {
         setProcessing(false, "idle");
         toast.warning(
           "Transcription timed out — try uploading an MP4 for faster processing.",
-          { duration: 8000 },
+          { duration: 8000 }
         );
       }
     }, 30_000);
     return () => clearTimeout(watchdog);
   }, [currentStage, cancelPipeline, setProcessing]);
 
-  // Auto-import from Chrome extension: /editor?v=VIDEO_ID or /editor?url=ENCODED_URL
-  // useRef guards against React StrictMode double-fire.
+  // Auto-import from Chrome extension query params
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (hasAutoImportedRef.current) return;
@@ -133,17 +124,14 @@ export default function EditorLayout() {
     const videoId = params.get("v");
     const queryUrl = params.get("url");
     let targetUrl = "";
-    if (videoId) {
-      targetUrl = `https://www.youtube.com/watch?v=${videoId}`;
-    } else if (queryUrl) {
-      targetUrl = decodeURIComponent(queryUrl);
-    }
+    if (videoId) targetUrl = `https://www.youtube.com/watch?v=${videoId}`;
+    else if (queryUrl) targetUrl = decodeURIComponent(queryUrl);
     if (targetUrl) {
       hasAutoImportedRef.current = true;
       setUrlInput(targetUrl);
       void handleAnalyze(targetUrl);
     }
-  }, []); // mount-only — handleAnalyze is stable within this render cycle
+  }, []);
 
   const handleUrlChange = (e: ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
@@ -169,77 +157,55 @@ export default function EditorLayout() {
 
   const handleAnalyze = async (overrideUrl?: string) => {
     const url = overrideUrl ?? urlInput;
-
     if (!url.trim()) {
       toast.error("Please paste a YouTube URL first.");
       return;
     }
-
-    // Immediately show YouTube preview before backend responds
     const videoId = parseYouTubeId(url);
     if (videoId) {
       setYoutubePreviewId(videoId);
       setBackendFailed(false);
     }
-
     try {
       setProcessing(true, "loading");
       toast.info("Connecting to Viral Intelligence Engine...");
-
       const info = await getVideoInfo(url);
-
-      // Structured error returned by backend when yt-dlp also failed
       if (info.code === "YOUTUBE_FETCH_FAILED") {
         toast.warning(
-          "YouTube server-side access failed. The preview is still playing above. For AI analysis, upload the MP4 file instead.",
+          "YouTube server-side access failed. Preview is still playing. Upload MP4 for AI analysis.",
           { duration: 7000 }
         );
         setBackendFailed(true);
         setProcessing(false, "idle");
         return;
       }
-
       toast.success(`Found: ${info.title}`);
       if (info.thumbnail) storeThumbnail(info.thumbnail);
-
-      // Set initial video context for AI panel (transcript added after pipeline)
       setVideoContext({
         id: info.id ?? videoId ?? "",
         title: info.title ?? "YouTube Video",
         transcript: "",
       });
-
-      // Set video metadata so the Gemini Editor AI panel knows what video is loaded
       setVideoMetadata({
         id: info.id ?? videoId ?? "",
-        url: url,
+        url,
         title: info.title ?? "YouTube Video",
         duration: info.duration ?? 0,
         nativeWidth: 1280,
         nativeHeight: 720,
         fps: 30,
       });
-
-      // Store the raw YouTube URL — VideoCanvas handles building /api/proxy-video internally.
-      // runPipeline fires in the background so VideoCanvas mounts immediately without
-      // waiting for audio extraction (which can take 30–60s). Transcript→AI panel sync
-      // happens via the useEffect above when transcription completes.
       setSourceUrl(url);
       void runPipeline();
     } catch (error: unknown) {
-      console.error(error);
-
-      // Keep YouTube preview visible on any backend failure
       setBackendFailed(true);
-
       let errMsg = "Process interrupted. Please try another link.";
       if (axios.isAxiosError(error)) {
         if (error.code === "ERR_NETWORK") {
-          errMsg =
-            "Network Error: Could not connect to the backend server. Check your connection.";
+          errMsg = "Network Error: Could not connect to the backend server.";
         } else if (error.response?.data?.code === "YOUTUBE_FETCH_FAILED") {
           toast.warning(
-            "YouTube server-side access failed. The preview is still playing above. For AI analysis, upload the MP4 file instead.",
+            "YouTube server-side access failed. Upload MP4 instead.",
             { duration: 7000 }
           );
           setProcessing(false, "idle");
@@ -247,12 +213,11 @@ export default function EditorLayout() {
         } else if (error.response) {
           errMsg =
             (error.response.data as { detail?: string })?.detail ||
-            `Server returned error ${error.response.status}`;
+            `Server error ${error.response.status}`;
         }
       } else if (error instanceof Error) {
         errMsg = error.message || errMsg;
       }
-
       toast.error(`Error: ${errMsg}`);
       setProcessing(false, "idle");
     }
@@ -306,21 +271,13 @@ export default function EditorLayout() {
       onDrop={handleDrop}
       onDragOver={handleDragOver}
       className={cn(
-        "relative h-screen w-full overflow-hidden bg-background flex flex-col items-center p-6 pb-8 pr-6 selection:bg-primary/30 font-sans",
+        "h-screen w-screen overflow-hidden bg-zinc-950 flex flex-col p-4 gap-4",
         "transition-[padding-left] duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)]",
-        isSidebarCollapsed ? "md:pl-20" : "md:pl-[256px]",
+        isSidebarCollapsed ? "md:pl-20" : "md:pl-[256px]"
       )}
     >
-      {/* Dynamic Ambient Background */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/5 blur-[120px] rounded-full animate-pulse" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-accent/5 blur-[120px] rounded-full" />
-        <div className="absolute inset-0 bg-[url('/grid.svg')] bg-center opacity-[0.02]" />
-      </div>
-
       <Sidebar />
 
-      {/* Hidden file input for MP4 upload fallback */}
       <input
         ref={fileInputRef}
         type="file"
@@ -329,140 +286,117 @@ export default function EditorLayout() {
         onChange={handleFileUpload}
       />
 
-      {/* Main Workspace Container */}
-      <div className="relative z-10 w-full h-full flex flex-col gap-6 max-w-[1920px] mx-auto transition-all duration-1000 ease-fluid">
-
-        {/* Top Navigation Bar */}
-        <header className="flex items-center justify-between px-4 py-2">
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-3">
-              <div
-                className={cn(
-                  "flex items-center gap-1.5 px-2.5 py-1 rounded-full border backdrop-blur-md transition-all duration-500",
-                  isProcessing
-                    ? "text-amber-400 border-amber-400/30 bg-amber-400/10"
-                    : "text-emerald-400 border-emerald-400/30 bg-emerald-400/10",
-                )}
-              >
-                <Zap className="w-3 h-3" />
-                <span className="text-[9px] font-black tracking-[0.2em] uppercase">
-                  {isProcessing
-                    ? currentStage === "transcribing"
-                      ? "Creating Subtitles..."
-                      : currentStage === "analyzing"
-                      ? "Finding Viral Hooks..."
-                      : "Downloading Video..."
-                    : "Studio Ready"}
-                </span>
-              </div>
-            </div>
-            <h1 className="text-2xl font-black tracking-tighter text-foreground/90 leading-none">
-              QuickAI <span className="premium-gradient-text italic">Studio</span>
-            </h1>
+      {/* Header */}
+      <header className="flex items-center justify-between shrink-0">
+        <div className="flex items-center gap-3">
+          <div
+            className={cn(
+              "flex items-center gap-1.5 px-2.5 py-1 rounded-full border transition-colors duration-300",
+              isProcessing
+                ? "text-amber-400 border-amber-400/20 bg-amber-400/8"
+                : "text-emerald-400 border-emerald-400/20 bg-emerald-400/8"
+            )}
+          >
+            <Zap className="w-3 h-3" />
+            <span className="text-[9px] font-black tracking-[0.2em] uppercase">
+              {isProcessing
+                ? currentStage === "transcribing"
+                  ? "Creating Subtitles..."
+                  : currentStage === "analyzing"
+                  ? "Finding Viral Hooks..."
+                  : "Downloading Video..."
+                : "Studio Ready"}
+            </span>
           </div>
-          <div className="flex items-center gap-3">
-            {/* Effects Studio toggle */}
-            <button
-              onClick={() => setCenterMode(centerMode === "effects" ? "preview" : "effects")}
-              aria-label={centerMode === "effects" ? "Switch to Preview" : "Open Effects Studio"}
-              className={cn(
-                "h-9 w-9 rounded-lg flex items-center justify-center border transition-colors",
-                centerMode === "effects"
-                  ? "bg-primary/20 border-primary/40 text-primary"
-                  : "bg-[hsl(var(--bg-elevated))] border-[hsl(var(--border))] text-[hsl(var(--fg-muted))] hover:bg-[hsl(var(--bg-muted))] hover:text-foreground"
-              )}
-            >
-              <Wand2 size={15} aria-hidden="true" />
-            </button>
-            {/* AI Panel toggle */}
-            <button
-              onClick={() => setAIPanelOpen(true)}
-              aria-label="Open AI Assistant"
-              className="h-9 w-9 rounded-lg flex items-center justify-center
-                         bg-[hsl(var(--bg-elevated))] border border-[hsl(var(--border))]
-                         hover:bg-[hsl(var(--bg-muted))] transition-colors
-                         text-[hsl(var(--fg-muted))] hover:text-[hsl(var(--accent-indigo))]"
-            >
-              <Sparkles size={15} aria-hidden="true" />
-            </button>
-            <LiquidThemeToggle />
-          </div>
-        </header>
+          <h1 className="text-xl font-black tracking-tighter text-zinc-100 leading-none">
+            QuickAI <span className="text-violet-400 italic">Studio</span>
+          </h1>
+        </div>
 
-        {/* Central Workspace Grid — expands to 4 columns when AI panel is open */}
-        <main className={cn(
-          "flex-1 min-h-0 grid grid-cols-1 gap-6 overflow-hidden",
-          anyPanelOpen
-            ? "lg:grid-cols-[minmax(240px,20%)_1fr_minmax(280px,25%)_340px]"
-            : "lg:grid-cols-[minmax(240px,20%)_1fr_minmax(280px,25%)]",
-        )}>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() =>
+              setCenterMode(centerMode === "effects" ? "preview" : "effects")
+            }
+            aria-label={
+              centerMode === "effects" ? "Switch to Preview" : "Open Effects Studio"
+            }
+            className={cn(
+              "h-9 w-9 rounded-lg flex items-center justify-center border transition-colors",
+              centerMode === "effects"
+                ? "bg-violet-500/20 border-violet-500/30 text-violet-400"
+                : "bg-zinc-900 border-white/5 text-zinc-400 hover:text-zinc-100"
+            )}
+          >
+            <Wand2 size={15} />
+          </button>
 
-          {/* Left: Viral Suggestions & Source */}
-          <section className="rounded-[2.5rem] p-6 bg-[#141417] border border-foreground/5 shadow-2xl flex flex-col overflow-hidden min-h-0">
+          <button
+            onClick={() => setAICopilotOpen(true)}
+            aria-label="Open AI Copilot"
+            className="h-9 w-9 rounded-lg flex items-center justify-center bg-zinc-900 border border-white/5 text-zinc-400 hover:text-violet-400 transition-colors"
+          >
+            <Sparkles size={15} />
+          </button>
+
+          <LiquidThemeToggle />
+        </div>
+      </header>
+
+      {/* Main 3-column workspace */}
+      <main className="flex-1 min-h-0 grid grid-cols-1 gap-4 overflow-hidden lg:grid-cols-[minmax(220px,18%)_1fr_minmax(260px,22%)]">
+
+        {/* Left — Viral Suggestions */}
+        <section className="bg-zinc-900 border border-white/5 rounded-2xl flex flex-col overflow-hidden min-h-0">
+          <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-full">
             <LeftPanel />
-          </section>
+          </div>
+        </section>
 
-          {/* Center: Creative Engine */}
-          <section className="relative flex flex-col items-center justify-center gap-4 min-h-0">
-            {/* Dot grid background */}
-            <div
-              className="absolute inset-0 pointer-events-none rounded-[2.5rem]"
-              style={{
-                backgroundImage:
-                  "radial-gradient(circle, hsl(var(--foreground)/0.04) 1px, transparent 1px)",
-                backgroundSize: "28px 28px",
-              }}
-            />
-
-            {/* The Intelligence Bar (Search Island) */}
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 z-40 w-full max-w-xl px-6">
-              <AnimatePresence mode="wait">
+        {/* Center — Stage */}
+        <section className="relative flex flex-col items-center justify-center gap-4 min-h-0">
+          {/* URL import bar */}
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 z-40 w-full max-w-xl px-4">
+            <AnimatePresence mode="wait">
               {panelCollapsed ? (
-                /* Collapsed mini-bar — shown after video loads (Bug 9) */
                 <motion.div
                   key="panel-collapsed"
-                  initial={{ y: -10, opacity: 0 }}
+                  initial={{ y: -8, opacity: 0 }}
                   animate={{ y: 0, opacity: 1 }}
-                  exit={{ y: -10, opacity: 0 }}
+                  exit={{ y: -8, opacity: 0 }}
                   transition={{ type: "spring", damping: 24, stiffness: 200 }}
-                  className="glass-surface rounded-2xl px-4 py-2.5 flex items-center justify-between gap-3 border border-white/10 shadow-xl"
+                  className="bg-zinc-900 border border-white/5 rounded-xl px-4 py-2.5 flex items-center justify-between gap-3 shadow-xl"
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                    <span className="text-[10px] font-black text-foreground/70 uppercase tracking-widest truncate">
+                    <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest truncate">
                       {storeVideoMetadata?.title ?? urlInput.slice(0, 50) ?? "Video loaded"}
                     </span>
                   </div>
                   <button
                     onClick={() => setPanelCollapsed(false)}
-                    className="text-[9px] font-black text-primary/70 hover:text-primary uppercase tracking-widest shrink-0 transition-colors"
+                    className="text-[9px] font-black text-violet-400 hover:text-violet-300 uppercase tracking-widest shrink-0 transition-colors"
                   >
                     Change
                   </button>
                 </motion.div>
               ) : (
-              <motion.div
-                key="panel-expanded"
-                initial={{ y: -30, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                exit={{ y: -10, opacity: 0 }}
-                transition={{ type: "spring", damping: 20, stiffness: 100 }}
-                className="group relative"
-              >
-                <div className="absolute inset-0 bg-primary/20 blur-2xl rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
-
-                <div className="relative glass-surface rounded-[1.5rem] p-2 flex flex-col gap-1 shadow-[0_0_50px_rgba(0,0,0,0.2)] border border-white/10 overflow-hidden">
-                  <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-
-                  <div className="text-[9px] font-black text-center uppercase tracking-[0.25em] pt-2 pb-1 transition-colors duration-300">
+                <motion.div
+                  key="panel-expanded"
+                  initial={{ y: -20, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  exit={{ y: -8, opacity: 0 }}
+                  transition={{ type: "spring", damping: 20, stiffness: 100 }}
+                  className="bg-zinc-900 border border-white/5 rounded-2xl p-2 flex flex-col gap-1 shadow-xl"
+                >
+                  <div className="text-[9px] font-black text-center uppercase tracking-[0.25em] pt-2 pb-1">
                     {urlValid === true ? (
                       <span className="text-emerald-400">Video Ready — Hit Generate</span>
                     ) : (
-                      <span className="text-primary/50">Import Your Video</span>
+                      <span className="text-zinc-500">Import Your Video</span>
                     )}
                   </div>
 
-                  {/* Thumbnail preview strip — hidden while analysing to compact the bar */}
                   <AnimatePresence>
                     {thumbnailUrl && urlValid && !isAnalysing && (
                       <motion.div
@@ -471,14 +405,14 @@ export default function EditorLayout() {
                         exit={{ opacity: 0, height: 0 }}
                         className="px-1.5 pb-1"
                       >
-                        <div className="relative rounded-xl overflow-hidden border border-emerald-500/30 bg-foreground/5">
+                        <div className="relative rounded-xl overflow-hidden border border-emerald-500/20 bg-zinc-800">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
                             src={thumbnailUrl}
                             alt="YouTube thumbnail"
-                            className="w-full h-28 object-cover opacity-80"
+                            className="w-full h-24 object-cover opacity-70"
                           />
-                          <div className="absolute inset-0 bg-gradient-to-r from-background/60 to-transparent" />
+                          <div className="absolute inset-0 bg-gradient-to-r from-zinc-900/60 to-transparent" />
                           <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
                             <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                             <span className="text-[9px] font-black text-emerald-400 uppercase tracking-widest">
@@ -491,64 +425,57 @@ export default function EditorLayout() {
                   </AnimatePresence>
 
                   <div className="flex items-center gap-2 p-1.5">
-                    {/* URL input — label is visually hidden but announced by screen readers */}
                     <label htmlFor="youtube-url-input" className="sr-only">
                       YouTube video URL
                     </label>
-                    <div className="neon-url-container flex-1" data-analyzing={isAnalysing || undefined}>
-                      <div className="neon-url-spin-layer" aria-hidden="true" />
-                      <div className="neon-url-glow-layer" aria-hidden="true" />
-                      <div
-                        className={cn(
-                          "neon-url-inner flex items-center transition-all duration-300",
-                          urlValid === true
-                            ? "ring-1 ring-emerald-500/30"
-                            : urlValid === false
-                            ? "ring-1 ring-destructive/30"
-                            : "",
+                    <div
+                      className={cn(
+                        "flex-1 flex items-center bg-zinc-800 border rounded-xl transition-colors",
+                        urlValid === true
+                          ? "border-emerald-500/30"
+                          : urlValid === false
+                          ? "border-red-500/30"
+                          : "border-white/5"
+                      )}
+                    >
+                      <span className="pl-3.5 shrink-0">
+                        {urlValid === true ? (
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                        ) : urlValid === false ? (
+                          <AlertCircle className="w-4 h-4 text-red-400" />
+                        ) : (
+                          <Link2 className="w-4 h-4 text-zinc-600" />
                         )}
-                      >
-                        <span className="pl-3.5 flex-shrink-0">
-                          {urlValid === true ? (
-                            <CheckCircle2 className="w-4 h-4 text-emerald-400 transition-colors" />
-                          ) : urlValid === false ? (
-                            <AlertCircle className="w-4 h-4 text-destructive transition-colors" />
-                          ) : (
-                            <Link2 className="w-4 h-4 text-muted-foreground/30 transition-colors" />
-                          )}
-                        </span>
-                        <input
-                          id="youtube-url-input"
-                          type="text"
-                          placeholder="Paste a YouTube URL to start editing..."
-                          className="bg-transparent border-none outline-none text-sm w-full text-foreground placeholder:text-muted-foreground/20 h-11 pl-3 pr-4 font-bold tracking-tight"
-                          value={urlInput}
-                          onChange={handleUrlChange}
-                          onKeyDown={(e: KeyboardEvent<HTMLInputElement>) =>
-                            e.key === "Enter" && !isAnalysing && handleAnalyze()
-                          }
-                          disabled={isAnalysing}
-                        />
-                      </div>
+                      </span>
+                      <input
+                        id="youtube-url-input"
+                        type="text"
+                        placeholder="Paste a YouTube URL..."
+                        className="bg-transparent border-none outline-none text-sm w-full text-zinc-100 placeholder:text-zinc-600 h-11 pl-3 pr-4 font-medium"
+                        value={urlInput}
+                        onChange={handleUrlChange}
+                        onKeyDown={(e: KeyboardEvent<HTMLInputElement>) =>
+                          e.key === "Enter" && !isAnalysing && handleAnalyze()
+                        }
+                        disabled={isAnalysing}
+                      />
                     </div>
 
                     {isAnalysing ? (
                       <button
-                        id="cancel-generate-btn"
                         onClick={handleCancel}
-                        className="h-11 px-5 rounded-xl bg-destructive/20 border border-destructive/30 text-destructive hover:bg-destructive/30 transition-all font-black text-[10px] uppercase tracking-widest flex items-center gap-2 shadow-xl"
+                        className="h-11 px-5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 transition-colors font-black text-[10px] uppercase tracking-widest flex items-center gap-2"
                       >
                         <X className="w-4 h-4" />
-                        <span>Cancel</span>
+                        Cancel
                       </button>
                     ) : (
                       <GlowButton
-                        id="generate-btn"
                         variant="premium"
                         size="sm"
-                        className="rounded-xl h-11 px-6 font-black text-[10px] uppercase tracking-widest shadow-xl"
+                        className="rounded-xl h-11 px-6 font-black text-[10px] uppercase tracking-widest"
                         onClick={() => handleAnalyze()}
-                        disabled={!urlInput.trim() && !isAnalysing}
+                        disabled={!urlInput.trim()}
                       >
                         <div className="flex items-center gap-2">
                           <Zap className="w-4 h-4 fill-white" />
@@ -558,28 +485,26 @@ export default function EditorLayout() {
                     )}
                   </div>
 
-                  {/* Inline validation hint */}
                   <AnimatePresence>
                     {urlValid === false && urlInput.trim() && (
                       <motion.p
                         initial={{ opacity: 0, height: 0 }}
                         animate={{ opacity: 1, height: "auto" }}
                         exit={{ opacity: 0, height: 0 }}
-                        className="text-[9px] text-destructive/80 font-bold px-4 pb-2"
+                        className="text-[9px] text-red-400/80 font-bold px-4 pb-2"
                       >
                         Only YouTube URLs are supported (youtube.com or youtu.be)
                       </motion.p>
                     )}
                   </AnimatePresence>
 
-                  {/* Upload MP4 fallback — shown when backend fails */}
                   <AnimatePresence>
                     {backendFailed && (
                       <motion.div
                         initial={{ opacity: 0, height: 0 }}
                         animate={{ opacity: 1, height: "auto" }}
                         exit={{ opacity: 0, height: 0 }}
-                        className="px-4 pb-2 flex items-center gap-2"
+                        className="px-4 pb-2"
                       >
                         <button
                           onClick={() => fileInputRef.current?.click()}
@@ -591,50 +516,27 @@ export default function EditorLayout() {
                       </motion.div>
                     )}
                   </AnimatePresence>
-                </div>
-              </motion.div>
+                </motion.div>
               )}
-              </AnimatePresence>
-            </div>
+            </AnimatePresence>
+          </div>
 
-            {/* The Stage */}
-            <div
-              className="w-full h-full flex items-center justify-center rounded-[3rem] overflow-hidden bg-background/50 border border-foreground/5 relative group shadow-inner"
-              style={{ perspective: "1200px", perspectiveOrigin: "50% 40%" }}
-            >
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,hsl(var(--primary)/0.05),transparent_80%)]" />
-
-              <AnimatePresence mode="wait">
-                {isAnalysing ? (
-                  <motion.div
-                    key="stage-analysing"
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 1.05 }}
-                    transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-                    className="absolute inset-0 z-10 flex items-center justify-center"
-                  >
-                    {youtubePreviewId ? (
-                      /* YouTube preview visible behind analysis overlay */
-                      <div className="relative w-full h-full flex items-center justify-center p-16">
-                        <YouTubePlayer
-                          videoId={youtubePreviewId}
-                          className="max-w-lg w-full"
-                        />
-                        <div className="absolute inset-0 bg-background/60 backdrop-blur-sm flex items-center justify-center">
-                          <TimelineLoader
-                            phases={
-                              currentStage === "transcribing"
-                                ? ["Transcribing...", "Captioning...", "Building subtitles..."]
-                                : currentStage === "analyzing"
-                                ? ["Analyzing...", "Scoring virality...", "Finding hooks..."]
-                                : ["Downloading...", "Preparing...", "Extracting..."]
-                            }
-                          />
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="bg-background w-full h-full flex items-center justify-center">
+          {/* Video stage */}
+          <div className="w-full h-full flex items-center justify-center rounded-2xl overflow-hidden bg-zinc-950 border border-white/5 relative">
+            <AnimatePresence mode="wait">
+              {isAnalysing ? (
+                <motion.div
+                  key="stage-analysing"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.3 }}
+                  className="absolute inset-0 z-10 flex items-center justify-center"
+                >
+                  {youtubePreviewId ? (
+                    <div className="relative w-full h-full flex items-center justify-center p-16">
+                      <YouTubePlayer videoId={youtubePreviewId} className="max-w-lg w-full" />
+                      <div className="absolute inset-0 bg-zinc-950/70 flex items-center justify-center">
                         <TimelineLoader
                           phases={
                             currentStage === "transcribing"
@@ -645,103 +547,76 @@ export default function EditorLayout() {
                           }
                         />
                       </div>
-                    )}
-                  </motion.div>
-                ) : youtubePreviewId && !sourceUrl ? (
-                  /* Immediate YouTube preview — before or after failed backend */
-                  <motion.div
-                    key="stage-youtube-preview"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="w-full h-full flex items-center justify-center p-16"
-                  >
-                    <YouTubePlayer
-                      videoId={youtubePreviewId}
-                      className="max-w-lg w-full"
-                    />
-                  </motion.div>
-                ) : centerMode === "effects" ? (
-                  <motion.div
-                    key="stage-effects"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="w-full h-full overflow-auto"
-                  >
-                    <VideoWorkspace />
-                  </motion.div>
-                ) : (
-                  <motion.div
-                    key="stage-canvas"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="w-full h-full flex items-center justify-center"
-                  >
-                    <VideoCanvas />
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              {/* Contextual HUD Overlay */}
-              {!isAnalysing && sourceUrl && (
-                <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-6 px-8 py-4 glass-surface rounded-2xl border-foreground/10 opacity-0 group-hover:opacity-100 translate-y-4 group-hover:translate-y-0 transition-all duration-500 shadow-2xl">
-                  <div className="flex items-center gap-2 border-r border-foreground/10 pr-6">
-                    <Zap className="w-4 h-4 text-primary fill-primary" />
-                    <span className="text-[10px] font-black text-foreground uppercase tracking-[0.2em]">
-                      Live Render
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                    <span className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">
-                      Gemini AI Active
-                    </span>
-                  </div>
-                </div>
+                    </div>
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <TimelineLoader
+                        phases={
+                          currentStage === "transcribing"
+                            ? ["Transcribing...", "Captioning...", "Building subtitles..."]
+                            : currentStage === "analyzing"
+                            ? ["Analyzing...", "Scoring virality...", "Finding hooks..."]
+                            : ["Downloading...", "Preparing...", "Extracting..."]
+                        }
+                      />
+                    </div>
+                  )}
+                </motion.div>
+              ) : youtubePreviewId && !sourceUrl ? (
+                <motion.div
+                  key="stage-youtube-preview"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="w-full h-full flex items-center justify-center p-16"
+                >
+                  <YouTubePlayer videoId={youtubePreviewId} className="max-w-lg w-full" />
+                </motion.div>
+              ) : centerMode === "effects" ? (
+                <motion.div
+                  key="stage-effects"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="w-full h-full overflow-auto"
+                >
+                  <VideoWorkspace />
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="stage-canvas"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="w-full h-full flex items-center justify-center"
+                >
+                  <VideoCanvas />
+                </motion.div>
               )}
-            </div>
-          </section>
+            </AnimatePresence>
+          </div>
+        </section>
 
-          {/* Right: Property Inspector & AI Results */}
-          <section className="rounded-[2.5rem] p-6 bg-[#141417] border border-foreground/5 shadow-2xl flex flex-col overflow-hidden min-h-0">
+        {/* Right — Property Inspector */}
+        <section className="bg-zinc-900 border border-white/5 rounded-2xl flex flex-col overflow-hidden min-h-0">
+          <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-full">
             <RightPanel />
-          </section>
+          </div>
+        </section>
+      </main>
 
-          {/* AI Panel — 4th grid column on lg+, hidden on mobile (fixed overlay handles mobile) */}
-          <AnimatePresence>
-            {anyPanelOpen && (
-              <motion.section
-                key="ai-grid-column"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.2 }}
-                className="hidden lg:flex rounded-[2.5rem] bg-[#141417] border border-foreground/5 shadow-2xl flex-col overflow-hidden min-h-0"
-              >
-                <AIPanel embedded />
-              </motion.section>
-            )}
-          </AnimatePresence>
-        </main>
+      {/* Timeline */}
+      <footer className="h-44 shrink-0 bg-zinc-900 border border-white/5 rounded-2xl flex flex-col overflow-hidden relative">
+        <BottomDock />
+      </footer>
 
-        {/* Bottom: Sequence Timeline */}
-        <footer className="h-44 rounded-[3rem] p-6 bg-[#141417] border border-foreground/5 shadow-2xl flex flex-col overflow-hidden relative">
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-20 h-1 bg-foreground/5 rounded-full mt-2" />
-          <BottomDock />
-        </footer>
-      </div>
-
-      {/* Floating Macro Controls */}
-      <div className="fixed right-10 top-1/2 -translate-y-1/2 flex flex-col gap-5 z-40 hidden 2xl:flex">
+      {/* Floating macro controls — 2xl+ only */}
+      <div className="fixed right-10 top-1/2 -translate-y-1/2 flex flex-col gap-4 z-40 hidden 2xl:flex">
         <FloatingControls />
       </div>
 
-      {/* Mobile AI Panel — fixed overlay, only shown below lg breakpoint */}
-      <div className="lg:hidden">
-        <AIPanel />
-      </div>
+      {/* AI Copilot — fixed overlay, zero layout impact when closed */}
+      <AICopilot />
     </div>
   );
 }
@@ -765,43 +640,26 @@ function FloatingControls() {
   };
 
   const triggerPreFlight = () => {
-    window.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "P", shiftKey: true }),
-    );
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "P", shiftKey: true }));
   };
 
   const buttons = [
-    {
-      icon: Smartphone,
-      title: `Aspect Ratio — ${exportSettings.aspectRatio}`,
-      action: cycleAspectRatio,
-    },
-    {
-      icon: Zap,
-      title: "Auto-Enhance — Remove silence & boost",
-      action: triggerAutoEnhance,
-    },
-    {
-      icon: Sparkles,
-      title: "AI Pre-Flight — Test with audience",
-      action: triggerPreFlight,
-    },
+    { icon: Smartphone, title: `Aspect Ratio — ${exportSettings.aspectRatio}`, action: cycleAspectRatio },
+    { icon: Zap, title: "Auto-Enhance", action: triggerAutoEnhance },
+    { icon: Sparkles, title: "AI Pre-Flight", action: triggerPreFlight },
   ];
 
   return (
     <>
       {buttons.map(({ icon: Icon, title, action }, i) => (
-        <motion.button
+        <button
           key={i}
           onClick={action}
           aria-label={title}
-          whileHover={{ scale: 1.1, x: -5 }}
-          whileTap={{ scale: 0.95 }}
-          className="w-14 h-14 rounded-2xl glass-surface border-foreground/10 flex items-center justify-center hover:border-primary/50 transition-all cursor-pointer group shadow-2xl overflow-hidden relative"
+          className="w-12 h-12 rounded-xl bg-zinc-900 border border-white/5 flex items-center justify-center text-zinc-400 hover:text-zinc-100 hover:border-white/10 transition-colors"
         >
-          <div className="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity" aria-hidden="true" />
-          <Icon className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors relative z-10" aria-hidden="true" />
-        </motion.button>
+          <Icon className="w-4 h-4" />
+        </button>
       ))}
     </>
   );

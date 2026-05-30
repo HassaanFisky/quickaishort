@@ -20,7 +20,6 @@ import { CaptionOverlay } from "./CaptionOverlay";
 import { CanvasLayer } from "./CanvasLayer";
 import { cn } from "@/lib/utils";
 
-// Minimal ambient type for YouTube IFrame Player API (auto-loaded from YT CDN).
 declare global {
   interface Window {
     YT?: {
@@ -30,9 +29,7 @@ declare global {
           videoId: string;
           host?: string;
           playerVars?: Record<string, number | string>;
-          events?: {
-            onReady?: (e: { target: YTPlayer }) => void;
-          };
+          events?: { onReady?: (e: { target: YTPlayer }) => void };
         }
       ) => YTPlayer;
       loaded?: number;
@@ -46,7 +43,6 @@ interface YTPlayer {
   destroy(): void;
 }
 
-/** Extract 11-char video ID from any recognised YouTube URL format. */
 function extractYtVideoId(url: string): string | null {
   const m = url.match(
     /(?:youtube\.com\/(?:watch\?.*v=|shorts\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/
@@ -59,13 +55,10 @@ export default function VideoCanvas() {
   const audioContextRef = useRef<AudioContext | null>(null);
   const gainNodeRef = useRef<GainNode | null>(null);
   const noiseFilterRef = useRef<BiquadFilterNode | null>(null);
-  
+
   const [isBuffering, setIsBuffering] = useState(false);
   const [videoError, setVideoError] = useState(false);
   const [proxyRetry, setProxyRetry] = useState(0);
-
-  // YouTube IFrame mode — activated when sourceUrl is a YouTube URL.
-  // Local state drives the IFrame player; store state is synced for clip marking.
   const [localYtId, setLocalYtId] = useState<string | null>(null);
   const ytPlayerRef = useRef<YTPlayer | null>(null);
 
@@ -92,15 +85,12 @@ export default function VideoCanvas() {
   } = useEditorStore();
 
   const { isReady, reframingData, detect } = useFaceTracker();
-
   const [displayUrl, setDisplayUrl] = useState<string | null>(null);
 
-  // Web Audio API — initialise once per video source, then keep in sync
+  // Web Audio API chain — MediaElementSource → BiquadFilter → GainNode
   useEffect(() => {
     if (!videoRef.current) return;
-
     const audioBoost = exportSettings.audioBoost;
-
     if (!audioContextRef.current) {
       try {
         const AudioCtx =
@@ -108,43 +98,34 @@ export default function VideoCanvas() {
           (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
         audioContextRef.current = new AudioCtx();
         const source = audioContextRef.current.createMediaElementSource(videoRef.current);
-
-        // Highpass filter for live noise suppression (Bug 4)
         noiseFilterRef.current = audioContextRef.current.createBiquadFilter();
         noiseFilterRef.current.type = "highpass";
         noiseFilterRef.current.frequency.value = 80;
-
         gainNodeRef.current = audioContextRef.current.createGain();
         source.connect(noiseFilterRef.current);
         noiseFilterRef.current.connect(gainNodeRef.current);
         gainNodeRef.current.connect(audioContextRef.current.destination);
       } catch {
-        // Cross-origin video without CORS headers — Web Audio unavailable for this source
         audioContextRef.current = null;
       }
     }
-
     if (gainNodeRef.current) {
-      // 0-200% → 0.0-3.0 gain. Base 85% → 1.275 (slightly above unity). (Bug 3)
       gainNodeRef.current.gain.value = (audioBoost / 100) * 1.5;
     } else if (videoRef.current) {
-      // Fallback: set native element volume when Web Audio isn't available (Bug 3)
       videoRef.current.volume = Math.min(1, audioBoost / 100);
     }
-
     if (isPlaying && audioContextRef.current?.state === "suspended") {
       audioContextRef.current.resume();
     }
   }, [exportSettings.audioBoost, isPlaying]);
 
-  // Live Noise Suppression — update highpass filter frequency (Bug 4)
+  // Live noise suppression — update highpass filter frequency
   useEffect(() => {
     if (!noiseFilterRef.current) return;
-    // 0% = 80 Hz (nearly flat), 100% = 400 Hz (aggressively cuts low-freq rumble)
     noiseFilterRef.current.frequency.value = 80 + (exportSettings.noiseSuppression / 100) * 320;
   }, [exportSettings.noiseSuppression]);
 
-  // Live Playback Speed — apply on mount and on source change (Bug 2)
+  // Live playback speed
   useEffect(() => {
     if (videoRef.current) {
       videoRef.current.playbackRate = exportSettings.playbackSpeed / 100;
@@ -170,13 +151,11 @@ export default function VideoCanvas() {
     setProxyRetry(0);
     const ytId = extractYtVideoId(sourceUrl);
     if (ytId) {
-      setYtVideoId(ytId);  // always sync to store for clip marking
+      setYtVideoId(ytId);
       if (duration <= 1800) {
-        // Short enough to stream via proxy — native <video> enables full editing.
         setLocalYtId(null);
         setDisplayUrl(`${API_URL}/api/proxy-video?url=${encodeURIComponent(sourceUrl)}`);
       } else {
-        // Too long to proxy — fall back to ToS-compliant IFrame preview.
         setLocalYtId(ytId);
         setDisplayUrl(null);
       }
@@ -187,8 +166,7 @@ export default function VideoCanvas() {
     }
   }, [sourceUrl, duration]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // IFrame fallback timeout — if proxy video never reaches readyState >= 2 within
-  // 10s, fall back to the YT IFrame player (handles yt-dlp bot-detection blocks).
+  // IFrame fallback timeout
   useEffect(() => {
     if (!displayUrl || localYtId) return;
     const timer = setTimeout(() => {
@@ -204,15 +182,13 @@ export default function VideoCanvas() {
     return () => clearTimeout(timer);
   }, [displayUrl, localYtId, sourceUrl]);
 
-  // Load the YouTube IFrame Player API script once and create a player
-  // instance when a YouTube video ID is available.
+  // YouTube IFrame Player API
   useEffect(() => {
     if (!localYtId) {
       ytPlayerRef.current?.destroy();
       ytPlayerRef.current = null;
       return;
     }
-
     const createPlayer = () => {
       if (!window.YT?.Player) return;
       ytPlayerRef.current?.destroy();
@@ -229,11 +205,9 @@ export default function VideoCanvas() {
         },
       });
     };
-
     if (window.YT?.loaded) {
       createPlayer();
     } else {
-      // API not yet loaded — inject the script and register the callback.
       window.onYouTubeIframeAPIReady = createPlayer;
       if (!document.querySelector('script[src*="youtube.com/iframe_api"]')) {
         const tag = document.createElement("script");
@@ -241,7 +215,6 @@ export default function VideoCanvas() {
         document.head.appendChild(tag);
       }
     }
-
     return () => {
       ytPlayerRef.current?.destroy();
       ytPlayerRef.current = null;
@@ -258,7 +231,7 @@ export default function VideoCanvas() {
     setClipRange(useEditorStore.getState().clipStartTime, t);
   }, [setClipRange]);
 
-  // Seek to clip start when selection changes
+  // Seek to clip start on selection change
   useEffect(() => {
     if (selectedClipId && videoRef.current) {
       const clip = suggestions.find((c) => c.id === selectedClipId);
@@ -269,14 +242,12 @@ export default function VideoCanvas() {
     }
   }, [selectedClipId, suggestions, setCurrentTime]);
 
-  // Drive the video element from store isPlaying
+  // Drive video from store play state
   useEffect(() => {
     if (!videoRef.current) return;
     if (isPlaying) {
       videoRef.current.play().catch(() => {});
-      if (audioContextRef.current?.state === "suspended") {
-        audioContextRef.current.resume();
-      }
+      audioContextRef.current?.state === "suspended" && audioContextRef.current.resume();
     } else {
       videoRef.current.pause();
     }
@@ -286,15 +257,20 @@ export default function VideoCanvas() {
     setIsPlaying(!isPlaying);
   }, [isPlaying, setIsPlaying]);
 
-  const skip = useCallback((delta: number) => {
-    if (!videoRef.current) return;
-    const next = Math.max(0, Math.min(duration || videoRef.current.duration || 0, currentTime + delta));
-    videoRef.current.currentTime = next;
-    setCurrentTime(next);
-  }, [currentTime, duration, setCurrentTime]);
+  const skip = useCallback(
+    (delta: number) => {
+      if (!videoRef.current) return;
+      const next = Math.max(
+        0,
+        Math.min(duration || videoRef.current.duration || 0, currentTime + delta)
+      );
+      videoRef.current.currentTime = next;
+      setCurrentTime(next);
+    },
+    [currentTime, duration, setCurrentTime]
+  );
 
-  // Keyboard navigation for seek and play/pause (Bug 5)
-  // Must come AFTER skip and togglePlay are declared above.
+  // Keyboard navigation — placed after skip and togglePlay declarations
   useEffect(() => {
     if (!sourceUrl) return;
     const handler = (e: KeyboardEvent) => {
@@ -317,7 +293,7 @@ export default function VideoCanvas() {
     return () => document.removeEventListener("keydown", handler);
   }, [sourceUrl, skip, togglePlay]);
 
-  // Respond to external seek requests (e.g. from Timeline slider)
+  // External seek requests (e.g. timeline slider)
   useEffect(() => {
     if (pendingSeek == null || !videoRef.current) return;
     videoRef.current.currentTime = pendingSeek;
@@ -328,7 +304,6 @@ export default function VideoCanvas() {
   // Face detection loop
   const detectRef = useRef(detect);
   useEffect(() => { detectRef.current = detect; }, [detect]);
-
   useEffect(() => {
     if (!isPlaying) return;
     let id: number;
@@ -350,22 +325,29 @@ export default function VideoCanvas() {
 
   const aspectContainerClass: Record<string, string> = {
     "9:16": "aspect-[9/16] h-full max-h-[75vh] w-auto",
-    "1:1":  "aspect-square max-h-[65vh] w-auto",
+    "1:1": "aspect-square max-h-[65vh] w-auto",
   };
-  const aspectClass = aspectContainerClass[exportSettings.aspectRatio] ?? aspectContainerClass["9:16"];
+  const aspectClass =
+    aspectContainerClass[exportSettings.aspectRatio] ?? aspectContainerClass["9:16"];
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center p-6 h-full animate-in fade-in zoom-in-95 duration-1000">
-      <div className={cn("relative depth-card glass-surface rounded-[2.5rem] overflow-hidden flex items-center justify-center group border border-foreground/5 shadow-2xl", aspectClass)}>
-        <div className="absolute top-6 right-6 z-50 flex flex-col items-end gap-2">
+    <div className="flex-1 flex flex-col items-center justify-center p-6 h-full">
+      <div
+        className={cn(
+          "relative bg-zinc-900 rounded-2xl overflow-hidden flex items-center justify-center group border border-white/5 shadow-2xl",
+          aspectClass
+        )}
+      >
+        {/* Status badges */}
+        <div className="absolute top-4 right-4 z-50 flex flex-col items-end gap-2">
           {(!isReady || isBuffering) && (
-            <div className="flex items-center gap-2 glass-surface border border-foreground/10 px-3 py-1.5 rounded-full text-[10px] font-black text-muted-foreground uppercase tracking-widest shadow-xl">
-              <Loader2 className="w-3 h-3 animate-spin text-primary" />
+            <div className="flex items-center gap-2 bg-zinc-900/90 border border-white/10 px-3 py-1.5 rounded-full text-[10px] font-black text-zinc-400 uppercase tracking-widest">
+              <Loader2 className="w-3 h-3 animate-spin text-violet-400" />
               {isBuffering ? "Buffering..." : "Vision Active"}
             </div>
           )}
           {exportSettings.noiseSuppression > 0 && (
-            <div className="flex items-center gap-2 glass-surface border border-primary/20 px-3 py-1.5 rounded-full text-[9px] font-black text-primary uppercase tracking-widest shadow-xl bg-primary/5">
+            <div className="flex items-center gap-2 bg-violet-500/10 border border-violet-500/20 px-3 py-1.5 rounded-full text-[9px] font-black text-violet-400 uppercase tracking-widest">
               Noise reduction: applied on export
             </div>
           )}
@@ -374,16 +356,13 @@ export default function VideoCanvas() {
         {sourceUrl ? (
           <>
             {localYtId ? (
-              /* YouTube IFrame mode — ToS-compliant preview with clip marking.
-                 Face tracking and audio boost are unavailable in IFrame mode
-                 due to cross-origin restrictions; they apply post-extraction. */
               <div className="relative w-full h-full flex flex-col">
                 <div id="yt-player-frame" className="w-full flex-1" />
-                <div className="flex items-center justify-center gap-3 py-3 px-4 bg-background/80 backdrop-blur-sm border-t border-foreground/10">
+                <div className="flex items-center justify-center gap-3 py-2.5 px-4 bg-zinc-950/80 border-t border-white/5">
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-9 gap-2 text-[10px] font-black uppercase tracking-widest text-primary hover:bg-primary/10 border border-primary/20"
+                    className="h-8 gap-2 text-[10px] font-black uppercase tracking-widest text-violet-400 hover:bg-violet-500/10 border border-violet-500/20"
                     onClick={handleMarkStart}
                   >
                     <Flag className="w-3.5 h-3.5" />
@@ -392,7 +371,7 @@ export default function VideoCanvas() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-9 gap-2 text-[10px] font-black uppercase tracking-widest text-primary hover:bg-primary/10 border border-primary/20"
+                    className="h-8 gap-2 text-[10px] font-black uppercase tracking-widest text-violet-400 hover:bg-violet-500/10 border border-violet-500/20"
                     onClick={handleMarkEnd}
                   >
                     <Scissors className="w-3.5 h-3.5" />
@@ -401,24 +380,23 @@ export default function VideoCanvas() {
                 </div>
               </div>
             ) : videoError ? (
-              /* Non-YouTube source failed — show thumbnail fallback */
               <div className="relative w-full h-full flex items-center justify-center">
                 {thumbnailUrl && (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={thumbnailUrl}
                     alt="Video thumbnail"
-                    className="absolute inset-0 w-full h-full object-cover opacity-40"
+                    className="absolute inset-0 w-full h-full object-cover opacity-30"
                   />
                 )}
                 <div className="relative z-10 flex flex-col items-center gap-3 px-6 text-center">
-                  <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500/20 border border-amber-500/30">
+                  <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500/15 border border-amber-500/20">
                     <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
                     <span className="text-[10px] font-black text-amber-400 uppercase tracking-widest">
                       Preview unavailable
                     </span>
                   </div>
-                  <p className="text-[9px] text-muted-foreground font-bold uppercase tracking-widest">
+                  <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest">
                     AI analysis continues in background
                   </p>
                 </div>
@@ -435,13 +413,10 @@ export default function VideoCanvas() {
                       : sourceUrl
                   }
                   className={cn(
-                    "w-full h-full object-cover interactive will-change-[object-position] transition-all duration-500",
+                    "w-full h-full object-cover will-change-[object-position] transition-all duration-500",
                     isBuffering && "blur-md scale-105 opacity-50"
                   )}
-                  style={{
-                    objectPosition: getObjectPosition(),
-                    filter: getCssFilter(),
-                  }}
+                  style={{ objectPosition: getObjectPosition(), filter: getCssFilter() }}
                   controls={false}
                   loop
                   preload="auto"
@@ -449,8 +424,8 @@ export default function VideoCanvas() {
                     if (!videoRef.current) return;
                     const v = videoRef.current;
                     setDuration(v.duration);
-                    // Re-apply playback rate when a new video loads (Bug 2)
-                    v.playbackRate = useEditorStore.getState().exportSettings.playbackSpeed / 100;
+                    v.playbackRate =
+                      useEditorStore.getState().exportSettings.playbackSpeed / 100;
                     if (videoMetadata) {
                       setVideoMetadata({
                         ...videoMetadata,
@@ -461,10 +436,7 @@ export default function VideoCanvas() {
                     }
                   }}
                   onWaiting={() => setIsBuffering(true)}
-                  onCanPlay={() => {
-                    setIsBuffering(false);
-                    setVideoError(false);
-                  }}
+                  onCanPlay={() => { setIsBuffering(false); setVideoError(false); }}
                   onPlay={() => setIsPlaying(true)}
                   onPause={() => setIsPlaying(false)}
                   onTimeUpdate={() => {
@@ -472,11 +444,8 @@ export default function VideoCanvas() {
                   }}
                   onError={() => {
                     if (proxyRetry < 1 && displayUrl) {
-                      // Retry once after 4 s — handles cold-start latency on Cloud Run.
                       setTimeout(() => setProxyRetry((r) => r + 1), 4000);
                     } else {
-                      // Proxy exhausted retries. For YouTube URLs, fall back to the
-                      // IFrame player — works even when yt-dlp is blocked by bot detection.
                       const ytId = sourceUrl ? extractYtVideoId(sourceUrl) : null;
                       if (ytId && displayUrl?.includes("proxy-video")) {
                         setLocalYtId(ytId);
@@ -490,94 +459,71 @@ export default function VideoCanvas() {
                 />
                 {isBuffering && (
                   <div className="absolute inset-0 flex items-center justify-center z-10">
-                    <Loader2 className="w-12 h-12 animate-spin text-primary opacity-50" strokeWidth={1} />
+                    <Loader2
+                      className="w-10 h-10 animate-spin text-violet-400 opacity-60"
+                      strokeWidth={1}
+                    />
                   </div>
                 )}
               </>
             )}
           </>
         ) : (
-          <div className="empty-state select-none">
-            <div className="empty-state-icon">
-              <PlayCircle className="w-8 h-8 text-primary/20" strokeWidth={1} />
+          /* Empty state */
+          <div className="flex flex-col items-center gap-4 p-8 select-none">
+            <div className="w-14 h-14 rounded-2xl bg-zinc-800 border border-white/5 flex items-center justify-center">
+              <PlayCircle className="w-6 h-6 text-zinc-600" strokeWidth={1} />
             </div>
-            <div>
-              <p className="empty-state-title">Paste a YouTube URL to get started</p>
-              <p className="empty-state-description">
+            <div className="text-center">
+              <p className="text-sm font-black text-zinc-400 uppercase tracking-widest mb-1">
+                Paste a YouTube URL to get started
+              </p>
+              <p className="text-xs text-zinc-600 max-w-[220px]">
                 We&apos;ll analyze the video and suggest the best viral clips automatically
               </p>
             </div>
           </div>
         )}
 
-        <CaptionOverlay videoRef={videoRef} transcript={captionsEnabled && transcript ? transcript : undefined} />
+        <CaptionOverlay
+          videoRef={videoRef}
+          transcript={captionsEnabled && transcript ? transcript : undefined}
+        />
         <CanvasLayer />
 
+        {/* Playback controls — visible on hover when video is loaded */}
         {sourceUrl && !localYtId && !isBuffering && !videoError && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-500 interactive">
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label={isPlaying ? "Pause video" : "Play video"}
-              className="w-20 h-20 rounded-full text-white hover:bg-white/10 interactive-scale backdrop-blur-md border border-white/10 shadow-2xl"
-              onClick={togglePlay}
-            >
-              {isPlaying ? (
-                <Pause className="w-10 h-10 fill-current" aria-hidden="true" />
-              ) : (
-                <Play className="w-10 h-10 fill-current pl-1.5" aria-hidden="true" />
-              )}
-            </Button>
+          <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none group-hover:pointer-events-auto">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => skip(-10)}
+                aria-label="Skip back 10 seconds"
+                className="w-10 h-10 rounded-full bg-black/60 border border-white/10 flex items-center justify-center text-white hover:bg-black/80 transition-colors"
+              >
+                <SkipBack className="w-4 h-4" />
+              </button>
+              <button
+                onClick={togglePlay}
+                aria-label={isPlaying ? "Pause" : "Play"}
+                className="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center text-zinc-900 hover:bg-white transition-colors"
+              >
+                {isPlaying ? (
+                  <Pause className="w-5 h-5 fill-zinc-900" />
+                ) : (
+                  <Play className="w-5 h-5 fill-zinc-900 ml-0.5" />
+                )}
+              </button>
+              <button
+                onClick={() => skip(10)}
+                aria-label="Skip forward 10 seconds"
+                className="w-10 h-10 rounded-full bg-black/60 border border-white/10 flex items-center justify-center text-white hover:bg-black/80 transition-colors"
+              >
+                <SkipForward className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         )}
       </div>
-
-      {sourceUrl && !localYtId && !videoError && (
-        <div className="mt-8 flex items-center gap-6 glass-surface p-2.5 px-6 rounded-full border border-foreground/5 shadow-2xl">
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Skip back 10 seconds"
-            className="text-muted-foreground hover:text-primary hover:bg-foreground/5 rounded-full w-10 h-10 interactive"
-            onClick={() => skip(-10)}
-          >
-            <SkipBack className="w-4 h-4" strokeWidth={1.5} aria-hidden="true" />
-          </Button>
-
-          {/* Play/Pause — slide-up icon/text on hover */}
-          <Button
-            variant="default"
-            size="icon"
-            aria-label={isPlaying ? "Pause" : "Play"}
-            className="relative w-14 h-14 rounded-full bg-primary text-white hover:scale-110 active:scale-95 shadow-[0_0_20px_hsl(var(--primary)/0.3)] transition-all interactive overflow-hidden group"
-            onClick={togglePlay}
-            disabled={isBuffering}
-          >
-            {/* Icon layer — default visible, slides up on hover */}
-            <span className="absolute inset-0 flex items-center justify-center transition-transform duration-300 ease-in-out group-hover:-translate-y-full" aria-hidden="true">
-              {isPlaying ? (
-                <Pause className="w-6 h-6 fill-current" />
-              ) : (
-                <Play className="w-6 h-6 fill-current pl-1" />
-              )}
-            </span>
-            {/* Visible text label on hover — already conveys the action */}
-            <span className="absolute inset-0 flex items-center justify-center transition-transform duration-300 ease-in-out translate-y-full group-hover:translate-y-0 text-[8px] font-black uppercase tracking-widest pointer-events-none" aria-hidden="true">
-              {isPlaying ? "Pause" : "Play"}
-            </span>
-          </Button>
-
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Skip forward 10 seconds"
-            className="text-muted-foreground hover:text-primary hover:bg-foreground/5 rounded-full w-10 h-10 interactive"
-            onClick={() => skip(10)}
-          >
-            <SkipForward className="w-4 h-4" strokeWidth={1.5} aria-hidden="true" />
-          </Button>
-        </div>
-      )}
     </div>
   );
 }
