@@ -16,7 +16,7 @@ import logging
 import os
 
 from fastapi import Header, HTTPException
-from jose import JWTError, jwt
+import jwt as _jwt  # PyJWT 2.x — replaces python-jose (Critical CVE GHSA-cjwg-qfpm-7377)
 
 logger = logging.getLogger(__name__)
 
@@ -61,11 +61,11 @@ def get_verified_user_id(
         )
 
     try:
-        payload = jwt.decode(token, _NEXTAUTH_SECRET, algorithms=[_ALGORITHM])
+        payload = _jwt.decode(token, _NEXTAUTH_SECRET, algorithms=[_ALGORITHM])
         user_id = payload.get("sub") or payload.get("id") or ""
         if not user_id:
             raise HTTPException(status_code=401, detail="Token missing user identity.")
         return str(user_id)
-    except JWTError as exc:
+    except _jwt.PyJWTError as exc:
         logger.warning("JWT verification failed: %s", exc)
         raise HTTPException(status_code=401, detail="Invalid or expired token.")

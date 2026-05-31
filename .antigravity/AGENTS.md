@@ -124,7 +124,7 @@ FILE EDITING
 BROWSER AGENT
 
 - Use for: navigating Google Cloud Console, Vercel dashboard, GitHub,
-  Cloudflare DNS, Supabase dashboard, Devpost submission.
+  Cloudflare DNS, Devpost submission.
 - Before clicking: take screenshot to confirm the element is visible.
 - Before typing credentials: confirm the correct page in the URL bar.
 - Never auto-submit forms with payment info, legal agreements, or account
@@ -148,7 +148,7 @@ TECH STACK LOCKED — DO NOT SWAP
 - Backend: Python 3.12, FastAPI, yt-dlp, FFmpeg
 - Agent: Google ADK v1.0, Gemini 2.5 Flash (model string: gemini-2.5-flash — verified 2026-04-24 via /v1beta/models API; gemini-2.5-pro also available for higher quality)
 - Deploy: Vercel (frontend) + Google Cloud Run (backend)
-- Storage: MongoDB Atlas (GridFS for exports) + Supabase (free tier)
+- Storage: MongoDB Atlas (GridFS for exports)
 - Domain: quickaishort.online via Cloudflare DNS
 
 FORBIDDEN CHANGES
@@ -295,7 +295,7 @@ SKILLS (.antigravity/skills/)
 - ALL secrets live in .env files that are gitignored
 - Reference env vars in code: os.environ["KEY"] (backend),
   process.env.NEXT_PUBLIC_* (frontend — only for public values)
-- Private keys (GEMINI_API_KEY, SUPABASE_SERVICE_ROLE) NEVER prefixed with
+- Private keys (GEMINI_API_KEY) NEVER prefixed with
   NEXT_PUBLIC_
 - Before pushing to GitHub, run: `git diff --cached | grep -iE
   "(api_key|secret|token|password)"` — if any match, abort commit
@@ -339,7 +339,6 @@ The agent must treat these as acceptance tests before any "shipping" claim:
 
 - [ ] Uses Google Gemini model (not OpenAI/Claude) for core AI logic
 - [ ] Uses Google ADK v1.0+ for agent orchestration
-- [ ] Integrates at least one MCP server (Supabase MCP is current choice)
 - [ ] Has deployed, publicly accessible URL at quickaishort.online
 - [ ] Has public GitHub repo with MIT LICENSE file
 - [ ] Has 2:50–3:00 demo video showing live pipeline (not mock)

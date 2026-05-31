@@ -193,7 +193,7 @@ export default function VideoWorkspace() {
   useEffect(() => {
     if (!sourceUrl || !engineRef.current) return;
     // YouTube URLs aren't directly playable — route through the proxy like VideoCanvas does.
-    const isYouTube = sourceUrl.includes("youtube.com") || sourceUrl.includes("youtu.be");
+    const isYouTube = /\/\/(?:[a-z]+\.)?youtube\.com\/|:\/\/youtu\.be\//.test(sourceUrl);
     const effectiveUrl = isYouTube
       ? `${API_URL}/api/proxy-video?url=${encodeURIComponent(sourceUrl)}`
       : sourceUrl;

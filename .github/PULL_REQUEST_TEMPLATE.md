@@ -43,5 +43,5 @@ Please paste any relevant CLI execution logs, API response payloads, or active a
 ### ✅ Contributor Checklist
 - [ ] My code adheres to the project's design system and styling tokens.
 - [ ] I have left all existing comments and docstrings intact unless they are directly related to the modification.
-- [ ] My commit messages follow the [Conventional Commits](https://www.conventionalcommits.org/) format (e.g., `feat(agent): add Supabase MCP toolkit grounding`).
+- [ ] My commit messages follow the [Conventional Commits](https://www.conventionalcommits.org/) format (e.g., `feat(agent): add BigQuery analytics grounding`).
 - [ ] I have updated the documentation (`README.md`, `ARCHITECTURE.md`, `SECURITY.md`) to reflect these changes.

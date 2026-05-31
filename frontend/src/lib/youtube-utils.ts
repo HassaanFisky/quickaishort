@@ -5,7 +5,8 @@ export function parseYouTubeId(input: string): string | null {
   try {
     const u = new URL(s);
     if (u.hostname === 'youtu.be') return u.pathname.slice(1).split(/[?#]/)[0] || null;
-    if (u.hostname.endsWith('youtube.com')) {
+    const ytHosts = new Set(['www.youtube.com', 'youtube.com', 'm.youtube.com', 'music.youtube.com']);
+    if (ytHosts.has(u.hostname)) {
       if (u.pathname === '/watch') return u.searchParams.get('v');
       const m = u.pathname.match(/^\/(embed|shorts|v|live)\/([^/?#]+)/);
       if (m) return m[2];

@@ -26,7 +26,7 @@ export default function EditorPage() {
       try {
         if (
           typeof source === "string" &&
-          (source.includes("youtube.com") || source.includes("youtu.be"))
+          (/\/\/(?:[a-z]+\.)?youtube\.com\/|:\/\/youtu\.be\//.test(source))
         ) {
           const { getProxyUrl } = await import("@/lib/api");
           source = getProxyUrl(source);
