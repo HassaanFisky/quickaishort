@@ -2,6 +2,7 @@
 
 import { useRef, useState, useCallback, useEffect, useMemo } from "react";
 import { useEditorStore } from "@/stores/editorStore";
+import { useUIStore, type EditorTool } from "@/stores/uiStore";
 import { Button } from "@/components/ui/button";
 import type { Clip } from "@/types/pipeline";
 import {
@@ -156,6 +157,7 @@ export default function BottomDock() {
     deleteClip,
   } = useEditorStore();
 
+  const { activeTool, setActiveTool } = useUIStore();
   const waveformCanvasRef = useRef<HTMLCanvasElement>(null);
   const [hoverTime, setHoverTime] = useState<number | null>(null);
   const [hoverX, setHoverX] = useState(0);
@@ -318,44 +320,56 @@ export default function BottomDock() {
     toast.success(nextVal ? "AI Voiceover Track/Enhancement enabled." : "Voiceover disabled.");
   }, [exportSettings.voiceoverEnabled, setExportSetting]);
 
-  const tools = [
+  const tools: Array<{
+    icon: React.FC<{ className?: string; "aria-hidden"?: boolean }>;
+    label: string;
+    toolId: EditorTool;
+    action: () => void;
+    tooltip: string;
+  }> = [
     {
       icon: SquareSplitHorizontal,
       label: "Split",
+      toolId: "split",
       action: handleSplit,
       tooltip: "Split — S — Cut clip at playhead",
     },
     {
       icon: Scissors,
       label: "Trim",
+      toolId: "trim",
       action: () => toast.info("Drag clip edges on the timeline to trim."),
       tooltip: "Trim — Drag clip edges to resize",
     },
     {
       icon: Type,
       label: "Text",
+      toolId: "text",
       action: handleAddText,
       tooltip: "Text — T — Add text overlay to canvas",
     },
     {
       icon: Wand2,
       label: "FX",
+      toolId: "fx",
       action: handleFX,
       tooltip: `FX — Visual filter (current: ${exportSettings.filter})`,
     },
     {
       icon: Layout,
       label: "Transitions",
+      toolId: "transitions",
       action: handleTransitions,
       tooltip: "Transitions — Toggle crossfade between clips",
     },
     {
       icon: Mic,
       label: "Voiceover",
+      toolId: "voiceover",
       action: handleVoiceover,
       tooltip: "Voiceover — Toggle AI voice enhancement",
     },
-  ] as const;
+  ];
 
   return (
     <div className="w-full h-full flex flex-col gap-4 animate-in slide-in-from-bottom-4 duration-500">
@@ -411,20 +425,41 @@ export default function BottomDock() {
         </div>
 
         <div className="flex items-center gap-5">
-          {tools.map(({ icon: Icon, label, action, tooltip }) => (
-            <button
-              key={label}
-              onClick={action}
-              title={tooltip}
-              aria-label={tooltip}
-              className="flex items-center gap-2 group cursor-pointer focus:outline-none"
-            >
-              <Icon className="w-4 h-4 text-foreground/40 group-hover:text-primary transition-colors" aria-hidden="true" />
-              <span className="text-[10px] font-black text-foreground/40 uppercase tracking-widest group-hover:text-primary transition-colors">
-                {label}
-              </span>
-            </button>
-          ))}
+          {tools.map(({ icon: Icon, label, toolId, action, tooltip }) => {
+            const isActive = activeTool === toolId;
+            return (
+              <button
+                key={label}
+                onClick={() => { action(); setActiveTool(toolId); }}
+                title={tooltip}
+                aria-label={tooltip}
+                aria-pressed={isActive}
+                className={cn(
+                  "flex items-center gap-2 group cursor-pointer focus:outline-none transition-all duration-200",
+                  isActive && "relative"
+                )}
+              >
+                {isActive && (
+                  <span className="absolute -inset-x-2 -inset-y-1 rounded-lg bg-primary/10 border border-primary/20 pointer-events-none" />
+                )}
+                <Icon
+                  className={cn(
+                    "w-4 h-4 transition-colors relative",
+                    isActive ? "text-primary" : "text-foreground/40 group-hover:text-primary"
+                  )}
+                  aria-hidden={true}
+                />
+                <span
+                  className={cn(
+                    "text-[10px] font-black uppercase tracking-widest transition-colors relative",
+                    isActive ? "text-primary" : "text-foreground/40 group-hover:text-primary"
+                  )}
+                >
+                  {label}
+                </span>
+              </button>
+            );
+          })}
           {selectedClipId && (
             <Button
               variant="ghost"

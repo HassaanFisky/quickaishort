@@ -48,14 +48,14 @@ export default function Console() {
   return (
     <div
       className={cn(
-        "flex flex-col bg-black text-zinc-400 font-mono text-xs transition-all duration-300",
+        "flex flex-col bg-black text-fg-muted font-mono text-xs transition-all duration-300",
         isExpanded ? "h-64" : "h-full",
       )}
     >
-      <div className="flex items-center justify-between px-4 py-1 border-b border-zinc-800 bg-zinc-900/50">
+      <div className="flex items-center justify-between px-4 py-1 border-b border-border bg-card/50">
         <div className="flex items-center gap-2">
-          <Terminal className="w-3 h-3 text-zinc-500" />
-          <span className="uppercase tracking-widest text-[10px] font-bold text-zinc-500">
+          <Terminal className="w-3 h-3 text-muted-foreground" />
+          <span className="uppercase tracking-widest text-[10px] font-bold text-muted-foreground">
             Console Output
           </span>
         </div>
@@ -63,7 +63,7 @@ export default function Console() {
           <Button
             variant="ghost"
             size="icon"
-            className="h-6 w-6 text-zinc-500 hover:text-white"
+            className="h-6 w-6 text-muted-foreground hover:text-white"
             onClick={copyLogs}
           >
             <Copy className="h-3 w-3" />
@@ -71,7 +71,7 @@ export default function Console() {
           <Button
             variant="ghost"
             size="icon"
-            className="h-6 w-6 text-zinc-500 hover:text-white"
+            className="h-6 w-6 text-muted-foreground hover:text-white"
             onClick={clearLogs}
           >
             <Trash2 className="h-3 w-3" />
@@ -79,7 +79,7 @@ export default function Console() {
           <Button
             variant="ghost"
             size="icon"
-            className="h-6 w-6 text-zinc-500 hover:text-white"
+            className="h-6 w-6 text-muted-foreground hover:text-white"
             onClick={() => setIsExpanded(!isExpanded)}
           >
             {isExpanded ? (
@@ -95,7 +95,7 @@ export default function Console() {
         <div className="space-y-1">
           {logs.map((log) => (
             <div key={log.id} className="flex gap-2 group">
-              <span className="text-zinc-600 shrink-0">
+              <span className="text-muted-foreground shrink-0">
                 {new Date(log.timestamp).toLocaleTimeString()}
               </span>
               <span

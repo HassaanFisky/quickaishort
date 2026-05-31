@@ -25,16 +25,29 @@ import {
   Sliders,
   Droplets,
   Zap,
-  Flame,
-  Snowflake,
   Sun,
-  Waves,
   Keyboard,
+  Check,
+  RotateCcw,
+  Lock,
+  Server,
+  Trash2,
+  FileText,
+  ExternalLink,
   type LucideIcon,
 } from "lucide-react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { useState, useEffect } from "react";
 import { useEditorStore } from "@/stores/editorStore";
+import {
+  useShortcutsStore,
+  SHORTCUT_ACTIONS,
+  eventToCombo,
+  comboToChips,
+  DEFAULTS,
+  type ShortcutId,
+} from "@/stores/shortcutsStore";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -51,21 +64,9 @@ const TABS: { id: Tab; icon: LucideIcon; label: string }[] = [
 ];
 
 const THEMES = [
-  { id: "dark", name: "Dark", description: "Default", icon: Droplets, color: "#a855f7", bg: "#08080a" },
-  { id: "light", name: "Light", description: "Clean & bright", icon: Sun, color: "#a855f7", bg: "#f8f8fc" },
-  { id: "neon", name: "Neon", description: "Electric green", icon: Zap, color: "#39ff14", bg: "#030305" },
-  { id: "crystal", name: "Crystal", description: "Sky blue", icon: Snowflake, color: "#38bdf8", bg: "#f0f9ff" },
-  { id: "magma", name: "Magma", description: "Orange-red", icon: Flame, color: "#ff4500", bg: "#0a0604" },
-  { id: "nano", name: "Nano", description: "Minimal white", icon: Waves, color: "#06d6a0", bg: "#f4f4f5" },
-];
-
-const SHORTCUTS = [
-  { action: "Play / Pause", keys: "Space" },
-  { action: "Skip Forward 10s", keys: "→" },
-  { action: "Skip Backward 10s", keys: "←" },
-  { action: "Run Pre-Flight", keys: "Shift + P" },
-  { action: "Export", keys: "Ctrl + E" },
-  { action: "New Project", keys: "Ctrl + N" },
+  { id: "dark",  name: "Studio Dark",   description: "Elegant graphite",  icon: Droplets, color: "#b984ff", bg: "#131316" },
+  { id: "oled",  name: "OLED Pitch",    description: "Pure-black focus",   icon: Zap,      color: "#c084fc", bg: "#000000" },
+  { id: "light", name: "Creator Light", description: "Pristine & bright",  icon: Sun,      color: "#7c3aed", bg: "#fdfdff" },
 ];
 
 const QUALITY_OPTIONS = ["low", "medium", "high"] as const;
@@ -225,44 +226,46 @@ export default function SettingsPage() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="grid grid-cols-3 gap-6 max-w-md">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       {THEMES.map((t) => {
                         const isActive = theme === t.id;
+                        const Icon = t.icon;
                         return (
                           <button
                             key={t.id}
                             onClick={() => setTheme(t.id)}
-                            className="flex flex-col items-center gap-2 group focus-visible:outline-none"
+                            aria-pressed={isActive}
                             aria-label={`Switch to ${t.name} theme`}
+                            className={cn(
+                              "group relative flex flex-col gap-4 rounded-2xl border p-4 text-left transition-all duration-200 focus-visible:outline-none",
+                              isActive
+                                ? "border-primary/50 bg-primary/[0.04] shadow-lg shadow-primary/5"
+                                : "border-border hover:border-border-strong hover:bg-foreground/[0.02]",
+                            )}
                           >
+                            {/* Live preview swatch */}
                             <div
-                              className={cn(
-                                "relative h-16 w-16 rounded-xl overflow-hidden border-2 transition-all duration-150",
-                                isActive
-                                  ? "border-primary scale-105 shadow-[0_0_0_2px_hsl(var(--background)),0_0_0_4px_hsl(var(--primary))]"
-                                  : "border-border group-hover:border-foreground/20",
-                              )}
+                              className="relative h-20 w-full rounded-xl overflow-hidden border border-black/5"
                               style={{ background: t.bg }}
                             >
-                              <div
-                                className="absolute bottom-2 right-2 h-4 w-4 rounded-full"
-                                style={{ background: t.color }}
-                              />
-                              <div
-                                className="absolute top-2 left-2 h-1.5 w-6 rounded-full opacity-30"
-                                style={{ background: t.color }}
-                              />
-                            </div>
-                            <span
-                              className={cn(
-                                "text-xs font-semibold transition-colors",
-                                isActive
-                                  ? "text-foreground"
-                                  : "text-muted-foreground group-hover:text-foreground",
+                              <div className="absolute top-3 left-3 h-1.5 w-10 rounded-full" style={{ background: t.color, opacity: 0.9 }} />
+                              <div className="absolute top-6 left-3 h-1.5 w-6 rounded-full" style={{ background: t.color, opacity: 0.35 }} />
+                              <div className="absolute bottom-3 right-3 h-6 w-6 rounded-full" style={{ background: t.color }} />
+                              {isActive && (
+                                <div className="absolute top-2 right-2 h-5 w-5 rounded-full bg-primary flex items-center justify-center shadow-md">
+                                  <Check className="h-3 w-3 text-primary-foreground" strokeWidth={3} />
+                                </div>
                               )}
-                            >
-                              {t.name}
-                            </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Icon className={cn("h-4 w-4 shrink-0", isActive ? "text-primary" : "text-muted-foreground")} />
+                              <div className="min-w-0">
+                                <p className={cn("text-sm font-bold tracking-tight leading-none", isActive ? "text-foreground" : "text-foreground/90")}>
+                                  {t.name}
+                                </p>
+                                <p className="text-[11px] font-medium text-muted-foreground mt-1 leading-none">{t.description}</p>
+                              </div>
+                            </div>
                           </button>
                         );
                       })}
@@ -372,48 +375,7 @@ export default function SettingsPage() {
               )}
 
               {/* ── SHORTCUTS ── */}
-              {activeTab === "shortcuts" && (
-                <Card className="depth-card glass-surface rounded-[2.5rem] border-foreground/5 p-4">
-                  <CardHeader className="pb-8">
-                    <CardTitle className="text-2xl font-black tracking-tight">
-                      Keyboard Shortcuts
-                    </CardTitle>
-                    <CardDescription className="text-base font-medium">
-                      Read-only reference. Bindings are fixed in this build.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="rounded-2xl border border-border overflow-hidden">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="bg-secondary/40 text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
-                            <th className="text-left px-5 py-3 font-semibold">Action</th>
-                            <th className="text-right px-5 py-3 font-semibold">Shortcut</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {SHORTCUTS.map((s, i) => (
-                            <tr
-                              key={s.action}
-                              className={cn(
-                                "border-t border-border",
-                                i % 2 === 1 && "bg-secondary/20",
-                              )}
-                            >
-                              <td className="px-5 py-3 font-medium">{s.action}</td>
-                              <td className="px-5 py-3 text-right">
-                                <kbd className="inline-flex items-center rounded-md border border-border bg-background px-2 py-1 text-[11px] font-mono">
-                                  {s.keys}
-                                </kbd>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
+              {activeTab === "shortcuts" && <ShortcutsTab />}
 
               {/* ── NOTIFICATIONS ── */}
               {activeTab === "notifications" && (
@@ -437,45 +399,7 @@ export default function SettingsPage() {
               )}
 
               {/* ── PRIVACY ── */}
-              {activeTab === "privacy" && (
-                <Card className="depth-card glass-surface rounded-[2.5rem] border-foreground/5 p-4">
-                  <CardHeader className="pb-8">
-                    <CardTitle className="text-2xl font-black tracking-tight text-foreground/90">Encryption & Privacy</CardTitle>
-                    <CardDescription className="text-base font-medium">
-                      Elite privacy by design. All core processing is sandboxed on your device.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-6">
-                    <div className="p-8 rounded-[2rem] bg-primary/5 border border-primary/10 space-y-4">
-                      <div className="flex items-center gap-3">
-                         <Shield className="w-6 h-6 text-primary" />
-                         <p className="text-xl font-black tracking-tight text-primary">Zero-Trust Processing</p>
-                      </div>
-                      <p className="text-sm font-medium text-muted-foreground leading-relaxed opacity-90">
-                        Our hybrid engine runs FFmpeg, Whisper, and Vision models as local Web Workers.
-                        Your raw source media never touches our servers.
-                      </p>
-                    </div>
-                    <div className="p-8 rounded-[2rem] bg-foreground/[0.02] border border-foreground/5 space-y-4">
-                      <p className="text-lg font-black tracking-tight">Active Data Map</p>
-                      <ul className="text-sm font-medium text-muted-foreground space-y-3">
-                        <li className="flex items-center gap-3">
-                           <div className="w-1.5 h-1.5 rounded-full bg-primary" />
-                           Session token (sandboxed & encrypted)
-                        </li>
-                        <li className="flex items-center gap-3">
-                           <div className="w-1.5 h-1.5 rounded-full bg-primary" />
-                           Workspace preferences (local persistence only)
-                        </li>
-                        <li className="flex items-center gap-3">
-                           <div className="w-1.5 h-1.5 rounded-full bg-primary" />
-                           Metadata logs (archived in cloud, no media content)
-                        </li>
-                      </ul>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
+              {activeTab === "privacy" && <PrivacyTab />}
             </motion.div>
           </AnimatePresence>
         </div>
@@ -534,5 +458,316 @@ function SaveRow({ onSave, onReset }: { onSave?: () => void; onReset?: () => voi
         <Save className="w-4 h-4" /> Synchronize Changes
       </Button>
     </motion.div>
+  );
+}
+
+// ── KEYBOARD SHORTCUTS — interactive, persisted key-mapping ──────────────────
+
+function KeyCombo({ combo, mac, dim }: { combo: string; mac: boolean; dim?: boolean }) {
+  return (
+    <span className="inline-flex items-center gap-1">
+      {comboToChips(combo, mac).map((chip, i) => (
+        <kbd
+          key={i}
+          className={cn(
+            "inline-flex h-7 min-w-[1.75rem] items-center justify-center rounded-lg border px-2 text-xs font-bold tracking-tight shadow-sm",
+            dim
+              ? "border-border bg-secondary/50 text-muted-foreground"
+              : "border-border-strong bg-secondary text-foreground",
+          )}
+        >
+          {chip}
+        </kbd>
+      ))}
+    </span>
+  );
+}
+
+function ShortcutsTab() {
+  const { bindings, setBinding, resetBinding, resetAll, findConflict } = useShortcutsStore();
+  const [recordingId, setRecordingId] = useState<ShortcutId | null>(null);
+  const [mac, setMac] = useState(true);
+
+  useEffect(() => {
+    const p = typeof navigator !== "undefined" ? `${navigator.platform} ${navigator.userAgent}` : "";
+    setMac(/mac|iphone|ipad/i.test(p));
+  }, []);
+
+  // While recording, capture the next real key chord (capture phase, fully swallowed).
+  useEffect(() => {
+    if (!recordingId) return;
+    const onKey = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.key === "Escape") {
+        setRecordingId(null);
+        return;
+      }
+      const combo = eventToCombo(e);
+      if (!combo) return; // bare modifier — keep listening
+      const conflict = findConflict(combo, recordingId);
+      if (conflict) {
+        const label = SHORTCUT_ACTIONS.find((a) => a.id === conflict)?.label ?? conflict;
+        toast.error(`That chord is already mapped to “${label}”.`);
+        setRecordingId(null);
+        return;
+      }
+      setBinding(recordingId, combo);
+      toast.success("Shortcut updated.");
+      setRecordingId(null);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [recordingId, findConflict, setBinding]);
+
+  const anyChanged = SHORTCUT_ACTIONS.some((a) => bindings[a.id] !== DEFAULTS[a.id]);
+
+  return (
+    <Card className="depth-card glass-surface rounded-[2.5rem] border-foreground/5 p-4">
+      <CardHeader className="pb-8">
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-2">
+            <CardTitle className="text-2xl font-black tracking-tight">Keyboard Shortcuts</CardTitle>
+            <CardDescription className="text-base font-medium">
+              Click any shortcut, then press your new key chord. Changes save instantly and persist on this device.
+            </CardDescription>
+          </div>
+          <AnimatePresence>
+            {anyChanged && (
+              <motion.button
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                onClick={() => { resetAll(); setRecordingId(null); toast.success("Shortcuts restored to defaults."); }}
+                className="shrink-0 inline-flex items-center gap-2 h-9 px-4 rounded-xl border border-border text-[11px] font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground hover:bg-foreground/5 transition-colors"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                Reset all
+              </motion.button>
+            )}
+          </AnimatePresence>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="flex flex-col divide-y divide-border rounded-2xl border border-border overflow-hidden">
+          {SHORTCUT_ACTIONS.map((action) => {
+            const isRecording = recordingId === action.id;
+            const combo = bindings[action.id];
+            const changed = combo !== DEFAULTS[action.id];
+            return (
+              <div
+                key={action.id}
+                className={cn(
+                  "flex items-center justify-between gap-4 px-5 py-4 transition-colors",
+                  isRecording ? "bg-primary/[0.06]" : "hover:bg-foreground/[0.02]",
+                )}
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-foreground tracking-tight">{action.label}</p>
+                  <p className="text-[12px] font-medium text-muted-foreground mt-0.5 truncate">{action.description}</p>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  {changed && !isRecording && (
+                    <button
+                      onClick={() => resetBinding(action.id)}
+                      title="Reset to default"
+                      aria-label={`Reset ${action.label} to default`}
+                      className="h-8 w-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-foreground/5 transition-colors"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setRecordingId(isRecording ? null : action.id)}
+                    aria-label={isRecording ? `Cancel rebinding ${action.label}` : `Rebind ${action.label}`}
+                    className={cn(
+                      "min-w-[5.5rem] h-10 px-3 rounded-xl border flex items-center justify-center gap-1.5 transition-all duration-200",
+                      isRecording
+                        ? "border-primary/50 bg-primary/10 ring-2 ring-primary/15"
+                        : "border-border bg-secondary/40 hover:border-border-strong hover:bg-secondary/70",
+                    )}
+                  >
+                    {isRecording ? (
+                      <span className="flex items-center gap-1.5">
+                        <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
+                        <span className="text-[11px] font-bold uppercase tracking-widest text-primary">Press keys</span>
+                      </span>
+                    ) : (
+                      <KeyCombo combo={combo} mac={mac} />
+                    )}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <p className="mt-4 text-[12px] font-medium text-muted-foreground/80 flex items-center gap-2">
+          <Keyboard className="w-3.5 h-3.5 shrink-0" />
+          While recording, press <KeyCombo combo="Escape" mac={mac} dim /> to cancel. Shortcuts are ignored while typing in a field.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ── PRIVACY — comprehensive, transparent, interactive ────────────────────────
+
+const STAYS_LOCAL = [
+  "Raw video & audio — decoded and trimmed in-browser",
+  "Whisper transcription & caption text",
+  "Face-tracking and silence-detection passes",
+  "Your editor preferences, themes & shortcuts",
+];
+
+const LEAVES_DEVICE = [
+  "Encrypted session token (to keep you signed in)",
+  "Clip metadata for the render queue — never the source media",
+  "Aggregate, anonymous usage counts (optional, below)",
+];
+
+function PrivacyTab() {
+  const [analytics, setAnalytics] = useLocalSetting<boolean>("qai_privacy_analytics", true);
+  const [rememberHistory, setRememberHistory] = useLocalSetting<boolean>("qai_privacy_history", true);
+
+  const clearLocalData = () => {
+    try {
+      const keys = Object.keys(localStorage).filter(
+        (k) => k.startsWith("qai_") || k === "qai-shortcuts" || k === "ui-preferences",
+      );
+      keys.forEach((k) => localStorage.removeItem(k));
+      toast.success(`Cleared ${keys.length} local item${keys.length === 1 ? "" : "s"}. Refresh to apply.`);
+    } catch {
+      toast.error("Couldn't access local storage in this context.");
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Hero + transparency map */}
+      <Card className="depth-card glass-surface rounded-[2.5rem] border-foreground/5 p-4">
+        <CardHeader className="pb-6">
+          <CardTitle className="text-2xl font-black tracking-tight">Privacy &amp; Data</CardTitle>
+          <CardDescription className="text-base font-medium">
+            Your media is processed on your device. Here is exactly what that means — no fine print.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="p-6 rounded-[1.75rem] bg-primary/[0.06] border border-primary/15 flex items-start gap-4">
+            <div className="w-11 h-11 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+              <Lock className="w-5 h-5 text-primary" />
+            </div>
+            <div className="space-y-1.5">
+              <p className="text-lg font-bold tracking-tight text-foreground">Zero-Trust processing</p>
+              <p className="text-sm font-medium text-muted-foreground leading-relaxed">
+                FFmpeg, Whisper, and the vision models run as local Web Workers in your browser. Your raw
+                source media is never uploaded to our servers.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="p-5 rounded-2xl border border-border bg-foreground/[0.02] space-y-4">
+              <div className="flex items-center gap-2">
+                <Shield className="w-4 h-4 text-emerald-400" />
+                <p className="text-sm font-bold tracking-tight text-foreground">Stays on your device</p>
+              </div>
+              <ul className="space-y-2.5">
+                {STAYS_LOCAL.map((item) => (
+                  <li key={item} className="flex items-start gap-2.5 text-[13px] font-medium text-muted-foreground leading-snug">
+                    <Check className="w-3.5 h-3.5 text-emerald-400 mt-0.5 shrink-0" strokeWidth={3} />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="p-5 rounded-2xl border border-border bg-foreground/[0.02] space-y-4">
+              <div className="flex items-center gap-2">
+                <Server className="w-4 h-4 text-muted-foreground" />
+                <p className="text-sm font-bold tracking-tight text-foreground">Leaves your browser</p>
+              </div>
+              <ul className="space-y-2.5">
+                {LEAVES_DEVICE.map((item) => (
+                  <li key={item} className="flex items-start gap-2.5 text-[13px] font-medium text-muted-foreground leading-snug">
+                    <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/60 mt-1.5 shrink-0" />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Data controls */}
+      <Card className="depth-card glass-surface rounded-[2.5rem] border-foreground/5 p-4">
+        <CardHeader className="pb-6">
+          <CardTitle className="text-xl font-black tracking-tight">Data controls</CardTitle>
+          <CardDescription className="text-base font-medium">You decide what we collect and what we keep.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <ToggleRow
+            label="Anonymous usage analytics"
+            description="Share aggregate, de-identified product events to help us improve. Never tied to your media."
+            checked={analytics}
+            onCheckedChange={setAnalytics}
+          />
+          <ToggleRow
+            label="Remember edit history"
+            description="Keep your recent projects and undo history in this browser for faster resumes."
+            checked={rememberHistory}
+            onCheckedChange={setRememberHistory}
+            border
+          />
+        </CardContent>
+      </Card>
+
+      {/* Your data, your call */}
+      <Card className="depth-card glass-surface rounded-[2.5rem] border-foreground/5 p-4">
+        <CardHeader className="pb-6">
+          <CardTitle className="text-xl font-black tracking-tight">Your data, your call</CardTitle>
+          <CardDescription className="text-base font-medium">Reset locally stored preferences, or read the full policies.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 p-5 rounded-2xl border border-border bg-foreground/[0.02]">
+            <div className="space-y-1">
+              <p className="text-sm font-bold tracking-tight text-foreground">Clear local workspace data</p>
+              <p className="text-[13px] font-medium text-muted-foreground leading-snug">
+                Removes themes, shortcuts, and saved preferences from this browser. Your account is untouched.
+              </p>
+            </div>
+            <button
+              onClick={clearLocalData}
+              className="shrink-0 inline-flex items-center justify-center gap-2 h-11 px-5 rounded-xl border border-destructive/30 text-destructive font-semibold text-sm hover:bg-destructive/10 transition-colors"
+            >
+              <Trash2 className="w-4 h-4" />
+              Clear data
+            </button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Link
+              href="/privacy"
+              className="group flex items-center justify-between gap-3 h-12 px-5 rounded-xl border border-border bg-foreground/[0.02] hover:bg-foreground/5 transition-colors"
+            >
+              <span className="flex items-center gap-2.5 text-sm font-semibold text-foreground">
+                <FileText className="w-4 h-4 text-muted-foreground" />
+                Privacy Policy
+              </span>
+              <ExternalLink className="w-3.5 h-3.5 text-muted-foreground group-hover:text-foreground transition-colors" />
+            </Link>
+            <Link
+              href="/terms"
+              className="group flex items-center justify-between gap-3 h-12 px-5 rounded-xl border border-border bg-foreground/[0.02] hover:bg-foreground/5 transition-colors"
+            >
+              <span className="flex items-center gap-2.5 text-sm font-semibold text-foreground">
+                <FileText className="w-4 h-4 text-muted-foreground" />
+                Terms of Service
+              </span>
+              <ExternalLink className="w-3.5 h-3.5 text-muted-foreground group-hover:text-foreground transition-colors" />
+            </Link>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

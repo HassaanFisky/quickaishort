@@ -5,7 +5,7 @@ import { useUIStore } from "@/stores/uiStore";
 import { useMediaPipeline } from "@/hooks/useMediaPipeline";
 import { useAIPanel } from "@/stores/aiPanelStore";
 import React, { useState, useRef, useCallback, useEffect } from "react";
-import type { DragEvent, ChangeEvent, KeyboardEvent } from "react";
+import type { DragEvent, ChangeEvent } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { GlowButton } from "@/components/ui/GlowButton";
 import {
@@ -19,6 +19,8 @@ import {
   AlertCircle,
   Upload,
   Wand2,
+  PanelLeft,
+  PanelRight,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -51,7 +53,7 @@ export default function EditorLayout() {
 
   const { runPipeline, cancelPipeline, status } = useMediaPipeline();
   const { setOpen: setAICopilotOpen, setVideoContext } = useAIPanel();
-  const { isSidebarCollapsed } = useUIStore();
+  const { isSidebarCollapsed, leftPanelOpen, rightPanelOpen, setLeftPanelOpen, setRightPanelOpen } = useUIStore();
 
   // Sync transcript to AI panel context after pipeline completes
   const storeTranscript = useEditorStore((s) => s.transcript);
@@ -108,7 +110,7 @@ export default function EditorLayout() {
         cancelPipeline();
         setProcessing(false, "idle");
         toast.warning(
-          "Transcription timed out â€” try uploading an MP4 for faster processing.",
+          "Transcription timed out — try uploading an MP4 for faster processing.",
           { duration: 8000 }
         );
       }
@@ -271,7 +273,7 @@ export default function EditorLayout() {
       onDrop={handleDrop}
       onDragOver={handleDragOver}
       className={cn(
-        "h-screen w-screen overflow-hidden bg-zinc-950 flex flex-col p-4 gap-4",
+        "editor-shell-bg h-screen w-screen overflow-hidden flex flex-col p-4 gap-4",
         "transition-[padding-left] duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)]",
         isSidebarCollapsed ? "md:pl-20" : "md:pl-[256px]"
       )}
@@ -288,36 +290,82 @@ export default function EditorLayout() {
 
       {/* Header */}
       <header className="flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-3">
+        {/* Live status module — single premium element, no duplicate wordmark
+            (the Sidebar already carries brand identity) */}
+        <div className="flex items-center gap-2.5 min-w-0">
           <div
             className={cn(
-              "flex items-center gap-1.5 px-2.5 py-1 rounded-full border transition-colors duration-300",
+              "flex items-center gap-2 pl-2.5 pr-3 py-1.5 rounded-full border backdrop-blur-md transition-colors duration-500",
               isProcessing
-                ? "text-amber-400 border-amber-400/20 bg-amber-400/8"
-                : "text-emerald-400 border-emerald-400/20 bg-emerald-400/8"
+                ? "border-amber-400/25 bg-amber-400/[0.06]"
+                : "border-emerald-400/25 bg-emerald-400/[0.06]"
             )}
           >
-            <Zap className="w-3 h-3" />
-            <span className="text-[9px] font-black tracking-[0.2em] uppercase">
+            <span className="relative flex h-2 w-2 shrink-0">
+              {isProcessing && (
+                <span className="absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-60 animate-ping" />
+              )}
+              <span
+                className={cn(
+                  "relative inline-flex h-2 w-2 rounded-full",
+                  isProcessing ? "bg-amber-400" : "bg-emerald-400"
+                )}
+              />
+            </span>
+            <span
+              className={cn(
+                "text-[10px] font-black tracking-[0.18em] uppercase leading-none whitespace-nowrap",
+                isProcessing ? "text-amber-300" : "text-emerald-300"
+              )}
+            >
               {isProcessing
                 ? currentStage === "transcribing"
-                  ? "Creating Subtitles..."
+                  ? "Creating Subtitles"
                   : currentStage === "analyzing"
-                  ? "Finding Viral Hooks..."
-                  : "Downloading Video..."
+                  ? "Finding Viral Hooks"
+                  : "Downloading Video"
                 : "Studio Ready"}
             </span>
           </div>
-          <h1 className="text-xl font-black tracking-tighter text-zinc-100 leading-none">
-            QuickAI <span className="text-primary italic">Studio</span>
-          </h1>
+
+          {/* Loaded project title — appears only when content exists (progressive) */}
+          <AnimatePresence>
+            {storeVideoMetadata?.title && (
+              <motion.div
+                initial={{ opacity: 0, x: -6 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -6 }}
+                className="hidden sm:flex items-center gap-2 min-w-0 max-w-[40vw]"
+              >
+                <span className="h-3.5 w-px bg-foreground/10 shrink-0" />
+                <span className="text-[11px] font-bold text-fg-muted truncate leading-none">
+                  {storeVideoMetadata.title}
+                </span>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         <div className="flex items-center gap-3">
           <button
+            onClick={() => setLeftPanelOpen(!leftPanelOpen)}
+            aria-label="Toggle clips panel"
+            className="h-9 w-9 rounded-lg flex items-center justify-center bg-card border border-border text-fg-muted hover:text-foreground transition-colors lg:hidden"
+          >
+            <PanelLeft size={15} />
+          </button>
+          <button
+            onClick={() => setRightPanelOpen(!rightPanelOpen)}
+            aria-label="Toggle properties panel"
+            className="h-9 w-9 rounded-lg flex items-center justify-center bg-card border border-border text-fg-muted hover:text-foreground transition-colors lg:hidden"
+          >
+            <PanelRight size={15} />
+          </button>
+          <button
             onClick={() =>
               setCenterMode(centerMode === "effects" ? "preview" : "effects")
             }
+            title={centerMode === "effects" ? "Back to preview" : "Effects studio"}
             aria-label={
               centerMode === "effects" ? "Switch to Preview" : "Open Effects Studio"
             }
@@ -325,7 +373,7 @@ export default function EditorLayout() {
               "h-9 w-9 rounded-lg flex items-center justify-center border transition-colors",
               centerMode === "effects"
                 ? "bg-primary/20 border-primary/30 text-primary"
-                : "bg-zinc-900 border-white/5 text-zinc-400 hover:text-zinc-100"
+                : "bg-card border-border text-fg-muted hover:text-foreground"
             )}
           >
             <Wand2 size={15} />
@@ -333,8 +381,9 @@ export default function EditorLayout() {
 
           <button
             onClick={() => setAICopilotOpen(true)}
+            title="AI Copilot — ask anything about your video"
             aria-label="Open AI Copilot"
-            className="h-9 w-9 rounded-lg flex items-center justify-center bg-zinc-900 border border-white/5 text-zinc-400 hover:text-primary transition-colors"
+            className="h-9 w-9 rounded-lg flex items-center justify-center bg-card border border-border text-fg-muted hover:text-primary transition-colors"
           >
             <Sparkles size={15} />
           </button>
@@ -346,14 +395,14 @@ export default function EditorLayout() {
       {/* Main 3-column workspace */}
       <main className="flex-1 min-h-0 grid grid-cols-1 gap-4 overflow-hidden lg:grid-cols-[minmax(220px,18%)_1fr_minmax(260px,22%)]">
 
-        {/* Left â€” Viral Suggestions */}
-        <section className="bg-zinc-900 border border-white/5 rounded-2xl flex flex-col overflow-hidden min-h-0">
-          <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-full">
+        {/* Left — Viral Suggestions (desktop inline) */}
+        <section className="hidden lg:flex bg-card border border-border rounded-2xl flex-col overflow-hidden min-h-0">
+          <div className="flex-1 overflow-y-auto p-4 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-foreground/10 [&::-webkit-scrollbar-thumb]:rounded-full">
             <LeftPanel />
           </div>
         </section>
 
-        {/* Center â€” Stage */}
+        {/* Center — Stage */}
         <section className="relative flex flex-col items-center justify-center gap-4 min-h-0">
           {/* URL import bar */}
           <div className="absolute top-0 left-1/2 -translate-x-1/2 z-40 w-full max-w-xl px-4">
@@ -365,11 +414,11 @@ export default function EditorLayout() {
                   animate={{ y: 0, opacity: 1 }}
                   exit={{ y: -8, opacity: 0 }}
                   transition={{ type: "spring", damping: 24, stiffness: 200 }}
-                  className="bg-zinc-900 border border-white/5 rounded-xl px-4 py-2.5 flex items-center justify-between gap-3 shadow-xl"
+                  className="bg-card border border-border rounded-xl px-4 py-2.5 flex items-center justify-between gap-3 shadow-xl"
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                    <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest truncate">
+                    <span className="text-[10px] font-black text-fg-muted uppercase tracking-widest truncate">
                       {storeVideoMetadata?.title ?? urlInput.slice(0, 50) ?? "Video loaded"}
                     </span>
                   </div>
@@ -387,13 +436,16 @@ export default function EditorLayout() {
                   animate={{ y: 0, opacity: 1 }}
                   exit={{ y: -8, opacity: 0 }}
                   transition={{ type: "spring", damping: 20, stiffness: 100 }}
-                  className="bg-zinc-900 border border-white/5 rounded-2xl p-2 flex flex-col gap-1 shadow-xl"
+                  className="bg-card border border-border rounded-2xl p-2 flex flex-col gap-1 shadow-xl"
                 >
-                  <div className="text-[9px] font-black text-center uppercase tracking-[0.25em] pt-2 pb-1">
+                  <div className="flex items-center justify-center pt-2 pb-1">
                     {urlValid === true ? (
-                      <span className="text-emerald-400">Video Ready â€” Hit Generate</span>
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[9px] font-black uppercase tracking-[0.2em] text-emerald-400">
+                        <CheckCircle2 className="w-3 h-3" />
+                        Video Ready
+                      </span>
                     ) : (
-                      <span className="text-zinc-500">Import Your Video</span>
+                      <span className="text-[9px] font-black uppercase tracking-[0.25em] text-muted-foreground">Import Your Video</span>
                     )}
                   </div>
 
@@ -405,14 +457,14 @@ export default function EditorLayout() {
                         exit={{ opacity: 0, height: 0 }}
                         className="px-1.5 pb-1"
                       >
-                        <div className="relative rounded-xl overflow-hidden border border-emerald-500/20 bg-zinc-800">
+                        <div className="relative rounded-xl overflow-hidden border border-emerald-500/20 bg-muted">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
                             src={thumbnailUrl}
                             alt="YouTube thumbnail"
                             className="w-full h-24 object-cover opacity-70"
                           />
-                          <div className="absolute inset-0 bg-gradient-to-r from-zinc-900/60 to-transparent" />
+                          <div className="absolute inset-0 bg-gradient-to-r from-background/70 to-transparent" />
                           <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
                             <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                             <span className="text-[9px] font-black text-emerald-400 uppercase tracking-widest">
@@ -430,12 +482,12 @@ export default function EditorLayout() {
                     </label>
                     <div
                       className={cn(
-                        "flex-1 flex items-center bg-zinc-800 border rounded-xl transition-colors",
+                        "flex-1 flex items-center bg-muted border rounded-xl transition-colors",
                         urlValid === true
                           ? "border-emerald-500/30"
                           : urlValid === false
                           ? "border-red-500/30"
-                          : "border-white/5"
+                          : "border-border"
                       )}
                     >
                       <span className="pl-3.5 shrink-0">
@@ -444,17 +496,17 @@ export default function EditorLayout() {
                         ) : urlValid === false ? (
                           <AlertCircle className="w-4 h-4 text-red-400" />
                         ) : (
-                          <Link2 className="w-4 h-4 text-zinc-600" />
+                          <Link2 className="w-4 h-4 text-muted-foreground" />
                         )}
                       </span>
                       <input
                         id="youtube-url-input"
                         type="text"
                         placeholder="Paste a YouTube URL..."
-                        className="bg-transparent border-none outline-none text-sm w-full text-zinc-100 placeholder:text-zinc-600 h-11 pl-3 pr-4 font-medium"
+                        className="bg-transparent border-none outline-none text-sm w-full text-foreground placeholder:text-muted-foreground h-11 pl-3 pr-4 font-medium"
                         value={urlInput}
                         onChange={handleUrlChange}
-                        onKeyDown={(e: KeyboardEvent<HTMLInputElement>) =>
+                        onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) =>
                           e.key === "Enter" && !isAnalysing && handleAnalyze()
                         }
                         disabled={isAnalysing}
@@ -522,7 +574,7 @@ export default function EditorLayout() {
           </div>
 
           {/* Video stage */}
-          <div className="w-full h-full flex items-center justify-center rounded-2xl overflow-hidden bg-zinc-950 border border-white/5 relative">
+          <div className="editor-stage-bg w-full h-full flex items-center justify-center rounded-2xl overflow-hidden border border-border relative">
             <AnimatePresence mode="wait">
               {isAnalysing ? (
                 <motion.div
@@ -535,17 +587,24 @@ export default function EditorLayout() {
                 >
                   {youtubePreviewId ? (
                     <div className="relative w-full h-full flex items-center justify-center p-16">
+                      {/* Video stays fully visible at all times — status floats below, never covers */}
                       <YouTubePlayer videoId={youtubePreviewId} className="max-w-lg w-full" />
-                      <div className="absolute inset-0 bg-zinc-950/70 flex items-center justify-center">
-                        <TimelineLoader
-                          phases={
-                            currentStage === "transcribing"
-                              ? ["Transcribing...", "Captioning...", "Building subtitles..."]
+                      {/* Thin top progress shimmer — premium, non-blocking */}
+                      <div className="absolute top-0 left-0 right-0 h-0.5 overflow-hidden pointer-events-none">
+                        <div className="h-full w-1/3 bg-gradient-to-r from-transparent via-primary to-transparent animate-[shimmer_1.4s_ease-in-out_infinite]" />
+                      </div>
+                      {/* Floating glass status chip — bottom-center, never obscures the frame */}
+                      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
+                        <div className="flex items-center gap-2.5 px-4 py-2 rounded-full bg-base/85 backdrop-blur-xl border border-border shadow-2xl">
+                          <Loader2 className="w-3.5 h-3.5 text-primary animate-spin shrink-0" />
+                          <span className="text-[10px] font-black uppercase tracking-[0.18em] text-foreground whitespace-nowrap">
+                            {currentStage === "transcribing"
+                              ? "Creating subtitles"
                               : currentStage === "analyzing"
-                              ? ["Analyzing...", "Scoring virality...", "Finding hooks..."]
-                              : ["Downloading...", "Preparing...", "Extracting..."]
-                          }
-                        />
+                              ? "Finding viral hooks"
+                              : "Loading video"}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   ) : (
@@ -597,25 +656,101 @@ export default function EditorLayout() {
           </div>
         </section>
 
-        {/* Right â€” Property Inspector */}
-        <section className="bg-zinc-900 border border-white/5 rounded-2xl flex flex-col overflow-hidden min-h-0">
-          <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-full">
+        {/* Right — Property Inspector (desktop inline) */}
+        <section className="hidden lg:flex bg-card border border-border rounded-2xl flex-col overflow-hidden min-h-0">
+          <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-foreground/10 [&::-webkit-scrollbar-thumb]:rounded-full">
             <RightPanel />
           </div>
         </section>
       </main>
 
       {/* Timeline */}
-      <footer className="h-44 shrink-0 bg-zinc-900 border border-white/5 rounded-2xl flex flex-col overflow-hidden relative">
+      <footer className="h-44 shrink-0 bg-card border border-border rounded-2xl flex flex-col overflow-hidden relative">
         <BottomDock />
       </footer>
 
-      {/* Floating macro controls â€” 2xl+ only */}
+      {/* Floating macro controls — 2xl+ only */}
       <div className="fixed right-10 top-1/2 -translate-y-1/2 flex flex-col gap-4 z-40 hidden 2xl:flex">
         <FloatingControls />
       </div>
 
-      {/* AI Copilot â€” fixed overlay, zero layout impact when closed */}
+      {/* Mobile/tablet — Left panel slide-over drawer */}
+      <AnimatePresence>
+        {leftPanelOpen && (
+          <>
+            <motion.div
+              key="left-backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 bg-black/60 z-40 lg:hidden"
+              onClick={() => setLeftPanelOpen(false)}
+            />
+            <motion.aside
+              key="left-drawer"
+              initial={{ x: "-100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "-100%" }}
+              transition={{ type: "spring", damping: 30, stiffness: 300 }}
+              className="fixed left-0 top-0 bottom-0 w-80 bg-card border-r border-border z-50 flex flex-col overflow-hidden lg:hidden"
+            >
+              <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-fg-muted">Viral Clips</span>
+                <button
+                  onClick={() => setLeftPanelOpen(false)}
+                  className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-foreground/10 transition-colors"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-foreground/10 [&::-webkit-scrollbar-thumb]:rounded-full">
+                <LeftPanel />
+              </div>
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Mobile/tablet — Right panel slide-over drawer */}
+      <AnimatePresence>
+        {rightPanelOpen && (
+          <>
+            <motion.div
+              key="right-backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 bg-black/60 z-40 lg:hidden"
+              onClick={() => setRightPanelOpen(false)}
+            />
+            <motion.aside
+              key="right-drawer"
+              initial={{ x: "100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "100%" }}
+              transition={{ type: "spring", damping: 30, stiffness: 300 }}
+              className="fixed right-0 top-0 bottom-0 w-80 bg-card border-l border-border z-50 flex flex-col overflow-hidden lg:hidden"
+            >
+              <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-fg-muted">Properties</span>
+                <button
+                  onClick={() => setRightPanelOpen(false)}
+                  className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-foreground/10 transition-colors"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-foreground/10 [&::-webkit-scrollbar-thumb]:rounded-full">
+                <RightPanel />
+              </div>
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* AI Copilot — fixed overlay, zero layout impact when closed */}
       <AICopilot />
     </div>
   );
@@ -640,13 +775,13 @@ function FloatingControls() {
   };
 
   const triggerPreFlight = () => {
-    window.dispatchEvent(new KeyboardEvent("keydown", { key: "P", shiftKey: true }));
+    window.dispatchEvent(new CustomEvent("qai:preflight"));
   };
 
   const buttons = [
-    { icon: Smartphone, title: `Aspect Ratio â€” ${exportSettings.aspectRatio}`, action: cycleAspectRatio },
+    { icon: Smartphone, title: `Aspect Ratio — ${exportSettings.aspectRatio}`, action: cycleAspectRatio },
     { icon: Zap, title: "Auto-Enhance", action: triggerAutoEnhance },
-    { icon: Sparkles, title: "AI Pre-Flight", action: triggerPreFlight },
+    { icon: Sparkles, title: "Pre-Flight", action: triggerPreFlight },
   ];
 
   return (
@@ -656,7 +791,7 @@ function FloatingControls() {
           key={i}
           onClick={action}
           aria-label={title}
-          className="w-12 h-12 rounded-xl bg-zinc-900 border border-white/5 flex items-center justify-center text-zinc-400 hover:text-zinc-100 hover:border-white/10 transition-colors"
+          className="w-12 h-12 rounded-xl bg-card border border-border flex items-center justify-center text-fg-muted hover:text-foreground hover:border-border transition-colors"
         >
           <Icon className="w-4 h-4" />
         </button>

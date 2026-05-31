@@ -29,7 +29,7 @@ export function TelemetryDock() {
   }, []);
 
   return (
-    <div className="fixed bottom-4 left-4 z-50 flex items-center gap-1.5 bg-black/60 backdrop-blur-md border border-white/[0.06] px-2.5 py-1 rounded-full">
+    <div className="fixed bottom-4 left-4 z-50 flex items-center gap-1.5 bg-black/60 backdrop-blur-md border border-border px-2.5 py-1 rounded-full">
       <span
         className={cn(
           "w-1.5 h-1.5 rounded-full",

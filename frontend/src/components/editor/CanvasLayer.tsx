@@ -78,18 +78,18 @@ function DraggableElement({
       {/* Controls — always visible for text, hover-only for other elements */}
       <div
         className={cn(
-          "absolute -top-10 left-1/2 -translate-x-1/2 flex items-center gap-1 transition-opacity bg-background/80 backdrop-blur-md border border-white/10 rounded-full px-2 py-1 shadow-2xl z-50",
+          "absolute -top-10 left-1/2 -translate-x-1/2 flex items-center gap-1 transition-opacity bg-background/80 backdrop-blur-md border border-border rounded-full px-2 py-1 shadow-2xl z-50",
           element.type === "text" ? "opacity-100" : "opacity-0 group-hover:opacity-100",
         )}
       >
         <button
           aria-label="Rotate element 15 degrees"
           onClick={(e) => { e.stopPropagation(); onUpdate({ rotation: element.rotation + 15 }); }}
-          className="p-1.5 hover:bg-white/10 rounded-full text-muted-foreground hover:text-primary transition-colors"
+          className="p-1.5 hover:bg-foreground/10 rounded-full text-muted-foreground hover:text-primary transition-colors"
         >
           <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" />
         </button>
-        <div className="w-px h-3 bg-white/10 mx-1" />
+        <div className="w-px h-3 bg-foreground/10 mx-1" />
         <button
           aria-label="Remove element"
           onClick={(e) => { e.stopPropagation(); onRemove(); }}

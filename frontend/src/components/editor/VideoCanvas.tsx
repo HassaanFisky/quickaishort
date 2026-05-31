@@ -87,7 +87,7 @@ export default function VideoCanvas() {
   const { isReady, reframingData, detect } = useFaceTracker();
   const [displayUrl, setDisplayUrl] = useState<string | null>(null);
 
-  // Web Audio API chain â€” MediaElementSource â†’ BiquadFilter â†’ GainNode
+  // Web Audio API chain — MediaElementSource → BiquadFilter → GainNode
   useEffect(() => {
     if (!videoRef.current) return;
     const audioBoost = exportSettings.audioBoost;
@@ -119,7 +119,7 @@ export default function VideoCanvas() {
     }
   }, [exportSettings.audioBoost, isPlaying]);
 
-  // Live noise suppression â€” update highpass filter frequency
+  // Live noise suppression — update highpass filter frequency
   useEffect(() => {
     if (!noiseFilterRef.current) return;
     noiseFilterRef.current.frequency.value = 80 + (exportSettings.noiseSuppression / 100) * 320;
@@ -270,7 +270,7 @@ export default function VideoCanvas() {
     [currentTime, duration, setCurrentTime]
   );
 
-  // Keyboard navigation â€” placed after skip and togglePlay declarations
+  // Keyboard navigation — placed after skip and togglePlay declarations
   useEffect(() => {
     if (!sourceUrl) return;
     const handler = (e: KeyboardEvent) => {
@@ -334,14 +334,14 @@ export default function VideoCanvas() {
     <div className="flex-1 flex flex-col items-center justify-center p-6 h-full">
       <div
         className={cn(
-          "relative bg-zinc-900 rounded-2xl overflow-hidden flex items-center justify-center group border border-white/5 shadow-2xl",
+          "relative bg-card rounded-2xl overflow-hidden flex items-center justify-center group border border-border shadow-2xl",
           aspectClass
         )}
       >
         {/* Status badges */}
         <div className="absolute top-4 right-4 z-50 flex flex-col items-end gap-2">
           {(!isReady || isBuffering) && (
-            <div className="flex items-center gap-2 bg-zinc-900/90 border border-white/10 px-3 py-1.5 rounded-full text-[10px] font-black text-zinc-400 uppercase tracking-widest">
+            <div className="flex items-center gap-2 bg-card/90 border border-border px-3 py-1.5 rounded-full text-[10px] font-black text-fg-muted uppercase tracking-widest">
               <Loader2 className="w-3 h-3 animate-spin text-primary" />
               {isBuffering ? "Buffering..." : "Vision Active"}
             </div>
@@ -358,7 +358,7 @@ export default function VideoCanvas() {
             {localYtId ? (
               <div className="relative w-full h-full flex flex-col">
                 <div id="yt-player-frame" className="w-full flex-1" />
-                <div className="flex items-center justify-center gap-3 py-2.5 px-4 bg-zinc-950/80 border-t border-white/5">
+                <div className="flex items-center justify-center gap-3 py-2.5 px-4 bg-base/80 border-t border-border">
                   <Button
                     variant="ghost"
                     size="sm"
@@ -396,7 +396,7 @@ export default function VideoCanvas() {
                       Preview unavailable
                     </span>
                   </div>
-                  <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest">
+                  <p className="text-[9px] text-muted-foreground font-bold uppercase tracking-widest">
                     AI analysis continues in background
                   </p>
                 </div>
@@ -471,14 +471,14 @@ export default function VideoCanvas() {
         ) : (
           /* Empty state */
           <div className="flex flex-col items-center gap-4 p-8 select-none">
-            <div className="w-14 h-14 rounded-2xl bg-zinc-800 border border-white/5 flex items-center justify-center">
-              <PlayCircle className="w-6 h-6 text-zinc-600" strokeWidth={1} />
+            <div className="w-14 h-14 rounded-2xl bg-muted border border-border flex items-center justify-center">
+              <PlayCircle className="w-6 h-6 text-muted-foreground" strokeWidth={1} />
             </div>
             <div className="text-center">
-              <p className="text-sm font-black text-zinc-400 uppercase tracking-widest mb-1">
+              <p className="text-sm font-black text-fg-muted uppercase tracking-widest mb-1">
                 Paste a YouTube URL to get started
               </p>
-              <p className="text-xs text-zinc-600 max-w-[220px]">
+              <p className="text-xs text-muted-foreground max-w-[220px]">
                 We&apos;ll analyze the video and suggest the best viral clips automatically
               </p>
             </div>
@@ -491,14 +491,14 @@ export default function VideoCanvas() {
         />
         <CanvasLayer />
 
-        {/* Playback controls â€” visible on hover when video is loaded */}
+        {/* Playback controls — visible on hover when video is loaded */}
         {sourceUrl && !localYtId && !isBuffering && !videoError && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none group-hover:pointer-events-auto">
             <div className="flex items-center gap-3">
               <button
                 onClick={() => skip(-10)}
                 aria-label="Skip back 10 seconds"
-                className="w-10 h-10 rounded-full bg-black/60 border border-white/10 flex items-center justify-center text-white hover:bg-black/80 transition-colors"
+                className="w-10 h-10 rounded-full bg-black/60 border border-border flex items-center justify-center text-white hover:bg-black/80 transition-colors"
               >
                 <SkipBack className="w-4 h-4" />
               </button>
@@ -516,7 +516,7 @@ export default function VideoCanvas() {
               <button
                 onClick={() => skip(10)}
                 aria-label="Skip forward 10 seconds"
-                className="w-10 h-10 rounded-full bg-black/60 border border-white/10 flex items-center justify-center text-white hover:bg-black/80 transition-colors"
+                className="w-10 h-10 rounded-full bg-black/60 border border-border flex items-center justify-center text-white hover:bg-black/80 transition-colors"
               >
                 <SkipForward className="w-4 h-4" />
               </button>
