@@ -145,11 +145,9 @@ export default function EditorLayout() {
     const videoId = parseYouTubeId(val);
     if (videoId) {
       setUrlValid(true);
-      setThumbnailUrl(null);
       setYoutubePreviewId(videoId);
     } else {
       setUrlValid(false);
-      setThumbnailUrl(null);
       setYoutubePreviewId(null);
     }
   };
