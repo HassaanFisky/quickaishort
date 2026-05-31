@@ -191,22 +191,6 @@ if _ADK_OK:
             _bq_err,
         )
 
-# MCPToolset is a sub-package of ADK — import separately so a missing optional
-# dependency never breaks the main ADK import above.
-_MCP_OK = False
-MCPToolset = StdioServerParams = None  # type: ignore[assignment]
-if _ADK_OK:
-    try:
-        from google.adk.tools.mcp_tool.mcp_toolset import MCPToolset, StdioServerParameters as StdioServerParams  # type: ignore[assignment]
-
-        _MCP_OK = True
-    except Exception as _mcp_err:
-        logger.warning(
-            "google-adk MCPToolset not available or failed to load (%s) — Supabase MCP agent disabled",
-            _mcp_err,
-        )
-
-
 # ---------------------------------------------------------------------------
 # Async grounding (runs OUTSIDE ADK so we can true-parallel both calls)
 # ---------------------------------------------------------------------------
@@ -640,60 +624,10 @@ def _build_pipeline() -> tuple[Any, Any]:
     trend_agent = _TrendAgent()
     analytics_agent = _AnalyticsAgent()
 
-    # Supabase MCP agent — queries historical preflight data for channel context.
-    # Activated only when SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY are set and
-    # MCPToolset is available in the installed ADK build.
-    supabase_mcp_agent = None
-    _supabase_url = os.environ.get("SUPABASE_URL", "")
-    _supabase_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
-    if _MCP_OK and _supabase_url and _supabase_key:
-        try:
-            _mcp_toolset = MCPToolset(
-                connection_params=StdioServerParams(
-                    command="npx",
-                    args=["-y", "@supabase/mcp-server-supabase@latest"],
-                    env={
-                        "SUPABASE_URL": _supabase_url,
-                        "SUPABASE_SERVICE_ROLE_KEY": _supabase_key,
-                    },
-                )
-            )
-            supabase_mcp_agent = Agent(
-                name="SupabaseMCPAgent",
-                model=model,
-                generate_content_config=generate_config,
-                tools=[_mcp_toolset],
-                description="Grounds persona predictions with historical preflight data from Supabase.",
-                instruction=(
-                    "Use the execute_sql tool to run this query: "
-                    "SELECT ROUND(AVG(consensus_score)::numeric, 1) AS avg_score, "
-                    "COUNT(*) AS sample_count FROM preflight_results "
-                    "WHERE created_at > NOW() - INTERVAL '30 days'. "
-                    "If the table does not exist or the query fails, respond with 'null'. "
-                    "Otherwise respond with the JSON result only — no extra text."
-                ),
-                output_key="historical_baseline",
-            )
-            logger.info(
-                "Supabase MCP agent initialised (channel history grounding active)"
-            )
-        except Exception as _mcp_err:
-            logger.warning("Supabase MCP agent init failed: %s", _mcp_err)
-            supabase_mcp_agent = None
-    else:
-        logger.info(
-            "Supabase MCP agent skipped (SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY not set)"
-        )
-
     # Pillar 3: Parallelize initial grounding + candidate check (DAG-like).
-    # SupabaseMCPAgent is added to the DAG when credentials are available.
-    grounding_sub_agents = [clip_candidate_agent, trend_agent, analytics_agent]
-    if supabase_mcp_agent is not None:
-        grounding_sub_agents.append(supabase_mcp_agent)
-
     grounding_parallel = ParallelAgent(
         name="GroundingDAG",
-        sub_agents=grounding_sub_agents,
+        sub_agents=[clip_candidate_agent, trend_agent, analytics_agent],
     )
 
     root_agent = SequentialAgent(
