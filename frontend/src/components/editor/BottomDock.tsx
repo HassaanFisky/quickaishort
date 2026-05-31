@@ -19,6 +19,7 @@ import {
   Undo2,
   Redo2,
   Trash2,
+  type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatTime } from "@/lib/utils/formatTime";
@@ -321,7 +322,7 @@ export default function BottomDock() {
   }, [exportSettings.voiceoverEnabled, setExportSetting]);
 
   const tools: Array<{
-    icon: React.FC<{ className?: string; "aria-hidden"?: boolean }>;
+    icon: LucideIcon;
     label: string;
     toolId: EditorTool;
     action: () => void;
