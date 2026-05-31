@@ -22,7 +22,7 @@ google-cloud-bigquery>=3.25.0
 google-cloud-storage>=2.14.0
 httpx==0.28.1
 # python-jose removed (Critical CVE GHSA-cjwg-qfpm-7377 — replaced with PyJWT)
-PyJWT[crypto]==2.10.1
+PyJWT[crypto]==2.13.0
 google-api-python-client>=2.120.0
 slowapi==0.1.9
 structlog>=23.1.0

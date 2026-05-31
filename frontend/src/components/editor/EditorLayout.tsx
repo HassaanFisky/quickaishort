@@ -457,7 +457,7 @@ export default function EditorLayout() {
                         <div className="relative rounded-xl overflow-hidden border border-emerald-500/20 bg-muted">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
-                            src={`https://i.ytimg.com/vi/${youtubePreviewId}/mqdefault.jpg`}
+                            src={`https://i.ytimg.com/vi/${(youtubePreviewId??"").replace(/[^a-zA-Z0-9_-]/g,"")}/mqdefault.jpg`}
                             alt="YouTube thumbnail"
                             className="w-full h-24 object-cover opacity-70"
                           />
