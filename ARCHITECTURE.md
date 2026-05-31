@@ -102,7 +102,6 @@
 | ClipCandidateAgent | `Agent` | Validates clip metadata, seeds session state |
 | TrendGroundingAgent | `BaseAgent` | Calls SerpAPI async via httpx (deterministic) |
 | AnalyticsGroundingAgent | `BaseAgent` | Calls YouTube Analytics v2 via OAuth (deterministic) |
-| SupabaseMCPAgent | `Agent` + `MCPToolset` | Queries Supabase for historical channel preflight data via stdio MCP server |
 | Persona_* (×6) | `Agent` | Simulates a specific demographic audience member |
 | VoteAggregatorAgent | `BaseAgent` | Weighted consensus from 6 votes (pure Python, no LLM) |
 | QualityGateAgent | `BaseAgent` | Sets loop exit flag + recommendation (pure Python, no LLM) |
@@ -174,7 +173,6 @@ Frontend (RightPanel.tsx)
 
 - [x] Uses Google Gemini 2.5 Flash for all agent reasoning
 - [x] Uses Google ADK 1.0 — `SequentialAgent`, `LoopAgent`, `ParallelAgent`, `FunctionTool`
-- [x] Integrates Supabase MCP server
 - [x] Deployed at quickaishort.online
 - [x] Public GitHub repo with MIT LICENSE
 - [ ] 2:50–3:00 demo video (live pipeline, not mock)

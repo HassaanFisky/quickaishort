@@ -177,7 +177,7 @@ def inject_ydl_bypass(opts: dict) -> dict:
             new_opts.setdefault("http_headers", {})[
                 "Proxy-Authorization"
             ] = f"Basic {b64_token}"
-            logger.debug("Proxy-Authorization header injected (user=%s)", cred_user)
+            logger.debug("Proxy-Authorization header injected")
         else:
             logger.warning(
                 "Proxy URL set but credentials could not be parsed; "

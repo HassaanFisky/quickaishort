@@ -72,7 +72,7 @@ export default function EditorLayout() {
   }, [storeTranscript, storeVideoMetadata, setVideoContext]);
 
   const [urlInput, setUrlInput] = useState("");
-  const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
+  
   const [urlValid, setUrlValid] = useState<boolean | null>(null);
   const [youtubePreviewId, setYoutubePreviewId] = useState<string | null>(null);
   const [backendFailed, setBackendFailed] = useState(false);
@@ -141,14 +141,13 @@ export default function EditorLayout() {
     setBackendFailed(false);
     if (!val.trim()) {
       setUrlValid(null);
-      setThumbnailUrl(null);
       setYoutubePreviewId(null);
       return;
     }
     const videoId = parseYouTubeId(val);
     if (videoId) {
       setUrlValid(true);
-      setThumbnailUrl(`https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`);
+      setThumbnailUrl(null);
       setYoutubePreviewId(videoId);
     } else {
       setUrlValid(false);
@@ -450,7 +449,7 @@ export default function EditorLayout() {
                   </div>
 
                   <AnimatePresence>
-                    {thumbnailUrl && urlValid && !isAnalysing && (
+                    {youtubePreviewId && urlValid && !isAnalysing && (
                       <motion.div
                         initial={{ opacity: 0, height: 0 }}
                         animate={{ opacity: 1, height: "auto" }}
@@ -460,7 +459,7 @@ export default function EditorLayout() {
                         <div className="relative rounded-xl overflow-hidden border border-emerald-500/20 bg-muted">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
-                            src={thumbnailUrl}
+                            src={`https://i.ytimg.com/vi/${youtubePreviewId}/mqdefault.jpg`}
                             alt="YouTube thumbnail"
                             className="w-full h-24 object-cover opacity-70"
                           />

@@ -51,7 +51,7 @@ This is Pre-Flight. Built on Google ADK. Let me show you."
 
 **Say:**
 "Pre-Flight runs this clip through a Google ADK multi-agent system.
-It starts with a validation DAG — checking clip quality, grounding predictions against trend data from Supabase."
+It starts with a validation DAG — checking clip quality, grounding predictions against trend data from MongoDB."
 
 **Action:** Click "Run Pre-Flight" on the selected clip (or navigate to the Pre-Flight panel).
 
@@ -95,7 +95,7 @@ It starts with a validation DAG — checking clip quality, grounding predictions
 
 **Say:**
 "QuickAI Short: YouTube in, viral short out — validated before you post.
-Built with Google ADK, Gemini 2.5 Flash, and Supabase MCP.
+Built with Google ADK, Gemini 2.5 Flash, and MongoDB.
 Try it live at quickaishort.online."
 
 **Screen:** Homepage or clip result screen with the URL visible.

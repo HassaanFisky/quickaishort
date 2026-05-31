@@ -34,7 +34,7 @@ Paste any YouTube URL. The system extracts audio, runs heuristic scoring (audio 
 
 **2. Pre-Flight Audience Validation (ADK Multi-Agent)**
 The core differentiator. Each clip candidate passes through:
-- An asynchronous DAG: ClipCandidate validator → TrendGrounding agent (Supabase MCP) → AnalyticsGrounding agent
+- An asynchronous DAG: ClipCandidate validator → TrendGrounding agent (MongoDB Analytics) → AnalyticsGrounding agent
 - A LoopAgent running a ParallelAgent of 6 personas: Gen-Z, Millennial, Sports fan, Tech enthusiast, Entertainment fan, News consumer
 - An Aggregator → QualityGate → Refinement chain that produces a cross-demographic validation score and actionable notes
 
@@ -59,9 +59,7 @@ A browser-based clip editor with: timeline scrubber, caption overlay, Web Audio 
 - Gemini 2.5 Flash — all LLM calls (viral scoring, persona simulation, script generation, conversational editor)
 - Whisper base.en — in-browser audio transcription (no server round-trip)
 
-**Infrastructure:** Cloud Run (API + render worker), Vercel (frontend), MongoDB Atlas (GridFS media storage), Supabase (ADK grounding via MCP), Pusher (real-time dashboard updates), Cloudflare DNS
-
-**Supabase MCP Integration:** The `TrendGrounding` agent in the Pre-Flight DAG connects to Supabase via `MCPToolset + StdioServerParams` to query trend data that grounds each clip's viral prediction in real platform analytics.
+**Infrastructure:** Cloud Run (API + render worker), Vercel (frontend), MongoDB Atlas (GridFS media storage), Pusher (real-time dashboard updates), Cloudflare DNS
 
 ---
 
@@ -87,7 +85,7 @@ A browser-based clip editor with: timeline scrubber, caption overlay, Web Audio 
 ## What we learned
 
 - ADK LoopAgent + ParallelAgent composition is extremely powerful but requires careful session state management (Firestore session service, not in-memory, for cross-agent state)
-- Supabase MCP as a grounding tool inside an ADK DAG works well — MCPToolset auto-discovers the server's tool list at agent init time
+- MongoDB as a grounding data source for ADK agents works well — query results are passed as structured context
 - Google Gemini 2.5 Flash's JSON mode (`responseMimeType: "application/json"`) is reliable enough to use as a structured-output compiler for editor action arrays
 
 ---
@@ -103,7 +101,7 @@ A browser-based clip editor with: timeline scrubber, caption overlay, Web Audio 
 
 ## Built With
 
-google-adk, gemini-2.5-flash, nextjs, fastapi, python, yt-dlp, ffmpeg, whisper, redis, mongodb, supabase, vercel, google-cloud-run, tailwindcss, framer-motion, zustand, pusher
+google-adk, gemini-2.5-flash, nextjs, fastapi, python, yt-dlp, ffmpeg, whisper, redis, mongodb, mongodb, vercel, google-cloud-run, tailwindcss, framer-motion, zustand, pusher
 
 ---
 
@@ -130,7 +128,7 @@ Startup stage: Pre-seed
 
 ## Notes for form fields
 
-- "Does your project use Google AI products?" → YES: Google ADK v1.0, Gemini 2.5 Flash, Google Cloud Run, Google TTS (optional), Supabase MCP (Supabase is a Google Cloud partner)
+- "Does your project use Google AI products?" → YES: Google ADK v1.0, Gemini 2.5 Flash, Google Cloud Run, Google TTS (optional)
 - "GitHub repository" → https://github.com/HassaanFisky/quickaishort
 - "Demo URL" → https://www.quickaishort.online
 - "Demo video" → [FILL: YouTube/Vimeo link after recording]

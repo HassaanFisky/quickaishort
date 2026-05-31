@@ -80,7 +80,7 @@ Previous failed builds (now superseded):
 | Issue | Impact | Workaround |
 |-------|--------|-----------|
 | BigQuery `adk_analytics` dataset empty | No BQ-based analytics yet | MongoDB/Firestore fallback active |
-| MCP `SamplingCapability` import fail | Supabase MCP agent disabled | Logged as WARNING, graceful fallback |
+| MCP `SamplingCapability` import fail | MCP grounding agent disabled | Logged as WARNING, graceful fallback |
 | Sentry Celery integration | Warning log on startup | Non-functional but non-blocking |
 
 ---
