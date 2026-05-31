@@ -33,7 +33,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
             defaultTheme="dark"
             enableSystem
             disableTransitionOnChange
-            themes={["dark", "light", "crystal", "neon", "magma", "aurora", "nano"]}
+            themes={["dark", "oled", "light"]}
           >
             <SplashScreen />
             <ErrorBoundary>

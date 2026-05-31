@@ -5,6 +5,7 @@ import { useTranscription } from "@/hooks/useTranscription";
 import { useAnalysis } from "@/hooks/useAnalysis";
 import { useEffect } from "react";
 import { useEditorStore } from "@/stores/editorStore";
+import { useShortcutsStore, matchEvent } from "@/stores/shortcutsStore";
 import { TelemetryDock } from "@/components/editor/TelemetryDock";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import { extractAudioData } from "@/lib/utils/audioExtractor";
@@ -43,7 +44,7 @@ export default function EditorPage() {
       window.removeEventListener("trigger-silence-detect", handleSilenceTrigger);
   }, [sourceFile, sourceUrl, analysis, setAudioData]);
 
-  // Global keyboard shortcuts
+  // Global keyboard shortcuts — driven by the user-customizable bindings store.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
@@ -51,41 +52,20 @@ export default function EditorPage() {
       if (tag === "INPUT" || tag === "TEXTAREA" || target?.isContentEditable)
         return;
 
+      const b = useShortcutsStore.getState().bindings;
       const store = useEditorStore.getState();
 
-      if (e.key === " ") {
+      if (matchEvent(e, b.playPause)) {
         e.preventDefault();
         store.setIsPlaying(!store.isPlaying);
+        return;
       }
-      if (e.key === "s" && !e.metaKey && !e.ctrlKey) {
+      if (matchEvent(e, b.split)) {
         e.preventDefault();
         if (store.suggestions.length > 0) store.splitClipAtTime(store.currentTime);
+        return;
       }
-      if (e.key === "Delete" || e.key === "Backspace") {
-        if (store.selectedClipId) {
-          e.preventDefault();
-          store.deleteClip(store.selectedClipId);
-        }
-      }
-      if ((e.metaKey || e.ctrlKey) && e.key === "z" && !e.shiftKey) {
-        e.preventDefault();
-        store.undo();
-      }
-      if ((e.metaKey || e.ctrlKey) && e.key === "z" && e.shiftKey) {
-        e.preventDefault();
-        store.redo();
-      }
-      if (e.key === "ArrowLeft") {
-        e.preventDefault();
-        const delta = e.shiftKey ? 5 : 1;
-        store.setPendingSeek(Math.max(0, store.currentTime - delta));
-      }
-      if (e.key === "ArrowRight") {
-        e.preventDefault();
-        const delta = e.shiftKey ? 5 : 1;
-        store.setPendingSeek(Math.min(store.duration, store.currentTime + delta));
-      }
-      if (e.key === "t" && !e.metaKey && !e.ctrlKey) {
+      if (matchEvent(e, b.addText)) {
         e.preventDefault();
         store.addCanvasElement({
           type: "text",
@@ -96,6 +76,48 @@ export default function EditorPage() {
           rotation: 0,
           style: { className: "text-3xl font-bold text-white" },
         });
+        return;
+      }
+      // Delete: honor the bound key, plus Backspace as an always-on alias of the default.
+      if (matchEvent(e, b.deleteClip) || (b.deleteClip === "Delete" && matchEvent(e, "Backspace"))) {
+        if (store.selectedClipId) {
+          e.preventDefault();
+          store.deleteClip(store.selectedClipId);
+        }
+        return;
+      }
+      if (matchEvent(e, b.undo)) {
+        e.preventDefault();
+        store.undo();
+        return;
+      }
+      if (matchEvent(e, b.redo)) {
+        e.preventDefault();
+        store.redo();
+        return;
+      }
+      // Skip: match the key but ignore Shift so it can scale the nudge (1s → 5s).
+      if (matchEvent(e, b.skipBack, { looseShift: true })) {
+        e.preventDefault();
+        const delta = e.shiftKey ? 5 : 1;
+        store.setPendingSeek(Math.max(0, store.currentTime - delta));
+        return;
+      }
+      if (matchEvent(e, b.skipForward, { looseShift: true })) {
+        e.preventDefault();
+        const delta = e.shiftKey ? 5 : 1;
+        store.setPendingSeek(Math.min(store.duration, store.currentTime + delta));
+        return;
+      }
+      if (matchEvent(e, b.preflight)) {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent("qai:preflight"));
+        return;
+      }
+      if (matchEvent(e, b.export)) {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent("qai:export"));
+        return;
       }
     };
     window.addEventListener("keydown", handleKeyDown);
