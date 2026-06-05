@@ -18,6 +18,8 @@ export interface ExportRequestPayload {
   start_sec: number;
   end_sec: number;
   user_id: string;
+  /** Per-session isolation id so a superseded worker run discards its result. */
+  runId?: string;
   aspect_ratio: ExportAspect;
   quality: ExportQuality;
   captions: {

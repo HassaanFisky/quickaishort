@@ -82,6 +82,12 @@ export class VideoEngineCore {
   private _mounted = false;
   private _postRender: PostRenderCallback | null = null;
 
+  // Named references so destroy() can call removeEventListener correctly.
+  // Arrow-function literals cannot be removed because they don't share identity.
+  private readonly _onSeeked: () => void;
+  private readonly _onEnded: () => void;
+  private readonly _onResize: () => void;
+
   private readonly _listeners: {
     [K in keyof EngineEventMap]?: Set<EngineListener<K>>;
   } = {};
@@ -109,6 +115,12 @@ export class VideoEngineCore {
 
     this._hasRVFC =
       typeof (this._video as HTMLVideoElement).requestVideoFrameCallback === "function";
+
+    // Bind named handler references before _bindInternalEvents so destroy() can
+    // remove them. Arrow-function literals have no stable identity.
+    this._onSeeked = () => { this._blitFrame(); this._emit("seekComplete", this._video.currentTime); };
+    this._onEnded = () => { this._stopLoop(); this._setState("PAUSED"); };
+    this._onResize = () => { computeCropMatrix(this._video.videoWidth, this._video.videoHeight); };
 
     this._bindInternalEvents();
     this._mounted = true;
@@ -235,10 +247,14 @@ export class VideoEngineCore {
     this._audio.src = "";
     this._video.load();
     this._audio.load();
+    // Remove the internal DOM listeners registered in _bindInternalEvents.
+    this._video.removeEventListener("seeked", this._onSeeked);
+    this._video.removeEventListener("ended", this._onEnded);
+    this._video.removeEventListener("resize", this._onResize);
     // Flush canvas to opaque black
     this._ctx.fillStyle = "#000000";
     this._ctx.fillRect(0, 0, ENGINE_W, ENGINE_H);
-    // Remove all listeners
+    // Remove all external event listeners
     for (const k of Object.keys(this._listeners)) {
       delete (this._listeners as Record<string, unknown>)[k];
     }
@@ -324,18 +340,9 @@ export class VideoEngineCore {
   }
 
   private _bindInternalEvents(): void {
-    this._video.addEventListener("seeked", () => {
-      this._blitFrame();
-      this._emit("seekComplete", this._video.currentTime);
-    });
-    this._video.addEventListener("ended", () => {
-      this._stopLoop();
-      this._setState("PAUSED");
-    });
-    this._video.addEventListener("resize", () => {
-      // Adaptive-streaming quality switch — recompute crop to match new source dimensions
-      computeCropMatrix(this._video.videoWidth, this._video.videoHeight);
-    });
+    this._video.addEventListener("seeked", this._onSeeked);
+    this._video.addEventListener("ended", this._onEnded);
+    this._video.addEventListener("resize", this._onResize);
   }
 
   private _setState(next: EngineState): void {

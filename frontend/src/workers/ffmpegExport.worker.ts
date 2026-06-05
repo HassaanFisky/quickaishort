@@ -220,6 +220,14 @@ self.onmessage = async (e: MessageEvent<{
 
       case "cancel":
         isRecording = false;
+        // Delete every frame written so far from the virtual FS. Without this,
+        // stale frames from a cancelled session persist and are included in the
+        // next encode (frameCount resets to 0 but old files remain on disk).
+        if (ffmpeg && isLoaded && frameCount > 0) {
+          for (let i = 0; i < frameCount; i++) {
+            ffmpeg.deleteFile(`frame_${i.toString().padStart(6, "0")}.jpg`).catch(() => undefined);
+          }
+        }
         frameCount = 0;
         self.postMessage({
           type: "status",

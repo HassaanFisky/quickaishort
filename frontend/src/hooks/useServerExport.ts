@@ -281,6 +281,7 @@ export function useServerExport({ userId }: UseServerExportArgs) {
         start_sec: clip.start,
         end_sec: clip.end,
         user_id: userId,
+        runId: useEditorStore.getState().runId,
         aspect_ratio: options.aspectRatio ?? clip.aspectRatio ?? "9:16",
         quality: options.quality ?? "medium",
         captions: {

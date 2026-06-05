@@ -1,7 +1,7 @@
 """Tiered video acquisition with Redis metadata caching.
 
 Wraps the existing VideoService.download_segment_sync() with:
-- Per-tier hard timeouts (15s each) so no single yt-dlp call blocks forever
+- Per-tier hard timeouts (90s each, env-overridable) so no single yt-dlp call blocks forever
 - Redis metadata cache (1 hour TTL) so identical video+range combos skip re-download
 - Structured per-tier logging so failures are debuggable without reading ffmpeg stderr
 
@@ -23,7 +23,7 @@ from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
-_TIER_TIMEOUT_S = int(os.getenv("VIDEO_ACQUISITION_TIER_TIMEOUT_S", "15"))
+_TIER_TIMEOUT_S = int(os.getenv("VIDEO_ACQUISITION_TIER_TIMEOUT_S", "90"))
 _CACHE_TTL_S = 3600  # 1 hour
 _CACHE_KEY_PREFIX = "acquisition:"
 
@@ -142,6 +142,86 @@ def _try_tier2(video_id: str, start_sec: float, end_sec: float, workdir: Path) -
     return candidates[0]
 
 
+def _download_chunked(
+    video_id: str, start_sec: float, end_sec: float, workdir: Path
+) -> Path:
+    """O5: Download a long clip (>120s) as 120s chunks via tier-1, concat losslessly.
+
+    Each chunk runs under the same per-tier timeout so no single yt-dlp call
+    blocks forever. Raises on the first failed chunk so acquire_video() can fall
+    back to the standard single-shot tier loop.
+    """
+    import concurrent.futures
+    import subprocess
+
+    chunk_size = 120.0
+    chunks: list[Path] = []
+    cursor = start_sec
+    idx = 0
+
+    while cursor < end_sec:
+        chunk_end = min(cursor + chunk_size, end_sec)
+        chunk_workdir = workdir / f"chunk_{idx}"
+        chunk_workdir.mkdir(parents=True, exist_ok=True)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(
+                _try_tier1, video_id, cursor, chunk_end, chunk_workdir
+            )
+            try:
+                produced = future.result(timeout=_TIER_TIMEOUT_S)
+            except Exception as exc:
+                logger.warning(
+                    "chunked_download_chunk_failed start=%.0f end=%.0f error=%s",
+                    cursor,
+                    chunk_end,
+                    str(exc)[:200],
+                )
+                raise RuntimeError(
+                    f"Chunk {cursor:.0f}-{chunk_end:.0f}s failed: {exc}"
+                ) from exc
+        stable = workdir / f"chunk_{idx:03d}.mp4"
+        Path(produced).rename(stable)
+        chunks.append(stable)
+        cursor = chunk_end
+        idx += 1
+
+    if len(chunks) == 1:
+        final = workdir / "source.mp4"
+        chunks[0].rename(final)
+        return final
+
+    concat_list = workdir / "concat.txt"
+    concat_list.write_text(
+        "\n".join(f"file '{c.resolve().as_posix()}'" for c in chunks)
+    )
+    final = workdir / "source.mp4"
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-y",
+            "-f",
+            "concat",
+            "-safe",
+            "0",
+            "-i",
+            str(concat_list),
+            "-c",
+            "copy",
+            str(final),
+        ],
+        check=True,
+        capture_output=True,
+        timeout=120,
+    )
+    for c in chunks:
+        c.unlink(missing_ok=True)
+    concat_list.unlink(missing_ok=True)
+    logger.info(
+        "chunked_download_complete video_id=%s chunks=%d", video_id, len(chunks)
+    )
+    return final
+
+
 def acquire_video(
     video_id: str,
     start_sec: float,
@@ -197,6 +277,34 @@ def acquire_video(
                 end_sec,
             )
             return cached
+
+    # O5: clips longer than a single chunk download as 120s segments + concat.
+    # On any failure we fall through to the standard single-shot tier loop below.
+    if (end_sec - start_sec) > 120:
+        t0 = time.time()
+        try:
+            video_path = _download_chunked(video_id, start_sec, end_sec, workdir)
+            result = {
+                "status": "ready",
+                "video_path": str(video_path),
+                "tier": 1,
+                "metadata": {
+                    "video_id": video_id,
+                    "start_sec": start_sec,
+                    "end_sec": end_sec,
+                    "elapsed_s": round(time.time() - t0, 2),
+                    "acquired_at": time.time(),
+                    "method": "chunked",
+                },
+            }
+            _write_cache(video_id, start_sec, end_sec, result)
+            return result
+        except Exception as exc:
+            logger.warning(
+                "chunked_download_failed video_id=%s error=%s — falling back to tiers",
+                video_id,
+                str(exc)[:200],
+            )
 
     failed_tiers: list[dict] = []
 

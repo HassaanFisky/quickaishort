@@ -1430,7 +1430,7 @@ function PreflightResultsPanel({
       ) : (
         <div className="p-3 rounded-xl bg-card border border-dashed border-border">
           <p className="text-[9px] text-muted-foreground italic">
-            Add SERPAPI_KEY to env for live trend context.
+            Trend data unavailable for this clip.
           </p>
         </div>
       )}

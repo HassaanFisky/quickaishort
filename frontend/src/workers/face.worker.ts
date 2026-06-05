@@ -69,6 +69,9 @@ workerCtx.addEventListener("message", async (event) => {
         frame,
         timestamp,
       );
+      // Release GPU texture memory immediately — ImageBitmaps must be explicitly
+      // closed or they accumulate. At 30fps this is ~30 × 8 MB/frame without close().
+      (frame as ImageBitmap).close();
 
       if (result.detections.length > 0) {
         const bestFace = result.detections[0];

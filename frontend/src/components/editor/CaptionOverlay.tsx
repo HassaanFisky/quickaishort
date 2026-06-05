@@ -23,6 +23,13 @@ export function CaptionOverlay({ videoRef, transcript }: CaptionOverlayProps) {
         return;
       }
 
+      // Skip the draw and reschedule only when playing — avoids running at 60fps
+      // while the video is paused, which burns CPU/battery with no visible change.
+      if (video.paused || video.ended) {
+        requestRef.current = requestAnimationFrame(render);
+        return;
+      }
+
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
 

@@ -34,6 +34,21 @@ export async function extractAudioData(
         } catch { /* ignore parse failure, keep status-based message */ }
         throw new Error(errMsg);
       }
+
+      // Guard against OOM: reject before allocating the ArrayBuffer + decoded PCM.
+      // 150 MB compressed ≈ 2.5 hrs at 128 kbps. Decoded Float32Array at 16 kHz
+      // would be ~600 MB — combined peak allocation exceeds 700 MB, crashing mobile tabs.
+      const contentLength = response.headers.get("content-length");
+      if (contentLength) {
+        const bytes = parseInt(contentLength, 10);
+        if (!isNaN(bytes) && bytes > 150_000_000) {
+          throw new Error(
+            `Audio stream is too large for browser processing (${Math.round(bytes / 1_000_000)} MB compressed). ` +
+            `Use a video under 60 minutes, or upload an MP4 file directly.`
+          );
+        }
+      }
+
       arrayBuffer = await response.arrayBuffer();
     } else {
       arrayBuffer = await source.arrayBuffer();
