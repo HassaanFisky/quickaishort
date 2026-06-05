@@ -535,13 +535,6 @@ html.liquid-transition::view-transition-new(root) {
 .interactive:hover  { opacity: 1; filter: brightness(1.12); }
 .interactive:active { transform: scale(0.97); filter: brightness(0.9); }
 
-/* custom-scrollbar used inside AgentWorkforce */
-.custom-scrollbar::-webkit-scrollbar { width: 4px; }
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: hsl(var(--foreground) / 0.08);
-  border-radius: 100px;
-}
-
 /* ── Marquee (social proof ticker) ─────────────── */
 @keyframes marquee {
   from { transform: translateX(0); }
@@ -1065,31 +1058,6 @@ nav:has(.nav-link:hover) .nav-link:not(:hover) {
 
 /* ── AI Video Editor styles ─────────────────────────────────────────────── */
 
-.editor-root {
-  display: grid;
-  grid-template-columns: 1fr 14rem;
-  grid-template-rows: 1fr auto;
-  width: 100%;
-  min-height: 100vh;
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  position: relative;
-  overflow: hidden;
-}
-
-.video-stage {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: clamp(1rem, 3vw, 2.5rem);
-  gap: 1rem;
-  min-height: 0;
-}
-
-.stage-portrait { max-width: 420px; margin: 0 auto; }
-.stage-landscape { width: 100%; }
-
 .video-wrapper {
   position: relative;
   width: 100%;
@@ -1099,8 +1067,6 @@ nav:has(.nav-link:hover) .nav-link:not(:hover) {
   background: #111113;
   box-shadow: 0 0 0 1px rgba(255,255,255,0.06), 0 24px 60px rgba(0,0,0,0.7);
 }
-
-.stage-portrait .video-wrapper { width: auto; height: calc(100vh - 120px); }
 
 .video-element {
   width: 100%;
@@ -1204,79 +1170,6 @@ nav:has(.nav-link:hover) .nav-link:not(:hover) {
   color: rgba(232,232,234,0.5);
   flex-shrink: 0;
   letter-spacing: 0.02em;
-}
-
-.filter-controls {
-  grid-row: 1 / 2;
-  padding: 1.25rem 1rem;
-  border-left: 1px solid rgba(255,255,255,0.06);
-  background: rgba(255,255,255,0.02);
-  display: flex;
-  flex-direction: column;
-  gap: 0.875rem;
-  overflow-y: auto;
-}
-
-.filter-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 0.25rem;
-}
-
-.filter-title {
-  font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: rgba(255,255,255,0.35);
-}
-
-.filter-reset {
-  background: none;
-  border: 1px solid rgba(255,255,255,0.1);
-  color: rgba(255,255,255,0.4);
-  font-size: 0.7rem;
-  padding: 0.15em 0.5em;
-  border-radius: 0.25rem;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.filter-reset:hover { color: #c4a4ff; border-color: rgba(196,164,255,0.4); }
-
-.filter-row { display: flex; flex-direction: column; gap: 0.3rem; }
-
-.filter-label {
-  font-size: 0.72rem;
-  color: rgba(255,255,255,0.45);
-  display: flex;
-  justify-content: space-between;
-}
-
-.filter-value {
-  font-size: 0.65rem;
-  font-family: 'JetBrains Mono', monospace;
-  color: rgba(196,164,255,0.7);
-}
-
-.filter-slider {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 100%;
-  height: 2px;
-  background: rgba(255,255,255,0.12);
-  border-radius: 99px;
-  outline: none;
-  cursor: pointer;
-}
-.filter-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: #c4a4ff;
-  cursor: pointer;
 }
 
 .ai-panel-toggle {

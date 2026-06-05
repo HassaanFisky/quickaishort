@@ -1,7 +1,7 @@
 "use client";
 
 import { useSession, signIn, signOut } from "next-auth/react";
-import Logo from "@/components/shared/Logo";
+import QSLogo from "@/components/shared/QSLogo";
 import { GlowButton } from "@/components/ui/GlowButton";
 import { Button } from "@/components/ui/button";
 import {
@@ -44,7 +44,13 @@ export default function Navbar() {
         )}
       >
         <div className="flex items-center gap-8">
-          <Logo />
+          <Link
+            href="/"
+            aria-label="QuickAI Shorts – Home"
+            className="flex items-center flex-shrink-0 group"
+          >
+            <QSLogo variant="full" size="md" animated />
+          </Link>
           <div className="hidden md:flex items-center gap-0.5">
             {[["/#features", "Features"], ["/pricing", "Pricing"]].map(([href, label]) => (
               <Link

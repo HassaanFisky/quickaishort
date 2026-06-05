@@ -121,7 +121,7 @@ All agents call Gemini 2.5 Flash via `fastapi/services/gemini_client.py`. Model 
 Heavy media work runs off the main thread in `frontend/src/workers/`:
 
 - Whisper transcription (`useTranscription` hook → Whisper.wasm via `@xenova/transformers`)
-- Browser local export (`clientExport.ts`) uses the `MediaRecorder` API (Chrome/Firefox/Edge) — no FFmpeg in the browser
+- Browser local export — two implemented paths: `clientExport.ts` (`MediaRecorder` API, Chrome/Firefox/Edge) and `ffmpegExport.worker.ts` (FFmpeg.wasm: canvas frame-capture → mp4), the latter instantiated in `VideoWorkspace.tsx` on the live `/editor`. The FFmpeg path warns at 10 s and surfaces a CDN-block error at 15 s instead of hanging.
 - Server export (`useServerExport` hook) sends the job to the backend render queue, processed by `ffmpeg-python` via the RQ worker (production path)
 - MediaPipe face tracking (`useFaceTracker`)
 
@@ -547,7 +547,7 @@ KEY DECISIONS (do not change without reason):
 - No subscription gating — core product is free and unblocked until billing is intentionally shipped
 - /api/audio: yt-dlp subprocess (bestaudio m4a/webm) → Cobalt v10 fallback → always returns audio/mpeg MP3
 - COEP/COOP headers scoped to /editor/:path* only — Google OAuth works on /signin
-- Browser export: MediaRecorder API (no FFmpeg.wasm — was never implemented; 15s timeout shows CDN block error instead of hanging)
+- Browser export: BOTH paths are implemented — MediaRecorder (`clientExport.ts`) AND FFmpeg.wasm (`ffmpegExport.worker.ts`, active in `VideoWorkspace` on `/editor`). The FFmpeg path warns at 10s and surfaces a CDN-block error at 15s instead of hanging. (Corrected 2026-06-05: prior note claimed FFmpeg.wasm "was never implemented" — it is.)
 - Server export: ffmpeg-python via RQ worker (production path, stored in GCS at exports/{user}/{job}.mp4)
 - All protected endpoints use verified_user_id from JWT, not request body
 - 6 personas in preflight panel (genz, millennial, sports, tech, entertainment, news)
