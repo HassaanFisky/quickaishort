@@ -47,15 +47,33 @@ export interface TrimMarker {
 
 export interface EditorAction {
   type:
-    | "ADD_CAPTION"
-    | "REMOVE_CAPTION"
-    | "UPDATE_CAPTION"
-    | "TRIM"
-    | "ADD_FILTER"
-    | "RESET_FILTER"
-    | "SEEK"
-    | "PLAY"
-    | "PAUSE";
+    // ─── Caption tools ───────────────────────────────────────────────────────
+    | "ADD_CAPTION"         // { text, startTime, endTime, style? }
+    | "REMOVE_CAPTION"      // { id }
+    | "UPDATE_CAPTION"      // { id, patch }
+    // ─── Clip tools ─────────────────────────────────────────────────────────
+    | "TRIM"                // { start, end } — sets trimMarker + seeks
+    | "SPLIT_CLIP"          // { time } — splits selected clip at time
+    | "DELETE_CLIP"         // { id? } — deletes clip by id or selected clip
+    | "SELECT_CLIP"         // { id?, index? } — selects a clip
+    // ─── Visual tools ───────────────────────────────────────────────────────
+    | "ADD_FILTER"          // { filter: "brightness"|"contrast"|"saturation"|"hue"|"blur", value }
+    | "RESET_FILTER"        // {} — resets frame filters
+    | "SET_VISUAL_FILTER"   // { filter: "None"|"Urban"|"Retro"|"Cinematic" }
+    // ─── Audio tools ────────────────────────────────────────────────────────
+    | "SET_AUDIO_BOOST"     // { value: 0-200 }
+    | "SET_NOISE_REDUCTION" // { value: 0-100 }
+    | "SET_PLAYBACK_SPEED"  // { value: 50-200 }
+    // ─── Feature toggles ────────────────────────────────────────────────────
+    | "TOGGLE_CAPTIONS"     // { enabled: boolean }
+    | "TOGGLE_TRANSITIONS"  // { enabled: boolean }
+    | "TOGGLE_VOICEOVER"    // { enabled: boolean }
+    // ─── Playback ────────────────────────────────────────────────────────────
+    | "SEEK"                // { time }
+    | "PLAY"                // {}
+    | "PAUSE"               // {}
+    // ─── Pipeline ────────────────────────────────────────────────────────────
+    | "EXPORT_CLIP";        // {} — fires qai:export event
   payload: Record<string, unknown>;
 }
 
@@ -149,6 +167,13 @@ const DEFAULT_EXPORT_SETTINGS: ExportSettings = {
   voiceoverEnabled: false,
 };
 
+// Per-session isolation id generator. Guarded for SSR / older runtimes that
+// lack crypto.randomUUID (mirrors the addCanvasElement pattern below).
+const genRunId = (): string =>
+  typeof crypto !== "undefined" && crypto.randomUUID
+    ? crypto.randomUUID()
+    : Math.random().toString(36).substring(2, 15);
+
 interface EditorState {
   // Source Video
   sourceFile: File | null;
@@ -164,6 +189,10 @@ interface EditorState {
   clipEndTime: number;
   duration: number;
   resolution: { width: number; height: number } | null;
+
+  // Per-session isolation id — minted fresh whenever a new source video loads,
+  // so stale clips/analysis from a previous video never bleed into a new run.
+  runId: string;
 
   // Processing State
   isProcessing: boolean;
@@ -187,20 +216,22 @@ interface EditorState {
   transcript: Transcript | null;
   suggestions: Clip[];
   silenceSegments: CutSegment[];
-  audioData: Float32Array | null;
+  // 120 normalized amplitude values (0.01–1.0) pre-computed by useMediaPipeline
+  // immediately after audio extraction using O(1)-per-bar stride sampling.
+  // The raw Float32Array is never stored here — peaks are GC-eligible on extraction.
+  waveformPeaks: number[] | null;
   captionsEnabled: boolean;
   selectedClipId: string | null;
 
   // Canvas Elements (Interactivity like PowerPoint/Canva)
   canvasElements: CanvasElement[];
 
-  // Export settings (shared across RightPanel + ExportPanel)
+  // Export settings
   exportSettings: ExportSettings;
 
   // History for undo/redo
   undoStack: Clip[][];
   redoStack: Clip[][];
-  activeTool: "select" | "trim" | "text" | null;
 
   // Actions
   setCurrentTime: (time: number) => void;
@@ -223,7 +254,7 @@ interface EditorState {
   setTranscript: (transcript: Transcript) => void;
   setSuggestions: (suggestions: Clip[]) => void;
   setSilenceSegments: (segments: CutSegment[]) => void;
-  setAudioData: (data: Float32Array | null) => void;
+  setWaveformPeaks: (peaks: number[] | null) => void;
   setCaptionsEnabled: (enabled: boolean) => void;
   selectClip: (id: string | null) => void;
   setYtVideoId: (id: string | null) => void;
@@ -243,8 +274,9 @@ interface EditorState {
   redo: () => void;
   scriptPrompt: string;
   setScriptPrompt: (prompt: string) => void;
-  setActiveTool: (tool: EditorState["activeTool"]) => void;
   reset: () => void;
+  // Wipe per-video derived data + mint a fresh runId without clearing the source.
+  resetForNewVideo: () => void;
 
   // ─── AI Editor State ───────────────────────────────────────────────────────
   videoMetadata: VideoMetadata | null;
@@ -285,6 +317,7 @@ export const useEditorStore = create<EditorState>()(
       clipEndTime: 0,
       duration: 0,
       resolution: null,
+      runId: genRunId(),
       isProcessing: false,
       currentStage: "idle",
       progress: 0,
@@ -302,7 +335,7 @@ export const useEditorStore = create<EditorState>()(
       transcript: null,
       suggestions: [],
       silenceSegments: [],
-      audioData: null,
+      waveformPeaks: null,
       captionsEnabled: true,
       selectedClipId: null,
       canvasElements: [],
@@ -311,7 +344,6 @@ export const useEditorStore = create<EditorState>()(
       scriptPrompt: "Write a high-engagement, viral-ready script for this clip.",
       undoStack: [],
       redoStack: [],
-      activeTool: "select",
 
       // AI Editor initial state
       videoMetadata: null,
@@ -337,12 +369,40 @@ export const useEditorStore = create<EditorState>()(
           sourceFile: file,
           sourceUrl: url || URL.createObjectURL(file),
           currentStage: "loading",
+          // O6: isolate the new video — drop derived data from any prior run.
+          runId: genRunId(),
+          suggestions: [],
+          captions: [],
+          transcript: null,
+          silenceSegments: [],
+          waveformPeaks: null,
+          videoAnalysis: null,
+          selectedClipId: null,
+          canvasElements: [],
+          trimMarker: null,
+          undoStack: [],
+          redoStack: [],
+          progress: 0,
         }),
 
       setSourceUrl: (url) =>
         set({
           sourceUrl: url,
           currentStage: "loading",
+          // O6: isolate the new video — drop derived data from any prior run.
+          runId: genRunId(),
+          suggestions: [],
+          captions: [],
+          transcript: null,
+          silenceSegments: [],
+          waveformPeaks: null,
+          videoAnalysis: null,
+          selectedClipId: null,
+          canvasElements: [],
+          trimMarker: null,
+          undoStack: [],
+          redoStack: [],
+          progress: 0,
         }),
 
       setThumbnailUrl: (url) => set({ thumbnailUrl: url }),
@@ -367,7 +427,7 @@ export const useEditorStore = create<EditorState>()(
 
       setSuggestions: (suggestions) => set({ suggestions }),
       setSilenceSegments: (segments) => set({ silenceSegments: segments }),
-      setAudioData: (data) => set({ audioData: data }),
+      setWaveformPeaks: (peaks) => set({ waveformPeaks: peaks }),
       setCaptionsEnabled: (enabled) => set({ captionsEnabled: enabled }),
       selectClip: (id) => set({ selectedClipId: id }),
       setYtVideoId: (id) => set({ ytVideoId: id }),
@@ -447,8 +507,6 @@ export const useEditorStore = create<EditorState>()(
           };
         }),
 
-      setActiveTool: (tool) => set({ activeTool: tool }),
-
       setExportSetting: (key, value) =>
         set((state) => ({
           exportSettings: { ...state.exportSettings, [key]: value },
@@ -521,8 +579,11 @@ export const useEditorStore = create<EditorState>()(
       dispatchAIActions: (actions) => {
         const store = useEditorStore.getState();
         const videoEl = store.videoElementRef?.current;
+
         actions.forEach((action) => {
           switch (action.type) {
+
+            // ── Caption tools ─────────────────────────────────────────────
             case "ADD_CAPTION":
               store.addCaption({
                 text: action.payload.text as string,
@@ -537,28 +598,121 @@ export const useEditorStore = create<EditorState>()(
             case "UPDATE_CAPTION":
               store.updateCaption(action.payload.id as string, action.payload.patch as Partial<Caption>);
               break;
+
+            // ── Clip tools ────────────────────────────────────────────────
             case "TRIM":
-              store.setTrimMarker({ startTime: action.payload.start as number, endTime: action.payload.end as number });
+              store.setTrimMarker({
+                startTime: action.payload.start as number,
+                endTime: action.payload.end as number,
+              });
               if (videoEl) videoEl.currentTime = action.payload.start as number;
               break;
+            case "SPLIT_CLIP": {
+              const splitTime = action.payload.time as number;
+              if (typeof splitTime === "number") store.splitClipAtTime(splitTime);
+              break;
+            }
+            case "DELETE_CLIP": {
+              const targetId = (action.payload.id as string | undefined) || store.selectedClipId;
+              if (targetId) store.deleteClip(targetId);
+              break;
+            }
+            case "SELECT_CLIP": {
+              if (action.payload.id) {
+                store.selectClip(action.payload.id as string);
+              } else if (typeof action.payload.index === "number") {
+                const clip = store.suggestions[action.payload.index as number];
+                if (clip) store.selectClip(clip.id);
+              }
+              break;
+            }
+
+            // ── Visual tools ─────────────────────────────────────────────
             case "ADD_FILTER":
-              store.setFrameFilter({ [action.payload.filter as string]: action.payload.value as number });
+              store.setFrameFilter({
+                [action.payload.filter as string]: action.payload.value as number,
+              });
               break;
             case "RESET_FILTER":
               store.resetFrameFilters();
               break;
+            case "SET_VISUAL_FILTER":
+              store.setExportSetting(
+                "filter",
+                action.payload.filter as ExportSettings["filter"],
+              );
+              break;
+
+            // ── Audio tools ──────────────────────────────────────────────
+            case "SET_AUDIO_BOOST": {
+              const v = Math.max(0, Math.min(200, action.payload.value as number));
+              store.setExportSetting("audioBoost", v);
+              break;
+            }
+            case "SET_NOISE_REDUCTION": {
+              const v = Math.max(0, Math.min(100, action.payload.value as number));
+              store.setExportSetting("noiseSuppression", v);
+              break;
+            }
+            case "SET_PLAYBACK_SPEED": {
+              const v = Math.max(50, Math.min(200, action.payload.value as number));
+              store.setExportSetting("playbackSpeed", v);
+              if (videoEl) videoEl.playbackRate = v / 100;
+              break;
+            }
+
+            // ── Feature toggles ──────────────────────────────────────────
+            case "TOGGLE_CAPTIONS":
+              store.setCaptionsEnabled(action.payload.enabled as boolean);
+              break;
+            case "TOGGLE_TRANSITIONS":
+              store.setExportSetting("transitionEnabled", action.payload.enabled as boolean);
+              break;
+            case "TOGGLE_VOICEOVER":
+              store.setExportSetting("voiceoverEnabled", action.payload.enabled as boolean);
+              break;
+
+            // ── Playback ─────────────────────────────────────────────────
             case "SEEK":
               if (videoEl) videoEl.currentTime = action.payload.time as number;
               break;
             case "PLAY":
-              videoEl?.play();
+              if (videoEl) videoEl.play().catch(() => {});
+              store.setIsPlaying(true);
               break;
             case "PAUSE":
-              videoEl?.pause();
+              if (videoEl) videoEl.pause();
+              store.setIsPlaying(false);
+              break;
+
+            // ── Pipeline ─────────────────────────────────────────────────
+            case "EXPORT_CLIP":
+              if (typeof window !== "undefined") {
+                window.dispatchEvent(new CustomEvent("qai:export"));
+              }
               break;
           }
         });
       },
+
+      resetForNewVideo: () =>
+        set({
+          runId: genRunId(),
+          suggestions: [],
+          captions: [],
+          transcript: null,
+          silenceSegments: [],
+          waveformPeaks: null,
+          videoAnalysis: null,
+          selectedClipId: null,
+          canvasElements: [],
+          trimMarker: null,
+          undoStack: [],
+          redoStack: [],
+          progress: 0,
+          isProcessing: false,
+          currentStage: "idle",
+        }),
 
       reset: () =>
         set({
@@ -566,6 +720,7 @@ export const useEditorStore = create<EditorState>()(
           sourceUrl: null,
           thumbnailUrl: null,
           sourceGcsPath: null,
+          runId: genRunId(),
           duration: 0,
           resolution: null,
           isProcessing: false,
@@ -583,11 +738,13 @@ export const useEditorStore = create<EditorState>()(
           transcript: null,
           suggestions: [],
           silenceSegments: [],
-          audioData: null,
+          waveformPeaks: null,
           captionsEnabled: true,
           selectedClipId: null,
           canvasElements: [],
           exportSettings: { ...DEFAULT_EXPORT_SETTINGS },
+          undoStack: [],
+          redoStack: [],
           videoMetadata: null,
           captions: [],
           trimMarker: null,
@@ -599,13 +756,9 @@ export const useEditorStore = create<EditorState>()(
           videoElementRef: null,
         }),
     }),
-    { 
+    {
       name: "EditorStore",
-      // Sanitizer to prevent large Float32Arrays from being serialized to DevTools
-      stateSanitizer: (state: any) => 
-        state.audioData 
-          ? { ...state, audioData: `<<Float32Array(${state.audioData.length})>>` } 
-          : state
+      enabled: process.env.NODE_ENV !== "production",
     },
   ),
 );

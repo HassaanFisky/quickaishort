@@ -11,6 +11,9 @@ import {
   AlertCircle,
   Scissors,
   Flag,
+  Maximize2,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useEditorStore } from "@/stores/editorStore";
@@ -19,6 +22,7 @@ import { useFaceTracker } from "@/hooks/useFaceTracker";
 import { CaptionOverlay } from "./CaptionOverlay";
 import { CanvasLayer } from "./CanvasLayer";
 import { cn } from "@/lib/utils";
+import { formatTime } from "@/lib/utils/formatTime";
 
 declare global {
   interface Window {
@@ -52,6 +56,7 @@ function extractYtVideoId(url: string): string | null {
 
 export default function VideoCanvas() {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const gainNodeRef = useRef<GainNode | null>(null);
   const noiseFilterRef = useRef<BiquadFilterNode | null>(null);
@@ -60,6 +65,7 @@ export default function VideoCanvas() {
   const [videoError, setVideoError] = useState(false);
   const [proxyRetry, setProxyRetry] = useState(0);
   const [localYtId, setLocalYtId] = useState<string | null>(null);
+  const [isMuted, setIsMuted] = useState(false);
   const ytPlayerRef = useRef<YTPlayer | null>(null);
 
   const {
@@ -257,6 +263,31 @@ export default function VideoCanvas() {
     setIsPlaying(!isPlaying);
   }, [isPlaying, setIsPlaying]);
 
+  const handleSeek = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const t = parseFloat(e.target.value);
+      if (videoRef.current) videoRef.current.currentTime = t;
+      setCurrentTime(t);
+    },
+    [setCurrentTime],
+  );
+
+  const handleMuteToggle = useCallback(() => {
+    if (!videoRef.current) return;
+    videoRef.current.muted = !videoRef.current.muted;
+    setIsMuted(videoRef.current.muted);
+  }, []);
+
+  const handleFullscreen = useCallback(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    if (!document.fullscreenElement) {
+      el.requestFullscreen?.().catch(() => {});
+    } else {
+      document.exitFullscreen?.().catch(() => {});
+    }
+  }, []);
+
   const skip = useCallback(
     (delta: number) => {
       if (!videoRef.current) return;
@@ -270,7 +301,9 @@ export default function VideoCanvas() {
     [currentTime, duration, setCurrentTime]
   );
 
-  // Keyboard navigation — placed after skip and togglePlay declarations
+  // Keyboard navigation — j/k/l only.
+  // Space, ArrowLeft, ArrowRight are owned by EditorPage via shortcutsStore
+  // to avoid double-firing on the same keypress.
   useEffect(() => {
     if (!sourceUrl) return;
     const handler = (e: KeyboardEvent) => {
@@ -281,9 +314,6 @@ export default function VideoCanvas() {
         target.contentEditable === "true"
       ) return;
       switch (e.key) {
-        case "ArrowLeft": e.preventDefault(); skip(-5); break;
-        case "ArrowRight": e.preventDefault(); skip(5); break;
-        case " ": e.preventDefault(); togglePlay(); break;
         case "j": e.preventDefault(); skip(-10); break;
         case "k": e.preventDefault(); togglePlay(); break;
         case "l": e.preventDefault(); skip(10); break;
@@ -331,7 +361,7 @@ export default function VideoCanvas() {
     aspectContainerClass[exportSettings.aspectRatio] ?? aspectContainerClass["9:16"];
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center p-6 h-full">
+    <div ref={containerRef} className="flex-1 flex flex-col items-center justify-center p-6 h-full gap-3">
       <div
         className={cn(
           "relative bg-card rounded-2xl overflow-hidden flex items-center justify-center group border border-border shadow-2xl",
@@ -491,7 +521,7 @@ export default function VideoCanvas() {
         />
         <CanvasLayer />
 
-        {/* Playback controls — visible on hover when video is loaded */}
+        {/* Hover overlay — center play/skip buttons */}
         {sourceUrl && !localYtId && !isBuffering && !videoError && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none group-hover:pointer-events-auto">
             <div className="flex items-center gap-3">
@@ -524,6 +554,59 @@ export default function VideoCanvas() {
           </div>
         )}
       </div>
+
+      {/* Persistent custom controls bar — shown when proxy video is active */}
+      {sourceUrl && !localYtId && !videoError && (
+        <div className="video-controls w-full" style={{ maxWidth: aspectContainerClass[exportSettings.aspectRatio] ? "420px" : "560px" }}>
+          {/* Play / Pause */}
+          <button
+            className="ctrl-btn"
+            onClick={togglePlay}
+            aria-label={isPlaying ? "Pause" : "Play"}
+          >
+            {isPlaying ? <Pause size={15} /> : <Play size={15} />}
+          </button>
+
+          {/* Skip back */}
+          <button className="ctrl-btn" onClick={() => skip(-10)} aria-label="Skip back 10 seconds">
+            <SkipBack size={14} />
+          </button>
+
+          {/* Seek track */}
+          <div className="seek-track">
+            <input
+              type="range"
+              className="seek-slider"
+              min={0}
+              max={duration || 0}
+              step={0.1}
+              value={currentTime}
+              onChange={handleSeek}
+              aria-label="Seek"
+            />
+          </div>
+
+          {/* Skip forward */}
+          <button className="ctrl-btn" onClick={() => skip(10)} aria-label="Skip forward 10 seconds">
+            <SkipForward size={14} />
+          </button>
+
+          {/* Timecode */}
+          <span className="time-display">
+            {formatTime(currentTime)} / {formatTime(duration)}
+          </span>
+
+          {/* Mute */}
+          <button className="ctrl-btn" onClick={handleMuteToggle} aria-label={isMuted ? "Unmute" : "Mute"}>
+            {isMuted ? <VolumeX size={14} /> : <Volume2 size={14} />}
+          </button>
+
+          {/* Fullscreen */}
+          <button className="ctrl-btn" onClick={handleFullscreen} aria-label="Fullscreen">
+            <Maximize2 size={14} />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

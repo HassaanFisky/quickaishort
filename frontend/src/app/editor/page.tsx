@@ -1,28 +1,41 @@
 "use client";
 
 import EditorLayout from "@/components/editor/EditorLayout";
-import { useTranscription } from "@/hooks/useTranscription";
 import { useAnalysis } from "@/hooks/useAnalysis";
-import { useEffect } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useEditorStore } from "@/stores/editorStore";
 import { useShortcutsStore, matchEvent } from "@/stores/shortcutsStore";
 import { TelemetryDock } from "@/components/editor/TelemetryDock";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import { extractAudioData } from "@/lib/utils/audioExtractor";
+import { ShortcutOverlay } from "@/components/editor/ShortcutOverlay";
 
 export default function EditorPage() {
-  const transcription = useTranscription();
   const analysis = useAnalysis();
+  const [shortcutOverlayOpen, setShortcutOverlayOpen] = useState(false);
+  const closeOverlay = useCallback(() => setShortcutOverlayOpen(false), []);
 
   const setSilenceSegments = useEditorStore((s) => s.setSilenceSegments);
-  const setAudioData = useEditorStore((s) => s.setAudioData);
   const sourceFile = useEditorStore((s) => s.sourceFile);
   const sourceUrl = useEditorStore((s) => s.sourceUrl);
 
-  // Silence detection triggered by FloatingControls "Auto-Enhance" action
+  // Keep refs for values used inside the silence handler so the window listener
+  // never re-registers on re-renders. Re-registration creates a window where
+  // trigger-silence-detect events can be silently dropped.
+  const sourceFileRef = useRef(sourceFile);
+  const sourceUrlRef = useRef(sourceUrl);
+  const analysisRef = useRef(analysis);
+  useEffect(() => {
+    sourceFileRef.current = sourceFile;
+    sourceUrlRef.current = sourceUrl;
+    analysisRef.current = analysis;
+  });
+
+  // Silence detection triggered by FloatingControls "Auto-Enhance" action.
+  // Empty deps — stable registration for the lifetime of EditorPage.
   useEffect(() => {
     const handleSilenceTrigger = async () => {
-      let source: File | string | null = sourceFile || sourceUrl;
+      let source: File | string | null = sourceFileRef.current || sourceUrlRef.current;
       if (!source) return;
       try {
         if (
@@ -33,8 +46,9 @@ export default function EditorPage() {
           source = getProxyUrl(source);
         }
         const { audioData, sampleRate } = await extractAudioData(source);
-        setAudioData(audioData);
-        analysis.detectSilence({ audioData, sampleRate });
+        // Pass directly to the worker — do NOT store in Zustand.
+        // The raw Float32Array is GC-eligible once detectSilence returns.
+        analysisRef.current.detectSilence({ audioData, sampleRate });
       } catch (err) {
         console.error("Failed to extract audio for silence detection:", err);
       }
@@ -42,7 +56,7 @@ export default function EditorPage() {
     window.addEventListener("trigger-silence-detect", handleSilenceTrigger);
     return () =>
       window.removeEventListener("trigger-silence-detect", handleSilenceTrigger);
-  }, [sourceFile, sourceUrl, analysis, setAudioData]);
+  }, []);
 
   // Global keyboard shortcuts — driven by the user-customizable bindings store.
   useEffect(() => {
@@ -119,6 +133,24 @@ export default function EditorPage() {
         window.dispatchEvent(new CustomEvent("qai:export"));
         return;
       }
+      // C — cut at playhead (razor tool alias, standard in Premiere/DaVinci)
+      if (matchEvent(e, b.cutClip)) {
+        e.preventDefault();
+        if (store.suggestions.length > 0) store.splitClipAtTime(store.currentTime);
+        return;
+      }
+      // ? — show/hide keyboard shortcut overlay
+      if (e.key === "?" && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        setShortcutOverlayOpen((v) => !v);
+        return;
+      }
+      // Ctrl+K — open Gemini AI Editor panel
+      if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+        e.preventDefault();
+        useEditorStore.getState().setAIPanelOpen(true);
+        return;
+      }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
@@ -132,21 +164,16 @@ export default function EditorPage() {
     }
   }, [analysis.lastMessage, setSilenceSegments]);
 
-  // Init / teardown Web Workers
-  useEffect(() => {
-    transcription.init();
-    analysis.init();
-    return () => {
-      transcription.terminate();
-      analysis.terminate();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // Init / teardown the analysis worker (used for silence detection here).
+  // The transcription worker lifecycle is owned by useMediaPipeline.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { analysis.init(); return () => analysis.terminate(); }, []);
 
   return (
     <ErrorBoundary>
       <EditorLayout />
       <TelemetryDock />
+      <ShortcutOverlay isOpen={shortcutOverlayOpen} onClose={closeOverlay} />
     </ErrorBoundary>
   );
 }

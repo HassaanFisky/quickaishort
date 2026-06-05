@@ -6,6 +6,7 @@ import { persist } from "zustand/middleware";
 export type ShortcutId =
   | "playPause"
   | "split"
+  | "cutClip"
   | "addText"
   | "deleteClip"
   | "undo"
@@ -26,6 +27,7 @@ export interface ShortcutAction {
 export const SHORTCUT_ACTIONS: ShortcutAction[] = [
   { id: "playPause", label: "Play / Pause", description: "Toggle timeline playback", default: "Space" },
   { id: "split", label: "Split Clip", description: "Cut the active clip at the playhead", default: "S" },
+  { id: "cutClip", label: "Cut at Playhead", description: "Razor cut — same as Split (C is the standard key in video editors)", default: "C" },
   { id: "addText", label: "Add Text", description: "Drop a text overlay onto the canvas", default: "T" },
   { id: "deleteClip", label: "Delete Clip", description: "Remove the selected clip", default: "Delete" },
   { id: "undo", label: "Undo", description: "Step backward through edits", default: "Mod+Z" },
