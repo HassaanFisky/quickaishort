@@ -235,6 +235,7 @@ async def validate_output(path: Path, request_id: str) -> None:
             f"[{request_id}] output too small: {size} bytes (min={_MIN_AUDIO_BYTES})"
         )
 
+    proc = None
     try:
         proc = await asyncio.create_subprocess_exec(
             "ffprobe",
@@ -250,8 +251,19 @@ async def validate_output(path: Path, request_id: str) -> None:
         stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
     except asyncio.TimeoutError:
         raise ValidationError(f"[{request_id}] ffprobe timed out after 10s")
+    except Exception as exc:
+        if not isinstance(exc, ValidationError):
+            raise ValidationError(f"[{request_id}] ffprobe failed: {exc}")
+        raise
+    finally:
+        if proc and proc.returncode is None:
+            try:
+                proc.kill()
+                await proc.wait()
+            except Exception:
+                pass
 
-    if proc.returncode != 0:
+    if proc is None or proc.returncode != 0:
         raise ValidationError(
             f"[{request_id}] ffprobe returned non-zero — file is corrupt"
         )
@@ -337,6 +349,7 @@ async def _run_ytdlp(cmd: List[str], tmpdir: str, tier_name: str) -> str:
     Raises ExtractionError with a classified error_class on any failure.
     Captures full stderr for classification — never discards it.
     """
+    proc = None
     try:
         proc = await asyncio.create_subprocess_exec(
             *cmd,
@@ -348,6 +361,13 @@ async def _run_ytdlp(cmd: List[str], tmpdir: str, tier_name: str) -> str:
         raise ExtractionError(
             "yt-dlp timed out after 65s", TierError.TIMEOUT, tier_name
         )
+    finally:
+        if proc and proc.returncode is None:
+            try:
+                proc.kill()
+                await proc.wait()
+            except Exception:
+                pass
 
     stderr = stderr_bytes.decode("utf-8", errors="replace")
 
@@ -793,21 +813,36 @@ class ExtractorService:
 
                     # ── 4. Normalise to MP3 via ffmpeg ────────────────────────
                     mp3_path = Path(tmpdir) / "final.mp3"
-                    conv = await asyncio.create_subprocess_exec(
-                        "ffmpeg",
-                        "-y",
-                        "-i",
-                        str(raw_path),
-                        "-vn",
-                        "-b:a",
-                        "128k",
-                        "-ar",
-                        "44100",  # normalise sample rate
-                        str(mp3_path),
-                        stdout=asyncio.subprocess.PIPE,
-                        stderr=asyncio.subprocess.PIPE,
-                    )
-                    await asyncio.wait_for(conv.communicate(), timeout=120)
+                    conv = None
+                    try:
+                        conv = await asyncio.create_subprocess_exec(
+                            "ffmpeg",
+                            "-y",
+                            "-i",
+                            str(raw_path),
+                            "-vn",
+                            "-b:a",
+                            "128k",
+                            "-ar",
+                            "44100",  # normalise sample rate
+                            str(mp3_path),
+                            stdout=asyncio.subprocess.PIPE,
+                            stderr=asyncio.subprocess.PIPE,
+                        )
+                        await asyncio.wait_for(conv.communicate(), timeout=120)
+                    except asyncio.TimeoutError:
+                        raise ExtractionError(
+                            "ffmpeg normalisation timed out after 120s",
+                            TierError.TIMEOUT,
+                            tier_name,
+                        )
+                    finally:
+                        if conv and conv.returncode is None:
+                            try:
+                                conv.kill()
+                                await conv.wait()
+                            except Exception:
+                                pass
                     final_path = mp3_path if mp3_path.exists() else raw_path
 
                     # ── 5. Validate output ────────────────────────────────────

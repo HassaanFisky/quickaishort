@@ -1,5 +1,6 @@
 import asyncio
 import http.server
+import json
 import os
 import shutil
 import signal
@@ -17,7 +18,11 @@ if current_dir not in sys.path:
     sys.path.insert(0, current_dir)
 
 from rq import Worker  # noqa: E402
-from services.queue_service import redis_conn, render_queue  # noqa: E402
+from services.queue_service import (  # noqa: E402
+    redis_conn,
+    render_queue,
+    JOB_TIMEOUT_SECONDS,
+)
 from services.logging import get_logger, log_workload, log_metric  # noqa: E402
 from services.storage_service import get_storage_service  # noqa: E402
 from services.events import (  # noqa: E402
@@ -55,6 +60,16 @@ def validate_env():
 
 
 logger = get_logger("render_worker")
+
+# Recovery + run-isolation keys. All use the SYNC redis_conn: a redis.asyncio
+# client would bind to the first asyncio.run() loop and break on the next job's
+# fresh loop. Sync ops here are tiny and mirror the existing publish() pattern.
+_META_KEY = "render:meta:{}"
+_ARGS_KEY = "render:args:{}"
+_RUNID_KEY = "render:runid:{}"
+_LOCK_KEY = "render:lock:{}"
+_RECOVERY_TTL = 7200  # 2h — recovery/run records self-expire
+_STALE_THRESHOLD_S = 600  # 10 min before a 'processing' job is treated as orphaned
 
 
 def get_mem_usage_mb() -> float:
@@ -107,10 +122,14 @@ class HealthCheckHandler(http.server.SimpleHTTPRequestHandler):
         self.wfile.write(b'{"status": "ok"}')
 
 
+class HealthCheckServer(socketserver.TCPServer):
+    allow_reuse_address = True
+
+
 def run_health_server():
     port = int(os.environ.get("PORT", 8080))
     logger.info("starting_health_server", port=port)
-    with socketserver.TCPServer(("", port), HealthCheckHandler) as httpd:
+    with HealthCheckServer(("", port), HealthCheckHandler) as httpd:
         httpd.serve_forever()
 
 
@@ -214,11 +233,12 @@ def process_render_task(
     end_sec: float,
     user_id: str,
     options: dict,
+    run_id: str = "",
 ) -> dict:
     """Entry point invoked by RQ."""
     return asyncio.run(
         _async_process_render_task(
-            job_id, video_id, start_sec, end_sec, user_id, options
+            job_id, video_id, start_sec, end_sec, user_id, options, run_id
         )
     )
 
@@ -230,6 +250,7 @@ async def _async_process_render_task(
     end_sec: float,
     user_id: str,
     options: dict,
+    run_id: str = "",
 ) -> dict:
     """Actual async implementation that shares a single event loop."""
     started_at = time.time()
@@ -264,7 +285,18 @@ async def _async_process_render_task(
         remote_filename = f"exports/{user_id}/{job_id}.mp4"
 
         # Check if this job was already successfully processed (e.g. retry of a successful job)
-        if await storage.exists_async(remote_filename):
+        # O3: never block the render on a failed existence probe (GCS 403 from
+        # billing/IAM, transient errors) — assume not-exists and proceed.
+        try:
+            _already_done = await storage.exists_async(remote_filename)
+        except Exception as exc:
+            logger.warning(
+                "gcs_exists_check_failed job_id=%s error=%s — assuming not exists",
+                job_id,
+                str(exc)[:200],
+            )
+            _already_done = False
+        if _already_done:
             logger.info("render_job_idempotency_hit", job_id=job_id)
             payload = {
                 "job_id": job_id,
@@ -281,6 +313,38 @@ async def _async_process_render_task(
                 metadata={"job_id": job_id},
             )
             return payload
+
+        # O4/O1: record crash-recovery args + 'processing' status AFTER the
+        # idempotency check, so an idempotency hit never leaves a stale
+        # 'processing' marker that recover_stale_jobs() would re-enqueue forever.
+        try:
+            redis_conn.set(
+                _ARGS_KEY.format(job_id),
+                json.dumps(
+                    {
+                        "job_id": job_id,
+                        "video_id": video_id,
+                        "start_sec": start_sec,
+                        "end_sec": end_sec,
+                        "user_id": user_id,
+                        "options": options,
+                        "run_id": run_id,
+                    },
+                    default=str,
+                ),
+                ex=_RECOVERY_TTL,
+            )
+            redis_conn.hset(
+                _META_KEY.format(job_id),
+                mapping={"status": "processing", "started_at": str(started_at)},
+            )
+            redis_conn.expire(_META_KEY.format(job_id), _RECOVERY_TTL)
+            if run_id:
+                redis_conn.set(_RUNID_KEY.format(job_id), run_id, ex=_RECOVERY_TTL)
+        except Exception as exc:
+            logger.warning(
+                "recovery_marker_write_failed job_id=%s error=%s", job_id, str(exc)
+            )
 
         # ---------------------------------------------------------------
         # Studio Voiceover Synthesis (ADK Studio path only)
@@ -369,11 +433,57 @@ async def _async_process_render_task(
         storage = get_storage_service()
         remote_filename = f"exports/{user_id}/{job_id}.mp4"
 
-        await storage.upload_file_async(
-            local_path=result_path,
-            remote_path=remote_filename,
-            content_type="video/mp4",
-        )
+        # O1: if a newer run claimed this job_id, discard this (stale) result
+        # rather than overwriting the fresh output.
+        if run_id:
+            _owner = redis_conn.get(_RUNID_KEY.format(job_id))
+            if isinstance(_owner, (bytes, bytearray)):
+                _owner = _owner.decode()
+            if _owner and _owner != run_id:
+                logger.warning(
+                    "stale_result_discarded job_id=%s my_run=%s current=%s",
+                    job_id,
+                    run_id,
+                    _owner,
+                )
+                # Mark terminal so render:meta doesn't hang at 'processing'.
+                try:
+                    redis_conn.hset(
+                        _META_KEY.format(job_id),
+                        mapping={"status": "superseded"},
+                    )
+                except Exception:
+                    pass
+                return {"status": "superseded", "job_id": job_id}
+
+        # O3: idempotency lock — exactly one worker uploads for a given job_id,
+        # preventing two concurrent runs from both passing exists_async() and
+        # racing the GCS write.
+        _lock_ok = redis_conn.set(_LOCK_KEY.format(job_id), "1", nx=True, ex=3600)
+        if not _lock_ok:
+            logger.info(
+                "idempotency_lock_hit job_id=%s — duplicate upload skipped", job_id
+            )
+            # Mark terminal so render:meta doesn't hang at 'processing'.
+            try:
+                redis_conn.hset(
+                    _META_KEY.format(job_id),
+                    mapping={"status": "duplicate"},
+                )
+            except Exception:
+                pass
+            return {"status": "duplicate", "job_id": job_id}
+        try:
+            await storage.upload_file_async(
+                local_path=result_path,
+                remote_path=remote_filename,
+                content_type="video/mp4",
+            )
+        finally:
+            try:
+                redis_conn.delete(_LOCK_KEY.format(job_id))
+            except Exception:
+                pass
 
         payload = {
             "job_id": job_id,
@@ -389,13 +499,16 @@ async def _async_process_render_task(
             {"user_id": user_id, "export_delta": 1, "duration_delta": duration_sec},
         )
 
-        _rq_push_result(
-            job_id,
-            user_id,
-            "success",
-            rendered_url=f"exports/{user_id}/{job_id}.mp4",
-            duration_ms=(time.time() - started_at) * 1000,
-        )
+        try:
+            _rq_push_result(
+                job_id,
+                user_id,
+                "success",
+                rendered_url=f"exports/{user_id}/{job_id}.mp4",
+                duration_ms=(time.time() - started_at) * 1000,
+            )
+        except Exception as redis_err:
+            logger.warning("redis_success_publish_failed", error=str(redis_err))
 
         # Learning loop — write side.
         try:
@@ -438,11 +551,11 @@ async def _async_process_render_task(
             _rq_job = _gcj()
             _attempt = (_rq_job.retries_left if _rq_job else 0) or 0
             _attempt_number = 3 - _attempt  # retries_left counts down from max
-        except Exception:
-            _attempt_number = 3  # treat as final attempt if RQ context unavailable
-        _rq_push_result(
-            job_id, user_id, "failed", error=str(exc), attempt=_attempt_number
-        )
+            _rq_push_result(
+                job_id, user_id, "failed", error=str(exc), attempt=_attempt_number
+            )
+        except Exception as redis_err:
+            logger.warning("redis_dlq_publish_failed", error=str(redis_err))
 
         # Dead Letter Persistence (Atomic Recovery)
         await persist_failed_job(
@@ -475,6 +588,78 @@ async def _async_process_render_task(
                 pass
 
 
+def recover_stale_jobs() -> None:
+    """O4: Re-enqueue jobs stuck in 'processing' longer than _STALE_THRESHOLD_S.
+
+    Called once at worker boot. A job is orphaned when a worker dies mid-render
+    after writing its 'processing' marker but before reaching a terminal status.
+    Uses the sync redis_conn (boot context — no event loop running yet) and
+    reads render:meta:* as a HASH (hgetall), not JSON.
+    """
+    now = time.time()
+    cursor = 0
+    recovered = 0
+    try:
+        while True:
+            cursor, keys = redis_conn.scan(cursor, match="render:meta:*", count=100)
+            for key in keys:
+                key_str = key.decode() if isinstance(key, (bytes, bytearray)) else key
+                raw = redis_conn.hgetall(key)
+                if not raw:
+                    continue
+                meta = {
+                    (k.decode() if isinstance(k, (bytes, bytearray)) else k): (
+                        v.decode() if isinstance(v, (bytes, bytearray)) else v
+                    )
+                    for k, v in raw.items()
+                }
+                if meta.get("status") != "processing":
+                    continue
+                try:
+                    started_at = float(meta.get("started_at", now))
+                except (TypeError, ValueError):
+                    started_at = now
+                if (now - started_at) < _STALE_THRESHOLD_S:
+                    continue
+
+                job_id = key_str.split("render:meta:", 1)[-1]
+                args_raw = redis_conn.get(_ARGS_KEY.format(job_id))
+                if not args_raw:
+                    logger.warning(
+                        "crash_recovery_no_args job_id=%s — cannot re-enqueue", job_id
+                    )
+                    continue
+                try:
+                    args = json.loads(args_raw)
+                except Exception:
+                    continue
+
+                logger.warning(
+                    "crash_recovery_reenqueue job_id=%s age_s=%.0f",
+                    job_id,
+                    now - started_at,
+                )
+                render_queue.enqueue(
+                    process_render_task,
+                    args["job_id"],
+                    args["video_id"],
+                    args["start_sec"],
+                    args["end_sec"],
+                    args["user_id"],
+                    args["options"],
+                    args.get("run_id", ""),
+                    job_id=args["job_id"],
+                    job_timeout=JOB_TIMEOUT_SECONDS,
+                )
+                recovered += 1
+
+            if cursor == 0:
+                break
+    except Exception as exc:
+        logger.error("crash_recovery_failed error=%s", str(exc))
+    logger.info("crash_recovery_complete recovered=%d", recovered)
+
+
 if __name__ == "__main__":
     import sys
 
@@ -489,6 +674,9 @@ if __name__ == "__main__":
 
     init_db_sync()
     logger.info("gcp_clients_initialized")
+
+    # O4: re-enqueue any jobs orphaned by a previous worker crash/restart.
+    recover_stale_jobs()
 
     logger.info("worker_starting_production_lifecycle", queue=render_queue.name)
 
