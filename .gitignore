@@ -89,6 +89,10 @@ build_env_string.ps1
 gen_secrets.ps1
 setup_infrastructure.sh
 
+# Chrome extension build artifacts
+*.crx
+*.pem
+
 # Project Management / Prompts
 scratch/
 *.pdf
