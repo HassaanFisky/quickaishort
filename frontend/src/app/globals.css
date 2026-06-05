@@ -275,10 +275,6 @@
     box-shadow: var(--card-shadow);
   }
 
-  .nano-glow {
-    box-shadow: 0 0 12px rgba(var(--primary), 0.2);
-  }
-
   .premium-gradient-text {
     @apply bg-clip-text text-transparent;
     background-image: linear-gradient(to bottom, var(--gradient-from), var(--gradient-to));
@@ -585,13 +581,6 @@ html.liquid-transition::view-transition-new(root) {
 }
 .score-reveal { animation: score-reveal 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
 
-/* ── Elite-tier pulse ring ──────────────────────── */
-@keyframes elite-ring {
-  0%   { box-shadow: 0 0 0 0   hsl(var(--primary) / 0.5); }
-  70%  { box-shadow: 0 0 0 12px hsl(var(--primary) / 0);  }
-  100% { box-shadow: 0 0 0 0   hsl(var(--primary) / 0);   }
-}
-.elite-ring { animation: elite-ring 2s ease-out infinite; }
 
 /* ── Gradient border trick (used on CTA card) ───── */
 .gradient-border {
