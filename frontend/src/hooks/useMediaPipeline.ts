@@ -10,6 +10,28 @@ import { API_URL, getAudioUrl, requestPresignedUploadUrl, uploadFileToGcs } from
 import { useSession } from "next-auth/react";
 import type { Clip, Transcript } from "@/types/pipeline";
 
+/**
+ * Reduce a Float32Array to 120 amplitude peaks for waveform display.
+ * Strides through each bar window (max 50 samples) so complexity is O(1)
+ * in audio length regardless of video duration. Safe to call on the main
+ * thread for any video length without causing a noticeable UI freeze.
+ */
+function computeWaveformPeaks(audioData: Float32Array, barCount = 120): number[] {
+  const step = Math.floor(audioData.length / barCount);
+  return Array.from({ length: barCount }, (_, i) => {
+    const start = i * step;
+    const end = Math.min(start + step, audioData.length);
+    const stride = Math.max(1, Math.floor((end - start) / 50));
+    let sum = 0;
+    let count = 0;
+    for (let j = start; j < end; j += stride) {
+      sum += Math.abs(audioData[j]);
+      count++;
+    }
+    return count > 0 ? Math.max(0.01, Math.min(1, (sum / count) * 10)) : 0.01;
+  });
+}
+
 export function useMediaPipeline() {
   const { data: session } = useSession();
   const userId = session?.user?.id ?? "anonymous";
@@ -21,7 +43,7 @@ export function useMediaPipeline() {
     setTranscript,
     setSuggestions,
     setAgentState,
-    setAudioData,
+    setWaveformPeaks,
     setSourceGcsPath,
   } = useEditorStore();
 
@@ -30,13 +52,38 @@ export function useMediaPipeline() {
 
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  /** Cancels the running pipeline immediately. */
+  // transcription is a plain object recreated each render (standard hook pattern).
+  // Storing it in a ref gives cancelPipeline a stable, dep-free closure that always
+  // calls the current terminate function without adding transcription to the callback deps.
+  const transcriptionRef = useRef(transcription);
+  useEffect(() => { transcriptionRef.current = transcription; });
+
+  // Run-ID guard: each runPipeline invocation writes a UUID here.
+  // cancelPipeline clears it to null. The transcription-complete and
+  // analyzeWithBackend handlers check this ref before writing to the store,
+  // preventing stale messages from a terminated worker reaching the UI.
+  const activeRunIdRef = useRef<string | null>(null);
+
+  // Cleanup only — terminate if a worker was ever created. initWorker is NOT called
+  // here to avoid setting worker status "loading" on mount before any user action.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => () => transcriptionRef.current.terminate(), []);
+
+  /** Cancels the running pipeline: aborts the audio fetch, terminates the
+   *  Whisper worker, and invalidates the run-ID so any in-flight async
+   *  completions are discarded. Stable callback — no deps needed. */
   const cancelPipeline = useCallback(() => {
     abortControllerRef.current?.abort();
     abortControllerRef.current = null;
+    activeRunIdRef.current = null;
+    transcriptionRef.current.terminate();
   }, []);
 
   const runPipeline = useCallback(async () => {
+    // Guard: a pipeline is already live. Prevents concurrent runs from rapid
+    // Generate clicks or retry-analysis events arriving before the first run finishes.
+    if (useEditorStore.getState().isProcessing) return;
+
     const { sourceFile, sourceUrl } = useEditorStore.getState();
     let source: File | string | null = sourceFile || sourceUrl;
 
@@ -76,7 +123,13 @@ export function useMediaPipeline() {
     void extractAudioData(source, controller.signal)
       .then(({ audioData, sampleRate, duration }) => {
         clearTimeout(timeoutId);
-        setAudioData(audioData);
+        // Compute 120-bar peaks here (O(1) per bar via stride sampling) and store
+        // only those — never persist the raw Float32Array in Zustand. A 4-hour video
+        // produces a ~920 MB Float32Array; storing it globally would cause OOM on
+        // mobile and block the main thread for 77ms+ in BottomDock's useMemo.
+        setWaveformPeaks(computeWaveformPeaks(audioData));
+        // audioData is passed to the worker below; local ref is GC-eligible once
+        // the .then() callback returns.
 
         if (useEditorStore.getState().duration === 0) {
           useEditorStore.setState({ duration });
@@ -88,6 +141,12 @@ export function useMediaPipeline() {
         setProcessing(true, "transcribing");
         setAgentState("transcription", { status: "working", progress: 0 });
         toast.info("Reading video content...");
+        // Stamp the active run-ID before starting the worker so the
+        // transcription-complete handler can verify this message belongs
+        // to the current pipeline (not a terminated one).
+        activeRunIdRef.current = crypto.randomUUID();
+        // Lazy init — idempotent (useWorker guards against re-init with workerRef check).
+        transcription.init();
         transcription.transcribe(audioData, sampleRate);
       })
       .catch((audioError: unknown) => {
@@ -137,7 +196,7 @@ export function useMediaPipeline() {
           console.warn("[useMediaPipeline] GCS upload failed (non-fatal):", msg);
         });
     }
-  }, [setProcessing, setProgress, setAgentState, setAudioData, setSourceGcsPath, transcription]);
+  }, [setProcessing, setProgress, setAgentState, setWaveformPeaks, setSourceGcsPath, transcription]);
 
   // Handle Transcription Complete
   useEffect(() => {
@@ -145,8 +204,28 @@ export function useMediaPipeline() {
       transcription.lastMessage?.type === "complete" &&
       transcription.lastMessage.stage === "process"
     ) {
-      const transcript = transcription.lastMessage.payload.transcript;
-      if (!transcript) return;
+      // @xenova/transformers ASR returns { text, chunks: [{ text, timestamp:[s,e] }] }.
+      // Our internal TranscriptChunk shape expects { text, start, end }.
+      // Normalize at this single boundary so every downstream consumer gets
+      // the correct shape: CaptionOverlay, generateSRT, VideoWorkspace word tokens,
+      // RightPanel preflight filter, and analyzeWithBackend.
+      type XenovaChunk = { text?: string; timestamp?: [number, number]; start?: number; end?: number };
+      type XenovaTranscript = { text?: string; chunks?: XenovaChunk[] };
+      // Discard if this completion belongs to a cancelled run. A terminated
+      // worker can still deliver one final message before the thread dies.
+      if (!activeRunIdRef.current) return;
+
+      const raw = transcription.lastMessage.payload.transcript as unknown as XenovaTranscript | null | undefined;
+      if (!raw) return;
+
+      const transcript: Transcript = {
+        text: raw.text ?? "",
+        chunks: (raw.chunks ?? []).map((c) => ({
+          text: c.text ?? "",
+          start: c.start ?? c.timestamp?.[0] ?? 0,
+          end: c.end ?? c.timestamp?.[1] ?? 0,
+        })),
+      };
 
       setTranscript(transcript);
       setAgentState("transcription", { status: "done", progress: 100 });
@@ -166,12 +245,16 @@ export function useMediaPipeline() {
         message?: string;
       }
 
+      // Capture run-ID so the promise callback can verify it hasn't been
+      // superseded by a cancel + re-generate while the HTTP request was in flight.
+      const capturedRunId = activeRunIdRef.current;
       analysis.analyzeWithBackend({
         videoId: sourceUrl || "local-video",
         transcript: transcript.chunks,
         duration: useEditorStore.getState().duration || 0,
         user_id: userId,
       }).then((response: AnalysisResponse) => {
+        if (activeRunIdRef.current !== capturedRunId) return; // stale — discard
         if (response.suggestedClips) {
           setAgentState("viralAnalysis", { status: "done", progress: 100 });
           setAgentState("reframing", { status: "working", progress: 50 });
@@ -218,36 +301,6 @@ export function useMediaPipeline() {
     setProgress,
     analysis,
   ]);
-
-  // Handle Analysis Complete
-  useEffect(() => {
-    if (
-      analysis.lastMessage?.type === "complete" &&
-      analysis.lastMessage.stage === "process"
-    ) {
-      const suggestions = analysis.lastMessage.payload.suggestions;
-      if (!suggestions) return;
-
-      setAgentState("viralAnalysis", { status: "done", progress: 100 });
-      setAgentState("reframing", { status: "working", progress: 80 });
-
-      setSuggestions(
-        suggestions.map((s) => ({
-          ...s,
-          aspectRatio: "9:16" as const,
-          captionsEnabled: true,
-          status: "ready" as const,
-        })),
-      );
-
-      setAgentState("reframing", { status: "done", progress: 100 });
-      setProcessing(false, "ready");
-      setProgress(100);
-      toast.success("Analysis complete! Suggestions ready.");
-    } else if (analysis.progress) {
-      setAgentState("viralAnalysis", { progress: analysis.progress });
-    }
-  }, [analysis.lastMessage, analysis.progress, setSuggestions, setProcessing, setAgentState, setProgress]);
 
   // Handle errors
   useEffect(() => {

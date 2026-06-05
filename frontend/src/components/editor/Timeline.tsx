@@ -1,6 +1,5 @@
 "use client";
 
-import { useMemo } from "react";
 import { useEditorStore } from "@/stores/editorStore";
 import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
@@ -9,42 +8,17 @@ import type { Clip } from "@/types/pipeline";
 
 
 export default function Timeline() {
-  const { audioData, silenceSegments, duration, currentTime, setPendingSeek, exportSettings, suggestions, selectedClipId } = useEditorStore();
-  const numBars = 120; // Matches visually with the design
+  const { waveformPeaks, silenceSegments, duration, currentTime, setPendingSeek, exportSettings, suggestions, selectedClipId } = useEditorStore();
+  const numBars = 120;
 
   const selectedClip: Clip | undefined = selectedClipId
     ? suggestions.find((c) => c.id === selectedClipId)
     : suggestions[0];
 
-  // Generate waveform levels from actual audio data or fallback to random
-  const waveLevels = useMemo(() => {
-    if (!audioData) {
-      // Fallback for when no audio is analyzed yet - use index-based stable pattern
-      return Array.from({ length: numBars }).map(
-        (_, i) => 0.2 + ((i * 17) % 30) / 100,
-      );
-    }
-
-    const levels: number[] = [];
-    const step = Math.floor(audioData.length / numBars);
-
-    for (let i = 0; i < numBars; i++) {
-      const start = i * step;
-      const end = start + step;
-      let sum = 0;
-      // Optimize: only check every Nth sample for speed
-      const stride = Math.ceil((end - start) / 50);
-      let count = 0;
-
-      for (let j = start; j < end; j += stride) {
-        sum += Math.abs(audioData[j]);
-        count++;
-      }
-      // Normalize somewhat
-      levels.push(Math.min(1, (sum / count) * 3));
-    }
-    return levels;
-  }, [audioData]);
+  // waveformPeaks are pre-computed by useMediaPipeline (120 normalized values).
+  // Fall back to a stable index-based pattern while audio is being analyzed.
+  const waveLevels = waveformPeaks
+    ?? Array.from({ length: numBars }, (_, i) => 0.2 + ((i * 17) % 30) / 100);
 
   return (
     <div className="flex-1 p-4 flex flex-col gap-4 bg-muted/20">
@@ -73,7 +47,7 @@ export default function Timeline() {
 
       <div className="relative h-24 bg-muted/20 rounded-xl border-2 border-dashed border-muted-foreground/10 overflow-hidden flex items-center px-4 group transition-colors hover:bg-muted/30">
         {/* Honest State Overlay */}
-        {!audioData ? (
+        {!waveformPeaks ? (
           <div className="absolute inset-0 z-40 bg-background/40 backdrop-blur-[1px] flex items-center justify-center pointer-events-none">
             <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-background/80 border border-border shadow-lg animate-pulse">
               <div className="w-2 h-2 rounded-full bg-primary animate-ping" />
@@ -113,7 +87,7 @@ export default function Timeline() {
           {waveLevels.map((level, i) => (
             <div
               key={i}
-              className={`flex-1 rounded-full transition-all duration-300 ${audioData ? "bg-primary" : "bg-primary/20"}`}
+              className={`flex-1 rounded-full transition-all duration-300 ${waveformPeaks ? "bg-primary" : "bg-primary/20"}`}
               style={{ height: `${Math.max(10, level * 100)}%` }}
             />
           ))}
