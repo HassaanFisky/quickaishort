@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useCallback, useEffect, useMemo } from "react";
+import { useRef, useState, useCallback, useEffect } from "react";
 import { useEditorStore } from "@/stores/editorStore";
 import { useUIStore, type EditorTool } from "@/stores/uiStore";
 import { Button } from "@/components/ui/button";
@@ -31,11 +31,13 @@ function TimelineClip({
   duration,
   isSelected,
   onSelect,
+  onContextMenu,
 }: {
   clip: Clip;
   duration: number;
   isSelected: boolean;
   onSelect: () => void;
+  onContextMenu: (e: React.MouseEvent, clipId: string) => void;
 }) {
   const { updateClip, setPendingSeek } = useEditorStore();
   const [isDragging, setIsDragging] = useState(false);
@@ -102,6 +104,7 @@ function TimelineClip({
       )}
       style={{ left: `${left}%`, width: `${width}%` }}
       onMouseDown={(e) => handleMouseDown(e, "move")}
+      onContextMenu={(e) => { e.preventDefault(); onContextMenu(e, clip.id); }}
     >
       {/* Left Trim Handle */}
       <div
@@ -136,6 +139,7 @@ export default function BottomDock() {
   const {
     transcript,
     suggestions,
+    setSuggestions,
     duration,
     currentTime,
     isPlaying,
@@ -149,7 +153,7 @@ export default function BottomDock() {
     addCanvasElement,
     setExportSetting,
     exportSettings,
-    audioData,
+    waveformPeaks,
     silenceSegments,
     undoStack,
     redoStack,
@@ -163,20 +167,45 @@ export default function BottomDock() {
   const [hoverTime, setHoverTime] = useState<number | null>(null);
   const [hoverX, setHoverX] = useState(0);
   const isDraggingPlayhead = useRef(false);
+  const [contextMenu, setContextMenu] = useState<{ clipId: string; x: number; y: number } | null>(null);
 
-  // Amplitude peaks per pixel column — used to draw the canvas waveform.
-  const waveformPeaks = useMemo(() => {
-    if (!audioData || audioData.length === 0) return null;
-    const barCount = 120;
-    const step = Math.floor(audioData.length / barCount);
-    return Array.from({ length: barCount }, (_, i) => {
-      let sum = 0;
-      for (let j = i * step; j < (i + 1) * step && j < audioData.length; j++) {
-        sum += Math.abs(audioData[j]);
+  // Close context menu on outside click
+  useEffect(() => {
+    if (!contextMenu) return;
+    const close = () => setContextMenu(null);
+    window.addEventListener("mousedown", close);
+    return () => window.removeEventListener("mousedown", close);
+  }, [contextMenu]);
+
+  const handleClipContextMenu = useCallback(
+    (e: React.MouseEvent, clipId: string) => {
+      setContextMenu({ clipId, x: e.clientX, y: e.clientY });
+    },
+    [],
+  );
+
+  const duplicateClip = useCallback(
+    (clipId: string) => {
+      const clip = suggestions.find((c) => c.id === clipId);
+      if (!clip) return;
+      const clipLen = clip.end - clip.start;
+      const newStart = clip.end;
+      const newEnd = Math.min(newStart + clipLen, duration);
+      if (newStart >= duration) {
+        toast.error("No room to duplicate — move the clip earlier.");
+        return;
       }
-      return Math.max(0.01, Math.min(1, (sum / step) * 10));
-    });
-  }, [audioData]);
+      const newClip: Clip = { ...clip, id: `${clip.id}-dup-${Date.now()}`, start: newStart, end: newEnd };
+      setSuggestions([...suggestions, newClip]);
+      toast.success("Clip duplicated.");
+    },
+    [suggestions, duration, setSuggestions],
+  );
+
+  // waveformPeaks come pre-computed from the store (set by useMediaPipeline after
+  // audio extraction). The raw Float32Array is never stored in Zustand — peaks are
+  // 120 numbers computed with O(1)-per-bar stride sampling before GC releases the
+  // raw buffer. No useMemo needed here.
 
   // Redraw waveform canvas whenever peaks, playhead, or silence segments change.
   useEffect(() => {
@@ -315,10 +344,7 @@ export default function BottomDock() {
   const handleVoiceover = useCallback(() => {
     const nextVal = !exportSettings.voiceoverEnabled;
     setExportSetting("voiceoverEnabled", nextVal);
-    if (nextVal) {
-      setExportSetting("audioBoost", 150); // Automatically boost audio to support voiceover freq
-    }
-    toast.success(nextVal ? "AI Voiceover Track/Enhancement enabled." : "Voiceover disabled.");
+    toast.success(nextVal ? "AI Voiceover enabled." : "Voiceover disabled.");
   }, [exportSettings.voiceoverEnabled, setExportSetting]);
 
   const tools: Array<{
@@ -526,6 +552,7 @@ export default function BottomDock() {
                   duration={duration}
                   isSelected={clip.id === selectedClipId}
                   onSelect={() => selectClip(clip.id)}
+                  onContextMenu={handleClipContextMenu}
                 />
               ))
             ) : (
@@ -605,16 +632,71 @@ export default function BottomDock() {
           </div>
         </div>
       </div>
+      {/* Right-click context menu */}
+      {contextMenu && (
+        <div
+          className="fixed z-50 bg-card border border-border rounded-xl shadow-2xl py-1 min-w-[148px] overflow-hidden"
+          style={{ top: contextMenu.y, left: contextMenu.x }}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          {[
+            {
+              label: "Trim",
+              sub: "Drag clip edges",
+              onClick: () => { toast.info("Drag the clip edges on the timeline to trim."); setContextMenu(null); },
+            },
+            {
+              label: "Duplicate",
+              onClick: () => { duplicateClip(contextMenu.clipId); setContextMenu(null); },
+            },
+            {
+              label: "Delete",
+              danger: true,
+              onClick: () => { deleteClip(contextMenu.clipId); toast.success("Clip deleted."); setContextMenu(null); },
+            },
+          ].map(({ label, sub, danger, onClick }) => (
+            <button
+              key={label}
+              onClick={onClick}
+              className={cn(
+                "w-full text-left px-3 py-2 text-[11px] font-bold flex items-center justify-between hover:bg-foreground/8 transition-colors",
+                danger ? "text-red-400 hover:bg-red-500/10" : "text-foreground/80",
+              )}
+            >
+              <span>{label}</span>
+              {sub && <span className="text-[9px] text-muted-foreground/50 font-normal">{sub}</span>}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
 function TimeScale({ duration }: { duration: number }) {
   if (duration === 0) return <div className="h-4 pl-20" />;
-  const markers = [0, 0.25, 0.5, 0.75].map((frac) => frac * duration);
+
+  // Pick a marker interval that keeps the ruler readable (≤ 10 marks).
+  const step = duration <= 60 ? 10 : duration <= 300 ? 30 : duration <= 1800 ? 60 : 300;
+  const markers: number[] = [];
+  for (let t = 0; t <= duration; t += step) markers.push(t);
+
   return (
-    <div className="flex items-center h-4 pl-20 pr-4 justify-between text-[8px] font-black text-muted-foreground/30 uppercase tracking-[0.3em]">
-      {markers.map((t) => <span key={t}>{formatTime(t)}</span>)}
+    <div className="h-4 flex items-center">
+      {/* Spacer matching the "Video" label width + gap */}
+      <div className="w-16 shrink-0 mr-4" />
+      {/* Ruler track — absolutely positioned markers proportional to the track */}
+      <div className="flex-1 relative h-full mr-4">
+        {markers.map((t) => (
+          <span
+            key={t}
+            className="absolute top-0 -translate-x-1/2 text-[8px] font-black text-muted-foreground/30 uppercase tracking-[0.25em] select-none"
+            style={{ left: `${(t / duration) * 100}%` }}
+          >
+            {formatTime(t)}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }

@@ -1,10 +1,62 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { motion, AnimatePresence, type Variants } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
+import { X, Send, Mic, MicOff, Sparkles, Zap, ChevronRight } from "lucide-react";
 import { useEditorStore } from "@/stores/editorStore";
 import { callGeminiEditor, getInitialSuggestions } from "@/lib/gemini-editor";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
+import { cn } from "@/lib/utils";
+
+/* ─── Sub-components ───────────────────────────────────────────────────────── */
+
+function ActionTag({ type }: { type: string }) {
+  return (
+    <span className="action-tag">
+      {type.replace(/_/g, " ").toLowerCase()}
+    </span>
+  );
+}
+
+function ThinkingBubble() {
+  return (
+    <div className="flex items-end gap-2">
+      <div className="msg-gem-badge">✦</div>
+      <div className="thinking-dots">
+        <span /><span /><span />
+      </div>
+    </div>
+  );
+}
+
+function MessageText({ text }: { text: string }) {
+  const parts = text.split(/(\*\*[^*]+\*\*)/);
+  return (
+    <p className="msg-text">
+      {parts.map((p, i) =>
+        p.startsWith("**") ? (
+          <strong key={i} className="font-semibold text-white/95">{p.slice(2, -2)}</strong>
+        ) : (
+          <React.Fragment key={i}>{p}</React.Fragment>
+        ),
+      )}
+    </p>
+  );
+}
+
+function StreamingText({ text }: { text: string }) {
+  const lines = text.split(/\n+/).filter((l) => l.trim());
+  if (lines.length === 0) return <MessageText text={text} />;
+  return (
+    <div className="flex flex-col gap-1">
+      {lines.map((line, i) => (
+        <MessageText key={i} text={line} />
+      ))}
+    </div>
+  );
+}
+
+/* ─── Main panel ────────────────────────────────────────────────────────────── */
 
 export function AIPanel() {
   const {
@@ -44,29 +96,33 @@ export function AIPanel() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [aiMessages, isAIThinking]);
 
+  // Focus textarea when panel opens
+  useEffect(() => {
+    if (aiPanelOpen) {
+      setTimeout(() => textareaRef.current?.focus(), 300);
+    }
+  }, [aiPanelOpen]);
+
   // Load initial suggestions when video is ready
   useEffect(() => {
     if (!videoMetadata || suggestionsLoaded) return;
     setSuggestionsLoaded(true);
 
     getInitialSuggestions(videoMetadata, videoAnalysis)
-      .then((s) => {
-        setSuggestions(s);
-      })
-      .catch((err: unknown) => {
-        console.error("[AIPanel] getInitialSuggestions failed:", err instanceof Error ? err.message : String(err));
+      .then((s) => setSuggestions(s))
+      .catch(() => {
         setSuggestions([
           "Add captions from transcript",
-          "Trim intro to first scene",
+          "Trim to best 30 seconds",
           "Apply cinematic color grade",
-          "Boost brightness +20%",
+          "Boost audio +20%",
           "Remove intro silence",
         ]);
       })
       .finally(() => {
         addAIMessage({
           role: "assistant",
-          content: `Video loaded — **${videoMetadata.title || "Untitled"}** (${Math.round(videoMetadata.duration)}s, ${videoMetadata.nativeWidth}×${videoMetadata.nativeHeight}).\n\nI've analyzed it. Tell me what to edit or tap a suggestion.`,
+          content: `Video loaded — **${videoMetadata.title || "Untitled"}** (${Math.round(videoMetadata.duration)}s).\n\nTell me what to edit or tap a suggestion below.`,
           actions: [],
         });
       });
@@ -81,8 +137,6 @@ export function AIPanel() {
       setInputText("");
       setInterimText("");
 
-      // Snapshot history BEFORE adding the new user message so Gemini doesn't
-      // see the current user turn twice (once in history, once via sendMessage).
       const historySnapshot = useEditorStore.getState().aiMessages.map((m) => ({
         role: m.role,
         content: m.content,
@@ -94,12 +148,8 @@ export function AIPanel() {
       try {
         const response = await callGeminiEditor(trimmed, videoMetadata, videoAnalysis, historySnapshot);
 
-        if (response.actions.length > 0) {
-          dispatchAIActions(response.actions);
-        }
-        if (response.suggestions.length > 0) {
-          setSuggestions(response.suggestions);
-        }
+        if (response.actions.length > 0) dispatchAIActions(response.actions);
+        if (response.suggestions.length > 0) setSuggestions(response.suggestions);
 
         addAIMessage({
           role: "assistant",
@@ -108,22 +158,16 @@ export function AIPanel() {
         });
       } catch (err: unknown) {
         const errMsg = err instanceof Error ? err.message : String(err);
-        console.error("[AIPanel] Gemini request failed:", errMsg);
 
         let displayMsg = "Request failed — please try again.";
-        if (/api[_\s]?key|not configured|gemini.*auth|unauthorized|401|403/i.test(errMsg)) {
-          displayMsg = "API key error — Gemini is not configured on this server.";
-        } else if (/400|invalid argument|alternates/i.test(errMsg)) {
-          displayMsg = "Invalid request — try rephrasing your message.";
-        } else if (/rate.?limit|quota|RESOURCE_EXHAUSTED|429/i.test(errMsg)) {
-          displayMsg = "Rate limit reached — wait a moment and try again.";
+        if (/api[_\s]?key|not configured|401|403/i.test(errMsg)) {
+          displayMsg = "Gemini API key not configured on this server.";
+        } else if (/rate.?limit|quota|429|RESOURCE_EXHAUSTED/i.test(errMsg)) {
+          displayMsg = "Rate limit reached — wait a moment and retry.";
         } else if (/network|fetch|failed to fetch/i.test(errMsg)) {
-          displayMsg = "Network error — check your connection and retry.";
-        } else if (/parse|JSON/i.test(errMsg)) {
-          displayMsg = "Unexpected response from Gemini — try again.";
-        } else if (/5\d\d|server error|internal/i.test(errMsg)) {
-          const clean = errMsg.replace(/^HTTP \d+[:\s]*/i, "").trim();
-          displayMsg = clean || "Gemini server error — please try again.";
+          displayMsg = "Connection lost — check your internet.";
+        } else if (/400|invalid argument/i.test(errMsg)) {
+          displayMsg = "Invalid request — try rephrasing.";
         } else if (errMsg && errMsg !== "Request failed") {
           displayMsg = errMsg;
         }
@@ -143,6 +187,16 @@ export function AIPanel() {
     }
   };
 
+  // Auto-resize textarea
+  const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInputText(e.target.value);
+    const el = e.target;
+    el.style.height = "auto";
+    el.style.height = Math.min(el.scrollHeight, 120) + "px";
+  };
+
+  const isVideoLoaded = !!videoMetadata;
+
   return (
     <AnimatePresence>
       {aiPanelOpen && (
@@ -151,45 +205,86 @@ export function AIPanel() {
           initial={{ x: "100%", opacity: 0 }}
           animate={{ x: 0, opacity: 1 }}
           exit={{ x: "100%", opacity: 0 }}
-          transition={{ type: "spring", damping: 28, stiffness: 260 }}
+          transition={{ type: "spring", damping: 26, stiffness: 240 }}
         >
+          {/* ── Header ──────────────────────────────────────────────── */}
           <div className="ai-panel-header">
             <div className="ai-header-left">
+              {/* Gem badge */}
               <div className="ai-header-gem">✦</div>
               <div className="ai-header-info">
                 <span className="ai-panel-brand">QuickAI Short</span>
-                <span className="ai-panel-title">Gemini Editor</span>
+                <span className="ai-panel-title">QuickAI Editor</span>
               </div>
             </div>
+
             <div className="ai-header-right">
-              <span className="ai-header-model">2.5 Flash</span>
+              <span className="ai-header-model">Gemini 2.5</span>
+              {/* Status dot */}
+              <span
+                className={cn(
+                  "w-1.5 h-1.5 rounded-full shrink-0",
+                  isAIThinking
+                    ? "bg-amber-400 animate-pulse"
+                    : isVideoLoaded
+                    ? "bg-emerald-400"
+                    : "bg-white/20"
+                )}
+              />
               <button
                 className="ai-close-btn"
                 onClick={() => setAIPanelOpen(false)}
-                aria-label="Close AI panel"
+                aria-label="Close QuickAI Editor"
               >
-                ✕
+                <X size={14} />
               </button>
             </div>
           </div>
 
+          {/* ── Context strip ─────────────────────────────────────── */}
+          <div className="px-4 py-2 flex items-center gap-2 border-b border-white/[0.05] bg-white/[0.02] shrink-0">
+            <Zap className="w-3 h-3 text-accent-p shrink-0" />
+            <span className="text-[10px] text-white/40 font-medium truncate">
+              {isVideoLoaded
+                ? videoMetadata!.title.length > 48
+                  ? videoMetadata!.title.slice(0, 48) + "…"
+                  : videoMetadata!.title
+                : "No video loaded — paste a YouTube URL to start"}
+            </span>
+          </div>
+
+          {/* ── Messages ────────────────────────────────────────────── */}
           <div className="ai-messages">
+
+            {/* Empty state */}
             {aiMessages.length === 0 && (
               <div className="ai-empty-state">
-                <span className="empty-icon">✦</span>
-                <p>Load a video and I&apos;ll analyze it.</p>
+                <div className="w-12 h-12 rounded-2xl bg-white/[0.04] border border-white/[0.07] flex items-center justify-center mb-1">
+                  <Sparkles className="w-5 h-5 text-accent-p/60" />
+                </div>
+                <p className="text-[12px] font-semibold text-white/30">
+                  {isVideoLoaded ? "Tell me what to edit" : "Load a video first"}
+                </p>
+                <p className="text-[10px] text-white/15 max-w-[200px]">
+                  {isVideoLoaded
+                    ? "I'll apply your edits directly to the timeline"
+                    : "Paste a YouTube URL in the top bar to get started"}
+                </p>
               </div>
             )}
 
+            {/* Messages */}
             {aiMessages.map((msg) => (
               <motion.div
                 key={msg.id}
                 className={`ai-msg ai-msg-${msg.role}`}
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.18 }}
+                transition={{ duration: 0.18, ease: "easeOut" }}
               >
-                {msg.role === "assistant" && <span className="msg-gem-badge">✦</span>}
+                {msg.role === "assistant" && (
+                  <div className="msg-gem-badge">✦</div>
+                )}
                 <div className="msg-content">
                   {msg.role === "assistant" ? (
                     <StreamingText text={msg.content} />
@@ -199,9 +294,7 @@ export function AIPanel() {
                   {msg.actions && msg.actions.length > 0 && (
                     <div className="action-tags">
                       {msg.actions.map((a, i) => (
-                        <span key={i} className="action-tag">
-                          {a.type.replace(/_/g, " ").toLowerCase()}
-                        </span>
+                        <ActionTag key={i} type={a.type} />
                       ))}
                     </div>
                   )}
@@ -209,24 +302,21 @@ export function AIPanel() {
               </motion.div>
             ))}
 
+            {/* Thinking indicator */}
             {isAIThinking && (
               <motion.div
-                className="ai-msg ai-msg-assistant"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
+                className="ai-msg ai-msg-assistant"
               >
-                <span className="msg-gem-badge">✦</span>
-                <div className="thinking-dots">
-                  <span />
-                  <span />
-                  <span />
-                </div>
+                <ThinkingBubble />
               </motion.div>
             )}
 
             <div ref={messagesEndRef} />
           </div>
 
+          {/* ── Suggestion chips ─────────────────────────────────── */}
           {suggestions.length > 0 && (
             <div className="suggestions-rail">
               {suggestions.map((s, i) => (
@@ -242,96 +332,67 @@ export function AIPanel() {
             </div>
           )}
 
+          {/* ── Input area ───────────────────────────────────────── */}
           <div className="ai-input-area">
-            {interimText && <div className="interim-text">{interimText}</div>}
+            {interimText && (
+              <div className="interim-text">{interimText}</div>
+            )}
 
             <div className="input-row">
               <textarea
                 ref={textareaRef}
                 className="ai-textarea"
-                placeholder={isRecording ? "Listening..." : "Tell me what to edit..."}
+                placeholder={
+                  !isVideoLoaded
+                    ? "Load a video to start editing…"
+                    : isRecording
+                    ? "Listening…"
+                    : "Tell me what to edit… (Enter to send)"
+                }
                 value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
+                onChange={handleInput}
                 onKeyDown={handleKeyDown}
-                rows={2}
-                disabled={isAIThinking}
+                rows={1}
+                disabled={isAIThinking || !isVideoLoaded}
               />
 
               <button
                 className={`voice-btn ${isRecording ? "voice-btn-active" : ""}`}
                 onClick={toggleVoice}
-                aria-label={isRecording ? "Stop recording" : "Start voice input"}
-                title={isRecording ? "Stop voice" : "Voice input"}
+                disabled={!isVideoLoaded}
+                aria-label={isRecording ? "Stop recording" : "Voice input"}
+                title={isRecording ? "Stop voice input" : "Voice input"}
               >
-                {isRecording ? (
-                  <span className="voice-icon-active">⏹</span>
-                ) : (
-                  <span className="voice-icon">🎙</span>
-                )}
+                {isRecording ? <MicOff size={14} /> : <Mic size={14} />}
               </button>
 
               <button
                 className="send-btn"
                 onClick={() => sendMessage(inputText)}
-                disabled={isAIThinking || !inputText.trim()}
+                disabled={isAIThinking || !inputText.trim() || !isVideoLoaded}
                 aria-label="Send"
+                title="Send (Enter)"
               >
-                ↑
+                <Send size={13} />
               </button>
             </div>
 
             {voiceError && <p className="voice-error">{voiceError}</p>}
+
+            {/* Keyboard hint */}
+            <div className="flex items-center justify-between px-0.5">
+              <span className="text-[9px] text-white/15">
+                Enter to send · Shift+Enter for new line
+              </span>
+              <span className="text-[9px] text-white/15 flex items-center gap-1">
+                <kbd className="px-1 py-0.5 rounded bg-white/[0.06] font-mono text-[9px]">Ctrl</kbd>
+                <kbd className="px-1 py-0.5 rounded bg-white/[0.06] font-mono text-[9px]">K</kbd>
+                to open
+              </span>
+            </div>
           </div>
         </motion.aside>
       )}
     </AnimatePresence>
-  );
-}
-
-function MessageText({ text }: { text: string }) {
-  const parts = text.split(/(\*\*[^*]+\*\*)/);
-  return (
-    <p className="msg-text">
-      {parts.map((part, i) =>
-        part.startsWith("**") ? (
-          <strong key={i}>{part.slice(2, -2)}</strong>
-        ) : (
-          <React.Fragment key={i}>{part}</React.Fragment>
-        ),
-      )}
-    </p>
-  );
-}
-
-const streamContainerVariants: Variants = {
-  hidden: {},
-  show: { transition: { staggerChildren: 0.08, delayChildren: 0.02 } },
-};
-
-const streamLineVariants: Variants = {
-  hidden: { opacity: 0 },
-  show: { opacity: 1, transition: { duration: 0.3, ease: "easeOut" } },
-};
-
-function StreamingText({ text }: { text: string }) {
-  const lines = text.split(/\n+/).filter((l) => l.trim());
-  if (lines.length === 0) return <p className="msg-text">{text}</p>;
-  return (
-    <motion.div variants={streamContainerVariants} initial="hidden" animate="show">
-      {lines.map((line, i) => {
-        const parts = line.split(/(\*\*[^*]+\*\*)/);
-        return (
-          <motion.p key={i} className="msg-text" variants={streamLineVariants}>
-            {parts.map((part, j) =>
-              part.startsWith("**") ? (
-                <strong key={j}>{part.slice(2, -2)}</strong>
-              ) : (
-                <React.Fragment key={j}>{part}</React.Fragment>
-              ),
-            )}
-          </motion.p>
-        );
-      })}
-    </motion.div>
   );
 }

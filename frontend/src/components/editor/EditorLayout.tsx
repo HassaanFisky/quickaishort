@@ -36,6 +36,7 @@ import Sidebar from "@/components/layout/Sidebar";
 import { TimelineLoader } from "@/components/ui/TimelineLoader";
 import { LiquidThemeToggle } from "@/components/shared/LiquidThemeToggle";
 import { AICopilot } from "@/components/editor/AICopilot";
+import { AIPanel } from "@/components/editor/AIPanel";
 import OnboardingTour from "./OnboardingTour";
 import VideoWorkspace from "./VideoWorkspace";
 import axios from "axios";
@@ -54,6 +55,7 @@ export default function EditorLayout() {
 
   const { runPipeline, cancelPipeline } = useMediaPipeline();
   const { setOpen: setAICopilotOpen, setVideoContext } = useAIPanel();
+  const setAIPanelOpen = useEditorStore((s) => s.setAIPanelOpen);
   const { isSidebarCollapsed, leftPanelOpen, rightPanelOpen, setLeftPanelOpen, setRightPanelOpen } = useUIStore();
 
   // Sync transcript to AI panel context after pipeline completes
@@ -399,9 +401,9 @@ export default function EditorLayout() {
           </button>
 
           <button
-            onClick={() => setAICopilotOpen(true)}
-            title="AI Copilot — ask anything about your video"
-            aria-label="Open AI Copilot"
+            onClick={() => setAIPanelOpen(true)}
+            title="Gemini AI Editor — Ctrl+K"
+            aria-label="Open AI Editor"
             className="h-9 w-9 rounded-lg flex items-center justify-center bg-card border border-border text-fg-muted hover:text-primary transition-colors"
           >
             <Sparkles size={15} />
@@ -769,8 +771,11 @@ export default function EditorLayout() {
         )}
       </AnimatePresence>
 
-      {/* AI Copilot — fixed overlay, zero layout impact when closed */}
+      {/* AI Copilot — simple chat overlay (⋯ icon opens this) */}
       <AICopilot />
+
+      {/* Gemini AI Editor — full action dispatch panel (Sparkles / Ctrl+K opens this) */}
+      <AIPanel />
 
       {/* First-run guided tour — shows once per browser, fully dismissible */}
       <OnboardingTour />
