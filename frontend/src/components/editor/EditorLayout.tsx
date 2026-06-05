@@ -36,6 +36,7 @@ import Sidebar from "@/components/layout/Sidebar";
 import { TimelineLoader } from "@/components/ui/TimelineLoader";
 import { LiquidThemeToggle } from "@/components/shared/LiquidThemeToggle";
 import { AICopilot } from "@/components/editor/AICopilot";
+import OnboardingTour from "./OnboardingTour";
 import VideoWorkspace from "./VideoWorkspace";
 import axios from "axios";
 
@@ -51,7 +52,7 @@ export default function EditorLayout() {
     setVideoMetadata,
   } = useEditorStore();
 
-  const { runPipeline, cancelPipeline, status } = useMediaPipeline();
+  const { runPipeline, cancelPipeline } = useMediaPipeline();
   const { setOpen: setAICopilotOpen, setVideoContext } = useAIPanel();
   const { isSidebarCollapsed, leftPanelOpen, rightPanelOpen, setLeftPanelOpen, setRightPanelOpen } = useUIStore();
 
@@ -81,9 +82,11 @@ export default function EditorLayout() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const hasAutoImportedRef = useRef(false);
 
-  const isAnalysing = (["analyzing", "loading", "transcribing"] as string[]).includes(
-    status || ""
-  );
+  // Derived from editorStore.isProcessing so it accurately reflects the pipeline
+  // lifecycle: true while setProcessing(true,...) is active, false after
+  // setProcessing(false,...). Previously derived from useMediaPipeline.status
+  // (transcription worker status), which never left "loading" after init.
+  const isAnalysing = isProcessing;
 
   // Collapse URL bar 1.5s after video loads
   useEffect(() => {
@@ -95,26 +98,34 @@ export default function EditorLayout() {
     return () => clearTimeout(t);
   }, [sourceUrl, isAnalysing]);
 
-  // Allow LeftPanel to re-trigger pipeline on retry
+  // Keep a ref so the retry listener never needs to re-register when runPipeline
+  // recreates (it captures transcription via closure, so it changes every render).
+  // A re-registration window between removeEventListener and addEventListener
+  // could silently swallow a retry-analysis event during active pipeline state changes.
+  const runPipelineRef = useRef(runPipeline);
+  useEffect(() => { runPipelineRef.current = runPipeline; });
+
   useEffect(() => {
-    const handler = () => void runPipeline();
+    const handler = () => void runPipelineRef.current();
     window.addEventListener("retry-analysis", handler);
     return () => window.removeEventListener("retry-analysis", handler);
-  }, [runPipeline]);
+  }, []); // stable — ref keeps it current without re-registration
 
-  // Watchdog: auto-cancel transcription after 30s if stalled
+  // Watchdog: 3-minute window covers first-time Whisper model download (~150 MB).
+  // cancelPipeline() now terminates the worker as well as aborting the audio-fetch
+  // controller, so no ghost clips arrive after the watchdog fires.
   useEffect(() => {
     if (currentStage !== "transcribing") return;
     const watchdog = setTimeout(() => {
       if (useEditorStore.getState().currentStage === "transcribing") {
         cancelPipeline();
         setProcessing(false, "idle");
-        toast.warning(
-          "Transcription timed out — try uploading an MP4 for faster processing.",
-          { duration: 8000 }
+        toast.info(
+          "Transcription is taking too long. Click Generate again — the AI model will be cached and load faster next time.",
+          { duration: 12_000 }
         );
       }
-    }, 30_000);
+    }, 180_000);
     return () => clearTimeout(watchdog);
   }, [currentStage, cancelPipeline, setProcessing]);
 
@@ -179,6 +190,17 @@ export default function EditorLayout() {
         return;
       }
       toast.success(`Found: ${info.title}`);
+
+      // Whisper tiny.en transcribes at ~10–20× realtime in WASM. Videos over
+      // 30 minutes (1800s) will likely exceed the 180s watchdog. Surface this
+      // before the pipeline starts so users know what to expect.
+      if (info.duration && info.duration > 1800) {
+        toast.warning(
+          `This video is ${Math.round(info.duration / 60)} minutes. Browser AI works best under 30 minutes — analysis may take longer or time out on first use.`,
+          { duration: 8000 }
+        );
+      }
+
       if (info.thumbnail) storeThumbnail(info.thumbnail);
       setVideoContext({
         id: info.id ?? videoId ?? "",
@@ -749,6 +771,9 @@ export default function EditorLayout() {
 
       {/* AI Copilot — fixed overlay, zero layout impact when closed */}
       <AICopilot />
+
+      {/* First-run guided tour — shows once per browser, fully dismissible */}
+      <OnboardingTour />
     </div>
   );
 }

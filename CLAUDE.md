@@ -1,3 +1,50 @@
+
+You must strictly execute within the boundaries of the following verified workspace rules and capabilities:
+
+=== 1. WORKSPACE SPECIFIC RULES & SKILLS ===
+
+A. PYTHON DEPENDENCY MANAGEMENT:
+   - BEFORE installing or importing any Python package, verify the environment.
+   - This project uses a virtual environment + pip + requirements.txt. 
+   - Never run global pip installs. Always run pip explicitly via the active virtual environment: `fastapi/venv/bin/pip install <package>` (or `./venv/bin/pip install <package>` relative to fastapi/ directory).
+   - After any install, freeze dependencies back to requirements.txt: `venv/bin/pip freeze > requirements.txt`.
+
+B. GOOGLE CLOUD AUTH & OPERATION BOUNDARIES:
+   - The GCP project is quickaishort-agent-494304, primary bucket is quickaishort-agent-494304-media.
+   - If authentication errors occur, verify status with `gcloud auth list`. Do not try to programmatically fix active credentials in code.
+   - If credentials are missing, stop and instruct the user to run:
+     1. `gcloud auth login`
+     2. `gcloud auth application-default login`
+
+C. ACCIDENTAL DATA LOSS PREVENTION:
+   - Halt execution and request explicit user consent before executing any command resulting in irreversible data loss.
+   - This includes: `gsutil rm` or `gcloud storage rm` targeting production GCS buckets, dropping MongoDB collections/GridFS databases, or terminating Cloud Run services.
+
+=== 2. PRIMARY ENGINEERING OBJECTIVES (E2E STABILITY) ===
+
+Address the following technical priorities in order:
+1. READ BEFORE WRITE: Read files in full before modification. Check directory structures before file creations. Verify imports and target functions exist.
+2. RESOLVE MEMORY LEAKS: Check worker processes (render_worker.py, RQ workers), media processing tasks, and long-running subprocesses. Implement clean connection/resource closures.
+3. SECURE WORKER LIFECYCLE: Enforce robust startup/shutdown hooks, job status tracking (using Redis Streams status layer & RQ), DLQ logging, and failure recovery.
+4. CANCELLATION & RACE CONDITIONS: Ensure async operations (FastAPI endpoints, Google ADK pipelines, Whisper workers) handle cancellation gracefully without dangling operations or stale states.
+5. CHUNKED VIDEO ACQUISITION & FALLBACKS: Optimize long video stream clipping. Ensure video_acquisition.py correctly routes segment downloads with fallbacks (Cookies -> PoToken-only -> error) and Redis cache lookups.
+6. NO TypeScript / LINT ERRORS: Clear all TS compilation errors. Fix visual grid clipping, arrow key navigation, and state sync bugs in the frontend. Remove dead or unreachable code.
+
+=== 3. VERIFICATION & COMPILATION GATE ===
+
+For every patch, change, or file edit:
+- Never assume a change works. Verify it immediately using terminal compilation commands.
+- For Frontend changes: Run `npx tsc --noEmit` and `pnpm build` from the `frontend/` directory.
+- For Backend changes: Run `python -m py_compile <file_path>` and check FastAPI routes.
+- Verify status endpoints (e.g. `GET /health`, `GET /api/admin/pipeline/health`, `GET /api/render/dlq/stats`) to confirm runtime stability.
+
+=== 4. STRICT OUTPUT contract ===
+
+Provide your output in the following format:
+- Done: List of exact files modified, with full relative paths.
+- Code Changes: Concise description of the exact fixes made.
+- Verification Actions: Detailed terminal output, lint/compilation results, and active health checks.
+
 # CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
@@ -487,6 +534,7 @@ COMPLETED:
 - FINAL PRODUCTION LOCKDOWN v1.0 (2026-05-21): Zero TS errors, zero lint errors, zero Python syntax errors. Conversational AI Editor verified. Pre-Flight multi-agent pipeline verified. Full deployment: Vercel (frontend) + Cloud Run quickai-api rev 00030 + quickai-worker rev 00007. Fixed /ready startup probe: deferred run_startup_checks() to background task; added startup probe failureThreshold=20/timeoutSeconds=5 in deploy_production.ps1 to accommodate 13s+ cold-start import time of heavy dependencies (google-adk, google-genai, celery).
 - EDITOR BUG FIX PASS (2026-05-23): Fixed 10 browser-verified bugs (commit 68a56bd). (1) Inspector scroll — min-h-0 on grid children; (2) Playback speed audio — re-apply rate in onLoadedMetadata; (3) Audio Boost — Web Audio GainNode + volume fallback on CORS; (4) Noise Reduction — BiquadFilter highpass in Web Audio chain; (5) Arrow key navigation — keyboard handler placed after skip/togglePlay declarations to avoid TDZ; (6) "No audio data" — setAudioData now called in useMediaPipeline after extraction; (7) Gemini AI Editor — trim leading model turns from chatHistory before startChat; (8) FFmpeg.wasm hang — 15s timeout surfaces CDN block error; (9) Import panel stays open — panelCollapsed state + AnimatePresence collapse with 1.5s delay after load; (10) Clip retry — retry-analysis custom event + error UI in LeftPanel. Zero TS errors, zero lint errors, clean build verified.
 - PRODUCTION STABILIZATION (2026-05-24): 6 production fixes shipped (commit 2002605). (1) Render DLQ: Redis Streams status layer + dead-letter stream render:dead + 4 admin endpoints (/api/render/status|dead|retry|dlq/stats) — push_result() called on every job success/failure; (2) Cookie rotation: cookie_rotator.py with yt-dlp canary validation, 1h in-process cache, CRITICAL log on expiry, admin endpoints + Cloud Scheduler job every 6h; (3) Agent analytics: analytics_queries.py (MongoDB-backed), BigQuery adk_analytics dataset created, 3 admin endpoints; (4) Tiered video acquisition: video_acquisition.py with 15s timeouts per tier (cookies→PoToken-only→error), Redis 1h cache, wired into render_service._download_segment(); (5) Infrastructure: quickai-worker scaled min=1 max=5 concurrency=1, ADMIN_SECRET set; (6) Pipeline resilience: tenacity retry (3 attempts, exponential 2–16s, TimeoutError/ConnectionError only) wrapping runner.run_async in both agents + pipeline_monitor.py writing to MongoDB pipeline_runs + /api/admin/pipeline/health endpoint.
+- E2E PIPELINE HARDENING (2026-06-05, branch fix/security-round2; commits f88afa4, 7e1bf21, f5bd40f, a35e734): runId isolation + worker resilience. (1) runId stale-run guard: process_render_task gains optional run_id (7th positional, default ""); worker discards superseded uploads. Wired through ExportRequest.runId + all 3 enqueue sites (process-video, create-video, retry) + frontend editorStore.runId (minted on setSourceFile/setSourceUrl, which now also clear stale derived state; sent in export payload). (2) Cancel: DELETE /api/render/{job_id} — RQ cancel + hset meta status=cancelled + runid bump so in-flight worker self-discards (user-auth, not admin). (3) Idempotency lock: Redis SETNX render:lock:{id} around GCS upload + broad guard on exists_async (GCS 403/billing never blocks render). (4) Crash recovery: worker writes render:args:{id} + 'processing' marker AFTER the idempotency check; recover_stale_jobs() at boot re-enqueues jobs stuck >10min; ALL early-returns set a terminal meta status (superseded/duplicate) so render:meta never hangs at 'processing'. (5) Chunked download: video_acquisition tier timeout 15s→90s; _download_chunked() for clips >120s (120s segments + lossless ffmpeg concat, falls back to tier loop). (6) One-click pipeline: routers/pipeline_router.py — POST /api/pipeline/run (real run_viral_pipeline on browser transcript → top clip by viralAnalysis.score → enqueue render) + GET /api/pipeline/{id}/status. NOTE: no frontend caller wired yet. (7) Editor onboarding: components/editor/OnboardingTour.tsx — 3-step first-run tour, localStorage-gated, dismissible. CRITICAL: all worker Redis ops use SYNC redis_conn (a redis.asyncio client would bind to the first asyncio.run() loop and break on the next job's fresh loop). Verified facts this pass: Next.js is 14.2.35 (not 14.2.22); user stats/credits/projects live in Firestore (stats_service.py uses google.cloud.firestore), MongoDB holds export history + legacy GridFS; render CRF is tiered (low=28/ultrafast, medium=23/veryfast, high=18/fast), not a flat crf=21. Zero TS errors, py_compile clean, pnpm build passed.
 
 KEY DECISIONS (do not change without reason):
 - ADMIN_SECRET env var: "quickai-admin-2026" — required for all /api/admin/* endpoints (X-Admin-Secret header). Set on quickai-api Cloud Run service 2026-05-24.
