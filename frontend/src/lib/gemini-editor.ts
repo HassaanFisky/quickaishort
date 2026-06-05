@@ -1,4 +1,69 @@
-import type { GeminiResponse, VideoAnalysis, VideoMetadata } from "@/stores/editorStore";
+import type { GeminiResponse, VideoAnalysis, VideoMetadata, ExportSettings } from "@/stores/editorStore";
+
+// ─── Editor state snapshot passed with every Gemini call ──────────────────────
+
+export interface EditorStateContext {
+  clipIndex: number | null;
+  clipStart: number | null;
+  clipEnd: number | null;
+  totalClips: number;
+  videoDuration: number;
+  filter: ExportSettings["filter"];
+  audioBoost: number;
+  playbackSpeed: number;
+  noiseSuppression: number;
+  captionsEnabled: boolean;
+  captionCount: number;
+  transitionEnabled: boolean;
+  voiceoverEnabled: boolean;
+  recentActions: string[];
+}
+
+// ─── Instant suggestions — zero API cost, generated from metadata alone ────────
+
+type ContentKey =
+  | "tutorial" | "interview" | "gaming" | "vlog"
+  | "news" | "music" | "sports" | "documentary" | "general";
+
+const INSTANT_SUGGESTIONS: Record<ContentKey, string[]> = {
+  tutorial: ["Add step-by-step captions", "Speed up explanation sections to 1.25x", "Trim intro — start at first key step"],
+  interview: ["Add speaker captions from transcript", "Cut long pauses between questions", "Trim to the 3 strongest answers"],
+  gaming: ["Apply Urban filter for gaming energy", "Boost audio to 160%", "Trim to the best highlight moment"],
+  vlog: ["Apply Retro filter for lifestyle warmth", "Add location captions at scene changes", "Trim intro to first interesting moment"],
+  news: ["Add factual captions from transcript", "Trim to the core 60-second story", "Boost audio to 130% for clear speech"],
+  music: ["Apply Cinematic filter for visual depth", "Sync captions to lyrics", "Trim to the chorus section"],
+  sports: ["Trim to the key play moment", "Apply Urban filter for energy", "Boost audio to 170%"],
+  documentary: ["Add informational captions", "Apply Cinematic filter", "Trim to the most compelling 90 seconds"],
+  general: ["Add captions from transcript", "Trim to strongest 60 seconds", "Apply Cinematic color grade"],
+};
+
+function detectContentKey(title: string): ContentKey {
+  const s = title.toLowerCase();
+  if (/tutorial|how.?to|guide|learn|course/.test(s)) return "tutorial";
+  if (/interview|podcast|q&a|talk/.test(s)) return "interview";
+  if (/gaming|gameplay|stream|playthrough|valorant|minecraft|fortnite/.test(s)) return "gaming";
+  if (/vlog|day.in|my.life|travel|behind/.test(s)) return "vlog";
+  if (/news|breaking|update|report/.test(s)) return "news";
+  if (/music|song|cover|lyrics|rap|official.video/.test(s)) return "music";
+  if (/sport|match|goal|highlights|nba|nfl|cricket|football/.test(s)) return "sports";
+  if (/documentary|history|science|nature|explained/.test(s)) return "documentary";
+  return "general";
+}
+
+export function generateImmediateSuggestions(
+  title: string,
+  duration: number,
+): string[] {
+  const key = detectContentKey(title);
+  const base = INSTANT_SUGGESTIONS[key].slice(0, 5);
+  if (duration > 3600) {
+    return ["Extract top 3 viral moments from this long video", ...base].slice(0, 5);
+  }
+  if (duration > 600) {
+    return ["Trim to the strongest 90-second segment", ...base].slice(0, 5);
+  }
+  return base;
+}
 
 // Re-export the system prompt so any consumer can read the contract without
 // duplicating it (no SDK import needed here for the client-side functions).
@@ -98,11 +163,18 @@ export async function callGeminiEditor(
   videoMetadata: VideoMetadata | null,
   videoAnalysis: VideoAnalysis | null,
   history: { role: string; content: string }[],
+  editorState?: EditorStateContext | null,
 ): Promise<GeminiResponse> {
   const res = await fetch("/api/ai/editor", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message: userMessage, videoMetadata, videoAnalysis, history }),
+    body: JSON.stringify({
+      message: userMessage,
+      videoMetadata,
+      videoAnalysis,
+      history,
+      editorState: editorState ?? null,
+    }),
   });
 
   if (!res.ok) {

@@ -1,10 +1,15 @@
 "use client";
 
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Send, Mic, MicOff, Sparkles, Zap, ChevronRight } from "lucide-react";
+import { X, Send, Mic, MicOff, Sparkles, Zap } from "lucide-react";
 import { useEditorStore } from "@/stores/editorStore";
-import { callGeminiEditor, getInitialSuggestions } from "@/lib/gemini-editor";
+import {
+  callGeminiEditor,
+  getInitialSuggestions,
+  generateImmediateSuggestions,
+  type EditorStateContext,
+} from "@/lib/gemini-editor";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
 import { cn } from "@/lib/utils";
 
@@ -69,14 +74,50 @@ export function AIPanel() {
     dispatchAIActions,
     videoMetadata,
     videoAnalysis,
+    // Editor state for context
+    suggestions: clips,
+    selectedClipId,
+    exportSettings,
+    captions,
+    captionsEnabled,
   } = useEditorStore();
 
   const [inputText, setInputText] = useState("");
   const [interimText, setInterimText] = useState("");
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [suggestionsLoaded, setSuggestionsLoaded] = useState(false);
+  const [recentActions, setRecentActions] = useState<string[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Build editor state snapshot for every Gemini call
+  const editorState = useMemo((): EditorStateContext => {
+    const selectedIndex = selectedClipId
+      ? clips.findIndex((c) => c.id === selectedClipId)
+      : null;
+    const selectedClip = selectedClipId
+      ? clips.find((c) => c.id === selectedClipId) ?? null
+      : null;
+    return {
+      clipIndex: selectedIndex != null && selectedIndex >= 0 ? selectedIndex : null,
+      clipStart: selectedClip?.start ?? null,
+      clipEnd: selectedClip?.end ?? null,
+      totalClips: clips.length,
+      videoDuration: videoMetadata?.duration ?? 0,
+      filter: exportSettings.filter,
+      audioBoost: exportSettings.audioBoost,
+      playbackSpeed: exportSettings.playbackSpeed,
+      noiseSuppression: exportSettings.noiseSuppression,
+      captionsEnabled,
+      captionCount: captions.length,
+      transitionEnabled: exportSettings.transitionEnabled,
+      voiceoverEnabled: exportSettings.voiceoverEnabled,
+      recentActions,
+    };
+  }, [
+    clips, selectedClipId, videoMetadata, exportSettings,
+    captionsEnabled, captions.length, recentActions,
+  ]);
 
   const handleTranscript = useCallback((text: string, isFinal: boolean) => {
     if (isFinal) {
@@ -103,28 +144,41 @@ export function AIPanel() {
     }
   }, [aiPanelOpen]);
 
-  // Load initial suggestions when video is ready
+  // Load suggestions when video is ready
+  // Step 1: instant (client-side, zero API cost) → shows immediately
+  // Step 2: Gemini-refined → replaces after API response
   useEffect(() => {
     if (!videoMetadata || suggestionsLoaded) return;
     setSuggestionsLoaded(true);
 
+    // Instant suggestions — no API call, appear in <1ms
+    const instant = generateImmediateSuggestions(
+      videoMetadata.title ?? "",
+      videoMetadata.duration,
+    );
+    setSuggestions(instant);
+
+    // Welcome message
+    const durationLabel =
+      videoMetadata.duration > 3600
+        ? `${Math.round(videoMetadata.duration / 3600)}h ${Math.round((videoMetadata.duration % 3600) / 60)}m`
+        : videoMetadata.duration > 60
+        ? `${Math.round(videoMetadata.duration / 60)}m ${Math.round(videoMetadata.duration % 60)}s`
+        : `${Math.round(videoMetadata.duration)}s`;
+
+    addAIMessage({
+      role: "assistant",
+      content: `**${videoMetadata.title || "Video"}** loaded (${durationLabel}).\n\nI can edit this video — trim, captions, filters, audio, split clips, and more. Tell me what to do or use a suggestion.`,
+      actions: [],
+    });
+
+    // Then refine with Gemini in background (replaces instant suggestions if better)
     getInitialSuggestions(videoMetadata, videoAnalysis)
-      .then((s) => setSuggestions(s))
-      .catch(() => {
-        setSuggestions([
-          "Add captions from transcript",
-          "Trim to best 30 seconds",
-          "Apply cinematic color grade",
-          "Boost audio +20%",
-          "Remove intro silence",
-        ]);
+      .then((refined) => {
+        if (refined.length > 0) setSuggestions(refined);
       })
-      .finally(() => {
-        addAIMessage({
-          role: "assistant",
-          content: `Video loaded — **${videoMetadata.title || "Untitled"}** (${Math.round(videoMetadata.duration)}s).\n\nTell me what to edit or tap a suggestion below.`,
-          actions: [],
-        });
+      .catch(() => {
+        // instant suggestions already showing — no action needed
       });
   }, [videoMetadata, videoAnalysis, suggestionsLoaded, addAIMessage]);
 
@@ -146,9 +200,21 @@ export function AIPanel() {
       setAIThinking(true);
 
       try {
-        const response = await callGeminiEditor(trimmed, videoMetadata, videoAnalysis, historySnapshot);
+        const response = await callGeminiEditor(
+          trimmed,
+          videoMetadata,
+          videoAnalysis,
+          historySnapshot,
+          editorState,
+        );
 
-        if (response.actions.length > 0) dispatchAIActions(response.actions);
+        if (response.actions.length > 0) {
+          dispatchAIActions(response.actions);
+          // Track recent actions for future context (keep last 8)
+          setRecentActions((prev) =>
+            [...prev, ...response.actions.map((a) => a.type)].slice(-8),
+          );
+        }
         if (response.suggestions.length > 0) setSuggestions(response.suggestions);
 
         addAIMessage({
@@ -177,7 +243,7 @@ export function AIPanel() {
         setAIThinking(false);
       }
     },
-    [isAIThinking, stopRecording, addAIMessage, setAIThinking, dispatchAIActions, videoMetadata, videoAnalysis],
+    [isAIThinking, stopRecording, addAIMessage, setAIThinking, dispatchAIActions, videoMetadata, videoAnalysis, editorState],
   );
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -252,6 +318,27 @@ export function AIPanel() {
                 : "No video loaded — paste a YouTube URL to start"}
             </span>
           </div>
+
+          {/* ── Active edit state (only shown when something is non-default) ── */}
+          {(() => {
+            const tags: string[] = [];
+            if (editorState.filter !== "None") tags.push(editorState.filter);
+            if (editorState.audioBoost !== 85 && editorState.audioBoost !== 100) tags.push(`Audio ${editorState.audioBoost}%`);
+            if (editorState.playbackSpeed !== 100) tags.push(`${editorState.playbackSpeed}% speed`);
+            if (editorState.captionCount > 0) tags.push(`${editorState.captionCount} caption${editorState.captionCount > 1 ? "s" : ""}`);
+            if (editorState.transitionEnabled) tags.push("Transitions");
+            if (tags.length === 0) return null;
+            return (
+              <div className="flex flex-wrap gap-1.5 px-3.5 py-2 border-b border-white/[0.05] bg-white/[0.015] shrink-0">
+                <span className="text-[8px] font-black uppercase tracking-[0.2em] text-white/20 self-center">Active</span>
+                {tags.map((t) => (
+                  <span key={t} className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-white/[0.06] border border-white/[0.08] text-white/50">
+                    {t}
+                  </span>
+                ))}
+              </div>
+            );
+          })()}
 
           {/* ── Messages ────────────────────────────────────────────── */}
           <div className="ai-messages">
