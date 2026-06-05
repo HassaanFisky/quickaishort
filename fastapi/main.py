@@ -345,6 +345,10 @@ from routers.admin_cookies import router as admin_cookies_router
 
 app.include_router(admin_cookies_router)
 
+from routers.pipeline_router import router as pipeline_router
+
+app.include_router(pipeline_router)
+
 
 def get_real_ip(request: Request) -> str:
     """
@@ -487,6 +491,7 @@ class ExportRequest(BaseModel):
     start_sec: float
     end_sec: float
     user_id: str
+    runId: Optional[str] = None
     aspect_ratio: Literal["9:16", "1:1"] = "9:16"
     quality: Literal["low", "medium", "high"] = "medium"
     captions: CaptionsPayload = Field(default_factory=CaptionsPayload)
@@ -794,6 +799,7 @@ async def export_video(
             request.end_sec,
             user_id,
             options,
+            request.runId or "",
             job_id=job_id,
             job_timeout=JOB_TIMEOUT_SECONDS,
             result_ttl=JOB_RESULT_TTL_SECONDS,
@@ -847,6 +853,59 @@ async def render_stream_status(job_id: str):
     return get_render_status(job_id)
 
 
+@app.delete("/api/render/{job_id}")
+async def cancel_render(
+    job_id: str,
+    verified_user_id: str = Depends(get_verified_user_id),
+):
+    """O2: Cancel a queued/running render job.
+
+    RQ can only drop jobs that have not started executing; a job already
+    running in the worker cannot be hard-killed, so we additionally (a) mark the
+    meta hash 'cancelled' and (b) bump render:runid so the worker's O1 stale-run
+    guard discards the in-flight upload instead of publishing it. Idempotent.
+    """
+    from rq.job import Job
+    from rq.exceptions import NoSuchJobError
+
+    rq_cancelled = False
+    try:
+        job = Job.fetch(job_id, connection=redis_conn)
+        job.cancel()
+        rq_cancelled = True
+    except NoSuchJobError:
+        pass  # already gone — treat as success
+    except Exception as exc:
+        logger.warning("cancel_render_fetch_failed job_id=%s error=%s", job_id, exc)
+
+    # render:meta:{job_id} is a HASH — update status with hset, never JSON.
+    try:
+        redis_conn.hset(f"render:meta:{job_id}", mapping={"status": "cancelled"})
+        # Supersede any in-flight worker run for this job_id (O1 guard).
+        redis_conn.set(
+            f"render:runid:{job_id}", f"cancelled-{uuid.uuid4().hex}", ex=7200
+        )
+    except Exception as exc:
+        logger.warning("cancel_render_meta_failed job_id=%s error=%s", job_id, exc)
+
+    try:
+        from services.events import publish, CHANNEL_EXPORT_FAILED
+
+        publish(
+            CHANNEL_EXPORT_FAILED,
+            {
+                "job_id": job_id,
+                "user_id": verified_user_id,
+                "error": "cancelled",
+                "reason": "cancelled",
+            },
+        )
+    except Exception as exc:
+        logger.warning("cancel_render_publish_failed job_id=%s error=%s", job_id, exc)
+
+    return {"status": "cancelled", "job_id": job_id, "rq_cancelled": rq_cancelled}
+
+
 @app.get("/api/render/dead")
 async def render_dead_jobs(
     x_admin_secret: Optional[str] = Header(None, alias="X-Admin-Secret"),
@@ -886,6 +945,7 @@ async def render_retry_dead(
             0.0,
             "",
             {},
+            uuid.uuid4().hex,
             job_id=job_id,
             job_timeout=JOB_TIMEOUT_SECONDS,
             result_ttl=JOB_RESULT_TTL_SECONDS,
@@ -1892,6 +1952,7 @@ async def create_video(
                 0,
                 user_id,
                 options,
+                uuid.uuid4().hex,
                 job_id=job_id,
                 job_timeout=JOB_TIMEOUT_SECONDS,
                 result_ttl=JOB_RESULT_TTL_SECONDS,
