@@ -164,9 +164,7 @@ def _download_chunked(
         chunk_workdir = workdir / f"chunk_{idx}"
         chunk_workdir.mkdir(parents=True, exist_ok=True)
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-            future = pool.submit(
-                _try_tier1, video_id, cursor, chunk_end, chunk_workdir
-            )
+            future = pool.submit(_try_tier1, video_id, cursor, chunk_end, chunk_workdir)
             try:
                 produced = future.result(timeout=_TIER_TIMEOUT_S)
             except Exception as exc:

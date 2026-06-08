@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 # ─── Element data models (used inside ADD_ELEMENT) ────────────────────────────
 
+
 class TextElementData(BaseModel):
     type: Literal["TEXT"]
     text: str = ""
@@ -59,10 +60,13 @@ EditorElementData = Annotated[
 
 # ─── 23 Action variants ───────────────────────────────────────────────────────
 
+
 class AddCaptionAction(BaseModel):
     type: Literal["ADD_CAPTION"]
     text: str
-    startTime: float = Field(default=0.0, ge=-86400, le=86400)  # sanitiser clamps to [0, videoDuration]
+    startTime: float = Field(
+        default=0.0, ge=-86400, le=86400
+    )  # sanitiser clamps to [0, videoDuration]
     endTime: float = Field(default=0.0, ge=-86400, le=86400)
     style: Optional[dict[str, Any]] = None
 
@@ -80,7 +84,9 @@ class UpdateCaptionAction(BaseModel):
 
 class TrimAction(BaseModel):
     type: Literal["TRIM"]
-    start: float = Field(default=0.0, ge=-86400, le=86400)  # sanitiser clamps to [0, videoDuration]
+    start: float = Field(
+        default=0.0, ge=-86400, le=86400
+    )  # sanitiser clamps to [0, videoDuration]
     end: float = Field(default=0.0, ge=-86400, le=86400)
 
 
@@ -147,7 +153,9 @@ class ToggleVoiceoverAction(BaseModel):
 
 class SeekAction(BaseModel):
     type: Literal["SEEK"]
-    time: float = Field(default=0.0, ge=-86400, le=86400)  # sanitiser clamps to [0, videoDuration]
+    time: float = Field(
+        default=0.0, ge=-86400, le=86400
+    )  # sanitiser clamps to [0, videoDuration]
 
 
 class PlayAction(BaseModel):
@@ -178,6 +186,38 @@ class RemoveElementAction(BaseModel):
     id: str
 
 
+# ─── Intelligent tool actions (4 additional variants) ─────────────────────────
+
+
+class ViralMoment(BaseModel):
+    timestamp: float = Field(ge=0)
+    hook: str
+    score: float = Field(ge=0, le=100)
+
+
+class DetectViralMomentsAction(BaseModel):
+    type: Literal["DETECT_VIRAL_MOMENTS"]
+    moments: list[ViralMoment]
+
+
+class GenerateHookCaptionAction(BaseModel):
+    type: Literal["GENERATE_HOOK_CAPTION"]
+    captions: list[str]
+
+
+class SuggestStylePresetAction(BaseModel):
+    type: Literal["SUGGEST_STYLE_PRESET"]
+    preset: Literal["Urban", "Retro", "Cinematic"]
+    reason: str
+    actions: list["AiEditorAction"] = Field(default_factory=list)
+
+
+class ExplainLastEditAction(BaseModel):
+    type: Literal["EXPLAIN_LAST_EDIT"]
+    explanation: str
+    confidence: Literal["high", "medium", "low"] = "medium"
+
+
 AiEditorAction = Annotated[
     Union[
         AddCaptionAction,
@@ -203,11 +243,19 @@ AiEditorAction = Annotated[
         AddElementAction,
         UpdateElementAction,
         RemoveElementAction,
+        DetectViralMomentsAction,
+        GenerateHookCaptionAction,
+        SuggestStylePresetAction,
+        ExplainLastEditAction,
     ],
     Field(discriminator="type"),
 ]
 
+# Resolve forward reference in SuggestStylePresetAction.actions
+SuggestStylePresetAction.model_rebuild()
+
 # ─── Request / Response envelopes ─────────────────────────────────────────────
+
 
 class AIEditorCurrentState(BaseModel):
     videoDuration: float = Field(ge=0)

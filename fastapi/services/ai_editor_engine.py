@@ -43,7 +43,7 @@ STATUS RULES:
 - "no_op"                 → request is valid but no edits needed (empty actions array)
 - "clarification_needed"  → request is ambiguous; put a clarifying question in message; empty actions
 
-ACTION CATALOGUE (23 variants):
+ACTION CATALOGUE (27 variants):
 ADD_CAPTION      { type, text, startTime, endTime, style? }
 REMOVE_CAPTION   { type, id }
 UPDATE_CAPTION   { type, id, patch }
@@ -67,6 +67,10 @@ EXPORT_CLIP      { type }
 ADD_ELEMENT      { type, element: { type: "TEXT"|"ZOOM"|"TRIM"|"STICKER", ...fields } }
 UPDATE_ELEMENT   { type, id, patch }
 REMOVE_ELEMENT   { type, id }
+DETECT_VIRAL_MOMENTS  { type, moments: [{timestamp, hook, score}] }  — surface top-3 viral moments from transcript; do NOT apply any edits
+GENERATE_HOOK_CAPTION { type, captions: ["option1", "option2", "option3"] }  — generate 3 hook caption options for user to choose
+SUGGEST_STYLE_PRESET  { type, preset: "Urban"|"Retro"|"Cinematic", reason, actions: [...] }  — recommend a style preset + include the ADD_FILTER/SET_VISUAL_FILTER actions to apply it
+EXPLAIN_LAST_EDIT     { type, explanation, confidence: "high"|"medium"|"low" }  — plain-language explanation of what the AI just did; only emit as the LAST action in the array
 
 TEXT element fields: text, x(0-1080), y(0-1920), scale(0.1-5), rotation, color, fontSize?, fontWeight?
 STICKER element fields: emoji, x, y, scale, rotation
@@ -165,7 +169,9 @@ async def run_ai_editor(
     message: str = parsed.get("message", "Done.")
     suggestions: list[str] = parsed.get("suggestions", [])[:3]
     raw_status: str = parsed.get("status", "ok")
-    status = raw_status if raw_status in ("ok", "clarification_needed", "no_op") else "ok"
+    status = (
+        raw_status if raw_status in ("ok", "clarification_needed", "no_op") else "ok"
+    )
 
     # Validate each action via Pydantic — drop malformed ones
     valid_actions: list[AiEditorAction] = []
@@ -173,10 +179,13 @@ async def run_ai_editor(
     for item in raw_actions_data:
         try:
             from pydantic import TypeAdapter
+
             ta: TypeAdapter[Any] = TypeAdapter(AiEditorAction)
             valid_actions.append(ta.validate_python(item))
         except Exception as exc:
-            action_type = item.get("type", "UNKNOWN") if isinstance(item, dict) else "UNKNOWN"
+            action_type = (
+                item.get("type", "UNKNOWN") if isinstance(item, dict) else "UNKNOWN"
+            )
             dropped_parse.append(f"{action_type}: {exc}")
             logger.debug("ai_editor: dropped malformed action %s: %s", item, exc)
 

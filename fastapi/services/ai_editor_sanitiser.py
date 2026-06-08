@@ -32,6 +32,11 @@ from models.ai_editor import (
     AddElementAction,
     UpdateElementAction,
     TextElementData,
+    DetectViralMomentsAction,
+    ViralMoment,
+    GenerateHookCaptionAction,
+    SuggestStylePresetAction,
+    ExplainLastEditAction,
 )
 
 logger = logging.getLogger(__name__)
@@ -83,11 +88,21 @@ def sanitise(
             new_start = _clamp_time(a.startTime, dur)
             new_end = _clamp_time(a.endTime, dur)
             if new_end <= new_start:
-                dropped.append(f"ADD_CAPTION startTime={orig_start:.1f} endTime={orig_end:.1f} — zero-length after clamp")
+                dropped.append(
+                    f"ADD_CAPTION startTime={orig_start:.1f} endTime={orig_end:.1f} — zero-length after clamp"
+                )
                 continue
             if new_start != orig_start or new_end != orig_end:
-                clamped.append(f"ADD_CAPTION startTime {orig_start:.1f}→{new_start:.1f}, endTime {orig_end:.1f}→{new_end:.1f}")
-                action = AddCaptionAction(type="ADD_CAPTION", text=a.text, startTime=new_start, endTime=new_end, style=a.style)
+                clamped.append(
+                    f"ADD_CAPTION startTime {orig_start:.1f}→{new_start:.1f}, endTime {orig_end:.1f}→{new_end:.1f}"
+                )
+                action = AddCaptionAction(
+                    type="ADD_CAPTION",
+                    text=a.text,
+                    startTime=new_start,
+                    endTime=new_end,
+                    style=a.style,
+                )
 
         # ── TRIM ──────────────────────────────────────────────────────────────
         elif t == "TRIM":
@@ -95,10 +110,14 @@ def sanitise(
             ns = _clamp_time(a.start, dur)
             ne = _clamp_time(a.end, dur)
             if ne <= ns:
-                dropped.append(f"TRIM start={a.start:.1f} end={a.end:.1f} — invalid range after clamp")
+                dropped.append(
+                    f"TRIM start={a.start:.1f} end={a.end:.1f} — invalid range after clamp"
+                )
                 continue
             if ns != a.start or ne != a.end:
-                clamped.append(f"TRIM start {a.start:.1f}→{ns:.1f}, end {a.end:.1f}→{ne:.1f}")
+                clamped.append(
+                    f"TRIM start {a.start:.1f}→{ns:.1f}, end {a.end:.1f}→{ne:.1f}"
+                )
                 action = TrimAction(type="TRIM", start=ns, end=ne)
 
         # ── SPLIT_CLIP ────────────────────────────────────────────────────────
@@ -106,7 +125,9 @@ def sanitise(
             a = action  # type: SplitClipAction
             nt = _clamp_time(a.time, dur)
             if nt <= 1.0 or nt >= dur - 1.0:
-                dropped.append(f"SPLIT_CLIP time={a.time:.1f} — too close to edge after clamp")
+                dropped.append(
+                    f"SPLIT_CLIP time={a.time:.1f} — too close to edge after clamp"
+                )
                 continue
             if nt != a.time:
                 clamped.append(f"SPLIT_CLIP time {a.time:.1f}→{nt:.1f}")
@@ -123,7 +144,13 @@ def sanitise(
         # ── ADD_FILTER ────────────────────────────────────────────────────────
         elif t == "ADD_FILTER":
             a = action  # type: AddFilterAction
-            ranges = {"brightness": (0.5, 2.0), "contrast": (0.5, 2.0), "saturation": (0.0, 2.0), "hue": (-180.0, 180.0), "blur": (0.0, 10.0)}
+            ranges = {
+                "brightness": (0.5, 2.0),
+                "contrast": (0.5, 2.0),
+                "saturation": (0.0, 2.0),
+                "hue": (-180.0, 180.0),
+                "blur": (0.0, 10.0),
+            }
             lo, hi = ranges.get(a.filter, (0.0, 10.0))
             nv = _clamp(a.value, lo, hi)
             if nv != a.value:
@@ -159,12 +186,15 @@ def sanitise(
             ny = _clamp_y(el_dict.get("y", 960.0))
             pos_changed = nx != el_dict.get("x") or ny != el_dict.get("y")
             if pos_changed:
-                clamped.append(f"ADD_ELEMENT {el.type} position clamped to canvas bounds")
+                clamped.append(
+                    f"ADD_ELEMENT {el.type} position clamped to canvas bounds"
+                )
                 el_dict["x"] = nx
                 el_dict["y"] = ny
                 # Reconstruct with clamped coords
                 from models.ai_editor import EditorElementData
                 from pydantic import TypeAdapter
+
                 ta: TypeAdapter[Any] = TypeAdapter(EditorElementData)
                 new_el = ta.validate_python(el_dict)
                 action = AddElementAction(type="ADD_ELEMENT", element=new_el)
@@ -191,7 +221,67 @@ def sanitise(
                     patched = True
             if patched:
                 clamped.append(f"UPDATE_ELEMENT {a.id} position clamped")
-                action = UpdateElementAction(type="UPDATE_ELEMENT", id=a.id, patch=patch)
+                action = UpdateElementAction(
+                    type="UPDATE_ELEMENT", id=a.id, patch=patch
+                )
+
+        # ── DETECT_VIRAL_MOMENTS — clamp moment timestamps ────────────────────
+        elif t == "DETECT_VIRAL_MOMENTS":
+            a = action  # type: DetectViralMomentsAction
+            valid_moments = []
+            for m in a.moments:
+                if not m.hook.strip():
+                    dropped.append(
+                        f"DETECT_VIRAL_MOMENTS moment at {m.timestamp:.1f}s dropped — empty hook"
+                    )
+                    continue
+                clamped_ts = _clamp_time(m.timestamp, dur)
+                if clamped_ts != m.timestamp:
+                    clamped.append(
+                        f"DETECT_VIRAL_MOMENTS moment timestamp {m.timestamp:.1f}→{clamped_ts:.1f}"
+                    )
+                valid_moments.append(
+                    ViralMoment(timestamp=clamped_ts, hook=m.hook, score=m.score)
+                )
+            if not valid_moments:
+                dropped.append("DETECT_VIRAL_MOMENTS dropped — no valid moments")
+                continue
+            action = DetectViralMomentsAction(
+                type="DETECT_VIRAL_MOMENTS", moments=valid_moments
+            )
+
+        # ── GENERATE_HOOK_CAPTION — drop empty caption strings ────────────────
+        elif t == "GENERATE_HOOK_CAPTION":
+            a = action  # type: GenerateHookCaptionAction
+            valid_captions = [c for c in a.captions if c.strip()]
+            if not valid_captions:
+                dropped.append(
+                    "GENERATE_HOOK_CAPTION dropped — all captions were empty"
+                )
+                continue
+            action = GenerateHookCaptionAction(
+                type="GENERATE_HOOK_CAPTION", captions=valid_captions
+            )
+
+        # ── SUGGEST_STYLE_PRESET — recursively sanitise nested actions ────────
+        elif t == "SUGGEST_STYLE_PRESET":
+            a = action  # type: SuggestStylePresetAction
+            safe_nested, nested_clamped, nested_dropped = sanitise(a.actions, state)
+            clamped.extend(nested_clamped)
+            dropped.extend(nested_dropped)
+            action = SuggestStylePresetAction(
+                type="SUGGEST_STYLE_PRESET",
+                preset=a.preset,
+                reason=a.reason,
+                actions=safe_nested,
+            )
+
+        # ── EXPLAIN_LAST_EDIT — pass-through (freeform text) ─────────────────
+        elif t == "EXPLAIN_LAST_EDIT":
+            a = action  # type: ExplainLastEditAction
+            if not a.explanation.strip():
+                dropped.append("EXPLAIN_LAST_EDIT dropped — empty explanation")
+                continue
 
         safe.append(action)
 
@@ -200,12 +290,20 @@ def sanitise(
 
 # ─── Mock provider ────────────────────────────────────────────────────────────
 
-def mock_response(state: AIEditorCurrentState) -> tuple[list[AiEditorAction], str, list[str]]:
+
+def mock_response(
+    state: AIEditorCurrentState,
+) -> tuple[list[AiEditorAction], str, list[str]]:
     """Return 4 deterministic actions without calling Gemini."""
     mid = state.videoDuration / 2 if state.videoDuration > 0 else 5.0
     actions: list[AiEditorAction] = [
         TrimAction(type="TRIM", start=0.0, end=max(state.videoDuration, 1.0)),
-        AddCaptionAction(type="ADD_CAPTION", text="🔥 AI-generated hook", startTime=0.0, endTime=min(3.0, state.videoDuration)),
+        AddCaptionAction(
+            type="ADD_CAPTION",
+            text="🔥 AI-generated hook",
+            startTime=0.0,
+            endTime=min(3.0, state.videoDuration),
+        ),
         SetVisualFilterAction(type="SET_VISUAL_FILTER", filter="Cinematic"),
         AddElementAction(
             type="ADD_ELEMENT",
@@ -226,4 +324,8 @@ def mock_response(state: AIEditorCurrentState) -> tuple[list[AiEditorAction], st
         "Boost audio to 140%",
         "Split at the first scene break",
     ]
-    return sanitised, f"Mock: applied {len(sanitised)} demo edits (MOCK_AI_EDITOR=true).", suggestions
+    return (
+        sanitised,
+        f"Mock: applied {len(sanitised)} demo edits (MOCK_AI_EDITOR=true).",
+        suggestions,
+    )
