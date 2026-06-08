@@ -45,6 +45,7 @@ gcloud run deploy quickai-worker `
     --cpu 4 `
     --concurrency 1 `
     --timeout 900 `
+    --min-instances 0 `
     --project $PROJECT_ID `
     --update-env-vars "ENVIRONMENT=production,GCS_BUCKET_NAME=$BUCKET_NAME,GOOGLE_CLOUD_PROJECT=$PROJECT_ID,PUBLIC_API_URL=https://quickai-api-y2cgnbsbxa-uc.a.run.app,LOG_LEVEL=info"
 

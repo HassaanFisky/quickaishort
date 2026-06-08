@@ -58,6 +58,7 @@ gcloud run deploy quickai-worker \
     --cpu 4 \
     --concurrency 1 \
     --timeout 900 \
+    --min-instances 0 \
     --project ${PROJECT_ID} \
     --update-env-vars \
 ENVIRONMENT=production,\
