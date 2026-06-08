@@ -349,6 +349,10 @@ from routers.pipeline_router import router as pipeline_router
 
 app.include_router(pipeline_router)
 
+from routers.ai_editor_router import router as ai_editor_router
+
+app.include_router(ai_editor_router)
+
 
 def get_real_ip(request: Request) -> str:
     """

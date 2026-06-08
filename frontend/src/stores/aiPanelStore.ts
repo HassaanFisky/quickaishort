@@ -16,6 +16,13 @@ type AIPanelState = {
   messages: AIMessage[];
   addMessage: (m: AIMessage) => void;
   clearMessages: () => void;
+
+  // Pillar-3 additions
+  aiPanelMode: 'chat' | 'edit';
+  setAiPanelMode: (mode: 'chat' | 'edit') => void;
+  executionOverlay: boolean;
+  executionOverlayLabel: string | undefined;
+  setExecutionOverlay: (active: boolean, label?: string) => void;
 };
 
 export const useAIPanel = create<AIPanelState>((set) => ({
@@ -26,4 +33,10 @@ export const useAIPanel = create<AIPanelState>((set) => ({
   messages: [],
   addMessage: (m) => set((s) => ({ messages: [...s.messages, m] })),
   clearMessages: () => set({ messages: [] }),
+
+  aiPanelMode: 'chat',
+  setAiPanelMode: (aiPanelMode) => set({ aiPanelMode }),
+  executionOverlay: false,
+  executionOverlayLabel: undefined,
+  setExecutionOverlay: (active, label) => set({ executionOverlay: active, executionOverlayLabel: label }),
 }));

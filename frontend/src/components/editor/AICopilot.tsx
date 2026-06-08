@@ -2,9 +2,14 @@
 
 import { useAIPanel } from "@/stores/aiPanelStore";
 import { useEditorStore } from "@/stores/editorStore";
+import { useAiCommander } from "@/hooks/useAiCommander";
 import { AnimatePresence, motion } from "framer-motion";
-import { useState, useRef, useEffect } from "react";
-import { Sparkles, X, Send, MessageSquareQuote } from "lucide-react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { signIn } from "next-auth/react";
+import {
+  Sparkles, X, Send, MessageSquareQuote,
+  Undo2, Redo2, ChevronDown, ChevronUp,
+} from "lucide-react";
 
 const NO_VIDEO_SUGGESTIONS = [
   "What makes a video go viral?",
@@ -20,46 +25,42 @@ const WITH_VIDEO_SUGGESTIONS = [
   "What would you cut from this?",
 ];
 
-/**
- * AICopilot — fixed overlay panel, zero layout impact when closed.
- *
- * Manages two concerns:
- * 1. AI Chat — powered by /api/ai/chat, state in aiPanelStore
- * 2. AI Creative Direction — scriptPrompt from editorStore, sent to export pipeline
- *
- * Opens via setOpen(true) from the Sparkles button in EditorLayout header.
- * When closed: unmounted entirely — consumes zero layout space.
- */
 export function AICopilot() {
-  const { isOpen, setOpen, videoContext, messages, addMessage } = useAIPanel();
+  const { isOpen, setOpen, videoContext, messages, addMessage, aiPanelMode, setAiPanelMode } = useAIPanel();
   const { scriptPrompt, setScriptPrompt } = useEditorStore();
+  const duration = useEditorStore((s) => s.duration);
+  const commander = useAiCommander();
 
-  const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
+  // Chat state
+  const [chatInput, setChatInput] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
   const [retryText, setRetryText] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
-  const suggestions = videoContext ? WITH_VIDEO_SUGGESTIONS : NO_VIDEO_SUGGESTIONS;
+  // Edit state
+  const [editInput, setEditInput] = useState("");
+  const [clampExpanded, setClampExpanded] = useState(false);
+  const editInputRef = useRef<HTMLTextAreaElement | null>(null);
+
+  const chatSuggestions = videoContext ? WITH_VIDEO_SUGGESTIONS : NO_VIDEO_SUGGESTIONS;
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  async function send(text: string) {
+  // ── Chat send ──────────────────────────────────────────────────────────────
+  async function sendChat(text: string) {
     const trimmed = text.trim();
-    if (!trimmed || loading) return;
-    setInput("");
+    if (!trimmed || chatLoading) return;
+    setChatInput("");
     setRetryText(null);
     addMessage({ role: "user", content: trimmed });
-    setLoading(true);
+    setChatLoading(true);
     try {
       const res = await fetch("/api/ai/chat", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          messages: [...messages, { role: "user", content: trimmed }],
-          videoContext,
-        }),
+        body: JSON.stringify({ messages: [...messages, { role: "user", content: trimmed }], videoContext }),
       });
       const data = await res.json();
       let content: string;
@@ -79,15 +80,45 @@ export function AICopilot() {
       }
       addMessage({ role: "assistant", content });
     } catch {
-      addMessage({
-        role: "assistant",
-        content: "Connection lost — check your internet and try again.",
-      });
+      addMessage({ role: "assistant", content: "Connection lost — check your internet and try again." });
       setRetryText(trimmed);
     } finally {
-      setLoading(false);
+      setChatLoading(false);
     }
   }
+
+  // ── Edit execute ───────────────────────────────────────────────────────────
+  const handleEditSubmit = useCallback(async () => {
+    const t = editInput.trim();
+    if (!t) return;
+    if (commander.status === "executing" || commander.status === "applying") return;
+    setEditInput("");
+    await commander.execute(t);
+  }, [editInput, commander]);
+
+  // Keyboard: Ctrl/Cmd+Z = undo, Ctrl/Cmd+Shift+Z = redo (scoped to Edit panel)
+  const handleEditKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
+      e.preventDefault();
+      commander.undo();
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key === "z" && e.shiftKey) {
+      e.preventDefault();
+      commander.redo();
+      return;
+    }
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleEditSubmit();
+    }
+    // Escape cancels in-flight
+    if (e.key === "Escape") {
+      commander.cancel();
+    }
+  }, [commander, handleEditSubmit]);
+
+  const isExecuting = commander.status === "executing" || commander.status === "applying";
 
   return (
     <AnimatePresence>
@@ -119,127 +150,239 @@ export function AICopilot() {
             </button>
           </header>
 
+          {/* Mode tabs */}
+          <div className="flex border-b border-border shrink-0">
+            {(["chat", "edit"] as const).map((mode) => (
+              <button
+                key={mode}
+                onClick={() => setAiPanelMode(mode)}
+                className={`flex-1 py-2 text-xs font-black uppercase tracking-widest transition-colors ${
+                  aiPanelMode === mode
+                    ? "text-primary border-b-2 border-primary"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {mode === "chat" ? "Chat" : "Edit"}
+              </button>
+            ))}
+          </div>
+
           {/* Context indicator */}
           <div className="px-4 py-2 text-xs text-muted-foreground border-b border-border shrink-0 bg-base/30">
             {videoContext ? (
-              <>
-                Editing:{" "}
-                <strong className="text-fg-muted">
-                  {videoContext.title.length > 45
-                    ? videoContext.title.slice(0, 45) + "…"
-                    : videoContext.title}
-                </strong>
-              </>
+              <>Editing: <strong className="text-fg-muted">{videoContext.title.length > 45 ? videoContext.title.slice(0, 45) + "…" : videoContext.title}</strong></>
             ) : (
               "No video loaded — ask me anything about short-form strategy."
             )}
           </div>
 
-          {/* Chat messages */}
-          <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3 min-h-0 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-foreground/10 [&::-webkit-scrollbar-thumb]:rounded-full">
-            {messages.length === 0 && (
-              <div className="flex flex-col gap-2">
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground pb-1">
-                  Quick Actions
-                </p>
-                {suggestions.map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => send(s)}
-                    className="w-full text-left text-xs px-3 py-2 rounded-lg border border-border hover:border-primary/30 hover:bg-primary/8 text-fg-muted hover:text-foreground transition-all duration-150"
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {messages.map((m, i) => (
-              <div
-                key={i}
-                className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
-              >
-                <div
-                  className={`max-w-[85%] text-xs px-3 py-2 rounded-xl leading-relaxed ${
-                    m.role === "user"
-                      ? "bg-primary text-white"
-                      : "bg-muted text-foreground"
-                  }`}
-                >
-                  {m.content}
-                </div>
-              </div>
-            ))}
-
-            {loading && (
-              <div className="flex justify-start">
-                <div className="bg-muted rounded-xl px-3 py-2">
-                  <span className="flex gap-1">
-                    {[0, 1, 2].map((i) => (
-                      <span
-                        key={i}
-                        className="h-1.5 w-1.5 rounded-full bg-muted-foreground animate-bounce"
-                        style={{ animationDelay: `${i * 0.15}s` }}
-                      />
+          {/* ── CHAT MODE ─────────────────────────────────────────────────── */}
+          {aiPanelMode === "chat" && (
+            <>
+              <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3 min-h-0 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-foreground/10 [&::-webkit-scrollbar-thumb]:rounded-full">
+                {messages.length === 0 && (
+                  <div className="flex flex-col gap-2">
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground pb-1">Quick Actions</p>
+                    {chatSuggestions.map((s) => (
+                      <button key={s} onClick={() => sendChat(s)} className="w-full text-left text-xs px-3 py-2 rounded-lg border border-border hover:border-primary/30 hover:bg-primary/8 text-fg-muted hover:text-foreground transition-all duration-150">{s}</button>
                     ))}
-                  </span>
+                  </div>
+                )}
+                {messages.map((m, i) => (
+                  <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                    <div className={`max-w-[85%] text-xs px-3 py-2 rounded-xl leading-relaxed ${m.role === "user" ? "bg-primary text-white" : "bg-muted text-foreground"}`}>
+                      {m.content}
+                    </div>
+                  </div>
+                ))}
+                {chatLoading && (
+                  <div className="flex justify-start">
+                    <div className="bg-muted rounded-xl px-3 py-2">
+                      <span className="flex gap-1">
+                        {[0, 1, 2].map((i) => <span key={i} className="h-1.5 w-1.5 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />)}
+                      </span>
+                    </div>
+                  </div>
+                )}
+                {retryText && !chatLoading && (
+                  <div className="flex justify-end">
+                    <button onClick={() => sendChat(retryText)} className="text-xs px-3 py-1.5 rounded-lg border border-primary/30 text-primary hover:bg-primary/10 transition-all duration-150 font-medium">Try again ↺</button>
+                  </div>
+                )}
+                <div ref={messagesEndRef} />
+              </div>
+              <form onSubmit={(e) => { e.preventDefault(); sendChat(chatInput); }} className="border-t border-border p-3 flex gap-2 shrink-0">
+                <input value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder={videoContext ? "Ask about this video…" : "Ask anything…"} className="flex-1 text-xs rounded-lg px-3 py-2 bg-muted border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/40 transition-colors" />
+                <button type="submit" disabled={!chatInput.trim() || chatLoading} className="px-2.5 py-2 rounded-lg bg-primary text-white disabled:opacity-30 disabled:cursor-not-allowed hover:bg-primary/90 transition-colors"><Send size={14} /></button>
+              </form>
+            </>
+          )}
+
+          {/* ── EDIT MODE ─────────────────────────────────────────────────── */}
+          {aiPanelMode === "edit" && (
+            <div className="flex flex-col flex-1 min-h-0">
+
+              {/* Undo/Redo toolbar */}
+              <div className="flex items-center justify-between px-4 py-2 border-b border-border shrink-0">
+                <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-black">Canvas Edit</span>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={commander.undo}
+                    disabled={!commander.canUndo}
+                    aria-label="Undo last AI edit"
+                    className="p-1.5 rounded hover:bg-foreground/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors text-muted-foreground hover:text-foreground"
+                  >
+                    <Undo2 size={13} />
+                  </button>
+                  <button
+                    onClick={commander.redo}
+                    disabled={!commander.canRedo}
+                    aria-label="Redo last AI edit"
+                    className="p-1.5 rounded hover:bg-foreground/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors text-muted-foreground hover:text-foreground"
+                  >
+                    <Redo2 size={13} />
+                  </button>
                 </div>
               </div>
-            )}
 
-            {retryText && !loading && (
-              <div className="flex justify-end">
-                <button
-                  onClick={() => send(retryText)}
-                  className="text-xs px-3 py-1.5 rounded-lg border border-primary/30 text-primary hover:bg-primary/10 transition-all duration-150 font-medium"
-                >
-                  Try again ↺
-                </button>
+              {/* Status banners */}
+              <div className="flex flex-col gap-2 px-4 pt-3 shrink-0">
+                {/* E1: no video */}
+                {duration === 0 && (
+                  <div className="text-xs px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400">
+                    Load a video first before using AI Edit.
+                  </div>
+                )}
+
+                {/* Error banner */}
+                {commander.status === "error" && commander.lastError && (
+                  <div className="flex items-start justify-between gap-2 text-xs px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400">
+                    <span className="flex-1">{commander.lastError}</span>
+                    <div className="flex items-center gap-1 shrink-0">
+                      {/session expired/i.test(commander.lastError ?? "") && (
+                        <button onClick={() => signIn()} className="text-[10px] px-2 py-0.5 rounded bg-red-500/20 hover:bg-red-500/40 transition-colors font-black">Sign in</button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Clarification bubble */}
+                {commander.status === "needs_clarification" && commander.lastMessage && (
+                  <div className="text-xs px-3 py-2 rounded-xl bg-muted text-foreground leading-relaxed">
+                    {commander.lastMessage}
+                  </div>
+                )}
+
+                {/* Success message */}
+                {commander.status === "idle" && commander.lastMessage && !commander.lastError && (
+                  <div className="text-xs px-3 py-2 rounded-xl bg-muted/60 text-muted-foreground leading-relaxed">
+                    {commander.lastMessage}
+                  </div>
+                )}
+
+                {/* Clamping notice */}
+                {commander.lastClampedReport.length > 0 && (
+                  <div className="text-[10px] px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400">
+                    <div className="flex items-center justify-between">
+                      <span>
+                        {commander.lastClampedReport.length === 1
+                          ? "1 edit adjusted to fit the video bounds."
+                          : `${commander.lastClampedReport.length} edits adjusted to fit the video bounds.`}
+                      </span>
+                      <button
+                        onClick={() => setClampExpanded((v) => !v)}
+                        className="ml-2 shrink-0 hover:opacity-70"
+                        aria-label={clampExpanded ? "Collapse details" : "Show details"}
+                      >
+                        {clampExpanded ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+                      </button>
+                    </div>
+                    {clampExpanded && (
+                      <ul className="mt-1.5 space-y-0.5 list-disc list-inside text-amber-400/70">
+                        {commander.lastClampedReport.map((r, i) => <li key={i}>{r}</li>)}
+                      </ul>
+                    )}
+                  </div>
+                )}
+
+                {/* Mock mode badge */}
+                {commander.isMockResponse && (
+                  <div className="text-[10px] px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-primary text-center font-black tracking-wide">
+                    Mock response — set MOCK_AI_EDITOR=false on server for real Gemini
+                  </div>
+                )}
               </div>
-            )}
 
-            <div ref={messagesEndRef} />
-          </div>
+              {/* Messages / suggestions area */}
+              <div className="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-2 min-h-0 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-foreground/10 [&::-webkit-scrollbar-thumb]:rounded-full">
+                {commander.lastSuggestions.length > 0 && (
+                  <>
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Suggestions</p>
+                    {commander.lastSuggestions.map((s) => (
+                      <button
+                        key={s}
+                        onClick={() => setEditInput(s)}
+                        className="w-full text-left text-xs px-3 py-2 rounded-lg border border-border hover:border-primary/30 hover:bg-primary/8 text-fg-muted hover:text-foreground transition-all duration-150"
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </>
+                )}
+              </div>
 
-          {/* Chat input */}
-          <form
-            onSubmit={(e) => { e.preventDefault(); send(input); }}
-            className="border-t border-border p-3 flex gap-2 shrink-0"
-          >
-            <input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder={videoContext ? "Ask about this video…" : "Ask anything…"}
-              className="flex-1 text-xs rounded-lg px-3 py-2 bg-muted border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/40 transition-colors"
-            />
-            <button
-              type="submit"
-              disabled={!input.trim() || loading}
-              className="px-2.5 py-2 rounded-lg bg-primary text-white disabled:opacity-30 disabled:cursor-not-allowed hover:bg-primary/90 transition-colors"
-            >
-              <Send size={14} />
-            </button>
-          </form>
+              {/* Input area */}
+              <div className="border-t border-border p-3 flex flex-col gap-2 shrink-0">
+                <div className={`flex gap-2 rounded-xl border transition-colors ${isExecuting ? "border-primary/60 shadow-[0_0_0_2px_rgba(168,85,247,0.2)]" : "border-border"}`}>
+                  <textarea
+                    ref={editInputRef}
+                    value={editInput}
+                    onChange={(e) => setEditInput(e.target.value)}
+                    onKeyDown={handleEditKeyDown}
+                    placeholder={duration === 0 ? "Load a video first…" : "e.g. trim to the hook and add a CTA text…"}
+                    disabled={duration === 0}
+                    rows={2}
+                    className="flex-1 text-xs rounded-xl px-3 py-2.5 bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-none resize-none disabled:opacity-40"
+                  />
+                  {isExecuting ? (
+                    <button
+                      onClick={commander.cancel}
+                      aria-label="Cancel AI edit"
+                      className="self-end mb-2 mr-2 px-2.5 py-1.5 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/40 text-[10px] font-black uppercase tracking-wide transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleEditSubmit}
+                      disabled={!editInput.trim() || duration === 0}
+                      aria-label="Send AI edit command"
+                      className="self-end mb-2 mr-2 px-2.5 py-2 rounded-lg bg-primary text-white disabled:opacity-30 disabled:cursor-not-allowed hover:bg-primary/90 transition-colors"
+                    >
+                      <Send size={13} />
+                    </button>
+                  )}
+                </div>
+                <p className="text-[9px] text-muted-foreground text-center">
+                  Enter to send · Shift+Enter for new line · Ctrl+Z to undo · Esc to cancel
+                </p>
+              </div>
 
-          {/* AI Creative Direction — render pipeline control */}
-          <div className="border-t border-border p-4 flex flex-col gap-3 shrink-0">
-            <div className="flex items-center gap-2">
-              <MessageSquareQuote className="w-3.5 h-3.5 text-primary" />
-              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-fg-muted">
-                AI Creative Direction
-              </span>
+              {/* AI Creative Direction */}
+              <div className="border-t border-border p-4 flex flex-col gap-3 shrink-0">
+                <div className="flex items-center gap-2">
+                  <MessageSquareQuote className="w-3.5 h-3.5 text-primary" />
+                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-fg-muted">AI Creative Direction</span>
+                </div>
+                <textarea
+                  value={scriptPrompt}
+                  onChange={(e) => setScriptPrompt(e.target.value)}
+                  placeholder="e.g. Make it high-energy and focus on the technical details..."
+                  className="w-full h-16 bg-muted border border-border rounded-xl p-3 text-[11px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/40 transition-colors resize-none [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-foreground/10"
+                />
+              </div>
             </div>
-            <textarea
-              value={scriptPrompt}
-              onChange={(e) => setScriptPrompt(e.target.value)}
-              placeholder="e.g. Make it high-energy and focus on the technical details..."
-              className="w-full h-20 bg-muted border border-border rounded-xl p-3 text-[11px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/40 transition-colors resize-none [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-foreground/10"
-            />
-            <p className="text-[9px] text-muted-foreground leading-relaxed">
-              This prompt is applied by the render pipeline when exporting. It influences
-              AI voiceover tone and clip-level stylistic choices.
-            </p>
-          </div>
+          )}
         </motion.aside>
       )}
     </AnimatePresence>

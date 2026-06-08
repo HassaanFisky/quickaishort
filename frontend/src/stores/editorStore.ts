@@ -73,7 +73,11 @@ export interface EditorAction {
     | "PLAY"                // {}
     | "PAUSE"               // {}
     // ─── Pipeline ────────────────────────────────────────────────────────────
-    | "EXPORT_CLIP";        // {} — fires qai:export event
+    | "EXPORT_CLIP"         // {} — fires qai:export event
+    // ─── Pillar-1 element actions (payload envelope, see applyAiEdits) ───────
+    | "ADD_ELEMENT"         // { element: Omit<EditorElement,"id"> }
+    | "UPDATE_ELEMENT"      // { id, patch }
+    | "REMOVE_ELEMENT";     // { id }
   payload: Record<string, unknown>;
 }
 
@@ -113,6 +117,48 @@ const DEFAULT_CAPTION_STYLE: CaptionStyle = {
   position: "bottom",
   bold: false,
 };
+
+// ─── Pillar-1 Strict EditorElement Union ──────────────────────────────────────
+// These types are the authoritative canvas element contract for the AI Editor.
+// The older CanvasElement / canvasElements API below remains intact for
+// CanvasLayer.tsx backward-compatibility.
+
+export type EditorElementType = "TEXT" | "ZOOM" | "TRIM" | "STICKER";
+
+export interface BaseEditorElement {
+  id: string;
+  x: number;
+  y: number;
+  scale: number;
+  rotation: number;
+}
+
+export interface TextElement extends BaseEditorElement {
+  type: "TEXT";
+  text: string;
+  color: string;
+  fontWeight?: number | string;
+  fontSize?: number;
+  className?: string;
+}
+
+export interface ZoomElement extends BaseEditorElement {
+  type: "ZOOM";
+  // Focal point the canvas zooms toward during playback
+}
+
+export interface TrimElement extends BaseEditorElement {
+  type: "TRIM";
+  startTime: number;
+  endTime: number;
+}
+
+export interface StickerElement extends BaseEditorElement {
+  type: "STICKER";
+  emoji: string;
+}
+
+export type EditorElement = TextElement | ZoomElement | TrimElement | StickerElement;
 
 export type AgentStatus = "idle" | "working" | "done" | "error";
 
@@ -154,6 +200,23 @@ export interface CanvasElement {
   rotation: number;
   style?: CanvasElementStyle;
 }
+
+// ─── AI Undo Snapshot (Pillar-3) ──────────────────────────────────────────────
+// Captures the full AI-mutable surface before any AI edit batch is applied.
+export interface AiSnapshot {
+  label: string;
+  timestamp: number;
+  elements: EditorElement[];
+  selectedElementId: string | null;
+  captions: Caption[];
+  trimMarker: TrimMarker | null;
+  frameFilters: FrameFilter;
+  exportSettings: ExportSettings;
+  captionsEnabled: boolean;
+  currentTime: number;
+}
+
+const _MAX_AI_STACK = 20;
 
 const DEFAULT_EXPORT_SETTINGS: ExportSettings = {
   quality: "medium",
@@ -226,12 +289,25 @@ interface EditorState {
   // Canvas Elements (Interactivity like PowerPoint/Canva)
   canvasElements: CanvasElement[];
 
+  // ─── Pillar-1 Strict EditorElement API ────────────────────────────────────
+  elements: EditorElement[];
+  selectedElementId: string | null;
+  lastAddedElementId: string | null;
+  addElement: (el: Omit<EditorElement, "id">) => void;
+  updateElement: (id: string, patch: Partial<EditorElement>) => void;
+  removeElement: (id: string) => void;
+  selectElement: (id: string | null) => void;
+
   // Export settings
   exportSettings: ExportSettings;
 
   // History for undo/redo
   undoStack: Clip[][];
   redoStack: Clip[][];
+
+  // ─── AI-edit undo/redo stack (Pillar-3) ───────────────────────────────────
+  aiUndoStack: AiSnapshot[];
+  aiRedoStack: AiSnapshot[];
 
   // Actions
   setCurrentTime: (time: number) => void;
@@ -303,6 +379,14 @@ interface EditorState {
   setVideoAnalysis: (a: VideoAnalysis) => void;
   setVideoElementRef: (ref: RefObject<HTMLVideoElement>) => void;
   dispatchAIActions: (actions: EditorAction[]) => void;
+
+  // ─── Pillar-3 AI edit batch apply + undo ─────────────────────────────────
+  pushAiSnapshot: (label: string) => void;
+  undoAiEdit: () => boolean;
+  redoAiEdit: () => boolean;
+  // Import type is forward-declared; implemented with AiEditorAction from ai-editor.ts
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  applyAiEdits: (actions: any[], options?: { snapshotLabel?: string; seekToFirstEdit?: boolean }) => void;
 }
 
 export const useEditorStore = create<EditorState>()(
@@ -341,9 +425,18 @@ export const useEditorStore = create<EditorState>()(
       canvasElements: [],
       exportSettings: { ...DEFAULT_EXPORT_SETTINGS },
 
+      // Pillar-1 strict element API
+      elements: [],
+      selectedElementId: null,
+      lastAddedElementId: null,
+
       scriptPrompt: "Write a high-engagement, viral-ready script for this clip.",
       undoStack: [],
       redoStack: [],
+
+      // Pillar-3 AI undo stacks
+      aiUndoStack: [],
+      aiRedoStack: [],
 
       // AI Editor initial state
       videoMetadata: null,
@@ -379,9 +472,14 @@ export const useEditorStore = create<EditorState>()(
           videoAnalysis: null,
           selectedClipId: null,
           canvasElements: [],
+          elements: [],
+          selectedElementId: null,
+          lastAddedElementId: null,
           trimMarker: null,
           undoStack: [],
           redoStack: [],
+          aiUndoStack: [],
+          aiRedoStack: [],
           progress: 0,
         }),
 
@@ -399,9 +497,14 @@ export const useEditorStore = create<EditorState>()(
           videoAnalysis: null,
           selectedClipId: null,
           canvasElements: [],
+          elements: [],
+          selectedElementId: null,
+          lastAddedElementId: null,
           trimMarker: null,
           undoStack: [],
           redoStack: [],
+          aiUndoStack: [],
+          aiRedoStack: [],
           progress: 0,
         }),
 
@@ -536,6 +639,36 @@ export const useEditorStore = create<EditorState>()(
         set((state) => ({
           canvasElements: state.canvasElements.filter((el) => el.id !== id),
         })),
+
+      // ─── Pillar-1 Strict EditorElement actions ────────────────────────────
+      addElement: (el) => {
+        const id =
+          typeof crypto !== "undefined" && crypto.randomUUID
+            ? crypto.randomUUID()
+            : Math.random().toString(36).substring(2, 15);
+        const full = { ...el, id } as EditorElement;
+        set((state) => ({
+          elements: [...state.elements, full],
+          lastAddedElementId: id,
+          selectedElementId: id,
+        }));
+      },
+
+      updateElement: (id, patch) =>
+        set((state) => ({
+          elements: state.elements.map((el) =>
+            el.id === id ? ({ ...el, ...patch, type: el.type, id: el.id } as EditorElement) : el,
+          ),
+        })),
+
+      removeElement: (id) =>
+        set((state) => ({
+          elements: state.elements.filter((el) => el.id !== id),
+          selectedElementId: state.selectedElementId === id ? null : state.selectedElementId,
+          lastAddedElementId: state.lastAddedElementId === id ? null : state.lastAddedElementId,
+        })),
+
+      selectElement: (id) => set({ selectedElementId: id }),
 
       // ─── AI Editor Actions ─────────────────────────────────────────────────
       setVideoMetadata: (meta) => set({ videoMetadata: meta }),
@@ -691,8 +824,155 @@ export const useEditorStore = create<EditorState>()(
                 window.dispatchEvent(new CustomEvent("qai:export"));
               }
               break;
+
+            // ── Pillar-1 element actions ──────────────────────────────────
+            // Option A: applyAiEdits wraps the wire format in payload before
+            // calling dispatchAIActions, so these cases read from payload.
+            case "ADD_ELEMENT": {
+              const el = action.payload.element as Omit<EditorElement, "id">;
+              if (el && typeof el.type === "string") store.addElement(el);
+              break;
+            }
+            case "UPDATE_ELEMENT": {
+              const id = action.payload.id as string;
+              const patch = action.payload.patch as Partial<EditorElement>;
+              if (id && patch) store.updateElement(id, patch);
+              break;
+            }
+            case "REMOVE_ELEMENT": {
+              const id = action.payload.id as string;
+              if (id) store.removeElement(id);
+              break;
+            }
           }
         });
+      },
+
+      // ─── Pillar-3 AI undo / redo ──────────────────────────────────────────
+      pushAiSnapshot: (label) => {
+        const s = useEditorStore.getState();
+        const snapshot: AiSnapshot = {
+          label,
+          timestamp: Date.now(),
+          elements: typeof structuredClone !== "undefined"
+            ? structuredClone(s.elements)
+            : JSON.parse(JSON.stringify(s.elements)),
+          selectedElementId: s.selectedElementId,
+          captions: typeof structuredClone !== "undefined"
+            ? structuredClone(s.captions)
+            : JSON.parse(JSON.stringify(s.captions)),
+          trimMarker: s.trimMarker ? { ...s.trimMarker } : null,
+          frameFilters: { ...s.frameFilters },
+          exportSettings: { ...s.exportSettings },
+          captionsEnabled: s.captionsEnabled,
+          currentTime: s.currentTime,
+        };
+        set((state) => ({
+          aiUndoStack: [...state.aiUndoStack.slice(-(_MAX_AI_STACK - 1)), snapshot],
+          aiRedoStack: [],
+        }));
+      },
+
+      undoAiEdit: () => {
+        const s = useEditorStore.getState();
+        if (s.aiUndoStack.length === 0) return false;
+        const snapshot = s.aiUndoStack[s.aiUndoStack.length - 1];
+        // Capture current for redo
+        const current: AiSnapshot = {
+          label: snapshot.label,
+          timestamp: Date.now(),
+          elements: typeof structuredClone !== "undefined"
+            ? structuredClone(s.elements)
+            : JSON.parse(JSON.stringify(s.elements)),
+          selectedElementId: s.selectedElementId,
+          captions: typeof structuredClone !== "undefined"
+            ? structuredClone(s.captions)
+            : JSON.parse(JSON.stringify(s.captions)),
+          trimMarker: s.trimMarker ? { ...s.trimMarker } : null,
+          frameFilters: { ...s.frameFilters },
+          exportSettings: { ...s.exportSettings },
+          captionsEnabled: s.captionsEnabled,
+          currentTime: s.currentTime,
+        };
+        set((state) => ({
+          aiUndoStack: state.aiUndoStack.slice(0, -1),
+          aiRedoStack: [...state.aiRedoStack.slice(-(_MAX_AI_STACK - 1)), current],
+          elements: snapshot.elements,
+          selectedElementId: snapshot.selectedElementId,
+          captions: snapshot.captions,
+          trimMarker: snapshot.trimMarker,
+          frameFilters: snapshot.frameFilters,
+          exportSettings: snapshot.exportSettings,
+          captionsEnabled: snapshot.captionsEnabled,
+          currentTime: snapshot.currentTime,
+        }));
+        return true;
+      },
+
+      redoAiEdit: () => {
+        const s = useEditorStore.getState();
+        if (s.aiRedoStack.length === 0) return false;
+        const snapshot = s.aiRedoStack[s.aiRedoStack.length - 1];
+        const current: AiSnapshot = {
+          label: snapshot.label,
+          timestamp: Date.now(),
+          elements: typeof structuredClone !== "undefined"
+            ? structuredClone(s.elements)
+            : JSON.parse(JSON.stringify(s.elements)),
+          selectedElementId: s.selectedElementId,
+          captions: typeof structuredClone !== "undefined"
+            ? structuredClone(s.captions)
+            : JSON.parse(JSON.stringify(s.captions)),
+          trimMarker: s.trimMarker ? { ...s.trimMarker } : null,
+          frameFilters: { ...s.frameFilters },
+          exportSettings: { ...s.exportSettings },
+          captionsEnabled: s.captionsEnabled,
+          currentTime: s.currentTime,
+        };
+        set((state) => ({
+          aiRedoStack: state.aiRedoStack.slice(0, -1),
+          aiUndoStack: [...state.aiUndoStack.slice(-(_MAX_AI_STACK - 1)), current],
+          elements: snapshot.elements,
+          selectedElementId: snapshot.selectedElementId,
+          captions: snapshot.captions,
+          trimMarker: snapshot.trimMarker,
+          frameFilters: snapshot.frameFilters,
+          exportSettings: snapshot.exportSettings,
+          captionsEnabled: snapshot.captionsEnabled,
+          currentTime: snapshot.currentTime,
+        }));
+        return true;
+      },
+
+      applyAiEdits: (wireActions, options) => {
+        if (!wireActions.length) return;
+        const store = useEditorStore.getState();
+        store.pushAiSnapshot(options?.snapshotLabel || "AI edit");
+
+        // Translate wire format (flat Pydantic) → dispatcher payload envelope
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const translated: EditorAction[] = wireActions.map((a: any) => {
+          const { type, ...rest } = a;
+          // For element actions the element/id/patch live directly on rest
+          // For existing 20 actions rest IS the payload
+          return { type, payload: rest } as EditorAction;
+        });
+
+        store.dispatchAIActions(translated);
+
+        // Seek to the first action that has a meaningful time field
+        if (options?.seekToFirstEdit !== false) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const first = wireActions.find((a: any) =>
+            typeof a.time === "number" ||
+            typeof a.start === "number" ||
+            typeof a.startTime === "number",
+          ) as Record<string, unknown> | undefined;
+          if (first) {
+            const t = (first.time ?? first.start ?? first.startTime) as number;
+            store.setCurrentTime(t);
+          }
+        }
       },
 
       resetForNewVideo: () =>
@@ -706,9 +986,14 @@ export const useEditorStore = create<EditorState>()(
           videoAnalysis: null,
           selectedClipId: null,
           canvasElements: [],
+          elements: [],
+          selectedElementId: null,
+          lastAddedElementId: null,
           trimMarker: null,
           undoStack: [],
           redoStack: [],
+          aiUndoStack: [],
+          aiRedoStack: [],
           progress: 0,
           isProcessing: false,
           currentStage: "idle",
@@ -742,9 +1027,14 @@ export const useEditorStore = create<EditorState>()(
           captionsEnabled: true,
           selectedClipId: null,
           canvasElements: [],
+          elements: [],
+          selectedElementId: null,
+          lastAddedElementId: null,
           exportSettings: { ...DEFAULT_EXPORT_SETTINGS },
           undoStack: [],
           redoStack: [],
+          aiUndoStack: [],
+          aiRedoStack: [],
           videoMetadata: null,
           captions: [],
           trimMarker: null,

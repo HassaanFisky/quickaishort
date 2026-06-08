@@ -23,17 +23,22 @@ steps:
 
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
     id: Deploy
-    entrypoint: gcloud
+    entrypoint: bash
     args:
-      - run
-      - services
-      - update
-      - '$_SERVICE_NAME'
-      - '--platform=managed'
-      - '--image=$_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA'
-      - '--labels=managed-by=gcp-cloud-build-deploy-cloud-run,commit-sha=$COMMIT_SHA,gcb-build-id=$BUILD_ID,gcb-trigger-id=$_TRIGGER_ID'
-      - '--region=$_DEPLOY_REGION'
-      - '--quiet'
+      - '-c'
+      - |
+        set -e
+        EXTRA_FLAGS=""
+        if [ "$_SERVICE_NAME" = "quickai-api" ]; then
+          EXTRA_FLAGS="--min-instances=1"
+        fi
+        gcloud run services update "$_SERVICE_NAME" \
+          --platform=managed \
+          --image="$_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA" \
+          --labels=managed-by=gcp-cloud-build-deploy-cloud-run,commit-sha=$COMMIT_SHA,gcb-build-id=$BUILD_ID,gcb-trigger-id=$_TRIGGER_ID \
+          --region=$_DEPLOY_REGION \
+          $EXTRA_FLAGS \
+          --quiet
 
 images:
   - '$_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA'

@@ -32,6 +32,7 @@ gcloud run deploy quickai-api \
     --cpu 2 \
     --concurrency 80 \
     --timeout 300 \
+    --min-instances 1 \
     "--liveness-probe=httpGet.path=/health,timeoutSeconds=5,failureThreshold=3,periodSeconds=30" \
     "--startup-probe=httpGet.path=/health,timeoutSeconds=10,failureThreshold=30,periodSeconds=10" \
     --project ${PROJECT_ID} \

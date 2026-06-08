@@ -14,6 +14,7 @@ import {
   Maximize2,
   Volume2,
   VolumeX,
+  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useEditorStore } from "@/stores/editorStore";
@@ -21,6 +22,8 @@ import { API_URL } from "@/lib/api";
 import { useFaceTracker } from "@/hooks/useFaceTracker";
 import { CaptionOverlay } from "./CaptionOverlay";
 import { CanvasLayer } from "./CanvasLayer";
+import { InteractiveCanvas } from "./InteractiveCanvas";
+import { useAIPanel } from "@/stores/aiPanelStore";
 import { cn } from "@/lib/utils";
 import { formatTime } from "@/lib/utils/formatTime";
 
@@ -91,6 +94,7 @@ export default function VideoCanvas() {
   } = useEditorStore();
 
   const { isReady, reframingData, detect } = useFaceTracker();
+  const { executionOverlay, executionOverlayLabel } = useAIPanel();
   const [displayUrl, setDisplayUrl] = useState<string | null>(null);
 
   // Web Audio API chain — MediaElementSource → BiquadFilter → GainNode
@@ -520,6 +524,21 @@ export default function VideoCanvas() {
           transcript={captionsEnabled && transcript ? transcript : undefined}
         />
         <CanvasLayer />
+        <InteractiveCanvas />
+
+        {/* AI execution overlay — pointer-events:none so cancel button above stays clickable */}
+        {executionOverlay && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 z-40 pointer-events-none">
+            <div className="flex flex-col items-center gap-3 px-6 text-center">
+              <div className="w-10 h-10 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center animate-pulse">
+                <Sparkles className="w-5 h-5 text-primary" />
+              </div>
+              <p className="text-xs font-black text-white uppercase tracking-widest drop-shadow-lg">
+                {executionOverlayLabel ?? "AI is editing your video…"}
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Hover overlay — center play/skip buttons */}
         {sourceUrl && !localYtId && !isBuffering && !videoError && (

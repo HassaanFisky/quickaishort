@@ -33,6 +33,12 @@ export async function POST(req: NextRequest) {
     if (rawCookie) headers["Authorization"] = `Bearer ${rawCookie}`;
     if (token?.sub) headers["X-User-Id"] = token.sub;
 
+    const xff =
+      req.headers.get("x-forwarded-for") ||
+      req.headers.get("x-real-ip") ||
+      "";
+    if (xff) headers["X-Forwarded-For"] = xff;
+
     const upstream = await fetch(`${BACKEND_URL}/api/process-video`, {
       method: "POST",
       headers,
