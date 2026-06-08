@@ -77,7 +77,12 @@ export interface EditorAction {
     // ─── Pillar-1 element actions (payload envelope, see applyAiEdits) ───────
     | "ADD_ELEMENT"         // { element: Omit<EditorElement,"id"> }
     | "UPDATE_ELEMENT"      // { id, patch }
-    | "REMOVE_ELEMENT";     // { id }
+    | "REMOVE_ELEMENT"      // { id }
+    // ─── Intelligent tool actions (surface suggestions, no direct edit) ──────
+    | "DETECT_VIRAL_MOMENTS"  // { moments: AiViralMoment[] }
+    | "GENERATE_HOOK_CAPTION" // { captions: string[] }
+    | "SUGGEST_STYLE_PRESET"  // { preset, reason, actions }
+    | "EXPLAIN_LAST_EDIT";    // { explanation, confidence }
   payload: Record<string, unknown>;
 }
 
@@ -201,6 +206,28 @@ export interface CanvasElement {
   style?: CanvasElementStyle;
 }
 
+// ─── AI Suggestions (Pillar-3.7 intelligent tools) ───────────────────────────
+
+export interface AiViralMoment {
+  timestamp: number;
+  hook: string;
+  score: number;
+}
+
+export interface AiSuggestions {
+  viralMoments: AiViralMoment[];
+  hookCaptions: string[];
+  stylePreset: { preset: string; reason: string } | null;
+  lastEditExplanation: { explanation: string; confidence: string } | null;
+}
+
+const DEFAULT_AI_SUGGESTIONS: AiSuggestions = {
+  viralMoments: [],
+  hookCaptions: [],
+  stylePreset: null,
+  lastEditExplanation: null,
+};
+
 // ─── AI Undo Snapshot (Pillar-3) ──────────────────────────────────────────────
 // Captures the full AI-mutable surface before any AI edit batch is applied.
 export interface AiSnapshot {
@@ -309,6 +336,9 @@ interface EditorState {
   aiUndoStack: AiSnapshot[];
   aiRedoStack: AiSnapshot[];
 
+  // ─── AI intelligent tool suggestions (Pillar-3.7) ─────────────────────────
+  aiSuggestions: AiSuggestions;
+
   // Actions
   setCurrentTime: (time: number) => void;
   setIsPlaying: (playing: boolean) => void;
@@ -387,6 +417,8 @@ interface EditorState {
   // Import type is forward-declared; implemented with AiEditorAction from ai-editor.ts
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   applyAiEdits: (actions: any[], options?: { snapshotLabel?: string; seekToFirstEdit?: boolean }) => void;
+  setAiSuggestions: (patch: Partial<AiSuggestions>) => void;
+  clearAiSuggestions: () => void;
 }
 
 export const useEditorStore = create<EditorState>()(
@@ -438,6 +470,9 @@ export const useEditorStore = create<EditorState>()(
       aiUndoStack: [],
       aiRedoStack: [],
 
+      // Pillar-3.7 AI suggestions
+      aiSuggestions: { ...DEFAULT_AI_SUGGESTIONS },
+
       // AI Editor initial state
       videoMetadata: null,
       captions: [],
@@ -480,6 +515,7 @@ export const useEditorStore = create<EditorState>()(
           redoStack: [],
           aiUndoStack: [],
           aiRedoStack: [],
+          aiSuggestions: { ...DEFAULT_AI_SUGGESTIONS },
           progress: 0,
         }),
 
@@ -505,6 +541,7 @@ export const useEditorStore = create<EditorState>()(
           redoStack: [],
           aiUndoStack: [],
           aiRedoStack: [],
+          aiSuggestions: { ...DEFAULT_AI_SUGGESTIONS },
           progress: 0,
         }),
 
@@ -844,6 +881,41 @@ export const useEditorStore = create<EditorState>()(
               if (id) store.removeElement(id);
               break;
             }
+
+            // ── Intelligent tool actions ──────────────────────────────────────
+            case "DETECT_VIRAL_MOMENTS": {
+              const moments = action.payload.moments as AiViralMoment[];
+              store.setAiSuggestions({ viralMoments: moments ?? [] });
+              break;
+            }
+            case "GENERATE_HOOK_CAPTION": {
+              const captions = action.payload.captions as string[];
+              store.setAiSuggestions({ hookCaptions: captions ?? [] });
+              break;
+            }
+            case "SUGGEST_STYLE_PRESET": {
+              const preset = action.payload.preset as string;
+              const reason = action.payload.reason as string;
+              store.setAiSuggestions({ stylePreset: { preset, reason } });
+              // Apply the nested preset actions via the dispatcher
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const nestedActions = action.payload.actions as any[];
+              if (nestedActions?.length) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const nestedTranslated: EditorAction[] = nestedActions.map((a: any) => {
+                  const { type: t, ...rest } = a;
+                  return { type: t, payload: rest } as EditorAction;
+                });
+                store.dispatchAIActions(nestedTranslated);
+              }
+              break;
+            }
+            case "EXPLAIN_LAST_EDIT": {
+              const explanation = action.payload.explanation as string;
+              const confidence = action.payload.confidence as string;
+              store.setAiSuggestions({ lastEditExplanation: { explanation, confidence } });
+              break;
+            }
           }
         });
       },
@@ -994,6 +1066,7 @@ export const useEditorStore = create<EditorState>()(
           redoStack: [],
           aiUndoStack: [],
           aiRedoStack: [],
+          aiSuggestions: { ...DEFAULT_AI_SUGGESTIONS },
           progress: 0,
           isProcessing: false,
           currentStage: "idle",
@@ -1035,6 +1108,7 @@ export const useEditorStore = create<EditorState>()(
           redoStack: [],
           aiUndoStack: [],
           aiRedoStack: [],
+          aiSuggestions: { ...DEFAULT_AI_SUGGESTIONS },
           videoMetadata: null,
           captions: [],
           trimMarker: null,
@@ -1045,6 +1119,11 @@ export const useEditorStore = create<EditorState>()(
           videoAnalysis: null,
           videoElementRef: null,
         }),
+
+      setAiSuggestions: (patch) =>
+        set((state) => ({ aiSuggestions: { ...state.aiSuggestions, ...patch } })),
+
+      clearAiSuggestions: () => set({ aiSuggestions: { ...DEFAULT_AI_SUGGESTIONS } }),
     }),
     {
       name: "EditorStore",

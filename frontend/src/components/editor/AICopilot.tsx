@@ -2,6 +2,7 @@
 
 import { useAIPanel } from "@/stores/aiPanelStore";
 import { useEditorStore } from "@/stores/editorStore";
+import type { AiViralMoment } from "@/stores/editorStore";
 import { useAiCommander } from "@/hooks/useAiCommander";
 import { AnimatePresence, motion } from "framer-motion";
 import { useState, useRef, useEffect, useCallback } from "react";
@@ -29,6 +30,10 @@ export function AICopilot() {
   const { isOpen, setOpen, videoContext, messages, addMessage, aiPanelMode, setAiPanelMode } = useAIPanel();
   const { scriptPrompt, setScriptPrompt } = useEditorStore();
   const duration = useEditorStore((s) => s.duration);
+  const aiSuggestions = useEditorStore((s) => s.aiSuggestions);
+  const clearAiSuggestions = useEditorStore((s) => s.clearAiSuggestions);
+  const setPendingSeek = useEditorStore((s) => s.setPendingSeek);
+  const addCaption = useEditorStore((s) => s.addCaption);
   const commander = useAiCommander();
 
   // Chat state
@@ -315,6 +320,82 @@ export function AICopilot() {
 
               {/* Messages / suggestions area */}
               <div className="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-2 min-h-0 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-foreground/10 [&::-webkit-scrollbar-thumb]:rounded-full">
+
+                {/* ── EXPLAIN_LAST_EDIT banner ── */}
+                {aiSuggestions.lastEditExplanation && (
+                  <div className="rounded-lg border border-primary/20 bg-primary/8 px-3 py-2">
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-[10px] uppercase tracking-wider text-primary font-black">What AI did</p>
+                      <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-black ${
+                        aiSuggestions.lastEditExplanation.confidence === "high"
+                          ? "bg-green-500/20 text-green-400"
+                          : aiSuggestions.lastEditExplanation.confidence === "medium"
+                          ? "bg-amber-500/20 text-amber-400"
+                          : "bg-red-500/20 text-red-400"
+                      }`}>{aiSuggestions.lastEditExplanation.confidence}</span>
+                    </div>
+                    <p className="text-xs text-foreground leading-relaxed">{aiSuggestions.lastEditExplanation.explanation}</p>
+                  </div>
+                )}
+
+                {/* ── DETECT_VIRAL_MOMENTS list ── */}
+                {aiSuggestions.viralMoments.length > 0 && (
+                  <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 flex flex-col gap-1.5">
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-black">Viral Moments</p>
+                    {aiSuggestions.viralMoments.map((m: AiViralMoment, i: number) => (
+                      <button
+                        key={i}
+                        onClick={() => setPendingSeek(m.timestamp)}
+                        className="flex items-center justify-between text-xs px-2 py-1.5 rounded-lg hover:bg-primary/8 hover:border-primary/20 border border-transparent text-left transition-all duration-150"
+                      >
+                        <span className="text-foreground truncate flex-1">{m.hook}</span>
+                        <span className="ml-2 shrink-0 text-[10px] font-black text-primary tabular-nums">
+                          {Math.floor(m.timestamp / 60)}:{String(Math.floor(m.timestamp % 60)).padStart(2, "0")}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* ── GENERATE_HOOK_CAPTION options ── */}
+                {aiSuggestions.hookCaptions.length > 0 && (
+                  <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 flex flex-col gap-1.5">
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-black">Hook Captions</p>
+                    {aiSuggestions.hookCaptions.map((c: string, i: number) => (
+                      <button
+                        key={i}
+                        onClick={() => {
+                          addCaption({ text: c, startTime: 0, endTime: Math.min(3, duration) });
+                        }}
+                        className="w-full text-left text-xs px-2 py-1.5 rounded-lg border border-border hover:border-primary/30 hover:bg-primary/8 text-fg-muted hover:text-foreground transition-all duration-150"
+                      >
+                        {c}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* ── SUGGEST_STYLE_PRESET card ── */}
+                {aiSuggestions.stylePreset && (
+                  <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-black">Style Preset Applied</p>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-black">{aiSuggestions.stylePreset.preset}</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground leading-relaxed">{aiSuggestions.stylePreset.reason}</p>
+                  </div>
+                )}
+
+                {/* Clear suggestions button */}
+                {(aiSuggestions.viralMoments.length > 0 || aiSuggestions.hookCaptions.length > 0 || aiSuggestions.stylePreset || aiSuggestions.lastEditExplanation) && (
+                  <button
+                    onClick={clearAiSuggestions}
+                    className="text-[10px] text-muted-foreground hover:text-foreground transition-colors self-end"
+                  >
+                    Clear insights
+                  </button>
+                )}
+
                 {commander.lastSuggestions.length > 0 && (
                   <>
                     <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Suggestions</p>

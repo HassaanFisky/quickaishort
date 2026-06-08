@@ -80,6 +80,19 @@ export interface AddElementAction      { type: "ADD_ELEMENT";      element: AiEd
 export interface UpdateElementAction   { type: "UPDATE_ELEMENT";   id: string; patch: Record<string, unknown> }
 export interface RemoveElementAction   { type: "REMOVE_ELEMENT";   id: string }
 
+// ─── Intelligent tool actions (4 additional variants) ────────────────────────
+
+export interface ViralMoment {
+  timestamp: number;
+  hook: string;
+  score: number;
+}
+
+export interface DetectViralMomentsAction { type: "DETECT_VIRAL_MOMENTS"; moments: ViralMoment[] }
+export interface GenerateHookCaptionAction { type: "GENERATE_HOOK_CAPTION"; captions: string[] }
+export interface SuggestStylePresetAction  { type: "SUGGEST_STYLE_PRESET";  preset: "Urban" | "Retro" | "Cinematic"; reason: string; actions: AiEditorAction[] }
+export interface ExplainLastEditAction     { type: "EXPLAIN_LAST_EDIT";     explanation: string; confidence: "high" | "medium" | "low" }
+
 export type AiEditorAction =
   | AddCaptionAction
   | RemoveCaptionAction
@@ -103,7 +116,11 @@ export type AiEditorAction =
   | ExportClipAction
   | AddElementAction
   | UpdateElementAction
-  | RemoveElementAction;
+  | RemoveElementAction
+  | DetectViralMomentsAction
+  | GenerateHookCaptionAction
+  | SuggestStylePresetAction
+  | ExplainLastEditAction;
 
 export type AiEditorActionType = AiEditorAction["type"];
 
