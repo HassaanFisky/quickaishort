@@ -82,7 +82,13 @@ export interface EditorAction {
     | "DETECT_VIRAL_MOMENTS"  // { moments: AiViralMoment[] }
     | "GENERATE_HOOK_CAPTION" // { captions: string[] }
     | "SUGGEST_STYLE_PRESET"  // { preset, reason, actions }
-    | "EXPLAIN_LAST_EDIT";    // { explanation, confidence }
+    | "EXPLAIN_LAST_EDIT"     // { explanation, confidence }
+    // ─── Phase 3a: B-Roll / Overlay actions ─────────────────────────────────
+    | "ADD_BROLL"             // { pexels_id, download_url, thumbnail_url, title, start_sec, duration_sec, position, opacity }
+    | "ADD_VIDEO_OVERLAY"     // { source_url, start_sec, duration_sec, position, opacity, mute_audio }
+    | "REMOVE_OVERLAY"        // { element_id }
+    | "BROLL_OPEN_LIBRARY"    // {} — UI-only: opens the B-roll drawer
+    | "BROLL_CLEAR_ALL";      // {} — removes all BROLL elements
   payload: Record<string, unknown>;
 }
 
@@ -128,7 +134,7 @@ const DEFAULT_CAPTION_STYLE: CaptionStyle = {
 // The older CanvasElement / canvasElements API below remains intact for
 // CanvasLayer.tsx backward-compatibility.
 
-export type EditorElementType = "TEXT" | "ZOOM" | "TRIM" | "STICKER";
+export type EditorElementType = "TEXT" | "ZOOM" | "TRIM" | "STICKER" | "VIDEO_OVERLAY" | "BROLL";
 
 export interface BaseEditorElement {
   id: string;
@@ -163,7 +169,40 @@ export interface StickerElement extends BaseEditorElement {
   emoji: string;
 }
 
-export type EditorElement = TextElement | ZoomElement | TrimElement | StickerElement;
+export type OverlayPosition =
+  | "full"
+  | "pip_tl" | "pip_tr" | "pip_bl" | "pip_br"
+  | "split_left" | "split_right";
+
+export interface VideoOverlayElement extends BaseEditorElement {
+  type: "VIDEO_OVERLAY";
+  source_url: string;
+  start_sec: number;
+  duration_sec: number;
+  position: OverlayPosition;
+  opacity: number;
+  mute_audio: boolean;
+}
+
+export interface BRollElement extends BaseEditorElement {
+  type: "BROLL";
+  pexels_id: number;
+  download_url: string;
+  thumbnail_url: string;
+  title: string;
+  start_sec: number;
+  duration_sec: number;
+  position: OverlayPosition;
+  opacity: number;
+}
+
+export type EditorElement =
+  | TextElement
+  | ZoomElement
+  | TrimElement
+  | StickerElement
+  | VideoOverlayElement
+  | BRollElement;
 
 export type AgentStatus = "idle" | "working" | "done" | "error";
 
@@ -339,6 +378,10 @@ interface EditorState {
   // ─── AI intelligent tool suggestions (Pillar-3.7) ─────────────────────────
   aiSuggestions: AiSuggestions;
 
+  // ─── Phase 3a: B-Roll drawer UI flag ──────────────────────────────────────
+  isBRollDrawerOpen: boolean;
+  setBRollDrawerOpen: (open: boolean) => void;
+
   // Actions
   setCurrentTime: (time: number) => void;
   setIsPlaying: (playing: boolean) => void;
@@ -472,6 +515,9 @@ export const useEditorStore = create<EditorState>()(
 
       // Pillar-3.7 AI suggestions
       aiSuggestions: { ...DEFAULT_AI_SUGGESTIONS },
+
+      // Phase 3a B-Roll drawer
+      isBRollDrawerOpen: false,
 
       // AI Editor initial state
       videoMetadata: null,
@@ -916,6 +962,54 @@ export const useEditorStore = create<EditorState>()(
               store.setAiSuggestions({ lastEditExplanation: { explanation, confidence } });
               break;
             }
+
+            // ── Phase 3a: B-Roll / Overlay actions ───────────────────────────
+            case "ADD_BROLL": {
+              const p = action.payload;
+              store.addElement({
+                type: "BROLL",
+                pexels_id: p.pexels_id as number,
+                download_url: p.download_url as string,
+                thumbnail_url: p.thumbnail_url as string,
+                title: (p.title as string) ?? "",
+                start_sec: p.start_sec as number,
+                duration_sec: p.duration_sec as number,
+                position: p.position as OverlayPosition,
+                opacity: p.opacity as number,
+                x: 0, y: 0, scale: 1, rotation: 0,
+              } as Omit<BRollElement, "id">);
+              break;
+            }
+            case "ADD_VIDEO_OVERLAY": {
+              const p = action.payload;
+              store.addElement({
+                type: "VIDEO_OVERLAY",
+                source_url: p.source_url as string,
+                start_sec: p.start_sec as number,
+                duration_sec: p.duration_sec as number,
+                position: p.position as OverlayPosition,
+                opacity: p.opacity as number,
+                mute_audio: (p.mute_audio as boolean) ?? true,
+                x: 0, y: 0, scale: 1, rotation: 0,
+              } as Omit<VideoOverlayElement, "id">);
+              break;
+            }
+            case "REMOVE_OVERLAY": {
+              const id = action.payload.element_id as string;
+              if (id) store.removeElement(id);
+              break;
+            }
+            case "BROLL_OPEN_LIBRARY": {
+              store.setBRollDrawerOpen(true);
+              break;
+            }
+            case "BROLL_CLEAR_ALL": {
+              const brollIds = store.elements
+                .filter((el) => el.type === "BROLL")
+                .map((el) => el.id);
+              brollIds.forEach((id) => store.removeElement(id));
+              break;
+            }
           }
         });
       },
@@ -1124,6 +1218,8 @@ export const useEditorStore = create<EditorState>()(
         set((state) => ({ aiSuggestions: { ...state.aiSuggestions, ...patch } })),
 
       clearAiSuggestions: () => set({ aiSuggestions: { ...DEFAULT_AI_SUGGESTIONS } }),
+
+      setBRollDrawerOpen: (open) => set({ isBRollDrawerOpen: open }),
     }),
     {
       name: "EditorStore",

@@ -93,6 +93,63 @@ export interface GenerateHookCaptionAction { type: "GENERATE_HOOK_CAPTION"; capt
 export interface SuggestStylePresetAction  { type: "SUGGEST_STYLE_PRESET";  preset: "Urban" | "Retro" | "Cinematic"; reason: string; actions: AiEditorAction[] }
 export interface ExplainLastEditAction     { type: "EXPLAIN_LAST_EDIT";     explanation: string; confidence: "high" | "medium" | "low" }
 
+// ─── Phase 3a: B-Roll / Overlay types ────────────────────────────────────────
+
+export interface BRollClip {
+  pexels_id: number;
+  title: string;
+  duration_sec: number;
+  thumbnail_url: string;
+  download_url: string;
+  width: number;
+  height: number;
+}
+
+export type OverlayPosition =
+  | "full"
+  | "pip_tl"
+  | "pip_tr"
+  | "pip_bl"
+  | "pip_br"
+  | "split_left"
+  | "split_right";
+
+export interface AddBRollAction {
+  type: "ADD_BROLL";
+  pexels_id: number;
+  download_url: string;
+  thumbnail_url: string;
+  title: string;
+  start_sec: number;
+  duration_sec: number;
+  position: OverlayPosition;
+  opacity: number;
+}
+
+export interface AddVideoOverlayAction {
+  type: "ADD_VIDEO_OVERLAY";
+  source_url: string;
+  start_sec: number;
+  duration_sec: number;
+  position: OverlayPosition;
+  opacity: number;
+  mute_audio: boolean;
+}
+
+export interface RemoveOverlayAction {
+  type: "REMOVE_OVERLAY";
+  element_id: string;
+}
+
+// Frontend-only UI actions (not sent to backend, handled by dispatchAIActions locally)
+export interface BRollOpenLibraryAction {
+  type: "BROLL_OPEN_LIBRARY";
+}
+
+export interface BRollClearAllAction {
+  type: "BROLL_CLEAR_ALL";
+}
+
 export type AiEditorAction =
   | AddCaptionAction
   | RemoveCaptionAction
@@ -120,7 +177,12 @@ export type AiEditorAction =
   | DetectViralMomentsAction
   | GenerateHookCaptionAction
   | SuggestStylePresetAction
-  | ExplainLastEditAction;
+  | ExplainLastEditAction
+  | AddBRollAction
+  | AddVideoOverlayAction
+  | RemoveOverlayAction
+  | BRollOpenLibraryAction
+  | BRollClearAllAction;
 
 export type AiEditorActionType = AiEditorAction["type"];
 
