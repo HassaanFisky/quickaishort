@@ -31,7 +31,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install linters
-        run: pip install black flake8 --quiet
+        run: pip install "black==26.5.1" flake8 --quiet
 
       - name: Black format check
         run: black --check fastapi/ --extend-exclude="venv/"

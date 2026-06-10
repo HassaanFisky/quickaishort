@@ -37,7 +37,9 @@ async def ai_edit(
         elapsed = (time.perf_counter() - t0) * 1000
         logger.info(
             "ai_edit mock user=%s actions=%d elapsed_ms=%.0f",
-            user_id, len(safe_actions), elapsed,
+            user_id,
+            len(safe_actions),
+            elapsed,
         )
         return AIEditorResponse(
             actions=safe_actions,
@@ -53,13 +55,19 @@ async def ai_edit(
     # ── Credit deduction ──────────────────────────────────────────────────────
     try:
         from services.stats_service import deduct_credits
+
         ok = await deduct_credits(user_id, 1)
         if not ok:
-            raise HTTPException(status_code=402, detail="Insufficient credits. Upgrade to Pro to continue.")
+            raise HTTPException(
+                status_code=402,
+                detail="Insufficient credits. Upgrade to Pro to continue.",
+            )
     except HTTPException:
         raise
     except Exception as exc:
-        logger.warning("ai_edit: credit deduction failed for %s: %s (proceeding)", user_id, exc)
+        logger.warning(
+            "ai_edit: credit deduction failed for %s: %s (proceeding)", user_id, exc
+        )
 
     # ── Gemini call ───────────────────────────────────────────────────────────
     try:
@@ -70,10 +78,16 @@ async def ai_edit(
             video_id=body.video_id,
         )
     except TimeoutError:
-        raise HTTPException(status_code=504, detail="AI editor timed out. Try a shorter prompt.")
+        raise HTTPException(
+            status_code=504, detail="AI editor timed out. Try a shorter prompt."
+        )
     except Exception as exc:
-        logger.error("ai_edit: engine error for user=%s: %s", user_id, exc, exc_info=True)
-        raise HTTPException(status_code=500, detail="AI editor encountered an internal error.")
+        logger.error(
+            "ai_edit: engine error for user=%s: %s", user_id, exc, exc_info=True
+        )
+        raise HTTPException(
+            status_code=500, detail="AI editor encountered an internal error."
+        )
 
     elapsed = (time.perf_counter() - t0) * 1000
     logger.info(
