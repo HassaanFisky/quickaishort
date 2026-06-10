@@ -359,6 +359,83 @@ def test_explain_last_edit_passthrough():
     assert len(dropped) == 0
 
 
+# ─── T19: AddBRollAction validates position literal ──────────────────────────
+
+
+def test_add_broll_action_validates_position():
+    """ADD_BROLL must reject invalid position values."""
+    from models.ai_editor import AddBRollAction
+    from pydantic import ValidationError
+
+    a = AddBRollAction(
+        type="ADD_BROLL",
+        pexels_id=12345,
+        download_url="https://x.com/v.mp4",
+        thumbnail_url="https://x.com/t.jpg",
+        title="Test",
+        start_sec=2.0,
+        duration_sec=5.0,
+        position="pip_br",
+        opacity=0.8,
+    )
+    assert a.position == "pip_br"
+
+    with pytest.raises(ValidationError):
+        AddBRollAction(
+            type="ADD_BROLL",
+            pexels_id=12345,
+            download_url="https://x.com/v.mp4",
+            thumbnail_url="https://x.com/t.jpg",
+            title="Test",
+            start_sec=2.0,
+            duration_sec=5.0,
+            position="invalid_position",  # type: ignore[arg-type]
+            opacity=0.8,
+        )
+
+
+# ─── T20: AddVideoOverlayAction clamped by sanitiser ─────────────────────────
+
+
+def test_add_video_overlay_clamps_via_sanitiser():
+    """Overlay starting near the end gets its duration clamped to fit."""
+    from models.ai_editor import AddVideoOverlayAction
+
+    state = make_state(videoDuration=10.0)
+    actions: list[AiEditorAction] = [
+        AddVideoOverlayAction(
+            type="ADD_VIDEO_OVERLAY",
+            source_url="gs://bucket/video.mp4",
+            start_sec=8.0,
+            duration_sec=10.0,  # would extend to 18s — must clamp to 2s
+            position="full",
+            opacity=1.0,
+            mute_audio=True,
+        )
+    ]
+    safe, clamped, dropped = sanitise(actions, state)
+    assert len(safe) == 1
+    assert safe[0].duration_sec <= 2.0  # type: ignore[attr-defined]
+    assert len(clamped) >= 1
+
+
+# ─── T21: RemoveOverlayAction round-trips ────────────────────────────────────
+
+
+def test_remove_overlay_action_round_trips():
+    """REMOVE_OVERLAY parses with just element_id and passes through sanitiser."""
+    from models.ai_editor import RemoveOverlayAction
+
+    a = RemoveOverlayAction(type="REMOVE_OVERLAY", element_id="abc123")
+    assert a.element_id == "abc123"
+
+    state = make_state(videoDuration=30.0)
+    safe, clamped, dropped = sanitise([a], state)
+    assert len(safe) == 1
+    assert len(clamped) == 0
+    assert len(dropped) == 0
+
+
 # ─── T14: engine returns no_op response on Gemini JSON parse failure ──────────
 
 

@@ -37,6 +37,9 @@ from models.ai_editor import (
     GenerateHookCaptionAction,
     SuggestStylePresetAction,
     ExplainLastEditAction,
+    AddBRollAction,
+    AddVideoOverlayAction,
+    RemoveOverlayAction,
 )
 
 logger = logging.getLogger(__name__)
@@ -282,6 +285,68 @@ def sanitise(
             if not a.explanation.strip():
                 dropped.append("EXPLAIN_LAST_EDIT dropped — empty explanation")
                 continue
+
+        # ── ADD_BROLL — clamp start/duration to video bounds ─────────────────
+        elif t == "ADD_BROLL":
+            a = action  # type: AddBRollAction
+            ns = _clamp_time(a.start_sec, dur)
+            max_dur = max(0.0, dur - ns)
+            nd = _clamp(a.duration_sec, 0.0, max_dur)
+            no = _clamp(a.opacity, 0.1, 1.0)
+            changed = ns != a.start_sec or nd != a.duration_sec or no != a.opacity
+            if nd < 0.5:
+                dropped.append(
+                    f"ADD_BROLL pexels_id={a.pexels_id} dropped — duration {nd:.2f}s < 0.5s after clamp"
+                )
+                continue
+            if changed:
+                clamped.append(
+                    f"ADD_BROLL pexels_id={a.pexels_id} start {a.start_sec:.1f}→{ns:.1f}"
+                    f" dur {a.duration_sec:.1f}→{nd:.1f}"
+                )
+                action = AddBRollAction(
+                    type="ADD_BROLL",
+                    pexels_id=a.pexels_id,
+                    download_url=a.download_url,
+                    thumbnail_url=a.thumbnail_url,
+                    title=a.title,
+                    start_sec=ns,
+                    duration_sec=nd,
+                    position=a.position,
+                    opacity=no,
+                )
+
+        # ── ADD_VIDEO_OVERLAY — same timestamp clamping ───────────────────────
+        elif t == "ADD_VIDEO_OVERLAY":
+            a = action  # type: AddVideoOverlayAction
+            ns = _clamp_time(a.start_sec, dur)
+            max_dur = max(0.0, dur - ns)
+            nd = _clamp(a.duration_sec, 0.0, max_dur)
+            no = _clamp(a.opacity, 0.1, 1.0)
+            changed = ns != a.start_sec or nd != a.duration_sec or no != a.opacity
+            if nd < 0.5:
+                dropped.append(
+                    f"ADD_VIDEO_OVERLAY dropped — duration {nd:.2f}s < 0.5s after clamp"
+                )
+                continue
+            if changed:
+                clamped.append(
+                    f"ADD_VIDEO_OVERLAY start {a.start_sec:.1f}→{ns:.1f}"
+                    f" dur {a.duration_sec:.1f}→{nd:.1f}"
+                )
+                action = AddVideoOverlayAction(
+                    type="ADD_VIDEO_OVERLAY",
+                    source_url=a.source_url,
+                    start_sec=ns,
+                    duration_sec=nd,
+                    position=a.position,
+                    opacity=no,
+                    mute_audio=a.mute_audio,
+                )
+
+        # ── REMOVE_OVERLAY — pass-through (frontend ignores unknown id) ───────
+        elif t == "REMOVE_OVERLAY":
+            pass  # type: RemoveOverlayAction — no clamping needed
 
         safe.append(action)
 

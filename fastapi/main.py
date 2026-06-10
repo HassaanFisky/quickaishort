@@ -353,6 +353,10 @@ from routers.ai_editor_router import router as ai_editor_router
 
 app.include_router(ai_editor_router)
 
+from routers.broll_router import router as broll_router
+
+app.include_router(broll_router)
+
 
 def get_real_ip(request: Request) -> str:
     """

@@ -1,6 +1,6 @@
 """Pydantic models for the AI Editor endpoint (/api/ai-edit).
 
-23-variant discriminated-union action set + request/response envelopes.
+30-variant discriminated-union action set + request/response envelopes.
 TypeScript mirror lives at: frontend/src/types/ai-editor.ts
 """
 
@@ -8,7 +8,35 @@ from __future__ import annotations
 
 from typing import Annotated, Any, Literal, Optional, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+# ─── B-Roll / Overlay position literal ───────────────────────────────────────
+
+_OVERLAY_POSITION = Literal[
+    "full",
+    "pip_tl",
+    "pip_tr",
+    "pip_bl",
+    "pip_br",
+    "split_left",
+    "split_right",
+]
+
+# ─── B-Roll search result ─────────────────────────────────────────────────────
+
+
+class BRollClip(BaseModel):
+    """A single B-roll candidate returned by /api/broll/search."""
+
+    model_config = ConfigDict(extra="forbid")
+    pexels_id: int
+    title: str = Field(default="", max_length=200)
+    duration_sec: float = Field(ge=0.5, le=600.0)
+    thumbnail_url: str
+    download_url: str
+    width: int = Field(ge=320)
+    height: int = Field(ge=180)
+
 
 # ─── Element data models (used inside ADD_ELEMENT) ────────────────────────────
 
@@ -218,6 +246,45 @@ class ExplainLastEditAction(BaseModel):
     confidence: Literal["high", "medium", "low"] = "medium"
 
 
+# ─── Phase 3a: B-Roll / Overlay actions ──────────────────────────────────────
+
+
+class AddBRollAction(BaseModel):
+    """AI or user dispatches a B-roll clip onto the V3 lane at a timestamp."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["ADD_BROLL"]
+    pexels_id: int
+    download_url: str
+    thumbnail_url: str
+    title: str = Field(default="", max_length=200)
+    start_sec: float = Field(ge=0, le=86400)
+    duration_sec: float = Field(ge=0.5, le=60.0)
+    position: _OVERLAY_POSITION = "pip_br"
+    opacity: float = Field(default=1.0, ge=0.1, le=1.0)
+
+
+class AddVideoOverlayAction(BaseModel):
+    """User-uploaded video overlay (PIP, split-screen) on the V2 lane."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["ADD_VIDEO_OVERLAY"]
+    source_url: str
+    start_sec: float = Field(ge=0, le=86400)
+    duration_sec: float = Field(ge=0.5, le=300.0)
+    position: _OVERLAY_POSITION = "pip_tr"
+    opacity: float = Field(default=1.0, ge=0.1, le=1.0)
+    mute_audio: bool = True
+
+
+class RemoveOverlayAction(BaseModel):
+    """Remove a single overlay or B-roll element by id."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["REMOVE_OVERLAY"]
+    element_id: str = Field(min_length=1, max_length=128)
+
+
 AiEditorAction = Annotated[
     Union[
         AddCaptionAction,
@@ -247,11 +314,14 @@ AiEditorAction = Annotated[
         GenerateHookCaptionAction,
         SuggestStylePresetAction,
         ExplainLastEditAction,
+        AddBRollAction,
+        AddVideoOverlayAction,
+        RemoveOverlayAction,
     ],
     Field(discriminator="type"),
 ]
 
-# Resolve forward reference in SuggestStylePresetAction.actions
+# Resolve forward references in SuggestStylePresetAction.actions
 SuggestStylePresetAction.model_rebuild()
 
 # ─── Request / Response envelopes ─────────────────────────────────────────────
