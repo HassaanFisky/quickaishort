@@ -521,6 +521,83 @@ export const AI_TOOL_CATALOG: AiTool[] = [
     execMode: "direct",
     buildActions: () => [{ type: "TOGGLE_VOICEOVER", payload: { enabled: true } }],
   },
+
+  // ── B-Roll ───────────────────────────────────────────────────────────────────
+  {
+    id: "broll-open-library",
+    name: "Open B-Roll library",
+    description: "Open the Pexels B-roll drawer to search and add overlay clips.",
+    category: "Elements",
+    iconName: "Film",
+    keywords: ["broll", "b-roll", "pexels", "stock", "overlay", "library", "footage"],
+    shortcut: "Cmd+B",
+    execMode: "direct",
+    buildActions: () => [{ type: "BROLL_OPEN_LIBRARY", payload: {} }],
+  },
+  {
+    id: "broll-ai-suggest",
+    name: "AI · Suggest B-roll",
+    description: "Gemini reads the transcript and suggests the best B-roll query for the current moment.",
+    category: "AI Intelligence",
+    iconName: "Search",
+    keywords: ["broll", "b-roll", "suggest", "ai", "pexels", "stock", "context"],
+    execMode: "gemini",
+    isEnabled: (s) => s.duration > 0,
+    geminiPrompt:
+      "Based on the transcript at the current playhead position, suggest the best single Pexels B-roll search query (2–4 words). Return as BROLL_AI_SUGGEST with a `query` string.",
+  },
+  {
+    id: "broll-clear-all",
+    name: "Clear all B-roll",
+    description: "Remove every B-roll clip from the V3 lane.",
+    category: "Elements",
+    iconName: "Trash2",
+    keywords: ["broll", "b-roll", "clear", "remove", "delete all", "clean"],
+    execMode: "direct",
+    buildActions: () => [{ type: "BROLL_CLEAR_ALL", payload: {} }],
+  },
+  {
+    id: "overlay-pip-tl",
+    name: "Overlay: PIP top-left",
+    description: "Place the selected overlay clip in a picture-in-picture box at the top-left.",
+    category: "Elements",
+    iconName: "LayoutPanelLeft",
+    keywords: ["overlay", "pip", "top left", "picture in picture", "position"],
+    execMode: "direct",
+    isEnabled: (s) => s.selectedElementId !== null,
+    buildActions: (s) =>
+      s.selectedElementId
+        ? [{ type: "UPDATE_ELEMENT", payload: { id: s.selectedElementId, patch: { position: "pip_tl" } } }]
+        : [],
+  },
+  {
+    id: "overlay-pip-tr",
+    name: "Overlay: PIP top-right",
+    description: "Place the selected overlay clip in a picture-in-picture box at the top-right.",
+    category: "Elements",
+    iconName: "LayoutPanelTop",
+    keywords: ["overlay", "pip", "top right", "picture in picture", "position"],
+    execMode: "direct",
+    isEnabled: (s) => s.selectedElementId !== null,
+    buildActions: (s) =>
+      s.selectedElementId
+        ? [{ type: "UPDATE_ELEMENT", payload: { id: s.selectedElementId, patch: { position: "pip_tr" } } }]
+        : [],
+  },
+  {
+    id: "overlay-split-50",
+    name: "Overlay: 50/50 split",
+    description: "Display the selected overlay as a full left/right 50% split screen.",
+    category: "Elements",
+    iconName: "Columns2",
+    keywords: ["overlay", "split", "50/50", "side by side", "half screen", "position"],
+    execMode: "direct",
+    isEnabled: (s) => s.selectedElementId !== null,
+    buildActions: (s) =>
+      s.selectedElementId
+        ? [{ type: "UPDATE_ELEMENT", payload: { id: s.selectedElementId, patch: { position: "split_left" } } }]
+        : [],
+  },
 ];
 
 export function searchTools(query: string, state: ToolExecutionContext): AiTool[] {

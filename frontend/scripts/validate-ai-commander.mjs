@@ -216,6 +216,63 @@ assert(editorPage !== null, "app/editor/page.tsx exists");
 assert(has(editorPage, "useAIPanel"), "editor page imports useAIPanel");
 assert(has(editorPage, 'setAiPanelMode("tools")'), 'Cmd+K sets aiPanelMode to tools');
 
+// ── [10] Phase 3a — Multi-track timeline + B-Roll ────────────────────────────
+console.log("\n[10] Phase 3a: B-Roll, Overlay, Multi-track timeline");
+
+// types/ai-editor.ts
+assert(has(types, '"ADD_BROLL"'), 'ADD_BROLL action type present in ai-editor.ts');
+assert(has(types, '"ADD_VIDEO_OVERLAY"'), 'ADD_VIDEO_OVERLAY action type present');
+assert(has(types, '"REMOVE_OVERLAY"'), 'REMOVE_OVERLAY action type present');
+assert(has(types, '"BROLL_OPEN_LIBRARY"'), 'BROLL_OPEN_LIBRARY action type present');
+assert(has(types, '"BROLL_CLEAR_ALL"'), 'BROLL_CLEAR_ALL action type present');
+assert(has(types, 'interface BRollClip'), 'BRollClip interface exported');
+assert(has(types, 'OverlayPosition'), 'OverlayPosition type exported');
+
+// stores/editorStore.ts
+assert(has(store, '"VIDEO_OVERLAY"'), 'editorStore has VIDEO_OVERLAY element type');
+assert(has(store, '"BROLL"'), 'editorStore has BROLL element type');
+assert(has(store, 'isBRollDrawerOpen'), 'isBRollDrawerOpen state field present');
+assert(has(store, 'setBRollDrawerOpen'), 'setBRollDrawerOpen action present');
+assert(has(store, 'case "ADD_BROLL"'), 'dispatcher handles ADD_BROLL');
+assert(has(store, 'case "BROLL_OPEN_LIBRARY"'), 'dispatcher handles BROLL_OPEN_LIBRARY');
+assert(has(store, 'case "BROLL_CLEAR_ALL"'), 'dispatcher handles BROLL_CLEAR_ALL');
+
+// lib/brollClient.ts
+const brollClient = read("lib/brollClient.ts");
+assert(brollClient !== null, 'lib/brollClient.ts exists');
+assert(has(brollClient, 'BRollSearchError'), 'exports BRollSearchError class');
+assert(has(brollClient, 'searchBRoll'), 'exports searchBRoll function');
+assert(has(brollClient, 'AbortController'), 'uses AbortController for timeout');
+assert(has(brollClient, '/api/broll/search'), 'hits /api/broll/search endpoint');
+
+// components/editor/BRollDrawer.tsx
+const brollDrawer = read("components/editor/BRollDrawer.tsx");
+assert(brollDrawer !== null, 'components/editor/BRollDrawer.tsx exists');
+assert(has(brollDrawer, 'BRollDrawer'), 'exports BRollDrawer component');
+assert(has(brollDrawer, 'isBRollDrawerOpen'), 'reads isBRollDrawerOpen from store');
+assert(has(brollDrawer, 'ADD_BROLL'), 'dispatches ADD_BROLL action');
+assert(has(brollDrawer, 'fixed bottom-0'), 'uses fixed positioning');
+
+// components/editor/MultiTrackTimeline.tsx
+const multiTrack = read("components/editor/MultiTrackTimeline.tsx");
+assert(multiTrack !== null, 'components/editor/MultiTrackTimeline.tsx exists');
+assert(has(multiTrack, 'MultiTrackTimeline'), 'exports MultiTrackTimeline component');
+assert(has(multiTrack, '"BROLL"'), 'renders BROLL lane');
+assert(has(multiTrack, '"VIDEO_OVERLAY"'), 'renders VIDEO_OVERLAY lane');
+assert(has(multiTrack, 'return null'), 'collapses when both lanes empty');
+
+// app/editor/page.tsx
+assert(has(editorPage, 'BRollDrawer'), 'editor page mounts BRollDrawer');
+assert(has(editorPage, 'setBRollDrawerOpen'), 'Cmd+B handler opens drawer');
+
+// lib/aiToolCatalog.ts
+assert(has(catalog, 'broll-open-library'), 'catalog has broll-open-library tool');
+assert(has(catalog, 'broll-ai-suggest'), 'catalog has broll-ai-suggest tool');
+assert(has(catalog, 'broll-clear-all'), 'catalog has broll-clear-all tool');
+assert(has(catalog, 'overlay-pip-tl'), 'catalog has overlay-pip-tl tool');
+assert(has(catalog, 'overlay-pip-tr'), 'catalog has overlay-pip-tr tool');
+assert(has(catalog, 'overlay-split-50'), 'catalog has overlay-split-50 tool');
+
 // ── Summary ──────────────────────────────────────────────────────────────────
 console.log(`\n${"─".repeat(50)}`);
 console.log(`Assertions: ${passed + failed} total, ${passed} passed, ${failed} failed`);

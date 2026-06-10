@@ -10,6 +10,7 @@ import { TelemetryDock } from "@/components/editor/TelemetryDock";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import { extractAudioData } from "@/lib/utils/audioExtractor";
 import { ShortcutOverlay } from "@/components/editor/ShortcutOverlay";
+import { BRollDrawer } from "@/components/editor/BRollDrawer";
 
 export default function EditorPage() {
   const analysis = useAnalysis();
@@ -154,6 +155,12 @@ export default function EditorPage() {
         useAIPanel.getState().setAiPanelMode("tools");
         return;
       }
+      // Ctrl+B — open B-Roll library drawer
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "b") {
+        e.preventDefault();
+        useEditorStore.getState().setBRollDrawerOpen(true);
+        return;
+      }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
@@ -177,6 +184,7 @@ export default function EditorPage() {
       <EditorLayout />
       <TelemetryDock />
       <ShortcutOverlay isOpen={shortcutOverlayOpen} onClose={closeOverlay} />
+      <BRollDrawer />
     </ErrorBoundary>
   );
 }

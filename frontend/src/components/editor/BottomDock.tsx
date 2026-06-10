@@ -24,6 +24,7 @@ import {
 import { cn } from "@/lib/utils";
 import { formatTime } from "@/lib/utils/formatTime";
 import { toast } from "sonner";
+import MultiTrackTimeline from "@/components/editor/MultiTrackTimeline";
 
 // ---- TimelineClip Component with Trim & Drag Support ----
 function TimelineClip({
@@ -508,6 +509,8 @@ export default function BottomDock() {
       </div>
 
       <div className="flex-1 flex flex-col gap-1.5 overflow-hidden">
+        {/* V3 / V2 lanes — render only when populated */}
+        <MultiTrackTimeline />
         <TimeScale duration={duration} />
 
         {/* Video Track Area */}
