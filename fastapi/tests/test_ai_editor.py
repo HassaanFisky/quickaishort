@@ -454,11 +454,15 @@ def test_remove_silences_validates_bounds():
 
     # min_silence_sec below minimum
     with pytest.raises(ValidationError):
-        RemoveSilencesAction(type="REMOVE_SILENCES", min_silence_sec=0.1, padding_sec=0.0)
+        RemoveSilencesAction(
+            type="REMOVE_SILENCES", min_silence_sec=0.1, padding_sec=0.0
+        )
 
     # min_silence_sec above maximum
     with pytest.raises(ValidationError):
-        RemoveSilencesAction(type="REMOVE_SILENCES", min_silence_sec=9.9, padding_sec=0.0)
+        RemoveSilencesAction(
+            type="REMOVE_SILENCES", min_silence_sec=9.9, padding_sec=0.0
+        )
 
 
 # ─── T23: sanitiser 80 % safety rail drops REMOVE_SILENCES → empty TRIM ──────

@@ -109,9 +109,17 @@ def _compute_silence_trims(
     trailing_silence = video_duration - chunks[-1].end
 
     # Only cut leading silence when it meets the threshold
-    trim_start = max(0.0, chunks[0].start - padding_sec) if leading_silence >= min_silence_sec else 0.0
+    trim_start = (
+        max(0.0, chunks[0].start - padding_sec)
+        if leading_silence >= min_silence_sec
+        else 0.0
+    )
     # Only cut trailing silence when it meets the threshold
-    trim_end = min(video_duration, chunks[-1].end + padding_sec) if trailing_silence >= min_silence_sec else video_duration
+    trim_end = (
+        min(video_duration, chunks[-1].end + padding_sec)
+        if trailing_silence >= min_silence_sec
+        else video_duration
+    )
 
     if trim_end <= trim_start:
         return []
