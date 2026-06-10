@@ -136,7 +136,7 @@ export default function AIToolConsole() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Search tools… (Cmd+K)"
+          placeholder="Search tools… (Shift+Alt+P)"
           className="w-full rounded-lg border border-[#26262b] bg-[#111113] py-1.5 pl-8 pr-8 text-xs text-[#f4f4f5] placeholder-[#71717a] outline-none focus:border-[#a855f7] transition-colors"
         />
         {query && (

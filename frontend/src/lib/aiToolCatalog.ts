@@ -530,7 +530,7 @@ export const AI_TOOL_CATALOG: AiTool[] = [
     category: "Elements",
     iconName: "Film",
     keywords: ["broll", "b-roll", "pexels", "stock", "overlay", "library", "footage"],
-    shortcut: "Cmd+B",
+    shortcut: "Shift+Alt+B",
     execMode: "direct",
     buildActions: () => [{ type: "BROLL_OPEN_LIBRARY", payload: {} }],
   },
@@ -597,6 +597,33 @@ export const AI_TOOL_CATALOG: AiTool[] = [
       s.selectedElementId
         ? [{ type: "UPDATE_ELEMENT", payload: { id: s.selectedElementId, patch: { position: "split_left" } } }]
         : [],
+  },
+
+  // ── Silence removal ─────────────────────────────────────────────────────────
+  {
+    id: "audio-remove-silences",
+    name: "AI · Remove silences",
+    description: "Gemini analyses the transcript and trims silent gaps from the video.",
+    category: "Audio",
+    iconName: "Scissors",
+    keywords: ["silence", "remove", "auto", "gaps", "trim", "speech", "ai", "clean"],
+    execMode: "gemini",
+    isEnabled: (s) => s.duration > 0,
+    geminiPrompt:
+      "Remove silent gaps from the video. Analyse the transcript to find speech segments, then return a REMOVE_SILENCES action with appropriate min_silence_sec and padding_sec values based on the content pacing.",
+  },
+  {
+    id: "audio-remove-silences-quick",
+    name: "Quick silence removal",
+    description: "Remove silent gaps at default settings — 0 credits, runs instantly.",
+    category: "Audio",
+    iconName: "Zap",
+    keywords: ["silence", "quick", "auto", "remove", "gaps", "fast", "direct"],
+    execMode: "direct",
+    isEnabled: (s) => s.duration > 0,
+    buildActions: () => [
+      { type: "REMOVE_SILENCES", payload: { min_silence_sec: 0.6, padding_sec: 0.08 } },
+    ],
   },
 ];
 

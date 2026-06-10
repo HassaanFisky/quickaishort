@@ -187,7 +187,7 @@ export function BRollDrawer() {
 
           {/* Footer */}
           <div className="px-4 py-1.5 border-t border-border text-[10px] text-muted-foreground shrink-0">
-            Esc to close · Click a clip to add at playhead · All clips royalty-free from Pexels
+            Esc / Shift+Alt+B to close · Click a clip to add at playhead · All clips royalty-free from Pexels
           </div>
         </motion.aside>
       )}

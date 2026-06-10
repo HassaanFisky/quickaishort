@@ -11,6 +11,8 @@ import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import { extractAudioData } from "@/lib/utils/audioExtractor";
 import { ShortcutOverlay } from "@/components/editor/ShortcutOverlay";
 import { BRollDrawer } from "@/components/editor/BRollDrawer";
+import { FloatingChatLauncher } from "@/components/editor/FloatingChatLauncher";
+import { matchShortcut } from "@/lib/shortcuts";
 
 export default function EditorPage() {
   const analysis = useAnalysis();
@@ -147,18 +149,24 @@ export default function EditorPage() {
         setShortcutOverlayOpen((v) => !v);
         return;
       }
-      // Ctrl+K — open AI panel and switch to Tools tab
-      if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+      // Shift+Alt+P (or Cmd+Shift+P on Mac) — open AI panel Tools tab
+      if (matchShortcut(e, "toggleCommandPalette")) {
         e.preventDefault();
         useEditorStore.getState().setAIPanelOpen(true);
         useAIPanel.getState().setOpen(true);
         useAIPanel.getState().setAiPanelMode("tools");
         return;
       }
-      // Ctrl+B — open B-Roll library drawer
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "b") {
+      // Shift+Alt+B (or Cmd+Shift+B on Mac) — open B-roll library drawer
+      if (matchShortcut(e, "toggleBRollDrawer")) {
         e.preventDefault();
         useEditorStore.getState().setBRollDrawerOpen(true);
+        return;
+      }
+      // Shift+Alt+A (or Cmd+Shift+A on Mac) — toggle floating AI chat
+      if (matchShortcut(e, "toggleFloatingChat")) {
+        e.preventDefault();
+        useAIPanel.getState().toggleFloatingChat();
         return;
       }
     };
@@ -185,6 +193,7 @@ export default function EditorPage() {
       <TelemetryDock />
       <ShortcutOverlay isOpen={shortcutOverlayOpen} onClose={closeOverlay} />
       <BRollDrawer />
+      <FloatingChatLauncher />
     </ErrorBoundary>
   );
 }
