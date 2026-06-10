@@ -12,6 +12,7 @@ import {
   Undo2, Redo2, ChevronDown, ChevronUp,
 } from "lucide-react";
 import AIToolConsole from "@/components/editor/AIToolConsole";
+import { ChatTranscript } from "@/components/editor/ChatTranscript";
 
 const NO_VIDEO_SUGGESTIONS = [
   "What makes a video go viral?",
@@ -41,7 +42,6 @@ export function AICopilot() {
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
   const [retryText, setRetryText] = useState<string | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   // Edit state
   const [editInput, setEditInput] = useState("");
@@ -49,10 +49,6 @@ export function AICopilot() {
   const editInputRef = useRef<HTMLTextAreaElement | null>(null);
 
   const chatSuggestions = videoContext ? WITH_VIDEO_SUGGESTIONS : NO_VIDEO_SUGGESTIONS;
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
 
   // ── Chat send ──────────────────────────────────────────────────────────────
   async function sendChat(text: string) {
@@ -185,38 +181,14 @@ export function AICopilot() {
           {/* ── CHAT MODE ─────────────────────────────────────────────────── */}
           {aiPanelMode === "chat" && (
             <>
-              <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3 min-h-0 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-foreground/10 [&::-webkit-scrollbar-thumb]:rounded-full">
-                {messages.length === 0 && (
-                  <div className="flex flex-col gap-2">
-                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground pb-1">Quick Actions</p>
-                    {chatSuggestions.map((s) => (
-                      <button key={s} onClick={() => sendChat(s)} className="w-full text-left text-xs px-3 py-2 rounded-lg border border-border hover:border-primary/30 hover:bg-primary/8 text-fg-muted hover:text-foreground transition-all duration-150">{s}</button>
-                    ))}
-                  </div>
-                )}
-                {messages.map((m, i) => (
-                  <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-                    <div className={`max-w-[85%] text-xs px-3 py-2 rounded-xl leading-relaxed ${m.role === "user" ? "bg-primary text-white" : "bg-muted text-foreground"}`}>
-                      {m.content}
-                    </div>
-                  </div>
-                ))}
-                {chatLoading && (
-                  <div className="flex justify-start">
-                    <div className="bg-muted rounded-xl px-3 py-2">
-                      <span className="flex gap-1">
-                        {[0, 1, 2].map((i) => <span key={i} className="h-1.5 w-1.5 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />)}
-                      </span>
-                    </div>
-                  </div>
-                )}
-                {retryText && !chatLoading && (
-                  <div className="flex justify-end">
-                    <button onClick={() => sendChat(retryText)} className="text-xs px-3 py-1.5 rounded-lg border border-primary/30 text-primary hover:bg-primary/10 transition-all duration-150 font-medium">Try again ↺</button>
-                  </div>
-                )}
-                <div ref={messagesEndRef} />
-              </div>
+              <ChatTranscript
+                messages={messages}
+                loading={chatLoading}
+                retryText={retryText}
+                onRetry={sendChat}
+                suggestions={chatSuggestions}
+                onSuggestion={sendChat}
+              />
               <form onSubmit={(e) => { e.preventDefault(); sendChat(chatInput); }} className="border-t border-border p-3 flex gap-2 shrink-0">
                 <input value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder={videoContext ? "Ask about this video…" : "Ask anything…"} className="flex-1 text-xs rounded-lg px-3 py-2 bg-muted border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/40 transition-colors" />
                 <button type="submit" disabled={!chatInput.trim() || chatLoading} className="px-2.5 py-2 rounded-lg bg-primary text-white disabled:opacity-30 disabled:cursor-not-allowed hover:bg-primary/90 transition-colors"><Send size={14} /></button>
