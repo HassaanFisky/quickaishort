@@ -11,6 +11,7 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, "..");
+const repoRoot = path.resolve(__dirname, "../..");
 const src = path.join(root, "src");
 
 let passed = 0;
@@ -36,7 +37,7 @@ function read(rel) {
 
 function readRoot(rel) {
   try {
-    return fs.readFileSync(path.join(root, rel), "utf8");
+    return fs.readFileSync(path.join(repoRoot, rel), "utf8");
   } catch {
     return null;
   }
@@ -272,6 +273,64 @@ assert(has(catalog, 'broll-clear-all'), 'catalog has broll-clear-all tool');
 assert(has(catalog, 'overlay-pip-tl'), 'catalog has overlay-pip-tl tool');
 assert(has(catalog, 'overlay-pip-tr'), 'catalog has overlay-pip-tr tool');
 assert(has(catalog, 'overlay-split-50'), 'catalog has overlay-split-50 tool');
+
+// ── [10b] Chrome-safe shortcut audit ─────────────────────────────────────────
+console.log("\n[10b] Chrome-safe shortcut audit (Slice 0)");
+
+const shortcuts = read("lib/shortcuts.ts");
+assert(shortcuts !== null, 'lib/shortcuts.ts exists');
+assert(has(shortcuts, 'export const SHORTCUTS'), 'exports SHORTCUTS map');
+assert(has(shortcuts, 'export function isChromeReserved'), 'exports isChromeReserved function');
+assert(has(shortcuts, '"Ctrl+K"'), 'reserved set includes Ctrl+K');
+assert(has(shortcuts, '"Ctrl+J"'), 'reserved set includes Ctrl+J');
+assert(has(shortcuts, '"Ctrl+T"'), 'reserved set includes Ctrl+T');
+assert(has(catalog, 'Shift+Alt+B'), 'broll-open-library shortcut updated to Shift+Alt+B');
+assert(has(catalog, 'Shift+Alt+P') || has(editorPage, 'toggleCommandPalette'), 'command palette uses Shift+Alt+P');
+
+// ── [11] Floating chat overlay (Slice A) ─────────────────────────────────────
+console.log("\n[11] Floating chat overlay (Slice A)");
+
+// panelStore already declared in [10b]
+assert(has(panelStore, 'isFloatingChatOpen'), 'isFloatingChatOpen state in aiPanelStore');
+assert(has(panelStore, 'toggleFloatingChat'), 'toggleFloatingChat action in aiPanelStore');
+assert(has(panelStore, 'setFloatingChatOpen'), 'setFloatingChatOpen action in aiPanelStore');
+
+const launcher = read("components/editor/FloatingChatLauncher.tsx");
+assert(launcher !== null, 'components/editor/FloatingChatLauncher.tsx exists');
+assert(has(launcher, "from \"@/lib/shortcuts\"") || has(launcher, "from '@/lib/shortcuts'"), 'FloatingChatLauncher imports from shortcuts.ts');
+assert(has(launcher, '"toggleFloatingChat"') || has(launcher, "'toggleFloatingChat'"), 'FloatingChatLauncher uses toggleFloatingChat shortcut id');
+assert(has(launcher, 'Escape') && has(launcher, 'isContentEditable'), 'Esc handler checks input focus before closing');
+assert(has(launcher, 'prefers-reduced-motion'), 'prefers-reduced-motion branch present');
+
+const persist = read("lib/transcriptPersistence.ts");
+assert(persist !== null, 'lib/transcriptPersistence.ts exists');
+assert(has(persist, '"quickeditor.v1"'), 'IndexedDB database name quickeditor.v1 present');
+assert(has(persist, '"agent_transcripts"'), 'IndexedDB store name agent_transcripts present');
+assert(has(persist, '50'), 'MAX_TURNS = 50 cap present in transcriptPersistence.ts');
+
+assert(has(editorPage, 'FloatingChatLauncher'), 'FloatingChatLauncher mounted in editor/page.tsx');
+
+const chatTranscript = read("components/editor/ChatTranscript.tsx");
+assert(chatTranscript !== null, 'components/editor/ChatTranscript.tsx exists');
+// copilot already declared above
+assert(has(copilot, 'ChatTranscript'), 'AICopilot imports ChatTranscript');
+assert(has(launcher, 'ChatTranscript'), 'FloatingChatLauncher imports ChatTranscript (shared transcript)');
+
+// ── [12] Auto-remove silences (Slice B) ──────────────────────────────────────
+console.log("\n[12] Auto-remove silences (Slice B)");
+
+const pyModels = readRoot("fastapi/models/ai_editor.py");
+assert(has(pyModels, 'REMOVE_SILENCES'), 'REMOVE_SILENCES action in fastapi/models/ai_editor.py');
+assert(has(pyModels, 'min_silence_sec'), 'min_silence_sec field in RemoveSilencesAction');
+assert(has(pyModels, '0.6'), 'default min_silence_sec = 0.6 present');
+assert(has(pyModels, '0.08'), 'default padding_sec = 0.08 present');
+
+const pySanitiser = readRoot("fastapi/services/ai_editor_sanitiser.py");
+assert(has(pySanitiser, 'REMOVE_SILENCES'), 'sanitiser branch handles REMOVE_SILENCES');
+
+assert(has(types, '"REMOVE_SILENCES"'), 'REMOVE_SILENCES in frontend ai-editor.ts union');
+assert(has(catalog, 'audio-remove-silences'), 'catalog has audio-remove-silences tool');
+assert(has(catalog, 'audio-remove-silences-quick'), 'catalog has audio-remove-silences-quick tool');
 
 // ── Summary ──────────────────────────────────────────────────────────────────
 console.log(`\n${"─".repeat(50)}`);

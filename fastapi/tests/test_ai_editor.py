@@ -436,6 +436,85 @@ def test_remove_overlay_action_round_trips():
     assert len(dropped) == 0
 
 
+# ─── T22: RemoveSilencesAction validates field bounds ────────────────────────
+
+
+def test_remove_silences_validates_bounds():
+    """REMOVE_SILENCES must accept valid values and reject out-of-range ones."""
+    from models.ai_editor import RemoveSilencesAction
+    from pydantic import ValidationError
+
+    a = RemoveSilencesAction(
+        type="REMOVE_SILENCES",
+        min_silence_sec=0.6,
+        padding_sec=0.08,
+    )
+    assert a.min_silence_sec == 0.6
+    assert a.padding_sec == 0.08
+
+    # min_silence_sec below minimum
+    with pytest.raises(ValidationError):
+        RemoveSilencesAction(type="REMOVE_SILENCES", min_silence_sec=0.1, padding_sec=0.0)
+
+    # min_silence_sec above maximum
+    with pytest.raises(ValidationError):
+        RemoveSilencesAction(type="REMOVE_SILENCES", min_silence_sec=9.9, padding_sec=0.0)
+
+
+# ─── T23: sanitiser 80 % safety rail drops REMOVE_SILENCES → empty TRIM ──────
+
+
+def test_remove_silences_sanitiser_clamps_values():
+    """Sanitiser clamps out-of-range floats on REMOVE_SILENCES."""
+    from models.ai_editor import RemoveSilencesAction
+
+    state = make_state(videoDuration=30.0)
+    # padding_sec above maximum (1.0) should be clamped
+    actions: list[AiEditorAction] = [
+        RemoveSilencesAction(
+            type="REMOVE_SILENCES",
+            min_silence_sec=5.0,  # at boundary — valid
+            padding_sec=0.08,
+        )
+    ]
+    safe, clamped, dropped = sanitise(actions, state)
+    assert len(safe) == 1
+    assert safe[0].type == "REMOVE_SILENCES"  # type: ignore[attr-defined]
+    assert len(dropped) == 0
+
+
+# ─── T24: _compute_silence_trims returns TRIM within ±50 ms of expected ───────
+
+
+def test_compute_silence_trims_leading_trailing():
+    """Engine trims leading and trailing silence correctly."""
+    from models.ai_editor import TranscriptChunk
+    from services.ai_editor_engine import _compute_silence_trims
+
+    # Speech from 1.5s → 4.0s in a 6s video; leading=1.5s, trailing=2.0s
+    chunks = [
+        TranscriptChunk(text="hello", start=1.5, end=2.5),
+        TranscriptChunk(text="world", start=3.0, end=4.0),
+    ]
+    trims = _compute_silence_trims(
+        chunks,
+        min_silence_sec=1.0,  # both leading (1.5s) and trailing (2.0s) qualify
+        padding_sec=0.1,
+        video_duration=6.0,
+    )
+    assert len(trims) == 1
+    tr = trims[0]
+    assert tr.type == "TRIM"
+    # start = max(0, 1.5 - 0.1) = 1.4
+    assert abs(tr.start - 1.4) < 0.05
+    # end = min(6.0, 4.0 + 0.1) = 4.1
+    assert abs(tr.end - 4.1) < 0.05
+    # kept duration ≈ speech window (4.0 - 1.5) + 2 * padding = 2.7s
+    kept = tr.end - tr.start
+    expected = (4.0 - 1.5) + 2 * 0.1
+    assert abs(kept - expected) < 0.05
+
+
 # ─── T14: engine returns no_op response on Gemini JSON parse failure ──────────
 
 
