@@ -150,6 +150,12 @@ export interface BRollClearAllAction {
   type: "BROLL_CLEAR_ALL";
 }
 
+export interface RemoveSilencesAction {
+  type: "REMOVE_SILENCES";
+  min_silence_sec: number;
+  padding_sec: number;
+}
+
 export type AiEditorAction =
   | AddCaptionAction
   | RemoveCaptionAction
@@ -182,7 +188,8 @@ export type AiEditorAction =
   | AddVideoOverlayAction
   | RemoveOverlayAction
   | BRollOpenLibraryAction
-  | BRollClearAllAction;
+  | BRollClearAllAction
+  | RemoveSilencesAction;
 
 export type AiEditorActionType = AiEditorAction["type"];
 

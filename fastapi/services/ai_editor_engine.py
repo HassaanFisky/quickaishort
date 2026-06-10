@@ -16,6 +16,8 @@ from models.ai_editor import (
     AIEditorResponse,
     AiEditorAction,
     TranscriptChunk,
+    TrimAction,
+    RemoveSilencesAction,
 )
 from services.gemini_client import DEFAULT_MODEL, call_gemini_text
 from services.ai_editor_sanitiser import sanitise
@@ -84,6 +86,37 @@ RULES:
 4. Never return partial JSON. Never add prose outside the JSON.
 5. If the request is impossible given current state, use "no_op" and explain.
 """
+
+
+def _compute_silence_trims(
+    transcript: list[TranscriptChunk],
+    min_silence_sec: float,
+    padding_sec: float,
+    video_duration: float,
+) -> list[TrimAction]:
+    """Return TRIM actions covering the speech window after removing leading/trailing silence.
+
+    Uses the gap between transcript chunk boundaries to detect silence.
+    Returns a single TRIM from (first_speech_start - padding) to
+    (last_speech_end + padding), clamped to [0, video_duration].
+    The 80 % safety rail is enforced by the caller.
+    """
+    if not transcript or video_duration <= 0:
+        return []
+
+    chunks = sorted(transcript, key=lambda c: c.start)
+    leading_silence = chunks[0].start
+    trailing_silence = video_duration - chunks[-1].end
+
+    # Only cut leading silence when it meets the threshold
+    trim_start = max(0.0, chunks[0].start - padding_sec) if leading_silence >= min_silence_sec else 0.0
+    # Only cut trailing silence when it meets the threshold
+    trim_end = min(video_duration, chunks[-1].end + padding_sec) if trailing_silence >= min_silence_sec else video_duration
+
+    if trim_end <= trim_start:
+        return []
+
+    return [TrimAction(type="TRIM", start=trim_start, end=trim_end)]
 
 
 def _build_context(
@@ -191,6 +224,26 @@ async def run_ai_editor(
 
     # Clamp + sanitise
     safe_actions, clamped_report, dropped_clamp = sanitise(valid_actions, state)
+
+    # Expand REMOVE_SILENCES → TRIM actions using the request transcript
+    expanded: list[AiEditorAction] = []
+    for act in safe_actions:
+        if act.type == "REMOVE_SILENCES":
+            rs = act  # type: RemoveSilencesAction
+            trims = _compute_silence_trims(
+                transcript, rs.min_silence_sec, rs.padding_sec, state.videoDuration
+            )
+            # 80 % safety rail: drop if kept duration < 20 % of video
+            for tr in trims:
+                if (tr.end - tr.start) >= state.videoDuration * 0.2:
+                    expanded.append(tr)
+                else:
+                    dropped_clamp.append(
+                        "REMOVE_SILENCES dropped — would remove > 80 % of video duration"
+                    )
+        else:
+            expanded.append(act)
+    safe_actions = expanded
 
     # Defensive: clarification_needed must have empty actions
     if status == "clarification_needed":

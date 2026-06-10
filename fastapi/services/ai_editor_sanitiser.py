@@ -40,6 +40,7 @@ from models.ai_editor import (
     AddBRollAction,
     AddVideoOverlayAction,
     RemoveOverlayAction,
+    RemoveSilencesAction,
 )
 
 logger = logging.getLogger(__name__)
@@ -347,6 +348,23 @@ def sanitise(
         # ── REMOVE_OVERLAY — pass-through (frontend ignores unknown id) ───────
         elif t == "REMOVE_OVERLAY":
             pass  # type: RemoveOverlayAction — no clamping needed
+
+        # ── REMOVE_SILENCES — clamp floats, enforce safety rail ───────────────
+        elif t == "REMOVE_SILENCES":
+            a = action  # type: RemoveSilencesAction
+            nm = _clamp(a.min_silence_sec, 0.2, 5.0)
+            np_ = _clamp(a.padding_sec, 0.0, 1.0)
+            changed = nm != a.min_silence_sec or np_ != a.padding_sec
+            if changed:
+                clamped.append(
+                    f"REMOVE_SILENCES min_silence_sec {a.min_silence_sec:.2f}→{nm:.2f}"
+                    f" padding_sec {a.padding_sec:.2f}→{np_:.2f}"
+                )
+                action = RemoveSilencesAction(
+                    type="REMOVE_SILENCES",
+                    min_silence_sec=nm,
+                    padding_sec=np_,
+                )
 
         safe.append(action)
 

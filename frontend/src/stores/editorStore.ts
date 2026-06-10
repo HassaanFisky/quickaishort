@@ -88,7 +88,8 @@ export interface EditorAction {
     | "ADD_VIDEO_OVERLAY"     // { source_url, start_sec, duration_sec, position, opacity, mute_audio }
     | "REMOVE_OVERLAY"        // { element_id }
     | "BROLL_OPEN_LIBRARY"    // {} — UI-only: opens the B-roll drawer
-    | "BROLL_CLEAR_ALL";      // {} — removes all BROLL elements
+    | "BROLL_CLEAR_ALL"       // {} — removes all BROLL elements
+    | "REMOVE_SILENCES";      // { min_silence_sec, padding_sec } — trims leading/trailing silence
   payload: Record<string, unknown>;
 }
 
@@ -1008,6 +1009,20 @@ export const useEditorStore = create<EditorState>()(
                 .filter((el) => el.type === "BROLL")
                 .map((el) => el.id);
               brollIds.forEach((id) => store.removeElement(id));
+              break;
+            }
+            case "REMOVE_SILENCES": {
+              const p = action.payload;
+              const paddingSec = (p.padding_sec as number) ?? 0.08;
+              const { transcript, duration } = store;
+              if (!transcript?.chunks?.length || duration === 0) break;
+              const chunks = [...transcript.chunks].sort((a, b) => a.start - b.start);
+              const trimStart = Math.max(0, chunks[0].start - paddingSec);
+              const trimEnd = Math.min(duration, chunks[chunks.length - 1].end + paddingSec);
+              // 80 % safety rail — don't remove more than 80 % of the video
+              if ((trimEnd - trimStart) < duration * 0.2) break;
+              store.setTrimMarker({ startTime: trimStart, endTime: trimEnd });
+              if (videoEl) videoEl.currentTime = trimStart;
               break;
             }
           }

@@ -285,6 +285,15 @@ class RemoveOverlayAction(BaseModel):
     element_id: str = Field(min_length=1, max_length=128)
 
 
+class RemoveSilencesAction(BaseModel):
+    """Trim silent gaps from the video using transcript timing data."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["REMOVE_SILENCES"]
+    min_silence_sec: float = Field(default=0.6, ge=0.2, le=5.0)
+    padding_sec: float = Field(default=0.08, ge=0.0, le=1.0)
+
+
 AiEditorAction = Annotated[
     Union[
         AddCaptionAction,
@@ -317,6 +326,7 @@ AiEditorAction = Annotated[
         AddBRollAction,
         AddVideoOverlayAction,
         RemoveOverlayAction,
+        RemoveSilencesAction,
     ],
     Field(discriminator="type"),
 ]
