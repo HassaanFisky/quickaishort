@@ -175,6 +175,47 @@ assert(canvas !== null, "file exists");
 assert(has(canvas, "executionOverlay"), "reads executionOverlay");
 assert(has(canvas, "InteractiveCanvas"), "mounts InteractiveCanvas");
 
+// ── [9] AI Tool Console ────────────────────────────────────────────────────────
+console.log("\n[9] AI Tool Console (Pillar 3.8 B)");
+
+const catalog = read("lib/aiToolCatalog.ts");
+assert(catalog !== null, "lib/aiToolCatalog.ts exists");
+assert(has(catalog, "AI_TOOL_CATALOG"), "exports AI_TOOL_CATALOG");
+assert(has(catalog, "searchTools"), "exports searchTools helper");
+assert(has(catalog, "ToolExecutionContext"), "defines ToolExecutionContext interface");
+assert(has(catalog, "ToolExecutionMode"), "defines ToolExecutionMode type");
+assert(has(catalog, "execMode"), "catalog entries have execMode field");
+assert(has(catalog, "DETECT_VIRAL_MOMENTS"), "covers DETECT_VIRAL_MOMENTS tool");
+assert(has(catalog, "GENERATE_HOOK_CAPTION"), "covers GENERATE_HOOK_CAPTION tool");
+assert(has(catalog, "SUGGEST_STYLE_PRESET"), "covers SUGGEST_STYLE_PRESET tool");
+assert(has(catalog, "EXPLAIN_LAST_EDIT"), "covers EXPLAIN_LAST_EDIT tool");
+
+const aiCard = read("components/editor/AIToolCard.tsx");
+assert(aiCard !== null, "components/editor/AIToolCard.tsx exists");
+assert(has(aiCard, "AIToolCard"), "exports AIToolCard component");
+assert(has(aiCard, "whileTap"), "has framer-motion tap animation");
+assert(has(aiCard, "aria-label"), "has aria-label for accessibility");
+
+const aiConsole = read("components/editor/AIToolConsole.tsx");
+assert(aiConsole !== null, "components/editor/AIToolConsole.tsx exists");
+assert(has(aiConsole, "searchTools"), "uses searchTools for palette filtering");
+assert(has(aiConsole, "ArrowDown"), "has ArrowDown keyboard navigation");
+assert(has(aiConsole, "ArrowUp"), "has ArrowUp keyboard navigation");
+assert(has(aiConsole, "dispatchAIActions"), "calls dispatchAIActions for direct tools");
+assert(has(aiConsole, "commander.execute"), "routes gemini tools via commander.execute");
+
+const panelStore = read("stores/aiPanelStore.ts");
+assert(panelStore !== null, "stores/aiPanelStore.ts exists");
+assert(has(panelStore, "'tools'"), "aiPanelStore mode union includes 'tools'");
+
+assert(has(copilot, "AIToolConsole"), "AICopilot imports AIToolConsole");
+assert(has(copilot, '"tools"'), 'AICopilot renders tools tab');
+
+const editorPage = read("app/editor/page.tsx");
+assert(editorPage !== null, "app/editor/page.tsx exists");
+assert(has(editorPage, "useAIPanel"), "editor page imports useAIPanel");
+assert(has(editorPage, 'setAiPanelMode("tools")'), 'Cmd+K sets aiPanelMode to tools');
+
 // ── Summary ──────────────────────────────────────────────────────────────────
 console.log(`\n${"─".repeat(50)}`);
 console.log(`Assertions: ${passed + failed} total, ${passed} passed, ${failed} failed`);

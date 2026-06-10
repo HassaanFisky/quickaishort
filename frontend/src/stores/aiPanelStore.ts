@@ -18,8 +18,8 @@ type AIPanelState = {
   clearMessages: () => void;
 
   // Pillar-3 additions
-  aiPanelMode: 'chat' | 'edit';
-  setAiPanelMode: (mode: 'chat' | 'edit') => void;
+  aiPanelMode: 'chat' | 'edit' | 'tools';
+  setAiPanelMode: (mode: 'chat' | 'edit' | 'tools') => void;
   executionOverlay: boolean;
   executionOverlayLabel: string | undefined;
   setExecutionOverlay: (active: boolean, label?: string) => void;

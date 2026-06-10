@@ -4,6 +4,7 @@ import EditorLayout from "@/components/editor/EditorLayout";
 import { useAnalysis } from "@/hooks/useAnalysis";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useEditorStore } from "@/stores/editorStore";
+import { useAIPanel } from "@/stores/aiPanelStore";
 import { useShortcutsStore, matchEvent } from "@/stores/shortcutsStore";
 import { TelemetryDock } from "@/components/editor/TelemetryDock";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
@@ -145,10 +146,12 @@ export default function EditorPage() {
         setShortcutOverlayOpen((v) => !v);
         return;
       }
-      // Ctrl+K — open Gemini AI Editor panel
+      // Ctrl+K — open AI panel and switch to Tools tab
       if ((e.ctrlKey || e.metaKey) && e.key === "k") {
         e.preventDefault();
         useEditorStore.getState().setAIPanelOpen(true);
+        useAIPanel.getState().setOpen(true);
+        useAIPanel.getState().setAiPanelMode("tools");
         return;
       }
     };

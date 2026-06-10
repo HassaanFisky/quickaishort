@@ -11,6 +11,7 @@ import {
   Sparkles, X, Send, MessageSquareQuote,
   Undo2, Redo2, ChevronDown, ChevronUp,
 } from "lucide-react";
+import AIToolConsole from "@/components/editor/AIToolConsole";
 
 const NO_VIDEO_SUGGESTIONS = [
   "What makes a video go viral?",
@@ -157,7 +158,7 @@ export function AICopilot() {
 
           {/* Mode tabs */}
           <div className="flex border-b border-border shrink-0">
-            {(["chat", "edit"] as const).map((mode) => (
+            {(["chat", "edit", "tools"] as const).map((mode) => (
               <button
                 key={mode}
                 onClick={() => setAiPanelMode(mode)}
@@ -167,7 +168,7 @@ export function AICopilot() {
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                {mode === "chat" ? "Chat" : "Edit"}
+                {mode === "chat" ? "Chat" : mode === "edit" ? "Edit" : "Tools"}
               </button>
             ))}
           </div>
@@ -221,6 +222,13 @@ export function AICopilot() {
                 <button type="submit" disabled={!chatInput.trim() || chatLoading} className="px-2.5 py-2 rounded-lg bg-primary text-white disabled:opacity-30 disabled:cursor-not-allowed hover:bg-primary/90 transition-colors"><Send size={14} /></button>
               </form>
             </>
+          )}
+
+          {/* ── TOOLS MODE ────────────────────────────────────────────────── */}
+          {aiPanelMode === "tools" && (
+            <div className="flex-1 min-h-0 overflow-hidden">
+              <AIToolConsole />
+            </div>
           )}
 
           {/* ── EDIT MODE ─────────────────────────────────────────────────── */}
