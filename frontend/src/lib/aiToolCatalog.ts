@@ -15,7 +15,8 @@ export type ToolCategory =
   | "Elements"
   | "Playback"
   | "Export"
-  | "Color";
+  | "Color"
+  | "Motion";
 
 export type ToolExecutionMode = "direct" | "gemini";
 
@@ -1003,6 +1004,49 @@ export const AI_TOOL_CATALOG: AiTool[] = [
     isEnabled: (s) => !!s.selectedClipId,
     buildActions: (s) => [{
       type: "CLEAR_MASKS",
+      payload: { clip_id: s.selectedClipId ?? "" },
+    }],
+  },
+  // ─── Phase 7: Motion keyframes ──────────────────────────────────────────────
+  {
+    id: "set-keyframe",
+    name: "Keyframe · Set",
+    description: "Set a keyframe on an animatable property at the given time.",
+    category: "Motion",
+    iconName: "Diamond",
+    keywords: ["keyframe", "animate", "motion", "set", "property"],
+    execMode: "direct",
+    isEnabled: (s) => !!s.selectedClipId,
+    buildActions: (s) => [{
+      type: "SET_KEYFRAME",
+      payload: { clip_id: s.selectedClipId ?? "", property: "x", time_ms: 0, value: 0 },
+    }],
+  },
+  {
+    id: "delete-keyframe",
+    name: "Keyframe · Delete",
+    description: "Delete a specific keyframe by ID from a property track.",
+    category: "Motion",
+    iconName: "DiamondMinus",
+    keywords: ["keyframe", "delete", "remove", "property"],
+    execMode: "direct",
+    isEnabled: (s) => !!s.selectedClipId,
+    buildActions: (s) => [{
+      type: "DELETE_KEYFRAME",
+      payload: { clip_id: s.selectedClipId ?? "", property: "x", keyframe_id: "" },
+    }],
+  },
+  {
+    id: "clear-keyframes",
+    name: "Keyframe · Clear All",
+    description: "Remove all motion keyframes from the selected clip.",
+    category: "Motion",
+    iconName: "LayoutList",
+    keywords: ["keyframe", "clear", "remove", "reset", "motion"],
+    execMode: "direct",
+    isEnabled: (s) => !!s.selectedClipId,
+    buildActions: (s) => [{
+      type: "CLEAR_KEYFRAMES",
       payload: { clip_id: s.selectedClipId ?? "" },
     }],
   },

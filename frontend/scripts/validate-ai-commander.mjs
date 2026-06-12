@@ -593,6 +593,39 @@ assert(has(catalogMask, "mask-rect"),       "mask-rect in aiToolCatalog");
 assert(has(catalogMask, "mask-ai-person"),  "mask-ai-person in aiToolCatalog");
 assert(has(catalogMask, "mask-clear"),      "mask-clear in aiToolCatalog");
 
+// ── [22] Phase 7 — Motion keyframes ──────────────────────────────────────────
+console.log("\n[22] Phase 7 Motion keyframes");
+
+const kfTypes = read("lib/motion/keyframeTypes.ts");
+assert(kfTypes !== null, "lib/motion/keyframeTypes.ts exists");
+assert(has(kfTypes, "Keyframe"),           "Keyframe interface in keyframeTypes.ts");
+assert(has(kfTypes, "PropertyTrack"),      "PropertyTrack interface in keyframeTypes.ts");
+assert(has(kfTypes, "MotionPath"),         "MotionPath interface in keyframeTypes.ts");
+assert(has(kfTypes, "interpolateTrack"),   "interpolateTrack exported from keyframeTypes.ts");
+assert(has(kfTypes, "solveCubicBezier"),   "solveCubicBezier exported from keyframeTypes.ts");
+
+const kfStore = read("lib/motion/keyframeStore.ts");
+assert(kfStore !== null, "lib/motion/keyframeStore.ts exists");
+assert(has(kfStore, "upsertKeyframe"),     "upsertKeyframe exported from keyframeStore.ts");
+assert(has(kfStore, "deleteKeyframe"),     "deleteKeyframe exported from keyframeStore.ts");
+assert(has(kfStore, "clearAllKeyframes"),  "clearAllKeyframes exported from keyframeStore.ts");
+assert(has(kfStore, "serializeMotionPaths"), "serializeMotionPaths exported from keyframeStore.ts");
+
+const pyModels22 = readRoot("fastapi/models/ai_editor.py");
+assert(has(pyModels22, "SET_KEYFRAME"),    "SET_KEYFRAME in ai_editor.py");
+assert(has(pyModels22, "DELETE_KEYFRAME"), "DELETE_KEYFRAME in ai_editor.py");
+assert(has(pyModels22, "CLEAR_KEYFRAMES"), "CLEAR_KEYFRAMES in ai_editor.py");
+
+assert(has(types, '"SET_KEYFRAME"'),       "SET_KEYFRAME in ai-editor.ts");
+assert(has(types, '"DELETE_KEYFRAME"'),    "DELETE_KEYFRAME in ai-editor.ts");
+assert(has(types, '"CLEAR_KEYFRAMES"'),    "CLEAR_KEYFRAMES in ai-editor.ts");
+
+const catalogKf = read("lib/aiToolCatalog.ts");
+assert(has(catalogKf, "set-keyframe"),     "set-keyframe in aiToolCatalog");
+assert(has(catalogKf, "delete-keyframe"),  "delete-keyframe in aiToolCatalog");
+assert(has(catalogKf, "clear-keyframes"),  "clear-keyframes in aiToolCatalog");
+assert(has(catalogKf, '"Motion"'),         "Motion category in aiToolCatalog");
+
 // ── Summary ──────────────────────────────────────────────────────────────────
 console.log(`\n${"─".repeat(50)}`);
 console.log(`Assertions: ${passed + failed} total, ${passed} passed, ${failed} failed`);

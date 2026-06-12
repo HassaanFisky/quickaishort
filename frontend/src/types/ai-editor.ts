@@ -262,7 +262,14 @@ export type AiEditorAction =
   | AddEllipseMaskAction
   | AddBezierMaskAction
   | AddAiPersonMaskAction
-  | ClearMasksAction;
+  | ClearMasksAction
+  | SetKeyframeAction
+  | DeleteKeyframeAction
+  | ClearKeyframesAction;
+
+export interface SetKeyframeAction    { type: "SET_KEYFRAME";     clip_id: string; property: string; time_ms: number; value: number; easing?: string }
+export interface DeleteKeyframeAction { type: "DELETE_KEYFRAME";  clip_id: string; property: string; keyframe_id: string }
+export interface ClearKeyframesAction { type: "CLEAR_KEYFRAMES";  clip_id: string }
 
 export interface SetClipGainAction    { type: "SET_CLIP_GAIN";   clip_id: string; gain_db: number }
 export interface SetMasterGainAction  { type: "SET_MASTER_GAIN"; gain_db: number }

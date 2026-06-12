@@ -1050,3 +1050,53 @@ def test_clear_masks_passthrough():  # T62
     safe, clamped, dropped = sanitise([action], state)
     assert len(safe) == 1
     assert dropped == []
+
+
+def test_set_keyframe_passthrough():  # T63
+    from models.ai_editor import SetKeyframeAction
+
+    action = SetKeyframeAction(
+        type="SET_KEYFRAME",
+        clip_id="c1",
+        property="x",
+        time_ms=1000,
+        value=0.5,
+        easing="ease-in-out",
+    )
+    state = make_state(videoDuration=30.0)
+    safe, clamped, dropped = sanitise([action], state)
+    assert len(safe) == 1
+    assert dropped == []
+    assert safe[0].time_ms == 1000
+
+
+def test_set_keyframe_clamps_time():  # T64
+    from models.ai_editor import SetKeyframeAction
+
+    action = SetKeyframeAction(
+        type="SET_KEYFRAME",
+        clip_id="c1",
+        property="scale",
+        time_ms=99999,
+        value=1.0,
+    )
+    state = make_state(videoDuration=10.0)
+    safe, clamped, dropped = sanitise([action], state)
+    assert len(safe) == 1
+    assert safe[0].time_ms == 10_000
+    assert any("SET_KEYFRAME" in c for c in clamped)
+
+
+def test_delete_keyframe_passthrough():  # T65
+    from models.ai_editor import DeleteKeyframeAction
+
+    action = DeleteKeyframeAction(
+        type="DELETE_KEYFRAME",
+        clip_id="c1",
+        property="y",
+        keyframe_id="kf-abc",
+    )
+    state = make_state(videoDuration=30.0)
+    safe, clamped, dropped = sanitise([action], state)
+    assert len(safe) == 1
+    assert dropped == []

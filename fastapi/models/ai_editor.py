@@ -683,6 +683,41 @@ class ClearMasksAction(BaseModel):
     clip_id: str = Field(min_length=1, max_length=128)
 
 
+# ─── Motion Keyframe actions ──────────────────────────────────────────────────
+
+
+class SetKeyframeAction(BaseModel):
+    """Add or update a motion keyframe on a clip property."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["SET_KEYFRAME"]
+    clip_id: str = Field(min_length=1, max_length=128)
+    property: str = Field(min_length=1, max_length=32)
+    time_ms: float = Field(ge=0.0, le=86400000.0)
+    value: float = Field(ge=-100000.0, le=100000.0)
+    easing: str = Field(
+        default="linear", pattern=r"^(linear|ease-in|ease-out|ease-in-out|bezier)$"
+    )
+
+
+class DeleteKeyframeAction(BaseModel):
+    """Delete a specific keyframe from a clip property track."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["DELETE_KEYFRAME"]
+    clip_id: str = Field(min_length=1, max_length=128)
+    property: str = Field(min_length=1, max_length=32)
+    keyframe_id: str = Field(min_length=1, max_length=64)
+
+
+class ClearKeyframesAction(BaseModel):
+    """Remove all keyframes from a clip."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["CLEAR_KEYFRAMES"]
+    clip_id: str = Field(min_length=1, max_length=128)
+
+
 AiEditorAction = Annotated[
     Union[
         AddCaptionAction,
@@ -754,6 +789,9 @@ AiEditorAction = Annotated[
         AddBezierMaskAction,
         AddAiPersonMaskAction,
         ClearMasksAction,
+        SetKeyframeAction,
+        DeleteKeyframeAction,
+        ClearKeyframesAction,
     ],
     Field(discriminator="type"),
 ]

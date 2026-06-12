@@ -705,6 +705,27 @@ def sanitise(
         elif t in ("ADD_AI_PERSON_MASK", "CLEAR_MASKS"):
             pass
 
+        # ── SET_KEYFRAME — clamp time_ms to [0, dur*1000] ────────────────────
+        elif t == "SET_KEYFRAME":
+            from models.ai_editor import SetKeyframeAction
+
+            a = action  # type: SetKeyframeAction
+            nt = _clamp(a.time_ms, 0.0, dur * 1000)
+            if nt != a.time_ms:
+                clamped.append(f"SET_KEYFRAME time_ms clamped to {nt:.0f}")
+                action = SetKeyframeAction(
+                    type="SET_KEYFRAME",
+                    clip_id=a.clip_id,
+                    property=a.property,
+                    time_ms=nt,
+                    value=a.value,
+                    easing=a.easing,
+                )
+
+        # ── DELETE_KEYFRAME / CLEAR_KEYFRAMES — pass-through ─────────────────
+        elif t in ("DELETE_KEYFRAME", "CLEAR_KEYFRAMES"):
+            pass
+
         safe.append(action)
 
     return safe, clamped, dropped

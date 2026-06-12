@@ -132,7 +132,11 @@ export interface EditorAction {
     | "ADD_ELLIPSE_MASK"      // { clip_id, cx, cy, rx, ry, rotation?, feather?, invert? }
     | "ADD_BEZIER_MASK"       // { clip_id, points, feather?, invert? }
     | "ADD_AI_PERSON_MASK"    // { clip_id, confidence?, invert? }
-    | "CLEAR_MASKS";          // { clip_id }
+    | "CLEAR_MASKS"           // { clip_id }
+    // ─── Phase 7: Motion keyframes ───────────────────────────────────────────
+    | "SET_KEYFRAME"          // { clip_id, property, time_ms, value, easing? }
+    | "DELETE_KEYFRAME"       // { clip_id, property, keyframe_id }
+    | "CLEAR_KEYFRAMES";      // { clip_id }
   payload: Record<string, unknown>;
 }
 
@@ -1313,6 +1317,13 @@ export const useEditorStore = create<EditorState>()(
               break;
             case "CLEAR_MASKS":
               store.setMaskEnabled(false);
+              break;
+            // ─── Phase 7: Motion keyframes ─────────────────────────────────
+            case "SET_KEYFRAME":
+              break;
+            case "DELETE_KEYFRAME":
+              break;
+            case "CLEAR_KEYFRAMES":
               break;
           }
         });
