@@ -16,7 +16,8 @@ export type ToolCategory =
   | "Playback"
   | "Export"
   | "Color"
-  | "Motion";
+  | "Motion"
+  | "Project";
 
 export type ToolExecutionMode = "direct" | "gemini";
 
@@ -1048,6 +1049,35 @@ export const AI_TOOL_CATALOG: AiTool[] = [
     buildActions: (s) => [{
       type: "CLEAR_KEYFRAMES",
       payload: { clip_id: s.selectedClipId ?? "" },
+    }],
+  },
+  // ─── Phase 8: Project file ───────────────────────────────────────────────────
+  {
+    id: "save-project",
+    name: "Project · Save",
+    description: "Save the current project to a QEP file in IndexedDB.",
+    category: "Project",
+    iconName: "Save",
+    keywords: ["save", "project", "qep", "export", "file"],
+    execMode: "direct",
+    isEnabled: () => true,
+    buildActions: () => [{
+      type: "SAVE_PROJECT",
+      payload: {},
+    }],
+  },
+  {
+    id: "load-project",
+    name: "Project · Load",
+    description: "Load a saved QEP project from IndexedDB by project ID.",
+    category: "Project",
+    iconName: "FolderOpen",
+    keywords: ["load", "open", "project", "qep", "restore"],
+    execMode: "direct",
+    isEnabled: () => true,
+    buildActions: () => [{
+      type: "LOAD_PROJECT",
+      payload: { project_id: "" },
     }],
   },
 ];

@@ -726,6 +726,10 @@ def sanitise(
         elif t in ("DELETE_KEYFRAME", "CLEAR_KEYFRAMES"):
             pass
 
+        # ── SAVE_PROJECT / LOAD_PROJECT — pass-through ────────────────────────
+        elif t in ("SAVE_PROJECT", "LOAD_PROJECT"):
+            pass
+
         safe.append(action)
 
     return safe, clamped, dropped

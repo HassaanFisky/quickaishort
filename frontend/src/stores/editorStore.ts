@@ -136,7 +136,10 @@ export interface EditorAction {
     // ─── Phase 7: Motion keyframes ───────────────────────────────────────────
     | "SET_KEYFRAME"          // { clip_id, property, time_ms, value, easing? }
     | "DELETE_KEYFRAME"       // { clip_id, property, keyframe_id }
-    | "CLEAR_KEYFRAMES";      // { clip_id }
+    | "CLEAR_KEYFRAMES"       // { clip_id }
+    // ─── Phase 8: Project file ───────────────────────────────────────────────
+    | "SAVE_PROJECT"          // { title? }
+    | "LOAD_PROJECT";         // { project_id }
   payload: Record<string, unknown>;
 }
 
@@ -1324,6 +1327,11 @@ export const useEditorStore = create<EditorState>()(
             case "DELETE_KEYFRAME":
               break;
             case "CLEAR_KEYFRAMES":
+              break;
+            // ─── Phase 8: Project file ─────────────────────────────────────
+            case "SAVE_PROJECT":
+              break;
+            case "LOAD_PROJECT":
               break;
           }
         });

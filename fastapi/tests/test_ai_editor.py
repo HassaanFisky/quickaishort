@@ -1100,3 +1100,25 @@ def test_delete_keyframe_passthrough():  # T65
     safe, clamped, dropped = sanitise([action], state)
     assert len(safe) == 1
     assert dropped == []
+
+
+def test_save_project_passthrough():  # T66
+    from models.ai_editor import SaveProjectAction
+
+    action = SaveProjectAction(type="SAVE_PROJECT", title="My Edit")
+    state = make_state(videoDuration=60.0)
+    safe, clamped, dropped = sanitise([action], state)
+    assert len(safe) == 1
+    assert dropped == []
+    assert safe[0].title == "My Edit"
+
+
+def test_load_project_passthrough():  # T67
+    from models.ai_editor import LoadProjectAction
+
+    action = LoadProjectAction(type="LOAD_PROJECT", project_id="proj-xyz")
+    state = make_state(videoDuration=60.0)
+    safe, clamped, dropped = sanitise([action], state)
+    assert len(safe) == 1
+    assert dropped == []
+    assert safe[0].project_id == "proj-xyz"

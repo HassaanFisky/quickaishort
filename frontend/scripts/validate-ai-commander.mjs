@@ -626,6 +626,45 @@ assert(has(catalogKf, "delete-keyframe"),  "delete-keyframe in aiToolCatalog");
 assert(has(catalogKf, "clear-keyframes"),  "clear-keyframes in aiToolCatalog");
 assert(has(catalogKf, '"Motion"'),         "Motion category in aiToolCatalog");
 
+// ── [23] Phase 8 — QEP project file + IndexedDB + crash recovery ─────────────
+console.log("\n[23] Phase 8 Project file / IndexedDB / crash recovery");
+
+const qepTypes = read("lib/project/qepTypes.ts");
+assert(qepTypes !== null, "lib/project/qepTypes.ts exists");
+assert(has(qepTypes, "QepProject"),      "QepProject interface in qepTypes.ts");
+assert(has(qepTypes, "QepClip"),         "QepClip interface in qepTypes.ts");
+assert(has(qepTypes, "QEP_VERSION"),     "QEP_VERSION constant in qepTypes.ts");
+
+const qepSer = read("lib/project/qepSerializer.ts");
+assert(qepSer !== null, "lib/project/qepSerializer.ts exists");
+assert(has(qepSer, "exportQep"),         "exportQep exported from qepSerializer.ts");
+assert(has(qepSer, "importQep"),         "importQep exported from qepSerializer.ts");
+
+const idbStore = read("lib/project/idbStorage.ts");
+assert(idbStore !== null, "lib/project/idbStorage.ts exists");
+assert(has(idbStore, "idbSave"),         "idbSave exported from idbStorage.ts");
+assert(has(idbStore, "idbLoad"),         "idbLoad exported from idbStorage.ts");
+assert(has(idbStore, "idbDelete"),       "idbDelete exported from idbStorage.ts");
+assert(has(idbStore, "idbList"),         "idbList exported from idbStorage.ts");
+
+const crashRec = read("lib/project/crashRecovery.ts");
+assert(crashRec !== null, "lib/project/crashRecovery.ts exists");
+assert(has(crashRec, "autosave"),        "autosave exported from crashRecovery.ts");
+assert(has(crashRec, "recoverDraft"),    "recoverDraft exported from crashRecovery.ts");
+assert(has(crashRec, "clearDraft"),      "clearDraft exported from crashRecovery.ts");
+
+const pyModels23 = readRoot("fastapi/models/ai_editor.py");
+assert(has(pyModels23, "SAVE_PROJECT"),  "SAVE_PROJECT in ai_editor.py");
+assert(has(pyModels23, "LOAD_PROJECT"),  "LOAD_PROJECT in ai_editor.py");
+
+assert(has(types, '"SAVE_PROJECT"'),     "SAVE_PROJECT in ai-editor.ts");
+assert(has(types, '"LOAD_PROJECT"'),     "LOAD_PROJECT in ai-editor.ts");
+
+const catalogPrj = read("lib/aiToolCatalog.ts");
+assert(has(catalogPrj, "save-project"),  "save-project in aiToolCatalog");
+assert(has(catalogPrj, "load-project"),  "load-project in aiToolCatalog");
+assert(has(catalogPrj, '"Project"'),     "Project category in aiToolCatalog");
+
 // ── Summary ──────────────────────────────────────────────────────────────────
 console.log(`\n${"─".repeat(50)}`);
 console.log(`Assertions: ${passed + failed} total, ${passed} passed, ${failed} failed`);

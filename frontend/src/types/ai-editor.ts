@@ -265,11 +265,16 @@ export type AiEditorAction =
   | ClearMasksAction
   | SetKeyframeAction
   | DeleteKeyframeAction
-  | ClearKeyframesAction;
+  | ClearKeyframesAction
+  | SaveProjectAction
+  | LoadProjectAction;
 
 export interface SetKeyframeAction    { type: "SET_KEYFRAME";     clip_id: string; property: string; time_ms: number; value: number; easing?: string }
 export interface DeleteKeyframeAction { type: "DELETE_KEYFRAME";  clip_id: string; property: string; keyframe_id: string }
 export interface ClearKeyframesAction { type: "CLEAR_KEYFRAMES";  clip_id: string }
+
+export interface SaveProjectAction    { type: "SAVE_PROJECT";     title?: string }
+export interface LoadProjectAction    { type: "LOAD_PROJECT";     project_id: string }
 
 export interface SetClipGainAction    { type: "SET_CLIP_GAIN";   clip_id: string; gain_db: number }
 export interface SetMasterGainAction  { type: "SET_MASTER_GAIN"; gain_db: number }

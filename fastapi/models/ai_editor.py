@@ -718,6 +718,25 @@ class ClearKeyframesAction(BaseModel):
     clip_id: str = Field(min_length=1, max_length=128)
 
 
+# ─── Phase 8: Project file (QEP) ─────────────────────────────────────────────
+
+
+class SaveProjectAction(BaseModel):
+    """Trigger an autosave / export of the current project to a QEP file."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["SAVE_PROJECT"]
+    title: Optional[str] = Field(default=None, max_length=128)
+
+
+class LoadProjectAction(BaseModel):
+    """Load a previously saved QEP project by ID from IndexedDB."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["LOAD_PROJECT"]
+    project_id: str = Field(min_length=1, max_length=128)
+
+
 AiEditorAction = Annotated[
     Union[
         AddCaptionAction,
@@ -792,6 +811,8 @@ AiEditorAction = Annotated[
         SetKeyframeAction,
         DeleteKeyframeAction,
         ClearKeyframesAction,
+        SaveProjectAction,
+        LoadProjectAction,
     ],
     Field(discriminator="type"),
 ]
