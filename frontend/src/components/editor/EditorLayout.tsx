@@ -21,6 +21,7 @@ import {
   Wand2,
   PanelLeft,
   PanelRight,
+  Download,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -39,6 +40,7 @@ import { AICopilot } from "@/components/editor/AICopilot";
 import { AIPanel } from "@/components/editor/AIPanel";
 import YouTubeInputStrip from "./YouTubeInputStrip";
 import VideoWorkspace from "./VideoWorkspace";
+import ExportDialog from "./ExportDialog";
 import axios from "axios";
 
 export default function EditorLayout() {
@@ -74,6 +76,7 @@ export default function EditorLayout() {
     });
   }, [storeTranscript, storeVideoMetadata, setVideoContext]);
 
+  const [exportOpen, setExportOpen] = useState(false);
   const [isAdvancedMode, setIsAdvancedMode] = useState(false);
   useEffect(() => {
     setIsAdvancedMode(new URLSearchParams(window.location.search).get("advanced") === "1");
@@ -407,6 +410,16 @@ export default function EditorLayout() {
             )}
           >
             <Wand2 size={15} />
+          </button>
+
+          <button
+            onClick={() => setExportOpen(true)}
+            title="Export"
+            aria-label="Export video"
+            className="h-9 px-3 rounded-lg flex items-center gap-1.5 bg-primary/10 border border-primary/25 text-primary text-xs font-bold hover:bg-primary/20 transition-colors"
+          >
+            <Download size={13} />
+            Export
           </button>
 
           <button
@@ -810,6 +823,9 @@ export default function EditorLayout() {
 
       {/* Gemini AI Editor — full action dispatch panel (Sparkles / Ctrl+K opens this) */}
       <AIPanel />
+
+      {/* Export dialog — opened via Export button in header */}
+      <ExportDialog open={exportOpen} onClose={() => setExportOpen(false)} />
     </div>
   );
 }

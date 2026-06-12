@@ -13,7 +13,8 @@ export type ToolCategory =
   | "Audio"
   | "Visual"
   | "Elements"
-  | "Playback";
+  | "Playback"
+  | "Export";
 
 export type ToolExecutionMode = "direct" | "gemini";
 
@@ -741,6 +742,29 @@ export const AI_TOOL_CATALOG: AiTool[] = [
     category: "Visual",
     iconName: "Zap",
     keywords: ["webgpu", "gpu", "compositor", "experimental", "dev", "flag", "toggle"],
+    execMode: "direct",
+    isEnabled: () => process.env.NODE_ENV !== "production",
+    buildActions: () => [],
+  },
+  // ── Export ───────────────────────────────────────────────────────────────────
+  {
+    id: "export-webcodecs-mp4",
+    name: "Export · Hardware MP4 (local)",
+    description: "Export the current clip as H.264 MP4 directly in the browser using WebCodecs hardware acceleration. Feature flag: webcodecs_export_enabled.",
+    category: "Export",
+    iconName: "Download",
+    keywords: ["export", "mp4", "download", "webcodecs", "hardware", "local", "encode"],
+    execMode: "direct",
+    isEnabled: (s) => s.duration > 0 && s.duration <= 60,
+    buildActions: () => [],
+  },
+  {
+    id: "dev-toggle-webcodecs-export",
+    name: "Dev · Toggle WebCodecs export",
+    description: "Enable or disable the WebCodecs hardware-accelerated local export path (developer feature).",
+    category: "Export",
+    iconName: "Zap",
+    keywords: ["webcodecs", "export", "flag", "dev", "toggle", "experimental"],
     execMode: "direct",
     isEnabled: () => process.env.NODE_ENV !== "production",
     buildActions: () => [],

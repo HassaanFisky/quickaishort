@@ -403,6 +403,33 @@ const toolbar = read("components/editor/TimelineToolbar.tsx");
 assert(toolbar !== null, 'components/editor/TimelineToolbar.tsx exists');
 assert(has(toolbar, 'TOOLS'), 'TimelineToolbar defines TOOLS array');
 
+// ── [16] Phase 4c WebCodecs export ───────────────────────────────────────────
+console.log("\n[16] Phase 4c WebCodecs export");
+
+const webCodecsExp = read("lib/export/webCodecsExporter.ts");
+assert(webCodecsExp !== null, "lib/export/webCodecsExporter.ts exists");
+assert(has(webCodecsExp, "WebCodecsExporter"), "WebCodecsExporter class in webCodecsExporter.ts");
+assert(has(webCodecsExp, "isSupported"), "static isSupported() in webCodecsExporter.ts");
+assert(has(webCodecsExp, "encodeFrameAt"), "encodeFrameAt method in webCodecsExporter.ts");
+assert(has(webCodecsExp, "finalize"), "finalize method in webCodecsExporter.ts");
+
+const mp4Mux = read("lib/export/mp4Mux.ts");
+assert(mp4Mux !== null, "lib/export/mp4Mux.ts exists");
+assert(has(mp4Mux, "mp4-muxer"), "mp4-muxer imported in mp4Mux.ts");
+
+const exportWorker = read("workers/exportWorker.ts");
+assert(exportWorker !== null, "workers/exportWorker.ts exists");
+
+const exportDialog = read("components/editor/ExportDialog.tsx");
+assert(exportDialog !== null, "components/editor/ExportDialog.tsx exists");
+assert(has(exportDialog, "webcodecs_export_enabled"), "webcodecs_export_enabled flag referenced in ExportDialog");
+
+const catalogExport = read("lib/aiToolCatalog.ts");
+assert(has(catalogExport, "export-webcodecs-mp4"), "export-webcodecs-mp4 in aiToolCatalog");
+
+const editorLayoutExport = read("components/editor/EditorLayout.tsx");
+assert(has(editorLayoutExport, "ExportDialog"), "ExportDialog imported/used in EditorLayout");
+
 // ── Summary ──────────────────────────────────────────────────────────────────
 console.log(`\n${"─".repeat(50)}`);
 console.log(`Assertions: ${passed + failed} total, ${passed} passed, ${failed} failed`);
