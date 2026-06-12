@@ -332,6 +332,77 @@ assert(has(types, '"REMOVE_SILENCES"'), 'REMOVE_SILENCES in frontend ai-editor.t
 assert(has(catalog, 'audio-remove-silences'), 'catalog has audio-remove-silences tool');
 assert(has(catalog, 'audio-remove-silences-quick'), 'catalog has audio-remove-silences-quick tool');
 
+// ── [13] WebGPU Phase 4a — compositor + feature flags + preview layer ─────────
+console.log("\n[13] WebGPU Phase 4a");
+
+const compositor = read("lib/webgpu/compositor.ts");
+assert(compositor !== null, 'lib/webgpu/compositor.ts exists');
+assert(has(compositor, 'class WebGpuCompositor'), 'WebGpuCompositor class defined');
+assert(has(compositor, 'static async isSupported'), 'isSupported static method');
+assert(has(compositor, 'async drawVideoFrame('), 'drawVideoFrame() method');
+assert(has(compositor, 'copyExternalImageToTexture'), 'uses copyExternalImageToTexture');
+assert(has(compositor, 'WGSL_SHADER'), 'WGSL shader constant');
+
+const featureFlags = read("lib/featureFlags.ts");
+assert(featureFlags !== null, 'lib/featureFlags.ts exists');
+assert(has(featureFlags, 'quickeditor.v1'), 'uses quickeditor.v1 DB name');
+assert(has(featureFlags, 'export async function getFlag'), 'exports getFlag');
+
+const webgpuLayer = read("components/editor/WebGpuPreviewLayer.tsx");
+assert(webgpuLayer !== null, 'components/editor/WebGpuPreviewLayer.tsx exists');
+assert(has(webgpuLayer, 'prefers-reduced-motion'), 'WebGpuPreviewLayer respects prefers-reduced-motion');
+assert(has(editorPage, 'WebGpuPreviewLayer'), 'WebGpuPreviewLayer mounted in editor/page.tsx');
+
+// ── [14] Phase 4a-USER-FLOW — engaging surface refactor ───────────────────────
+console.log("\n[14] Phase 4a-USER-FLOW");
+
+const ytInputStrip = read("components/editor/YouTubeInputStrip.tsx");
+assert(ytInputStrip !== null, 'components/editor/YouTubeInputStrip.tsx exists');
+
+const editorLayout = read("components/editor/EditorLayout.tsx");
+assert(has(editorLayout, 'YouTubeInputStrip'), 'EditorLayout imports/uses YouTubeInputStrip');
+assert(has(editorLayout, 'advanced'), 'EditorLayout gates panels behind ?advanced=1');
+
+const onboardingTourFile = read("components/editor/OnboardingTour.tsx");
+assert(onboardingTourFile === null, 'OnboardingTour.tsx deleted');
+
+// launcher already declared in [11]
+assert(has(launcher, '-translate-x-1/2'), 'FloatingChatLauncher is center-aligned');
+
+assert(has(editorPage, 'NODE_ENV'), 'TelemetryDock gated behind NODE_ENV in editor/page.tsx');
+
+// ── [15] Phase 4b-MANUAL-TOOLS — 8 NLE timeline tool actions ─────────────────
+console.log("\n[15] Phase 4b-MANUAL-TOOLS");
+
+// Pydantic models
+const pyModels15 = readRoot("fastapi/models/ai_editor.py");
+assert(has(pyModels15, 'POINTER_SELECT'), 'POINTER_SELECT variant in fastapi/models/ai_editor.py');
+assert(has(pyModels15, 'BLADE_SPLIT'),    'BLADE_SPLIT variant in fastapi/models/ai_editor.py');
+assert(has(pyModels15, 'RIPPLE_TRIM'),    'RIPPLE_TRIM variant in fastapi/models/ai_editor.py');
+assert(has(pyModels15, 'ROLLING_TRIM'),   'ROLLING_TRIM variant in fastapi/models/ai_editor.py');
+assert(has(pyModels15, 'SLIP_CLIP'),      'SLIP_CLIP variant in fastapi/models/ai_editor.py');
+assert(has(pyModels15, 'SLIDE_CLIP'),     'SLIDE_CLIP variant in fastapi/models/ai_editor.py');
+assert(has(pyModels15, 'RIPPLE_DELETE'),  'RIPPLE_DELETE variant in fastapi/models/ai_editor.py');
+assert(has(pyModels15, 'DURATION_STRETCH'), 'DURATION_STRETCH variant in fastapi/models/ai_editor.py');
+
+// TypeScript mirrors
+assert(has(types, '"POINTER_SELECT"'),    'POINTER_SELECT in frontend ai-editor.ts');
+assert(has(types, '"BLADE_SPLIT"'),       'BLADE_SPLIT in frontend ai-editor.ts');
+assert(has(types, '"RIPPLE_TRIM"'),       'RIPPLE_TRIM in frontend ai-editor.ts');
+assert(has(types, '"RIPPLE_DELETE"'),     'RIPPLE_DELETE in frontend ai-editor.ts');
+assert(has(types, '"DURATION_STRETCH"'),  'DURATION_STRETCH in frontend ai-editor.ts');
+
+// editorStore
+const editorStore = read("stores/editorStore.ts");
+assert(has(editorStore, 'ToolId'), 'ToolId exported from editorStore.ts');
+assert(has(editorStore, 'activeTimelineTool'), 'activeTimelineTool state in editorStore.ts');
+assert(has(editorStore, 'setActiveTimelineTool'), 'setActiveTimelineTool action in editorStore.ts');
+
+// TimelineToolbar component
+const toolbar = read("components/editor/TimelineToolbar.tsx");
+assert(toolbar !== null, 'components/editor/TimelineToolbar.tsx exists');
+assert(has(toolbar, 'TOOLS'), 'TimelineToolbar defines TOOLS array');
+
 // ── Summary ──────────────────────────────────────────────────────────────────
 console.log(`\n${"─".repeat(50)}`);
 console.log(`Assertions: ${passed + failed} total, ${passed} passed, ${failed} failed`);

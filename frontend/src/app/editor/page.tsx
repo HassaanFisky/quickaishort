@@ -12,6 +12,7 @@ import { extractAudioData } from "@/lib/utils/audioExtractor";
 import { ShortcutOverlay } from "@/components/editor/ShortcutOverlay";
 import { BRollDrawer } from "@/components/editor/BRollDrawer";
 import { FloatingChatLauncher } from "@/components/editor/FloatingChatLauncher";
+import { WebGpuPreviewLayer } from "@/components/editor/WebGpuPreviewLayer";
 import { matchShortcut } from "@/lib/shortcuts";
 
 export default function EditorPage() {
@@ -190,7 +191,8 @@ export default function EditorPage() {
   return (
     <ErrorBoundary>
       <EditorLayout />
-      <TelemetryDock />
+      {process.env.NODE_ENV === "development" && <TelemetryDock />}
+      <WebGpuPreviewLayer />
       <ShortcutOverlay isOpen={shortcutOverlayOpen} onClose={closeOverlay} />
       <BRollDrawer />
       <FloatingChatLauncher />
