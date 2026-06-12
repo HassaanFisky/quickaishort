@@ -251,7 +251,20 @@ export type AiEditorAction =
   | ColorCurvesAction
   | HslSecondariesAction
   | ApplyLutAction
-  | ResetColorAction;
+  | ResetColorAction
+  | SetClipGainAction
+  | SetMasterGainAction
+  | EnableDenoiseAction
+  | EnableLimiterAction
+  | AddFadeInAction
+  | AddFadeOutAction;
+
+export interface SetClipGainAction    { type: "SET_CLIP_GAIN";   clip_id: string; gain_db: number }
+export interface SetMasterGainAction  { type: "SET_MASTER_GAIN"; gain_db: number }
+export interface EnableDenoiseAction  { type: "ENABLE_DENOISE";  clip_id: string; enabled?: boolean }
+export interface EnableLimiterAction  { type: "ENABLE_LIMITER";  enabled?: boolean }
+export interface AddFadeInAction      { type: "ADD_FADE_IN";     clip_id: string; duration_ms?: number }
+export interface AddFadeOutAction     { type: "ADD_FADE_OUT";    clip_id: string; start_ms?: number; duration_ms?: number }
 
 export type AiEditorActionType = AiEditorAction["type"];
 

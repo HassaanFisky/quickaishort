@@ -55,6 +55,10 @@ from models.ai_editor import (  # noqa: F401
     TimelineZoomAction,
     ApplyLutAction,
     HslSecondariesAction,
+    SetClipGainAction,
+    SetMasterGainAction,
+    AddFadeInAction,
+    AddFadeOutAction,
 )
 
 logger = logging.getLogger(__name__)
@@ -592,6 +596,55 @@ def sanitise(
         # ── RESET_COLOR — pass-through ────────────────────────────────────────
         elif t == "RESET_COLOR":
             pass
+
+        # ── SET_CLIP_GAIN — clamp to [-60, 20] dB ────────────────────────────
+        elif t == "SET_CLIP_GAIN":
+            a = action  # type: SetClipGainAction
+            ng = _clamp(a.gain_db, -60.0, 20.0)
+            if ng != a.gain_db:
+                clamped.append(f"SET_CLIP_GAIN gain_db clamped to {ng:.1f}")
+                action = SetClipGainAction(
+                    type="SET_CLIP_GAIN", clip_id=a.clip_id, gain_db=ng
+                )
+
+        # ── SET_MASTER_GAIN — clamp to [-60, 20] dB ──────────────────────────
+        elif t == "SET_MASTER_GAIN":
+            a = action  # type: SetMasterGainAction
+            ng = _clamp(a.gain_db, -60.0, 20.0)
+            if ng != a.gain_db:
+                clamped.append(f"SET_MASTER_GAIN gain_db clamped to {ng:.1f}")
+                action = SetMasterGainAction(type="SET_MASTER_GAIN", gain_db=ng)
+
+        # ── ENABLE_DENOISE / ENABLE_LIMITER — pass-through ───────────────────
+        elif t in ("ENABLE_DENOISE", "ENABLE_LIMITER"):
+            pass
+
+        # ── ADD_FADE_IN — clamp duration_ms ──────────────────────────────────
+        elif t == "ADD_FADE_IN":
+            a = action  # type: AddFadeInAction
+            nd = _clamp(a.duration_ms, 10.0, 10000.0)
+            if nd != a.duration_ms:
+                clamped.append(f"ADD_FADE_IN duration_ms clamped to {nd:.0f}")
+                action = AddFadeInAction(
+                    type="ADD_FADE_IN", clip_id=a.clip_id, duration_ms=nd
+                )
+
+        # ── ADD_FADE_OUT — clamp start_ms and duration_ms ────────────────────
+        elif t == "ADD_FADE_OUT":
+            a = action  # type: AddFadeOutAction
+            ns = _clamp(a.start_ms, 0.0, dur * 1000)
+            nd = _clamp(a.duration_ms, 10.0, 10000.0)
+            changed = ns != a.start_ms or nd != a.duration_ms
+            if changed:
+                clamped.append(
+                    f"ADD_FADE_OUT start_ms {a.start_ms:.0f}→{ns:.0f} dur {a.duration_ms:.0f}→{nd:.0f}"
+                )
+                action = AddFadeOutAction(
+                    type="ADD_FADE_OUT",
+                    clip_id=a.clip_id,
+                    start_ms=ns,
+                    duration_ms=nd,
+                )
 
         safe.append(action)
 

@@ -561,6 +561,62 @@ class ResetColorAction(BaseModel):
     clip_id: str = Field(min_length=1, max_length=128)
 
 
+# ─── Web Audio / Mix actions ──────────────────────────────────────────────────
+
+
+class SetClipGainAction(BaseModel):
+    """Set clip output gain in dB."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["SET_CLIP_GAIN"]
+    clip_id: str = Field(min_length=1, max_length=128)
+    gain_db: float = Field(default=0.0, ge=-60.0, le=20.0)
+
+
+class SetMasterGainAction(BaseModel):
+    """Set master output gain in dB."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["SET_MASTER_GAIN"]
+    gain_db: float = Field(default=0.0, ge=-60.0, le=20.0)
+
+
+class EnableDenoiseAction(BaseModel):
+    """Enable or disable RNNoise denoising on a clip."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["ENABLE_DENOISE"]
+    clip_id: str = Field(min_length=1, max_length=128)
+    enabled: bool = True
+
+
+class EnableLimiterAction(BaseModel):
+    """Enable the brick-wall look-ahead limiter on the master bus."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["ENABLE_LIMITER"]
+    enabled: bool = True
+
+
+class AddFadeInAction(BaseModel):
+    """Add a fade-in envelope to a clip."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["ADD_FADE_IN"]
+    clip_id: str = Field(min_length=1, max_length=128)
+    duration_ms: float = Field(default=500.0, ge=10.0, le=10000.0)
+
+
+class AddFadeOutAction(BaseModel):
+    """Add a fade-out envelope to a clip."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["ADD_FADE_OUT"]
+    clip_id: str = Field(min_length=1, max_length=128)
+    start_ms: float = Field(default=0.0, ge=0.0, le=86400000.0)
+    duration_ms: float = Field(default=500.0, ge=10.0, le=10000.0)
+
+
 AiEditorAction = Annotated[
     Union[
         AddCaptionAction,
@@ -621,6 +677,12 @@ AiEditorAction = Annotated[
         HslSecondariesAction,
         ApplyLutAction,
         ResetColorAction,
+        SetClipGainAction,
+        SetMasterGainAction,
+        EnableDenoiseAction,
+        EnableLimiterAction,
+        AddFadeInAction,
+        AddFadeOutAction,
     ],
     Field(discriminator="type"),
 ]

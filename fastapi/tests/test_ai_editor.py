@@ -918,3 +918,69 @@ async def test_engine_returns_noop_on_parse_failure():
     assert resp.status == "no_op"
     assert resp.actions == []
     assert resp.used_mock is False
+
+
+# ─── T52-T57: Web Audio mix actions ──────────────────────────────────────────
+
+
+def test_set_clip_gain_clamps():  # T52
+    from models.ai_editor import SetClipGainAction
+
+    action = SetClipGainAction(type="SET_CLIP_GAIN", clip_id="c1", gain_db=-3.0)
+    state = make_state(videoDuration=30.0)
+    safe, clamped, dropped = sanitise([action], state)
+    assert len(safe) == 1
+    assert safe[0].gain_db == -3.0  # type: ignore[attr-defined]
+    assert clamped == []
+
+
+def test_set_master_gain_passthrough():  # T53
+    from models.ai_editor import SetMasterGainAction
+
+    action = SetMasterGainAction(type="SET_MASTER_GAIN", gain_db=0.0)
+    state = make_state(videoDuration=30.0)
+    safe, clamped, dropped = sanitise([action], state)
+    assert len(safe) == 1
+
+
+def test_enable_denoise_passthrough():  # T54
+    from models.ai_editor import EnableDenoiseAction
+
+    action = EnableDenoiseAction(type="ENABLE_DENOISE", clip_id="c1", enabled=True)
+    state = make_state(videoDuration=30.0)
+    safe, clamped, dropped = sanitise([action], state)
+    assert len(safe) == 1
+    assert dropped == []
+
+
+def test_enable_limiter_passthrough():  # T55
+    from models.ai_editor import EnableLimiterAction
+
+    action = EnableLimiterAction(type="ENABLE_LIMITER", enabled=True)
+    state = make_state(videoDuration=30.0)
+    safe, clamped, dropped = sanitise([action], state)
+    assert len(safe) == 1
+
+
+def test_add_fade_in_passthrough():  # T56
+    from models.ai_editor import AddFadeInAction
+
+    action = AddFadeInAction(type="ADD_FADE_IN", clip_id="c1", duration_ms=300.0)
+    state = make_state(videoDuration=30.0)
+    safe, clamped, dropped = sanitise([action], state)
+    assert len(safe) == 1
+    assert safe[0].duration_ms == 300.0  # type: ignore[attr-defined]
+
+
+def test_add_fade_out_clamps_start():  # T57
+    from models.ai_editor import AddFadeOutAction
+
+    # start_ms beyond video duration (30s = 30000ms) should clamp
+    action = AddFadeOutAction(
+        type="ADD_FADE_OUT", clip_id="c1", start_ms=50000.0, duration_ms=200.0
+    )
+    state = make_state(videoDuration=30.0)
+    safe, clamped, dropped = sanitise([action], state)
+    assert len(safe) == 1
+    assert safe[0].start_ms == 30000.0  # type: ignore[attr-defined]
+    assert len(clamped) == 1

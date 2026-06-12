@@ -753,6 +753,19 @@ export default function EditorLayout() {
       {/* Timeline */}
       <footer className="h-44 shrink-0 bg-card border border-border rounded-2xl flex flex-col overflow-hidden relative">
         <BottomDock />
+        {/* RNNoise attribution — required by Mozilla BSD 3-clause */}
+        <p className="absolute bottom-1 right-2 text-[9px] text-muted/40 select-none pointer-events-none">
+          Noise suppression powered by{" "}
+          <a
+            href="https://github.com/mozilla/rnnoise"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline pointer-events-auto hover:text-muted/70 transition-colors"
+          >
+            RNNoise
+          </a>{" "}
+          © Mozilla (BSD&nbsp;3-clause)
+        </p>
       </footer>
 
       {/* Floating macro controls — 2xl+ only */}

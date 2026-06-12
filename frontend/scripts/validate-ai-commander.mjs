@@ -526,6 +526,41 @@ assert(has(decoderWorker, "// @ts-nocheck"), "decoderWorker.ts has @ts-nocheck")
 const nextCfg = read("../next.config.mjs");
 assert(has(nextCfg, '"/adk/:path*"'), "COOP/COEP headers extended to /adk in next.config.mjs");
 
+// ── [20] Phase 5 — Web Audio multi-bus + RNNoise ─────────────────────────────
+console.log("\n[20] Phase 5 Web Audio multi-bus + RNNoise");
+
+const mixGraph = read("lib/audio/mixGraph.ts");
+assert(mixGraph !== null, "lib/audio/mixGraph.ts exists");
+assert(has(mixGraph, "MixGraph"),        "MixGraph class in mixGraph.ts");
+assert(has(mixGraph, "rnnoise"),         "rnnoise worklet reference in mixGraph.ts");
+assert(has(mixGraph, "enableLimiter"),   "enableLimiter method in MixGraph");
+
+const automation = read("lib/audio/automation.ts");
+assert(automation !== null, "lib/audio/automation.ts exists");
+assert(has(automation, "applyAutomation"), "applyAutomation exported from automation.ts");
+assert(has(automation, "buildFadeIn"),     "buildFadeIn exported from automation.ts");
+assert(has(automation, "buildFadeOut"),    "buildFadeOut exported from automation.ts");
+
+const rnnoiseWorklet = read("lib/audio/worklets/rnnoiseWorklet.ts");
+assert(rnnoiseWorklet !== null, "lib/audio/worklets/rnnoiseWorklet.ts exists");
+assert(has(rnnoiseWorklet, "// @ts-nocheck"), "rnnoiseWorklet.ts has @ts-nocheck");
+assert(has(rnnoiseWorklet, "rnnoise-worklet"), "rnnoise-worklet processor name registered");
+
+const limiterWorklet = read("lib/audio/worklets/limiterWorklet.ts");
+assert(limiterWorklet !== null, "lib/audio/worklets/limiterWorklet.ts exists");
+assert(has(limiterWorklet, "limiter-worklet"), "limiter-worklet processor name registered");
+
+const pyModels20 = readRoot("fastapi/models/ai_editor.py");
+assert(has(pyModels20, "SET_CLIP_GAIN"),   "SET_CLIP_GAIN in ai_editor.py");
+assert(has(pyModels20, "SET_MASTER_GAIN"), "SET_MASTER_GAIN in ai_editor.py");
+assert(has(pyModels20, "ENABLE_DENOISE"),  "ENABLE_DENOISE in ai_editor.py");
+assert(has(pyModels20, "ENABLE_LIMITER"),  "ENABLE_LIMITER in ai_editor.py");
+assert(has(pyModels20, "ADD_FADE_IN"),     "ADD_FADE_IN in ai_editor.py");
+assert(has(pyModels20, "ADD_FADE_OUT"),    "ADD_FADE_OUT in ai_editor.py");
+
+const editorLayoutAttrib = read("components/editor/EditorLayout.tsx");
+assert(has(editorLayoutAttrib, "mozilla/rnnoise"), "RNNoise attribution link in EditorLayout footer");
+
 // ── Summary ──────────────────────────────────────────────────────────────────
 console.log(`\n${"─".repeat(50)}`);
 console.log(`Assertions: ${passed + failed} total, ${passed} passed, ${failed} failed`);

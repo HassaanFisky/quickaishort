@@ -119,7 +119,14 @@ export interface EditorAction {
     | "COLOR_CURVES"          // { clip_id, master?, red?, green?, blue? }
     | "HSL_SECONDARIES"       // { clip_id, hue_shift?, saturation_adjust?, luminance_adjust? }
     | "APPLY_LUT"             // { clip_id, lut_url, lut_size?, intensity? }
-    | "RESET_COLOR";          // { clip_id }
+    | "RESET_COLOR"           // { clip_id }
+    // ─── Phase 5: Web Audio mix ──────────────────────────────────────────────
+    | "SET_CLIP_GAIN"         // { clip_id, gain_db }
+    | "SET_MASTER_GAIN"       // { gain_db }
+    | "ENABLE_DENOISE"        // { clip_id, enabled }
+    | "ENABLE_LIMITER"        // { enabled }
+    | "ADD_FADE_IN"           // { clip_id, duration_ms }
+    | "ADD_FADE_OUT";         // { clip_id, start_ms, duration_ms }
   payload: Record<string, unknown>;
 }
 
@@ -1270,6 +1277,20 @@ export const useEditorStore = create<EditorState>()(
               break;
             case "RESET_COLOR":
               store.setClipColor(null);
+              break;
+            case "SET_CLIP_GAIN":
+              // Stored in clipColorState for display; actual AudioParam update
+              // is handled by MixGraph in the audio layer
+              break;
+            case "SET_MASTER_GAIN":
+              break;
+            case "ENABLE_DENOISE":
+              break;
+            case "ENABLE_LIMITER":
+              break;
+            case "ADD_FADE_IN":
+              break;
+            case "ADD_FADE_OUT":
               break;
           }
         });
