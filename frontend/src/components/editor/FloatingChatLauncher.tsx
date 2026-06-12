@@ -152,7 +152,7 @@ export function FloatingChatLauncher() {
             animate={panelMotion.animate}
             exit={panelMotion.exit}
             transition={panelMotion.transition}
-            className="fixed bottom-[72px] right-4 z-40 w-80 max-h-[480px] flex flex-col bg-card border border-border rounded-2xl shadow-2xl overflow-hidden max-[767px]:left-0 max-[767px]:right-0 max-[767px]:w-full max-[767px]:bottom-0 max-[767px]:rounded-t-2xl max-[767px]:rounded-b-none max-[767px]:max-h-[70vh]"
+            className="fixed bottom-[96px] left-[50%] -translate-x-1/2 z-40 w-[min(640px,92vw)] max-h-[480px] flex flex-col bg-card border border-border rounded-2xl shadow-2xl overflow-hidden max-[767px]:left-0 max-[767px]:right-0 max-[767px]:w-full max-[767px]:translate-x-0 max-[767px]:bottom-0 max-[767px]:rounded-t-2xl max-[767px]:rounded-b-none max-[767px]:max-h-[70vh]"
             role="dialog"
             aria-label="Quick AI Editor floating chat"
           >

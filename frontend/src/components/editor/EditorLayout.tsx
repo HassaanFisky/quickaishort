@@ -37,7 +37,7 @@ import { TimelineLoader } from "@/components/ui/TimelineLoader";
 import { LiquidThemeToggle } from "@/components/shared/LiquidThemeToggle";
 import { AICopilot } from "@/components/editor/AICopilot";
 import { AIPanel } from "@/components/editor/AIPanel";
-import OnboardingTour from "./OnboardingTour";
+import YouTubeInputStrip from "./YouTubeInputStrip";
 import VideoWorkspace from "./VideoWorkspace";
 import axios from "axios";
 
@@ -74,8 +74,13 @@ export default function EditorLayout() {
     });
   }, [storeTranscript, storeVideoMetadata, setVideoContext]);
 
+  const [isAdvancedMode, setIsAdvancedMode] = useState(false);
+  useEffect(() => {
+    setIsAdvancedMode(new URLSearchParams(window.location.search).get("advanced") === "1");
+  }, []);
+
   const [urlInput, setUrlInput] = useState("");
-  
+
   const [urlValid, setUrlValid] = useState<boolean | null>(null);
   const [youtubePreviewId, setYoutubePreviewId] = useState<string | null>(null);
   const [backendFailed, setBackendFailed] = useState(false);
@@ -368,20 +373,24 @@ export default function EditorLayout() {
         </div>
 
         <div className="flex items-center gap-3">
-          <button
-            onClick={() => setLeftPanelOpen(!leftPanelOpen)}
-            aria-label="Toggle clips panel"
-            className="h-9 w-9 rounded-lg flex items-center justify-center bg-card border border-border text-fg-muted hover:text-foreground transition-colors lg:hidden"
-          >
-            <PanelLeft size={15} />
-          </button>
-          <button
-            onClick={() => setRightPanelOpen(!rightPanelOpen)}
-            aria-label="Toggle properties panel"
-            className="h-9 w-9 rounded-lg flex items-center justify-center bg-card border border-border text-fg-muted hover:text-foreground transition-colors lg:hidden"
-          >
-            <PanelRight size={15} />
-          </button>
+          {isAdvancedMode && (
+            <>
+              <button
+                onClick={() => setLeftPanelOpen(!leftPanelOpen)}
+                aria-label="Toggle clips panel"
+                className="h-9 w-9 rounded-lg flex items-center justify-center bg-card border border-border text-fg-muted hover:text-foreground transition-colors lg:hidden"
+              >
+                <PanelLeft size={15} />
+              </button>
+              <button
+                onClick={() => setRightPanelOpen(!rightPanelOpen)}
+                aria-label="Toggle properties panel"
+                className="h-9 w-9 rounded-lg flex items-center justify-center bg-card border border-border text-fg-muted hover:text-foreground transition-colors lg:hidden"
+              >
+                <PanelRight size={15} />
+              </button>
+            </>
+          )}
           <button
             onClick={() =>
               setCenterMode(centerMode === "effects" ? "preview" : "effects")
@@ -413,20 +422,42 @@ export default function EditorLayout() {
         </div>
       </header>
 
-      {/* Main 3-column workspace */}
-      <main className="flex-1 min-h-0 grid grid-cols-1 gap-4 overflow-hidden lg:grid-cols-[minmax(220px,18%)_1fr_minmax(260px,22%)]">
+      {/* Main workspace — 3-column when ?advanced=1, single center column otherwise */}
+      <main className={cn(
+        "flex-1 min-h-0 grid grid-cols-1 gap-4 overflow-hidden",
+        isAdvancedMode && "lg:grid-cols-[minmax(220px,18%)_1fr_minmax(260px,22%)]"
+      )}>
 
-        {/* Left — Viral Suggestions (desktop inline) */}
-        <section className="hidden lg:flex bg-card border border-border rounded-2xl flex-col overflow-hidden min-h-0">
-          <div className="flex-1 overflow-y-auto p-4 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-foreground/10 [&::-webkit-scrollbar-thumb]:rounded-full">
-            <LeftPanel />
-          </div>
-        </section>
+        {/* Left — Viral Suggestions (desktop inline, advanced mode only) */}
+        {isAdvancedMode && (
+          <section className="hidden lg:flex bg-card border border-border rounded-2xl flex-col overflow-hidden min-h-0">
+            <div className="flex-1 overflow-y-auto p-4 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-foreground/10 [&::-webkit-scrollbar-thumb]:rounded-full">
+              <LeftPanel />
+            </div>
+          </section>
+        )}
 
         {/* Center — Stage */}
         <section className="relative flex flex-col items-center justify-center gap-4 min-h-0">
           {/* URL import bar */}
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 z-40 w-full max-w-xl px-4">
+          <YouTubeInputStrip
+            urlInput={urlInput}
+            urlValid={urlValid}
+            youtubePreviewId={youtubePreviewId}
+            isAnalysing={isAnalysing}
+            backendFailed={backendFailed}
+            panelCollapsed={panelCollapsed}
+            currentStage={currentStage}
+            videoTitle={storeVideoMetadata?.title}
+            onUrlChange={handleUrlChange}
+            onAnalyze={() => void handleAnalyze()}
+            onCancel={handleCancel}
+            onFileUpload={() => fileInputRef.current?.click()}
+            onExpandPanel={() => setPanelCollapsed(false)}
+          />
+          {/* ▲ URL bar rendered via YouTubeInputStrip — legacy inline removed */}
+          {false && (
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 z-40 w-full max-w-xl px-4">
             <AnimatePresence mode="wait">
               {panelCollapsed ? (
                 <motion.div
@@ -592,7 +623,8 @@ export default function EditorLayout() {
                 </motion.div>
               )}
             </AnimatePresence>
-          </div>
+            </div>
+          )}
 
           {/* Video stage */}
           <div className="editor-stage-bg w-full h-full flex items-center justify-center rounded-2xl overflow-hidden border border-border relative">
@@ -677,12 +709,14 @@ export default function EditorLayout() {
           </div>
         </section>
 
-        {/* Right — Property Inspector (desktop inline) */}
-        <section className="hidden lg:flex bg-card border border-border rounded-2xl flex-col overflow-hidden min-h-0">
-          <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-foreground/10 [&::-webkit-scrollbar-thumb]:rounded-full">
-            <RightPanel />
-          </div>
-        </section>
+        {/* Right — Property Inspector (desktop inline, advanced mode only) */}
+        {isAdvancedMode && (
+          <section className="hidden lg:flex bg-card border border-border rounded-2xl flex-col overflow-hidden min-h-0">
+            <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-foreground/10 [&::-webkit-scrollbar-thumb]:rounded-full">
+              <RightPanel />
+            </div>
+          </section>
+        )}
       </main>
 
       {/* Timeline */}
@@ -695,9 +729,9 @@ export default function EditorLayout() {
         <FloatingControls />
       </div>
 
-      {/* Mobile/tablet — Left panel slide-over drawer */}
+      {/* Mobile/tablet — Left panel slide-over drawer (advanced mode only) */}
       <AnimatePresence>
-        {leftPanelOpen && (
+        {isAdvancedMode && leftPanelOpen && (
           <>
             <motion.div
               key="left-backdrop"
@@ -733,9 +767,9 @@ export default function EditorLayout() {
         )}
       </AnimatePresence>
 
-      {/* Mobile/tablet — Right panel slide-over drawer */}
+      {/* Mobile/tablet — Right panel slide-over drawer (advanced mode only) */}
       <AnimatePresence>
-        {rightPanelOpen && (
+        {isAdvancedMode && rightPanelOpen && (
           <>
             <motion.div
               key="right-backdrop"
@@ -776,9 +810,6 @@ export default function EditorLayout() {
 
       {/* Gemini AI Editor — full action dispatch panel (Sparkles / Ctrl+K opens this) */}
       <AIPanel />
-
-      {/* First-run guided tour — shows once per browser, fully dismissible */}
-      <OnboardingTour />
     </div>
   );
 }
