@@ -752,6 +752,48 @@ class AutoReframeAction(BaseModel):
     sample_rate_ms: int = Field(default=500, ge=100, le=5000)
 
 
+# ─── Phase 10: Voiceover, SFX, Transitions ───────────────────────────────────
+
+_TRANSITION_TYPE = Literal[
+    "fade",
+    "dissolve",
+    "wipe_left",
+    "wipe_right",
+    "zoom_in",
+    "zoom_out",
+    "glitch",
+]
+
+
+class AddVoiceoverAction(BaseModel):
+    """Attach a recorded voiceover segment to a clip."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["ADD_VOICEOVER"]
+    clip_id: str = Field(min_length=1, max_length=128)
+    start_sec: float = Field(default=0.0, ge=0)
+    duration_sec: float = Field(ge=0.1, le=300.0)
+
+
+class AddSfxAction(BaseModel):
+    """Place a sound effect at a point in the timeline."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["ADD_SFX"]
+    sfx_id: str = Field(min_length=1, max_length=64)
+    start_sec: float = Field(default=0.0, ge=0)
+    volume: float = Field(default=1.0, ge=0.0, le=2.0)
+
+
+class SetTransitionAction(BaseModel):
+    """Apply a cinematic WGSL transition between two clips."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["SET_TRANSITION"]
+    clip_id: str = Field(min_length=1, max_length=128)
+    transition: _TRANSITION_TYPE = "fade"
+
+
 AiEditorAction = Annotated[
     Union[
         AddCaptionAction,
@@ -829,6 +871,9 @@ AiEditorAction = Annotated[
         SaveProjectAction,
         LoadProjectAction,
         AutoReframeAction,
+        AddVoiceoverAction,
+        AddSfxAction,
+        SetTransitionAction,
     ],
     Field(discriminator="type"),
 ]

@@ -141,7 +141,11 @@ export interface EditorAction {
     | "SAVE_PROJECT"          // { title? }
     | "LOAD_PROJECT"          // { project_id }
     // ─── Phase 9: Auto-reframe ───────────────────────────────────────────────
-    | "AUTO_REFRAME";         // { clip_id, target_ar?, sample_rate_ms? }
+    | "AUTO_REFRAME"          // { clip_id, target_ar?, sample_rate_ms? }
+    // ─── Phase 10: Voiceover, SFX, Transitions ──────────────────────────────
+    | "ADD_VOICEOVER"         // { clip_id, start_sec?, duration_sec }
+    | "ADD_SFX"               // { sfx_id, start_sec?, volume? }
+    | "SET_TRANSITION";       // { clip_id, transition? }
   payload: Record<string, unknown>;
 }
 
@@ -1337,6 +1341,13 @@ export const useEditorStore = create<EditorState>()(
               break;
             // ─── Phase 9: Auto-reframe ──────────────────────────────────────
             case "AUTO_REFRAME":
+              break;
+            // ─── Phase 10: Voiceover / SFX / Transitions ───────────────────
+            case "ADD_VOICEOVER":
+              break;
+            case "ADD_SFX":
+              break;
+            case "SET_TRANSITION":
               break;
           }
         });

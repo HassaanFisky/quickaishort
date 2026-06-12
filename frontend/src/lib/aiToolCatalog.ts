@@ -1095,6 +1095,49 @@ export const AI_TOOL_CATALOG: AiTool[] = [
       payload: { clip_id: s.selectedClipId ?? "", target_ar: "9:16", sample_rate_ms: 500 },
     }],
   },
+  // ─── Phase 10: Voiceover / SFX / Transitions ────────────────────────────────
+  {
+    id: "add-voiceover",
+    name: "Voiceover · Record",
+    description: "Attach a recorded voiceover to the selected clip.",
+    category: "Audio",
+    iconName: "Mic",
+    keywords: ["voiceover", "record", "narration", "audio", "voice"],
+    execMode: "direct",
+    isEnabled: (s) => !!s.selectedClipId,
+    buildActions: (s) => [{
+      type: "ADD_VOICEOVER",
+      payload: { clip_id: s.selectedClipId ?? "", start_sec: 0, duration_sec: 10 },
+    }],
+  },
+  {
+    id: "add-sfx",
+    name: "SFX · Add",
+    description: "Place a sound effect from the library at the current position.",
+    category: "Audio",
+    iconName: "Music",
+    keywords: ["sfx", "sound", "effect", "impact", "whoosh", "audio"],
+    execMode: "direct",
+    isEnabled: () => true,
+    buildActions: () => [{
+      type: "ADD_SFX",
+      payload: { sfx_id: "impact-thud", start_sec: 0, volume: 1.0 },
+    }],
+  },
+  {
+    id: "set-transition",
+    name: "Transition · Set",
+    description: "Apply a cinematic WebGPU transition between clips.",
+    category: "Visual",
+    iconName: "Sparkles",
+    keywords: ["transition", "fade", "dissolve", "wipe", "zoom", "glitch", "wgsl"],
+    execMode: "direct",
+    isEnabled: (s) => !!s.selectedClipId,
+    buildActions: (s) => [{
+      type: "SET_TRANSITION",
+      payload: { clip_id: s.selectedClipId ?? "", transition: "fade" },
+    }],
+  },
 ];
 
 export function searchTools(query: string, state: ToolExecutionContext): AiTool[] {

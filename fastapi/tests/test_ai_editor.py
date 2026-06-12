@@ -1139,3 +1139,51 @@ def test_auto_reframe_passthrough():  # T68
     assert dropped == []
     assert safe[0].target_ar == "9:16"
     assert safe[0].sample_rate_ms == 500
+
+
+def test_add_voiceover_passthrough():  # T69
+    from models.ai_editor import AddVoiceoverAction
+
+    action = AddVoiceoverAction(
+        type="ADD_VOICEOVER",
+        clip_id="c1",
+        start_sec=5.0,
+        duration_sec=10.0,
+    )
+    state = make_state(videoDuration=60.0)
+    safe, clamped, dropped = sanitise([action], state)
+    assert len(safe) == 1
+    assert dropped == []
+    assert safe[0].duration_sec == 10.0
+
+
+def test_add_sfx_clamps_volume():  # T70
+    from models.ai_editor import AddSfxAction
+
+    action = AddSfxAction(
+        type="ADD_SFX",
+        sfx_id="impact-thud",
+        start_sec=0.0,
+        volume=1.5,
+    )
+    state = make_state(videoDuration=30.0)
+    safe, clamped, dropped = sanitise([action], state)
+    assert len(safe) == 1
+    # volume 1.5 is within Pydantic bounds (le=2.0), passes through unchanged
+    assert safe[0].volume == 1.5
+    assert dropped == []
+
+
+def test_set_transition_passthrough():  # T71
+    from models.ai_editor import SetTransitionAction
+
+    action = SetTransitionAction(
+        type="SET_TRANSITION",
+        clip_id="c1",
+        transition="glitch",
+    )
+    state = make_state(videoDuration=30.0)
+    safe, clamped, dropped = sanitise([action], state)
+    assert len(safe) == 1
+    assert dropped == []
+    assert safe[0].transition == "glitch"

@@ -734,6 +734,42 @@ def sanitise(
         elif t == "AUTO_REFRAME":
             pass
 
+        # ── ADD_VOICEOVER — clamp start_sec + duration_sec ───────────────────
+        elif t == "ADD_VOICEOVER":
+            from models.ai_editor import AddVoiceoverAction
+
+            a = action  # type: AddVoiceoverAction
+            dur = state.videoDuration
+            s = max(0.0, min(a.start_sec, dur))
+            d = max(0.1, min(a.duration_sec, dur - s if dur > s else 300.0))
+            if s != a.start_sec or d != a.duration_sec:
+                action = AddVoiceoverAction(
+                    type="ADD_VOICEOVER",
+                    clip_id=a.clip_id,
+                    start_sec=s,
+                    duration_sec=d,
+                )
+                clamped.append("ADD_VOICEOVER start_sec/duration_sec clamped")
+
+        # ── ADD_SFX — clamp volume ────────────────────────────────────────────
+        elif t == "ADD_SFX":
+            from models.ai_editor import AddSfxAction
+
+            a = action  # type: AddSfxAction
+            vol = max(0.0, min(2.0, a.volume))
+            if vol != a.volume:
+                action = AddSfxAction(
+                    type="ADD_SFX",
+                    sfx_id=a.sfx_id,
+                    start_sec=max(0.0, a.start_sec),
+                    volume=vol,
+                )
+                clamped.append("ADD_SFX volume clamped")
+
+        # ── SET_TRANSITION — pass-through ─────────────────────────────────────
+        elif t == "SET_TRANSITION":
+            pass
+
         safe.append(action)
 
     return safe, clamped, dropped

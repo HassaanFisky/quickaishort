@@ -268,7 +268,10 @@ export type AiEditorAction =
   | ClearKeyframesAction
   | SaveProjectAction
   | LoadProjectAction
-  | AutoReframeAction;
+  | AutoReframeAction
+  | AddVoiceoverAction
+  | AddSfxAction
+  | SetTransitionAction;
 
 export interface SetKeyframeAction    { type: "SET_KEYFRAME";     clip_id: string; property: string; time_ms: number; value: number; easing?: string }
 export interface DeleteKeyframeAction { type: "DELETE_KEYFRAME";  clip_id: string; property: string; keyframe_id: string }
@@ -278,6 +281,11 @@ export interface SaveProjectAction    { type: "SAVE_PROJECT";     title?: string
 export interface LoadProjectAction    { type: "LOAD_PROJECT";     project_id: string }
 
 export interface AutoReframeAction    { type: "AUTO_REFRAME";     clip_id: string; target_ar?: "9:16" | "1:1" | "4:5"; sample_rate_ms?: number }
+
+export type TransitionName = "fade" | "dissolve" | "wipe_left" | "wipe_right" | "zoom_in" | "zoom_out" | "glitch"
+export interface AddVoiceoverAction   { type: "ADD_VOICEOVER";    clip_id: string; start_sec?: number; duration_sec: number }
+export interface AddSfxAction         { type: "ADD_SFX";          sfx_id: string; start_sec?: number; volume?: number }
+export interface SetTransitionAction  { type: "SET_TRANSITION";   clip_id: string; transition?: TransitionName }
 
 export interface SetClipGainAction    { type: "SET_CLIP_GAIN";   clip_id: string; gain_db: number }
 export interface SetMasterGainAction  { type: "SET_MASTER_GAIN"; gain_db: number }

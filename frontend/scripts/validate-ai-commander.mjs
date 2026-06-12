@@ -691,6 +691,46 @@ assert(has(types, '"AUTO_REFRAME"'),        "AUTO_REFRAME in ai-editor.ts");
 const catalogRf = read("lib/aiToolCatalog.ts");
 assert(has(catalogRf, "auto-reframe"),      "auto-reframe in aiToolCatalog");
 
+// ── [25] Phase 10 — Voiceover + SFX + 7 WGSL transitions ────────────────────
+console.log("\n[25] Phase 10 Voiceover / SFX / WGSL transitions");
+
+const voiceRec = read("lib/voiceover/voiceRecorder.ts");
+assert(voiceRec !== null, "lib/voiceover/voiceRecorder.ts exists");
+assert(has(voiceRec, "VoiceRecorder"),       "VoiceRecorder class in voiceRecorder.ts");
+assert(has(voiceRec, "getLevel"),            "getLevel method in VoiceRecorder");
+
+const sfxLib = read("lib/sfx/sfxLibrary.ts");
+assert(sfxLib !== null, "lib/sfx/sfxLibrary.ts exists");
+assert(has(sfxLib, "SFX_CATALOG"),           "SFX_CATALOG exported from sfxLibrary.ts");
+assert(has(sfxLib, "playSfx"),               "playSfx exported from sfxLibrary.ts");
+assert(has(sfxLib, "searchSfx"),             "searchSfx exported from sfxLibrary.ts");
+
+const transitions = read("lib/transitions/wgslTransitions.ts");
+assert(transitions !== null, "lib/transitions/wgslTransitions.ts exists");
+assert(has(transitions, "WGSL_TRANSITIONS"),  "WGSL_TRANSITIONS map in wgslTransitions.ts");
+assert(has(transitions, "fade"),              "fade transition defined");
+assert(has(transitions, "dissolve"),          "dissolve transition defined");
+assert(has(transitions, "wipe_left"),         "wipe_left transition defined");
+assert(has(transitions, "wipe_right"),        "wipe_right transition defined");
+assert(has(transitions, "zoom_in"),           "zoom_in transition defined");
+assert(has(transitions, "zoom_out"),          "zoom_out transition defined");
+assert(has(transitions, "glitch"),            "glitch transition defined");
+assert(has(transitions, "TransitionPipeline"), "TransitionPipeline class in wgslTransitions.ts");
+
+const pyModels25 = readRoot("fastapi/models/ai_editor.py");
+assert(has(pyModels25, "ADD_VOICEOVER"),     "ADD_VOICEOVER in ai_editor.py");
+assert(has(pyModels25, "ADD_SFX"),           "ADD_SFX in ai_editor.py");
+assert(has(pyModels25, "SET_TRANSITION"),    "SET_TRANSITION in ai_editor.py");
+
+assert(has(types, '"ADD_VOICEOVER"'),        "ADD_VOICEOVER in ai-editor.ts");
+assert(has(types, '"ADD_SFX"'),              "ADD_SFX in ai-editor.ts");
+assert(has(types, '"SET_TRANSITION"'),       "SET_TRANSITION in ai-editor.ts");
+
+const catalogP10 = read("lib/aiToolCatalog.ts");
+assert(has(catalogP10, "add-voiceover"),     "add-voiceover in aiToolCatalog");
+assert(has(catalogP10, "add-sfx"),           "add-sfx in aiToolCatalog");
+assert(has(catalogP10, "set-transition"),    "set-transition in aiToolCatalog");
+
 // ── Summary ──────────────────────────────────────────────────────────────────
 console.log(`\n${"─".repeat(50)}`);
 console.log(`Assertions: ${passed + failed} total, ${passed} passed, ${failed} failed`);
