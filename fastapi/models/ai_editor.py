@@ -294,6 +294,82 @@ class RemoveSilencesAction(BaseModel):
     padding_sec: float = Field(default=0.08, ge=0.0, le=1.0)
 
 
+# ─── Phase 4b: NLE Timeline Tool actions ──────────────────────────────────────
+
+
+class PointerSelectAction(BaseModel):
+    """Activate the pointer/select tool and optionally select a clip."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["POINTER_SELECT"]
+    clip_id: Optional[str] = None
+
+
+class BladeSplitAction(BaseModel):
+    """Split all clips at the given timeline position (razor/blade tool)."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["BLADE_SPLIT"]
+    time_sec: float = Field(ge=0.0)
+
+
+class RippleTrimAction(BaseModel):
+    """Ripple-trim a clip's in or out point, shifting all downstream clips."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["RIPPLE_TRIM"]
+    clip_id: str = Field(min_length=1, max_length=128)
+    edge: Literal["in", "out"]
+    delta_sec: float = Field(ge=-3600.0, le=3600.0)
+
+
+class RollingTrimAction(BaseModel):
+    """Rolling trim: adjust edit point between two adjacent clips simultaneously."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["ROLLING_TRIM"]
+    clip_id: str = Field(min_length=1, max_length=128)
+    neighbor_id: str = Field(min_length=1, max_length=128)
+    edge: Literal["in", "out"]
+    delta_sec: float = Field(ge=-3600.0, le=3600.0)
+
+
+class SlipAction(BaseModel):
+    """Slip a clip: shift source in/out without changing its timeline position."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["SLIP_CLIP"]
+    clip_id: str = Field(min_length=1, max_length=128)
+    delta_sec: float = Field(ge=-3600.0, le=3600.0)
+
+
+class SlideAction(BaseModel):
+    """Slide a clip: move it in the timeline, trimming its neighbors to fill."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["SLIDE_CLIP"]
+    clip_id: str = Field(min_length=1, max_length=128)
+    delta_sec: float = Field(ge=-3600.0, le=3600.0)
+
+
+class RippleDeleteAction(BaseModel):
+    """Delete a clip and ripple-close the resulting gap."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["RIPPLE_DELETE"]
+    clip_id: str = Field(min_length=1, max_length=128)
+
+
+class DurationStretchAction(BaseModel):
+    """Time-stretch a clip to a target duration or speed factor."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["DURATION_STRETCH"]
+    clip_id: str = Field(min_length=1, max_length=128)
+    target_duration_sec: Optional[float] = Field(default=None, ge=0.1, le=3600.0)
+    speed_factor: Optional[float] = Field(default=None, ge=0.1, le=10.0)
+
+
 AiEditorAction = Annotated[
     Union[
         AddCaptionAction,
@@ -327,6 +403,14 @@ AiEditorAction = Annotated[
         AddVideoOverlayAction,
         RemoveOverlayAction,
         RemoveSilencesAction,
+        PointerSelectAction,
+        BladeSplitAction,
+        RippleTrimAction,
+        RollingTrimAction,
+        SlipAction,
+        SlideAction,
+        RippleDeleteAction,
+        DurationStretchAction,
     ],
     Field(discriminator="type"),
 ]

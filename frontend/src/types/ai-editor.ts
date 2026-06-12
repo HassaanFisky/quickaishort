@@ -156,6 +156,17 @@ export interface RemoveSilencesAction {
   padding_sec: number;
 }
 
+// ─── Phase 4b: NLE Timeline Tool action interfaces ────────────────────────────
+
+export interface PointerSelectAction  { type: "POINTER_SELECT";  clip_id?: string }
+export interface BladeSplitAction     { type: "BLADE_SPLIT";     time_sec: number }
+export interface RippleTrimAction     { type: "RIPPLE_TRIM";     clip_id: string; edge: "in" | "out"; delta_sec: number }
+export interface RollingTrimAction    { type: "ROLLING_TRIM";    clip_id: string; neighbor_id: string; edge: "in" | "out"; delta_sec: number }
+export interface SlipAction           { type: "SLIP_CLIP";       clip_id: string; delta_sec: number }
+export interface SlideAction          { type: "SLIDE_CLIP";      clip_id: string; delta_sec: number }
+export interface RippleDeleteAction   { type: "RIPPLE_DELETE";   clip_id: string }
+export interface DurationStretchAction { type: "DURATION_STRETCH"; clip_id: string; target_duration_sec?: number; speed_factor?: number }
+
 export type AiEditorAction =
   | AddCaptionAction
   | RemoveCaptionAction
@@ -189,7 +200,15 @@ export type AiEditorAction =
   | RemoveOverlayAction
   | BRollOpenLibraryAction
   | BRollClearAllAction
-  | RemoveSilencesAction;
+  | RemoveSilencesAction
+  | PointerSelectAction
+  | BladeSplitAction
+  | RippleTrimAction
+  | RollingTrimAction
+  | SlipAction
+  | SlideAction
+  | RippleDeleteAction
+  | DurationStretchAction;
 
 export type AiEditorActionType = AiEditorAction["type"];
 

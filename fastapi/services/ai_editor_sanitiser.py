@@ -41,6 +41,12 @@ from models.ai_editor import (
     AddVideoOverlayAction,
     RemoveOverlayAction,
     RemoveSilencesAction,
+    BladeSplitAction,
+    RippleTrimAction,
+    RollingTrimAction,
+    SlipAction,
+    SlideAction,
+    DurationStretchAction,
 )
 
 logger = logging.getLogger(__name__)
@@ -364,6 +370,90 @@ def sanitise(
                     type="REMOVE_SILENCES",
                     min_silence_sec=nm,
                     padding_sec=np_,
+                )
+
+        # ── POINTER_SELECT — pass-through (no numeric fields) ─────────────────
+        elif t == "POINTER_SELECT":
+            pass  # clip_id is optional; no clamping needed
+
+        # ── BLADE_SPLIT — clamp split time to video bounds ────────────────────
+        elif t == "BLADE_SPLIT":
+            a = action  # type: BladeSplitAction
+            nt = _clamp_time(a.time_sec, dur)
+            if nt <= 1.0 or nt >= dur - 1.0:
+                dropped.append(
+                    f"BLADE_SPLIT time_sec={a.time_sec:.1f} — too close to edge after clamp"
+                )
+                continue
+            if nt != a.time_sec:
+                clamped.append(f"BLADE_SPLIT time_sec {a.time_sec:.1f}→{nt:.1f}")
+                action = BladeSplitAction(type="BLADE_SPLIT", time_sec=nt)
+
+        # ── RIPPLE_TRIM — clamp delta to ±duration ────────────────────────────
+        elif t == "RIPPLE_TRIM":
+            a = action  # type: RippleTrimAction
+            nd = _clamp(a.delta_sec, -dur, dur)
+            if nd != a.delta_sec:
+                clamped.append(f"RIPPLE_TRIM delta_sec {a.delta_sec:.2f}→{nd:.2f}")
+                action = RippleTrimAction(
+                    type="RIPPLE_TRIM", clip_id=a.clip_id, edge=a.edge, delta_sec=nd
+                )
+
+        # ── ROLLING_TRIM — clamp delta ─────────────────────────────────────────
+        elif t == "ROLLING_TRIM":
+            a = action  # type: RollingTrimAction
+            nd = _clamp(a.delta_sec, -dur, dur)
+            if nd != a.delta_sec:
+                clamped.append(f"ROLLING_TRIM delta_sec {a.delta_sec:.2f}→{nd:.2f}")
+                action = RollingTrimAction(
+                    type="ROLLING_TRIM",
+                    clip_id=a.clip_id,
+                    neighbor_id=a.neighbor_id,
+                    edge=a.edge,
+                    delta_sec=nd,
+                )
+
+        # ── SLIP_CLIP — clamp delta ────────────────────────────────────────────
+        elif t == "SLIP_CLIP":
+            a = action  # type: SlipAction
+            nd = _clamp(a.delta_sec, -dur, dur)
+            if nd != a.delta_sec:
+                clamped.append(f"SLIP_CLIP delta_sec {a.delta_sec:.2f}→{nd:.2f}")
+                action = SlipAction(type="SLIP_CLIP", clip_id=a.clip_id, delta_sec=nd)
+
+        # ── SLIDE_CLIP — clamp delta ───────────────────────────────────────────
+        elif t == "SLIDE_CLIP":
+            a = action  # type: SlideAction
+            nd = _clamp(a.delta_sec, -dur, dur)
+            if nd != a.delta_sec:
+                clamped.append(f"SLIDE_CLIP delta_sec {a.delta_sec:.2f}→{nd:.2f}")
+                action = SlideAction(type="SLIDE_CLIP", clip_id=a.clip_id, delta_sec=nd)
+
+        # ── RIPPLE_DELETE — pass-through (no numeric fields) ──────────────────
+        elif t == "RIPPLE_DELETE":
+            pass  # clip_id validated by Pydantic; no clamping needed
+
+        # ── DURATION_STRETCH — clamp speed_factor and target_duration ─────────
+        elif t == "DURATION_STRETCH":
+            a = action  # type: DurationStretchAction
+            ntd = (
+                _clamp(a.target_duration_sec, 0.1, dur * 4)
+                if a.target_duration_sec is not None
+                else None
+            )
+            nsf = (
+                _clamp(a.speed_factor, 0.1, 10.0)
+                if a.speed_factor is not None
+                else None
+            )
+            changed = ntd != a.target_duration_sec or nsf != a.speed_factor
+            if changed:
+                clamped.append(f"DURATION_STRETCH values clamped for clip {a.clip_id}")
+                action = DurationStretchAction(
+                    type="DURATION_STRETCH",
+                    clip_id=a.clip_id,
+                    target_duration_sec=ntd,
+                    speed_factor=nsf,
                 )
 
         safe.append(action)

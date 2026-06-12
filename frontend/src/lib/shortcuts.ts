@@ -7,7 +7,13 @@
 export type UiShortcutId =
   | "toggleCommandPalette"
   | "toggleBRollDrawer"
-  | "toggleFloatingChat";
+  | "toggleFloatingChat"
+  // ─── Phase 4b: timeline tool shortcuts (fire only when timeline focused) ──
+  | "toolPointer"
+  | "toolBlade"
+  | "toolBladeAllTracks"
+  | "toolRollingTrim"
+  | "toolRippleDelete";
 
 export interface UiShortcut {
   id: UiShortcutId;
@@ -67,22 +73,71 @@ export const SHORTCUTS: Record<UiShortcutId, UiShortcut> = {
     label: "Shift+Alt+A",
     macLabel: "⌘⇧A",
   },
+  // ─── Phase 4b: timeline tool shortcuts ───────────────────────────────────
+  toolPointer: {
+    id: "toolPointer",
+    key: "v",
+    shift: false,
+    alt: false,
+    label: "V",
+    macLabel: "V",
+  },
+  toolBlade: {
+    id: "toolBlade",
+    key: "s",
+    shift: false,
+    alt: false,
+    label: "S",
+    macLabel: "S",
+  },
+  toolBladeAllTracks: {
+    id: "toolBladeAllTracks",
+    key: "s",
+    shift: true,
+    alt: false,
+    label: "Shift+S",
+    macLabel: "⇧S",
+  },
+  toolRollingTrim: {
+    id: "toolRollingTrim",
+    key: "r",
+    shift: true,
+    alt: false,
+    label: "Shift+R",
+    macLabel: "⇧R",
+  },
+  toolRippleDelete: {
+    id: "toolRippleDelete",
+    key: "Delete",
+    shift: true,
+    alt: false,
+    label: "Shift+Delete",
+    macLabel: "⇧⌫",
+  },
 };
 
 /**
  * Returns true if a KeyboardEvent matches the given shortcut.
- * Matches:
- *   - Shift+Alt+key  (Win/Linux/Mac — universal)
- *   - Meta+Shift+key (Mac alias, no Alt)
+ * UI panel shortcuts (Shift+Alt+X) also accept Meta+Shift+X as Mac alias.
+ * Timeline tool shortcuts fire on the exact modifier combo defined in SHORTCUTS.
  */
 export function matchShortcut(e: KeyboardEvent, id: UiShortcutId): boolean {
   const s = SHORTCUTS[id];
-  if (e.key.toLowerCase() !== s.key) return false;
-  // Shift+Alt+Key — works on all platforms
-  if (e.shiftKey && e.altKey && !e.ctrlKey && !e.metaKey) return true;
-  // Meta+Shift+Key — Mac alias
-  if (e.metaKey && e.shiftKey && !e.altKey && !e.ctrlKey) return true;
-  return false;
+  const key = s.key === "Delete" ? e.key : e.key.toLowerCase();
+  if (key !== s.key.toLowerCase() && e.key !== s.key) return false;
+  // UI panel toggles use Shift+Alt or Mac Meta+Shift alias
+  if (s.shift && s.alt) {
+    if (e.shiftKey && e.altKey && !e.ctrlKey && !e.metaKey) return true;
+    if (e.metaKey && e.shiftKey && !e.altKey && !e.ctrlKey) return true;
+    return false;
+  }
+  // Timeline tool shortcuts: exact modifier match
+  return (
+    e.shiftKey === s.shift &&
+    e.altKey === s.alt &&
+    !e.ctrlKey &&
+    !e.metaKey
+  );
 }
 
 /** Platform-aware shortcut label for tooltips. */

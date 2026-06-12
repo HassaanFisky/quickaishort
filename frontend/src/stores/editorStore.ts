@@ -89,7 +89,16 @@ export interface EditorAction {
     | "REMOVE_OVERLAY"        // { element_id }
     | "BROLL_OPEN_LIBRARY"    // {} — UI-only: opens the B-roll drawer
     | "BROLL_CLEAR_ALL"       // {} — removes all BROLL elements
-    | "REMOVE_SILENCES";      // { min_silence_sec, padding_sec } — trims leading/trailing silence
+    | "REMOVE_SILENCES"       // { min_silence_sec, padding_sec } — trims leading/trailing silence
+    // ─── Phase 4b: NLE Timeline Tools ───────────────────────────────────────
+    | "POINTER_SELECT"        // { clip_id? } — activate pointer tool
+    | "BLADE_SPLIT"           // { time_sec } — split all clips at time
+    | "RIPPLE_TRIM"           // { clip_id, edge, delta_sec }
+    | "ROLLING_TRIM"          // { clip_id, neighbor_id, edge, delta_sec }
+    | "SLIP_CLIP"             // { clip_id, delta_sec } — shift source in/out
+    | "SLIDE_CLIP"            // { clip_id, delta_sec } — move in timeline
+    | "RIPPLE_DELETE"         // { clip_id } — delete + close gap
+    | "DURATION_STRETCH";     // { clip_id, target_duration_sec?, speed_factor? }
   payload: Record<string, unknown>;
 }
 
@@ -204,6 +213,16 @@ export type EditorElement =
   | StickerElement
   | VideoOverlayElement
   | BRollElement;
+
+export type ToolId =
+  | "pointer"
+  | "blade"
+  | "ripple"
+  | "rolling"
+  | "slip"
+  | "slide"
+  | "ripple-delete"
+  | "duration-stretch";
 
 export type AgentStatus = "idle" | "working" | "done" | "error";
 
@@ -383,6 +402,10 @@ interface EditorState {
   isBRollDrawerOpen: boolean;
   setBRollDrawerOpen: (open: boolean) => void;
 
+  // ─── Phase 4b: active timeline tool ───────────────────────────────────────
+  activeTimelineTool: ToolId;
+  setActiveTimelineTool: (tool: ToolId) => void;
+
   // Actions
   setCurrentTime: (time: number) => void;
   setIsPlaying: (playing: boolean) => void;
@@ -519,6 +542,9 @@ export const useEditorStore = create<EditorState>()(
 
       // Phase 3a B-Roll drawer
       isBRollDrawerOpen: false,
+
+      // Phase 4b active timeline tool
+      activeTimelineTool: "pointer" as ToolId,
 
       // AI Editor initial state
       videoMetadata: null,
@@ -1025,6 +1051,96 @@ export const useEditorStore = create<EditorState>()(
               if (videoEl) videoEl.currentTime = trimStart;
               break;
             }
+
+            // ─── Phase 4b: NLE Timeline Tools ────────────────────────────────
+            case "POINTER_SELECT": {
+              const clipId = action.payload.clip_id as string | undefined;
+              store.setActiveTimelineTool("pointer");
+              if (clipId) store.selectClip(clipId);
+              break;
+            }
+            case "BLADE_SPLIT": {
+              const timeSec = action.payload.time_sec as number;
+              store.setActiveTimelineTool("blade");
+              if (typeof timeSec === "number" && store.suggestions.length > 0) {
+                store.splitClipAtTime(timeSec);
+              }
+              break;
+            }
+            case "RIPPLE_TRIM": {
+              const p = action.payload;
+              store.setActiveTimelineTool("ripple");
+              const deltaSec = (p.delta_sec as number) ?? 0;
+              const edge = p.edge as "in" | "out";
+              const { trimMarker, duration } = store;
+              if (trimMarker) {
+                if (edge === "in") {
+                  store.setTrimMarker({
+                    startTime: Math.max(0, trimMarker.startTime + deltaSec),
+                    endTime: trimMarker.endTime,
+                  });
+                } else {
+                  store.setTrimMarker({
+                    startTime: trimMarker.startTime,
+                    endTime: Math.min(duration, trimMarker.endTime + deltaSec),
+                  });
+                }
+              }
+              break;
+            }
+            case "ROLLING_TRIM": {
+              store.setActiveTimelineTool("rolling");
+              // Rolling trim adjusts the shared edit point — represented as trim marker in/out
+              const p = action.payload;
+              const deltaSec = (p.delta_sec as number) ?? 0;
+              const edge = p.edge as "in" | "out";
+              const { trimMarker, duration } = store;
+              if (trimMarker) {
+                if (edge === "in") {
+                  store.setTrimMarker({
+                    startTime: Math.max(0, trimMarker.startTime + deltaSec),
+                    endTime: trimMarker.endTime,
+                  });
+                } else {
+                  store.setTrimMarker({
+                    startTime: trimMarker.startTime,
+                    endTime: Math.min(duration, trimMarker.endTime + deltaSec),
+                  });
+                }
+              }
+              break;
+            }
+            case "SLIP_CLIP": {
+              store.setActiveTimelineTool("slip");
+              // Slip: shift playhead to reflect source offset — seek to current + delta
+              const deltaSec = (action.payload.delta_sec as number) ?? 0;
+              const next = Math.max(0, Math.min(store.duration, store.currentTime + deltaSec));
+              store.setPendingSeek(next);
+              break;
+            }
+            case "SLIDE_CLIP": {
+              store.setActiveTimelineTool("slide");
+              const deltaSec = (action.payload.delta_sec as number) ?? 0;
+              const next = Math.max(0, Math.min(store.duration, store.currentTime + deltaSec));
+              store.setPendingSeek(next);
+              break;
+            }
+            case "RIPPLE_DELETE": {
+              store.setActiveTimelineTool("ripple-delete");
+              const clipId = action.payload.clip_id as string;
+              if (clipId) store.deleteClip(clipId);
+              break;
+            }
+            case "DURATION_STRETCH": {
+              store.setActiveTimelineTool("duration-stretch");
+              const speedFactor = action.payload.speed_factor as number | undefined;
+              if (speedFactor != null) {
+                // Map speed_factor to playbackSpeed percentage (1.0 → 100, 2.0 → 200)
+                const pct = Math.round(Math.max(50, Math.min(200, speedFactor * 100)));
+                store.setExportSetting("playbackSpeed", pct);
+              }
+              break;
+            }
           }
         });
       },
@@ -1235,6 +1351,8 @@ export const useEditorStore = create<EditorState>()(
       clearAiSuggestions: () => set({ aiSuggestions: { ...DEFAULT_AI_SUGGESTIONS } }),
 
       setBRollDrawerOpen: (open) => set({ isBRollDrawerOpen: open }),
+
+      setActiveTimelineTool: (tool) => set({ activeTimelineTool: tool }),
     }),
     {
       name: "EditorStore",

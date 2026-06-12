@@ -519,6 +519,136 @@ def test_compute_silence_trims_leading_trailing():
     assert abs(kept - expected) < 0.05
 
 
+# ─── T25: PointerSelectAction parses and passes through sanitiser ─────────────
+
+
+def test_pointer_select_passthrough():
+    from models.ai_editor import PointerSelectAction
+
+    a = PointerSelectAction(type="POINTER_SELECT")
+    assert a.clip_id is None
+
+    a_with_id = PointerSelectAction(type="POINTER_SELECT", clip_id="clip-1")
+    assert a_with_id.clip_id == "clip-1"
+
+    state = make_state(videoDuration=30.0)
+    safe, clamped, dropped = sanitise([a_with_id], state)
+    assert len(safe) == 1
+    assert len(clamped) == 0
+
+
+# ─── T26: BladeSplitAction clamps time and drops near-edge splits ─────────────
+
+
+def test_blade_split_clamps_and_drops():
+    from models.ai_editor import BladeSplitAction
+
+    state = make_state(videoDuration=30.0)
+
+    # Valid split in the middle
+    valid = BladeSplitAction(type="BLADE_SPLIT", time_sec=15.0)
+    safe, clamped, dropped = sanitise([valid], state)
+    assert len(safe) == 1
+
+    # Split too close to start — should be dropped
+    near_start = BladeSplitAction(type="BLADE_SPLIT", time_sec=0.5)
+    safe2, _, dropped2 = sanitise([near_start], state)
+    assert len(safe2) == 0
+    assert len(dropped2) == 1
+
+
+# ─── T27: RippleTrimAction clamps delta to ±duration ─────────────────────────
+
+
+def test_ripple_trim_clamps_delta():
+    from models.ai_editor import RippleTrimAction
+
+    # 3600 is within Pydantic bounds but exceeds the 60s video duration
+    state = make_state(videoDuration=60.0)
+    action = RippleTrimAction(
+        type="RIPPLE_TRIM", clip_id="c1", edge="out", delta_sec=3600.0
+    )
+    safe, clamped, dropped = sanitise([action], state)
+    assert len(safe) == 1
+    assert safe[0].delta_sec <= 60.0  # type: ignore[attr-defined]
+    assert len(clamped) == 1
+
+
+# ─── T28: RollingTrimAction round-trips within bounds ────────────────────────
+
+
+def test_rolling_trim_round_trips():
+    from models.ai_editor import RollingTrimAction
+
+    state = make_state(videoDuration=30.0)
+    action = RollingTrimAction(
+        type="ROLLING_TRIM", clip_id="c1", neighbor_id="c2", edge="in", delta_sec=2.0
+    )
+    safe, clamped, dropped = sanitise([action], state)
+    assert len(safe) == 1
+    assert safe[0].delta_sec == 2.0  # type: ignore[attr-defined]
+    assert len(clamped) == 0
+
+
+# ─── T29: SlipAction clamps delta ─────────────────────────────────────────────
+
+
+def test_slip_action_clamps_delta():
+    from models.ai_editor import SlipAction
+
+    # -3600 is within Pydantic bounds but exceeds the 20s video duration
+    state = make_state(videoDuration=20.0)
+    action = SlipAction(type="SLIP_CLIP", clip_id="c1", delta_sec=-3600.0)
+    safe, clamped, dropped = sanitise([action], state)
+    assert len(safe) == 1
+    assert safe[0].delta_sec >= -20.0  # type: ignore[attr-defined]
+    assert len(clamped) == 1
+
+
+# ─── T30: SlideAction clamps delta ────────────────────────────────────────────
+
+
+def test_slide_action_clamps_delta():
+    from models.ai_editor import SlideAction
+
+    state = make_state(videoDuration=10.0)
+    action = SlideAction(type="SLIDE_CLIP", clip_id="c1", delta_sec=500.0)
+    safe, clamped, dropped = sanitise([action], state)
+    assert len(safe) == 1
+    assert safe[0].delta_sec <= 10.0  # type: ignore[attr-defined]
+
+
+# ─── T31: RippleDeleteAction passes through sanitiser ────────────────────────
+
+
+def test_ripple_delete_passthrough():
+    from models.ai_editor import RippleDeleteAction
+
+    state = make_state(videoDuration=30.0)
+    action = RippleDeleteAction(type="RIPPLE_DELETE", clip_id="clip-abc")
+    safe, clamped, dropped = sanitise([action], state)
+    assert len(safe) == 1
+    assert safe[0].clip_id == "clip-abc"  # type: ignore[attr-defined]
+    assert len(clamped) == 0
+
+
+# ─── T32: DurationStretchAction clamps target_duration_sec to dur*4 ─────────
+
+
+def test_duration_stretch_clamps_target_duration():
+    from models.ai_editor import DurationStretchAction
+
+    # 3600 is within Pydantic's le=3600 but sanitiser caps at dur*4=120
+    state = make_state(videoDuration=30.0)
+    action = DurationStretchAction(
+        type="DURATION_STRETCH", clip_id="c1", target_duration_sec=3600.0
+    )
+    safe, clamped, dropped = sanitise([action], state)
+    assert len(safe) == 1
+    assert safe[0].target_duration_sec <= 120.0  # type: ignore[attr-defined]
+    assert len(clamped) == 1
+
+
 # ─── T14: engine returns no_op response on Gemini JSON parse failure ──────────
 
 
