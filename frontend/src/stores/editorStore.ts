@@ -139,7 +139,9 @@ export interface EditorAction {
     | "CLEAR_KEYFRAMES"       // { clip_id }
     // ─── Phase 8: Project file ───────────────────────────────────────────────
     | "SAVE_PROJECT"          // { title? }
-    | "LOAD_PROJECT";         // { project_id }
+    | "LOAD_PROJECT"          // { project_id }
+    // ─── Phase 9: Auto-reframe ───────────────────────────────────────────────
+    | "AUTO_REFRAME";         // { clip_id, target_ar?, sample_rate_ms? }
   payload: Record<string, unknown>;
 }
 
@@ -1332,6 +1334,9 @@ export const useEditorStore = create<EditorState>()(
             case "SAVE_PROJECT":
               break;
             case "LOAD_PROJECT":
+              break;
+            // ─── Phase 9: Auto-reframe ──────────────────────────────────────
+            case "AUTO_REFRAME":
               break;
           }
         });

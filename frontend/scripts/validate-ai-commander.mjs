@@ -665,6 +665,32 @@ assert(has(catalogPrj, "save-project"),  "save-project in aiToolCatalog");
 assert(has(catalogPrj, "load-project"),  "load-project in aiToolCatalog");
 assert(has(catalogPrj, '"Project"'),     "Project category in aiToolCatalog");
 
+// ── [24] Phase 9 — Auto-reframe 16:9 → 9:16 ─────────────────────────────────
+console.log("\n[24] Phase 9 Auto-reframe");
+
+const rfTypes = read("lib/reframe/reframeTypes.ts");
+assert(rfTypes !== null, "lib/reframe/reframeTypes.ts exists");
+assert(has(rfTypes, "ReframeConfig"),       "ReframeConfig interface in reframeTypes.ts");
+assert(has(rfTypes, "ReframeFrame"),        "ReframeFrame interface in reframeTypes.ts");
+assert(has(rfTypes, "FaceBox"),             "FaceBox interface in reframeTypes.ts");
+
+const rfTracker = read("lib/reframe/faceTracker.ts");
+assert(rfTracker !== null, "lib/reframe/faceTracker.ts exists");
+assert(has(rfTracker, "FaceTracker"),       "FaceTracker class in faceTracker.ts");
+
+const rfAuto = read("lib/reframe/autoReframe.ts");
+assert(rfAuto !== null, "lib/reframe/autoReframe.ts exists");
+assert(has(rfAuto, "computeCrop"),          "computeCrop exported from autoReframe.ts");
+assert(has(rfAuto, "reframePlan"),          "reframePlan exported from autoReframe.ts");
+
+const pyModels24 = readRoot("fastapi/models/ai_editor.py");
+assert(has(pyModels24, "AUTO_REFRAME"),     "AUTO_REFRAME in ai_editor.py");
+
+assert(has(types, '"AUTO_REFRAME"'),        "AUTO_REFRAME in ai-editor.ts");
+
+const catalogRf = read("lib/aiToolCatalog.ts");
+assert(has(catalogRf, "auto-reframe"),      "auto-reframe in aiToolCatalog");
+
 // ── Summary ──────────────────────────────────────────────────────────────────
 console.log(`\n${"─".repeat(50)}`);
 console.log(`Assertions: ${passed + failed} total, ${passed} passed, ${failed} failed`);

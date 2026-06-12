@@ -730,6 +730,10 @@ def sanitise(
         elif t in ("SAVE_PROJECT", "LOAD_PROJECT"):
             pass
 
+        # ── AUTO_REFRAME — pass-through ───────────────────────────────────────
+        elif t == "AUTO_REFRAME":
+            pass
+
         safe.append(action)
 
     return safe, clamped, dropped

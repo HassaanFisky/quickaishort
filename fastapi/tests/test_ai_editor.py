@@ -1122,3 +1122,20 @@ def test_load_project_passthrough():  # T67
     assert len(safe) == 1
     assert dropped == []
     assert safe[0].project_id == "proj-xyz"
+
+
+def test_auto_reframe_passthrough():  # T68
+    from models.ai_editor import AutoReframeAction
+
+    action = AutoReframeAction(
+        type="AUTO_REFRAME",
+        clip_id="c1",
+        target_ar="9:16",
+        sample_rate_ms=500,
+    )
+    state = make_state(videoDuration=30.0)
+    safe, clamped, dropped = sanitise([action], state)
+    assert len(safe) == 1
+    assert dropped == []
+    assert safe[0].target_ar == "9:16"
+    assert safe[0].sample_rate_ms == 500

@@ -1080,6 +1080,21 @@ export const AI_TOOL_CATALOG: AiTool[] = [
       payload: { project_id: "" },
     }],
   },
+  // ─── Phase 9: Auto-reframe ───────────────────────────────────────────────────
+  {
+    id: "auto-reframe",
+    name: "Auto-Reframe 9:16",
+    description: "Automatically reframe 16:9 footage to 9:16 by tracking faces.",
+    category: "Visual",
+    iconName: "Crop",
+    keywords: ["reframe", "9:16", "portrait", "face", "mediapipe", "auto", "crop"],
+    execMode: "direct",
+    isEnabled: (s) => !!s.selectedClipId,
+    buildActions: (s) => [{
+      type: "AUTO_REFRAME",
+      payload: { clip_id: s.selectedClipId ?? "", target_ar: "9:16", sample_rate_ms: 500 },
+    }],
+  },
 ];
 
 export function searchTools(query: string, state: ToolExecutionContext): AiTool[] {

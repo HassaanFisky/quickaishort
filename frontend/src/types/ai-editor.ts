@@ -267,7 +267,8 @@ export type AiEditorAction =
   | DeleteKeyframeAction
   | ClearKeyframesAction
   | SaveProjectAction
-  | LoadProjectAction;
+  | LoadProjectAction
+  | AutoReframeAction;
 
 export interface SetKeyframeAction    { type: "SET_KEYFRAME";     clip_id: string; property: string; time_ms: number; value: number; easing?: string }
 export interface DeleteKeyframeAction { type: "DELETE_KEYFRAME";  clip_id: string; property: string; keyframe_id: string }
@@ -275,6 +276,8 @@ export interface ClearKeyframesAction { type: "CLEAR_KEYFRAMES";  clip_id: strin
 
 export interface SaveProjectAction    { type: "SAVE_PROJECT";     title?: string }
 export interface LoadProjectAction    { type: "LOAD_PROJECT";     project_id: string }
+
+export interface AutoReframeAction    { type: "AUTO_REFRAME";     clip_id: string; target_ar?: "9:16" | "1:1" | "4:5"; sample_rate_ms?: number }
 
 export interface SetClipGainAction    { type: "SET_CLIP_GAIN";   clip_id: string; gain_db: number }
 export interface SetMasterGainAction  { type: "SET_MASTER_GAIN"; gain_db: number }

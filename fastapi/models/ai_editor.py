@@ -737,6 +737,21 @@ class LoadProjectAction(BaseModel):
     project_id: str = Field(min_length=1, max_length=128)
 
 
+# ─── Phase 9: Auto-reframe ────────────────────────────────────────────────────
+
+_REFRAME_AR = Literal["9:16", "1:1", "4:5"]
+
+
+class AutoReframeAction(BaseModel):
+    """Trigger automatic 16:9→9:16 (or other AR) reframe using face tracking."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["AUTO_REFRAME"]
+    clip_id: str = Field(min_length=1, max_length=128)
+    target_ar: _REFRAME_AR = "9:16"
+    sample_rate_ms: int = Field(default=500, ge=100, le=5000)
+
+
 AiEditorAction = Annotated[
     Union[
         AddCaptionAction,
@@ -813,6 +828,7 @@ AiEditorAction = Annotated[
         ClearKeyframesAction,
         SaveProjectAction,
         LoadProjectAction,
+        AutoReframeAction,
     ],
     Field(discriminator="type"),
 ]
