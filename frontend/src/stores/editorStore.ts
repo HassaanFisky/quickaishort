@@ -98,7 +98,22 @@ export interface EditorAction {
     | "SLIP_CLIP"             // { clip_id, delta_sec } — shift source in/out
     | "SLIDE_CLIP"            // { clip_id, delta_sec } — move in timeline
     | "RIPPLE_DELETE"         // { clip_id } — delete + close gap
-    | "DURATION_STRETCH";     // { clip_id, target_duration_sec?, speed_factor? }
+    | "DURATION_STRETCH"      // { clip_id, target_duration_sec?, speed_factor? }
+    // ─── Phase 4b-wave-2: 14 additional NLE tools ───────────────────────────
+    | "FORWARD_LANE_SELECT"   // { clip_id? }
+    | "BACKWARD_LANE_SELECT"  // { clip_id? }
+    | "MARK_IN"               // { time_sec }
+    | "MARK_OUT"              // { time_sec }
+    | "CLIP_RANGE_MARK"       // { clip_id }
+    | "RANGE_MARK"            // { in_sec, out_sec }
+    | "EXTRACT"               // { clip_id } — ripple remove
+    | "LIFT"                  // { clip_id } — gap remove
+    | "INSERT_EDIT"           // { clip_id, insert_time_sec }
+    | "OVERWRITE_EDIT"        // { clip_id, insert_time_sec }
+    | "SWAP_CLIP"             // { clip_id, target_clip_id }
+    | "SCROLL_HAND"           // { delta_x?, delta_y? }
+    | "TIMELINE_ZOOM"         // { zoom_factor }
+    | "MAGNETIC_SNAP_TOGGLE"; // { enabled? }
   payload: Record<string, unknown>;
 }
 
@@ -222,7 +237,22 @@ export type ToolId =
   | "slip"
   | "slide"
   | "ripple-delete"
-  | "duration-stretch";
+  | "duration-stretch"
+  // Phase 4b-wave-2
+  | "forward-lane"
+  | "backward-lane"
+  | "mark-in"
+  | "mark-out"
+  | "clip-range-mark"
+  | "range-mark"
+  | "extract"
+  | "lift"
+  | "insert-edit"
+  | "overwrite-edit"
+  | "swap-clip"
+  | "scroll-hand"
+  | "timeline-zoom"
+  | "magnetic-snap";
 
 export type AgentStatus = "idle" | "working" | "done" | "error";
 
@@ -1141,6 +1171,59 @@ export const useEditorStore = create<EditorState>()(
               }
               break;
             }
+            // ─── Phase 4b-wave-2 dispatcher cases ──────────────────────────
+            case "FORWARD_LANE_SELECT":
+              store.setActiveTimelineTool("forward-lane");
+              break;
+            case "BACKWARD_LANE_SELECT":
+              store.setActiveTimelineTool("backward-lane");
+              break;
+            case "MARK_IN":
+              store.setActiveTimelineTool("mark-in");
+              store.setPendingSeek(action.payload.time_sec as number);
+              break;
+            case "MARK_OUT":
+              store.setActiveTimelineTool("mark-out");
+              store.setPendingSeek(action.payload.time_sec as number);
+              break;
+            case "CLIP_RANGE_MARK":
+              store.setActiveTimelineTool("clip-range-mark");
+              break;
+            case "RANGE_MARK":
+              store.setActiveTimelineTool("range-mark");
+              break;
+            case "EXTRACT": {
+              store.setActiveTimelineTool("extract");
+              const exClipId = action.payload.clip_id as string;
+              if (exClipId) store.deleteClip(exClipId);
+              break;
+            }
+            case "LIFT": {
+              store.setActiveTimelineTool("lift");
+              const liftClipId = action.payload.clip_id as string;
+              if (liftClipId) store.deleteClip(liftClipId);
+              break;
+            }
+            case "INSERT_EDIT":
+              store.setActiveTimelineTool("insert-edit");
+              store.setPendingSeek(action.payload.insert_time_sec as number);
+              break;
+            case "OVERWRITE_EDIT":
+              store.setActiveTimelineTool("overwrite-edit");
+              store.setPendingSeek(action.payload.insert_time_sec as number);
+              break;
+            case "SWAP_CLIP":
+              store.setActiveTimelineTool("swap-clip");
+              break;
+            case "SCROLL_HAND":
+              store.setActiveTimelineTool("scroll-hand");
+              break;
+            case "TIMELINE_ZOOM":
+              store.setActiveTimelineTool("timeline-zoom");
+              break;
+            case "MAGNETIC_SNAP_TOGGLE":
+              store.setActiveTimelineTool("magnetic-snap");
+              break;
           }
         });
       },

@@ -167,6 +167,22 @@ export interface SlideAction          { type: "SLIDE_CLIP";      clip_id: string
 export interface RippleDeleteAction   { type: "RIPPLE_DELETE";   clip_id: string }
 export interface DurationStretchAction { type: "DURATION_STRETCH"; clip_id: string; target_duration_sec?: number; speed_factor?: number }
 
+// ─── Phase 4b-wave-2: 14 additional NLE tools ─────────────────────────────────
+export interface ForwardLaneSelectorAction  { type: "FORWARD_LANE_SELECT";  clip_id?: string }
+export interface BackwardLaneSelectorAction { type: "BACKWARD_LANE_SELECT"; clip_id?: string }
+export interface MarkInAction               { type: "MARK_IN";              time_sec: number }
+export interface MarkOutAction              { type: "MARK_OUT";             time_sec: number }
+export interface ClipRangeMarkAction        { type: "CLIP_RANGE_MARK";      clip_id: string }
+export interface RangeMarkAction            { type: "RANGE_MARK";           in_sec: number; out_sec: number }
+export interface ExtractAction              { type: "EXTRACT";              clip_id: string }
+export interface LiftAction                 { type: "LIFT";                 clip_id: string }
+export interface InsertEditAction           { type: "INSERT_EDIT";          clip_id: string; insert_time_sec: number }
+export interface OverwriteEditAction        { type: "OVERWRITE_EDIT";       clip_id: string; insert_time_sec: number }
+export interface SwapClipAction             { type: "SWAP_CLIP";            clip_id: string; target_clip_id: string }
+export interface ScrollHandAction           { type: "SCROLL_HAND";          delta_x?: number; delta_y?: number }
+export interface TimelineZoomAction         { type: "TIMELINE_ZOOM";        zoom_factor: number }
+export interface MagneticSnapToggleAction   { type: "MAGNETIC_SNAP_TOGGLE"; enabled?: boolean }
+
 export type AiEditorAction =
   | AddCaptionAction
   | RemoveCaptionAction
@@ -208,7 +224,21 @@ export type AiEditorAction =
   | SlipAction
   | SlideAction
   | RippleDeleteAction
-  | DurationStretchAction;
+  | DurationStretchAction
+  | ForwardLaneSelectorAction
+  | BackwardLaneSelectorAction
+  | MarkInAction
+  | MarkOutAction
+  | ClipRangeMarkAction
+  | RangeMarkAction
+  | ExtractAction
+  | LiftAction
+  | InsertEditAction
+  | OverwriteEditAction
+  | SwapClipAction
+  | ScrollHandAction
+  | TimelineZoomAction
+  | MagneticSnapToggleAction;
 
 export type AiEditorActionType = AiEditorAction["type"];
 

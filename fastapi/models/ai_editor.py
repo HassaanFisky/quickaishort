@@ -370,6 +370,126 @@ class DurationStretchAction(BaseModel):
     speed_factor: Optional[float] = Field(default=None, ge=0.1, le=10.0)
 
 
+# ─── Phase 4b-wave-2: 14 additional NLE timeline tools ────────────────────────
+
+
+class ForwardLaneSelectorAction(BaseModel):
+    """Select the clip on the track immediately forward of the current selection."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["FORWARD_LANE_SELECT"]
+    clip_id: Optional[str] = Field(default=None, max_length=128)
+
+
+class BackwardLaneSelectorAction(BaseModel):
+    """Select the clip on the track immediately backward of the current selection."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["BACKWARD_LANE_SELECT"]
+    clip_id: Optional[str] = Field(default=None, max_length=128)
+
+
+class MarkInAction(BaseModel):
+    """Set the In point of the timeline range selection."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["MARK_IN"]
+    time_sec: float = Field(ge=0.0, le=86400.0)
+
+
+class MarkOutAction(BaseModel):
+    """Set the Out point of the timeline range selection."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["MARK_OUT"]
+    time_sec: float = Field(ge=0.0, le=86400.0)
+
+
+class ClipRangeMarkAction(BaseModel):
+    """Set In/Out points to match a specific clip's boundaries."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["CLIP_RANGE_MARK"]
+    clip_id: str = Field(min_length=1, max_length=128)
+
+
+class RangeMarkAction(BaseModel):
+    """Set an arbitrary In/Out range on the timeline."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["RANGE_MARK"]
+    in_sec: float = Field(ge=0.0, le=86400.0)
+    out_sec: float = Field(ge=0.0, le=86400.0)
+
+
+class ExtractAction(BaseModel):
+    """Remove a clip from the timeline and close the gap (ripple delete)."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["EXTRACT"]
+    clip_id: str = Field(min_length=1, max_length=128)
+
+
+class LiftAction(BaseModel):
+    """Remove a clip from the timeline and leave a gap (non-ripple delete)."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["LIFT"]
+    clip_id: str = Field(min_length=1, max_length=128)
+
+
+class InsertEditAction(BaseModel):
+    """Insert a clip at a specific timeline position, pushing later clips downstream."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["INSERT_EDIT"]
+    clip_id: str = Field(min_length=1, max_length=128)
+    insert_time_sec: float = Field(ge=0.0, le=86400.0)
+
+
+class OverwriteEditAction(BaseModel):
+    """Overwrite the timeline at a specific position with a clip."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["OVERWRITE_EDIT"]
+    clip_id: str = Field(min_length=1, max_length=128)
+    insert_time_sec: float = Field(ge=0.0, le=86400.0)
+
+
+class SwapClipAction(BaseModel):
+    """Swap the positions of two clips on the timeline."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["SWAP_CLIP"]
+    clip_id: str = Field(min_length=1, max_length=128)
+    target_clip_id: str = Field(min_length=1, max_length=128)
+
+
+class ScrollHandAction(BaseModel):
+    """Pan the timeline view by a pixel delta (hand/scroll tool)."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["SCROLL_HAND"]
+    delta_x: float = Field(default=0.0, ge=-10000.0, le=10000.0)
+    delta_y: float = Field(default=0.0, ge=-10000.0, le=10000.0)
+
+
+class TimelineZoomAction(BaseModel):
+    """Zoom the timeline view in or out."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["TIMELINE_ZOOM"]
+    zoom_factor: float = Field(default=1.0, ge=0.1, le=10.0)
+
+
+class MagneticSnapToggleAction(BaseModel):
+    """Toggle magnetic snapping on the timeline."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["MAGNETIC_SNAP_TOGGLE"]
+    enabled: Optional[bool] = None
+
+
 AiEditorAction = Annotated[
     Union[
         AddCaptionAction,
@@ -411,6 +531,20 @@ AiEditorAction = Annotated[
         SlideAction,
         RippleDeleteAction,
         DurationStretchAction,
+        ForwardLaneSelectorAction,
+        BackwardLaneSelectorAction,
+        MarkInAction,
+        MarkOutAction,
+        ClipRangeMarkAction,
+        RangeMarkAction,
+        ExtractAction,
+        LiftAction,
+        InsertEditAction,
+        OverwriteEditAction,
+        SwapClipAction,
+        ScrollHandAction,
+        TimelineZoomAction,
+        MagneticSnapToggleAction,
     ],
     Field(discriminator="type"),
 ]

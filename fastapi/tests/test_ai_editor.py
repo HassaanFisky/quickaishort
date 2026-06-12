@@ -635,7 +635,7 @@ def test_ripple_delete_passthrough():
 # ─── T32: DurationStretchAction clamps target_duration_sec to dur*4 ─────────
 
 
-def test_duration_stretch_clamps_target_duration():
+def test_duration_stretch_clamps_target_duration():  # T32
     from models.ai_editor import DurationStretchAction
 
     # 3600 is within Pydantic's le=3600 but sanitiser caps at dur*4=120
@@ -647,6 +647,171 @@ def test_duration_stretch_clamps_target_duration():
     assert len(safe) == 1
     assert safe[0].target_duration_sec <= 120.0  # type: ignore[attr-defined]
     assert len(clamped) == 1
+
+
+# ─── T33-T46: Phase 4b-wave-2 NLE tools ──────────────────────────────────────
+
+
+def test_forward_lane_selector_passthrough():  # T33
+    from models.ai_editor import ForwardLaneSelectorAction
+
+    action = ForwardLaneSelectorAction(type="FORWARD_LANE_SELECT")
+    state = make_state(videoDuration=30.0)
+    safe, clamped, dropped = sanitise([action], state)
+    assert len(safe) == 1
+    assert len(clamped) == 0
+
+
+def test_backward_lane_selector_passthrough():  # T34
+    from models.ai_editor import BackwardLaneSelectorAction
+
+    action = BackwardLaneSelectorAction(type="BACKWARD_LANE_SELECT", clip_id="c1")
+    state = make_state(videoDuration=30.0)
+    safe, clamped, dropped = sanitise([action], state)
+    assert len(safe) == 1
+    assert len(clamped) == 0
+
+
+def test_mark_in_clamps_time():  # T35
+    from models.ai_editor import MarkInAction
+
+    state = make_state(videoDuration=20.0)
+    # 86400 is within Pydantic bounds but sanitiser clamps to dur=20
+    action = MarkInAction(type="MARK_IN", time_sec=86400.0)
+    safe, clamped, dropped = sanitise([action], state)
+    assert len(safe) == 1
+    assert safe[0].time_sec <= 20.0  # type: ignore[attr-defined]
+    assert len(clamped) == 1
+
+
+def test_mark_out_clamps_time():  # T36
+    from models.ai_editor import MarkOutAction
+
+    state = make_state(videoDuration=10.0)
+    action = MarkOutAction(type="MARK_OUT", time_sec=86400.0)
+    safe, clamped, dropped = sanitise([action], state)
+    assert len(safe) == 1
+    assert safe[0].time_sec <= 10.0  # type: ignore[attr-defined]
+    assert len(clamped) == 1
+
+
+def test_clip_range_mark_passthrough():  # T37
+    from models.ai_editor import ClipRangeMarkAction
+
+    action = ClipRangeMarkAction(type="CLIP_RANGE_MARK", clip_id="clip-xyz")
+    state = make_state(videoDuration=30.0)
+    safe, clamped, dropped = sanitise([action], state)
+    assert len(safe) == 1
+    assert safe[0].clip_id == "clip-xyz"  # type: ignore[attr-defined]
+
+
+def test_range_mark_clamps_and_drops_invalid():  # T38
+    from models.ai_editor import RangeMarkAction
+
+    state = make_state(videoDuration=10.0)
+
+    # Valid range
+    valid = RangeMarkAction(type="RANGE_MARK", in_sec=2.0, out_sec=8.0)
+    safe, clamped, dropped = sanitise([valid], state)
+    assert len(safe) == 1
+
+    # out clamped below in → dropped
+    invert = RangeMarkAction(type="RANGE_MARK", in_sec=9.0, out_sec=86400.0)
+    safe2, clamped2, dropped2 = sanitise([invert], state)
+    # after clamping out to dur=10.0: in=9.0, out=10.0 → valid (not dropped)
+    assert len(safe2) == 1
+
+    # in == out after clamping → dropped
+    equal = RangeMarkAction(type="RANGE_MARK", in_sec=10.0, out_sec=10.0)
+    safe3, _, dropped3 = sanitise([equal], state)
+    assert len(dropped3) == 1
+
+
+def test_extract_passthrough():  # T39
+    from models.ai_editor import ExtractAction
+
+    action = ExtractAction(type="EXTRACT", clip_id="c1")
+    state = make_state(videoDuration=30.0)
+    safe, clamped, dropped = sanitise([action], state)
+    assert len(safe) == 1
+    assert len(clamped) == 0
+
+
+def test_lift_passthrough():  # T40
+    from models.ai_editor import LiftAction
+
+    action = LiftAction(type="LIFT", clip_id="c1")
+    state = make_state(videoDuration=30.0)
+    safe, clamped, dropped = sanitise([action], state)
+    assert len(safe) == 1
+    assert len(clamped) == 0
+
+
+def test_insert_edit_clamps_time():  # T41
+    from models.ai_editor import InsertEditAction
+
+    state = make_state(videoDuration=30.0)
+    action = InsertEditAction(type="INSERT_EDIT", clip_id="c1", insert_time_sec=86400.0)
+    safe, clamped, dropped = sanitise([action], state)
+    assert len(safe) == 1
+    assert safe[0].insert_time_sec <= 30.0  # type: ignore[attr-defined]
+    assert len(clamped) == 1
+
+
+def test_overwrite_edit_clamps_time():  # T42
+    from models.ai_editor import OverwriteEditAction
+
+    state = make_state(videoDuration=15.0)
+    action = OverwriteEditAction(type="OVERWRITE_EDIT", clip_id="c1", insert_time_sec=86400.0)
+    safe, clamped, dropped = sanitise([action], state)
+    assert len(safe) == 1
+    assert safe[0].insert_time_sec <= 15.0  # type: ignore[attr-defined]
+    assert len(clamped) == 1
+
+
+def test_swap_clip_passthrough():  # T43
+    from models.ai_editor import SwapClipAction
+
+    action = SwapClipAction(type="SWAP_CLIP", clip_id="c1", target_clip_id="c2")
+    state = make_state(videoDuration=30.0)
+    safe, clamped, dropped = sanitise([action], state)
+    assert len(safe) == 1
+    assert safe[0].target_clip_id == "c2"  # type: ignore[attr-defined]
+
+
+def test_scroll_hand_passthrough():  # T44
+    from models.ai_editor import ScrollHandAction
+
+    action = ScrollHandAction(type="SCROLL_HAND", delta_x=500.0, delta_y=-200.0)
+    state = make_state(videoDuration=30.0)
+    safe, clamped, dropped = sanitise([action], state)
+    assert len(safe) == 1
+    assert len(clamped) == 0
+
+
+def test_timeline_zoom_clamps():  # T45
+    from models.ai_editor import TimelineZoomAction
+    from pydantic import ValidationError
+
+    # Pydantic bounds: ge=0.1, le=10.0 — values within bounds pass to sanitiser
+    state = make_state(videoDuration=30.0)
+    valid = TimelineZoomAction(type="TIMELINE_ZOOM", zoom_factor=5.0)
+    safe, clamped, dropped = sanitise([valid], state)
+    assert len(safe) == 1
+
+    # Out-of-bounds value rejected by Pydantic
+    with pytest.raises(ValidationError):
+        TimelineZoomAction(type="TIMELINE_ZOOM", zoom_factor=99.0)
+
+
+def test_magnetic_snap_toggle_passthrough():  # T46
+    from models.ai_editor import MagneticSnapToggleAction
+
+    action = MagneticSnapToggleAction(type="MAGNETIC_SNAP_TOGGLE", enabled=True)
+    state = make_state(videoDuration=30.0)
+    safe, clamped, dropped = sanitise([action], state)
+    assert len(safe) == 1
+    assert safe[0].enabled is True  # type: ignore[attr-defined]
 
 
 # ─── T14: engine returns no_op response on Gemini JSON parse failure ──────────

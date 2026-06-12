@@ -430,6 +430,40 @@ assert(has(catalogExport, "export-webcodecs-mp4"), "export-webcodecs-mp4 in aiTo
 const editorLayoutExport = read("components/editor/EditorLayout.tsx");
 assert(has(editorLayoutExport, "ExportDialog"), "ExportDialog imported/used in EditorLayout");
 
+// ── [17] Phase 4b-wave-2 — 14 additional NLE tools ───────────────────────────
+console.log("\n[17] Phase 4b-wave-2 NLE tools (14)");
+
+const pyModels17 = readRoot("fastapi/models/ai_editor.py");
+assert(has(pyModels17, "FORWARD_LANE_SELECT"),   "FORWARD_LANE_SELECT in ai_editor.py");
+assert(has(pyModels17, "BACKWARD_LANE_SELECT"),  "BACKWARD_LANE_SELECT in ai_editor.py");
+assert(has(pyModels17, "MARK_IN"),               "MARK_IN in ai_editor.py");
+assert(has(pyModels17, "MARK_OUT"),              "MARK_OUT in ai_editor.py");
+assert(has(pyModels17, "CLIP_RANGE_MARK"),       "CLIP_RANGE_MARK in ai_editor.py");
+assert(has(pyModels17, "RANGE_MARK"),            "RANGE_MARK in ai_editor.py");
+assert(has(pyModels17, "EXTRACT"),               "EXTRACT in ai_editor.py");
+assert(has(pyModels17, "LIFT"),                  "LIFT in ai_editor.py");
+assert(has(pyModels17, "INSERT_EDIT"),           "INSERT_EDIT in ai_editor.py");
+assert(has(pyModels17, "OVERWRITE_EDIT"),        "OVERWRITE_EDIT in ai_editor.py");
+assert(has(pyModels17, "SWAP_CLIP"),             "SWAP_CLIP in ai_editor.py");
+assert(has(pyModels17, "SCROLL_HAND"),           "SCROLL_HAND in ai_editor.py");
+assert(has(pyModels17, "TIMELINE_ZOOM"),         "TIMELINE_ZOOM in ai_editor.py");
+assert(has(pyModels17, "MAGNETIC_SNAP_TOGGLE"),  "MAGNETIC_SNAP_TOGGLE in ai_editor.py");
+
+assert(has(types, '"FORWARD_LANE_SELECT"'),   "FORWARD_LANE_SELECT in ai-editor.ts");
+assert(has(types, '"BACKWARD_LANE_SELECT"'),  "BACKWARD_LANE_SELECT in ai-editor.ts");
+assert(has(types, '"MARK_IN"'),               "MARK_IN in ai-editor.ts");
+assert(has(types, '"MARK_OUT"'),              "MARK_OUT in ai-editor.ts");
+assert(has(types, '"CLIP_RANGE_MARK"'),       "CLIP_RANGE_MARK in ai-editor.ts");
+assert(has(types, '"RANGE_MARK"'),            "RANGE_MARK in ai-editor.ts");
+assert(has(types, '"EXTRACT"'),               "EXTRACT in ai-editor.ts");
+assert(has(types, '"LIFT"'),                  "LIFT in ai-editor.ts");
+assert(has(types, '"INSERT_EDIT"'),           "INSERT_EDIT in ai-editor.ts");
+assert(has(types, '"OVERWRITE_EDIT"'),        "OVERWRITE_EDIT in ai-editor.ts");
+assert(has(types, '"SWAP_CLIP"'),             "SWAP_CLIP in ai-editor.ts");
+assert(has(types, '"SCROLL_HAND"'),           "SCROLL_HAND in ai-editor.ts");
+assert(has(types, '"TIMELINE_ZOOM"'),         "TIMELINE_ZOOM in ai-editor.ts");
+assert(has(types, '"MAGNETIC_SNAP_TOGGLE"'),  "MAGNETIC_SNAP_TOGGLE in ai-editor.ts");
+
 // ── Summary ──────────────────────────────────────────────────────────────────
 console.log(`\n${"─".repeat(50)}`);
 console.log(`Assertions: ${passed + failed} total, ${passed} passed, ${failed} failed`);

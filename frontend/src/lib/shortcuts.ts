@@ -13,7 +13,22 @@ export type UiShortcutId =
   | "toolBlade"
   | "toolBladeAllTracks"
   | "toolRollingTrim"
-  | "toolRippleDelete";
+  | "toolRippleDelete"
+  // Phase 4b-wave-2
+  | "toolForwardLane"
+  | "toolBackwardLane"
+  | "toolMarkIn"
+  | "toolMarkOut"
+  | "toolClipRangeMark"
+  | "toolRangeMark"
+  | "toolExtract"
+  | "toolLift"
+  | "toolInsertEdit"
+  | "toolOverwriteEdit"
+  | "toolSwapClip"
+  | "toolScrollHand"
+  | "toolTimelineZoom"
+  | "toolMagneticSnap";
 
 export interface UiShortcut {
   id: UiShortcutId;
@@ -114,6 +129,21 @@ export const SHORTCUTS: Record<UiShortcutId, UiShortcut> = {
     label: "Shift+Delete",
     macLabel: "⇧⌫",
   },
+  // ─── Phase 4b-wave-2 tool shortcuts ─────────────────────────────────────
+  toolForwardLane:  { id: "toolForwardLane",  key: "a", shift: false, alt: false, label: "A",       macLabel: "A" },
+  toolBackwardLane: { id: "toolBackwardLane", key: "a", shift: true,  alt: false, label: "Shift+A", macLabel: "⇧A" },
+  toolMarkIn:       { id: "toolMarkIn",       key: "i", shift: false, alt: false, label: "I",       macLabel: "I" },
+  toolMarkOut:      { id: "toolMarkOut",      key: "o", shift: false, alt: false, label: "O",       macLabel: "O" },
+  toolClipRangeMark:{ id: "toolClipRangeMark",key: "x", shift: false, alt: false, label: "X",       macLabel: "X" },
+  toolRangeMark:    { id: "toolRangeMark",    key: "x", shift: true,  alt: false, label: "Shift+X", macLabel: "⇧X" },
+  toolExtract:      { id: "toolExtract",      key: ";", shift: false, alt: false, label: ";",       macLabel: ";" },
+  toolLift:         { id: "toolLift",         key: "'", shift: false, alt: false, label: "'",       macLabel: "'" },
+  toolInsertEdit:   { id: "toolInsertEdit",   key: ",", shift: false, alt: false, label: ",",       macLabel: "," },
+  toolOverwriteEdit:{ id: "toolOverwriteEdit",key: ".", shift: false, alt: false, label: ".",       macLabel: "." },
+  toolSwapClip:     { id: "toolSwapClip",     key: "y", shift: false, alt: false, label: "Y",       macLabel: "Y" },
+  toolScrollHand:   { id: "toolScrollHand",   key: "h", shift: false, alt: false, label: "H",       macLabel: "H" },
+  toolTimelineZoom: { id: "toolTimelineZoom", key: "z", shift: false, alt: false, label: "Z",       macLabel: "Z" },
+  toolMagneticSnap: { id: "toolMagneticSnap", key: "m", shift: false, alt: false, label: "M",       macLabel: "M" },
 };
 
 /**

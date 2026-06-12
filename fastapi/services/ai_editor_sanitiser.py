@@ -47,6 +47,12 @@ from models.ai_editor import (
     SlipAction,
     SlideAction,
     DurationStretchAction,
+    MarkInAction,
+    MarkOutAction,
+    RangeMarkAction,
+    InsertEditAction,
+    OverwriteEditAction,
+    TimelineZoomAction,
 )
 
 logger = logging.getLogger(__name__)
@@ -455,6 +461,86 @@ def sanitise(
                     target_duration_sec=ntd,
                     speed_factor=nsf,
                 )
+
+        # ── FORWARD_LANE_SELECT / BACKWARD_LANE_SELECT — pass-through ────────
+        elif t in ("FORWARD_LANE_SELECT", "BACKWARD_LANE_SELECT"):
+            pass
+
+        # ── MARK_IN — clamp to [0, dur] ───────────────────────────────────────
+        elif t == "MARK_IN":
+            a = action  # type: MarkInAction
+            ct = _clamp(a.time_sec, 0.0, dur)
+            if ct != a.time_sec:
+                clamped.append(f"MARK_IN time clamped to {ct:.3f}")
+                action = MarkInAction(type="MARK_IN", time_sec=ct)
+
+        # ── MARK_OUT — clamp to [0, dur] ──────────────────────────────────────
+        elif t == "MARK_OUT":
+            a = action  # type: MarkOutAction
+            ct = _clamp(a.time_sec, 0.0, dur)
+            if ct != a.time_sec:
+                clamped.append(f"MARK_OUT time clamped to {ct:.3f}")
+                action = MarkOutAction(type="MARK_OUT", time_sec=ct)
+
+        # ── CLIP_RANGE_MARK — pass-through ────────────────────────────────────
+        elif t == "CLIP_RANGE_MARK":
+            pass
+
+        # ── RANGE_MARK — clamp in/out, drop if in >= out ──────────────────────
+        elif t == "RANGE_MARK":
+            a = action  # type: RangeMarkAction
+            ni = _clamp(a.in_sec, 0.0, dur)
+            no = _clamp(a.out_sec, 0.0, dur)
+            if no <= ni:
+                dropped.append(f"RANGE_MARK dropped (in {ni:.3f} >= out {no:.3f})")
+                continue
+            if ni != a.in_sec or no != a.out_sec:
+                clamped.append("RANGE_MARK in/out clamped")
+                action = RangeMarkAction(type="RANGE_MARK", in_sec=ni, out_sec=no)
+
+        # ── EXTRACT / LIFT — pass-through ─────────────────────────────────────
+        elif t in ("EXTRACT", "LIFT"):
+            pass
+
+        # ── INSERT_EDIT — clamp insert time ───────────────────────────────────
+        elif t == "INSERT_EDIT":
+            a = action  # type: InsertEditAction
+            ct = _clamp(a.insert_time_sec, 0.0, dur)
+            if ct != a.insert_time_sec:
+                clamped.append(f"INSERT_EDIT time clamped to {ct:.3f}")
+                action = InsertEditAction(
+                    type="INSERT_EDIT", clip_id=a.clip_id, insert_time_sec=ct
+                )
+
+        # ── OVERWRITE_EDIT — clamp insert time ────────────────────────────────
+        elif t == "OVERWRITE_EDIT":
+            a = action  # type: OverwriteEditAction
+            ct = _clamp(a.insert_time_sec, 0.0, dur)
+            if ct != a.insert_time_sec:
+                clamped.append(f"OVERWRITE_EDIT time clamped to {ct:.3f}")
+                action = OverwriteEditAction(
+                    type="OVERWRITE_EDIT", clip_id=a.clip_id, insert_time_sec=ct
+                )
+
+        # ── SWAP_CLIP — pass-through ──────────────────────────────────────────
+        elif t == "SWAP_CLIP":
+            pass
+
+        # ── SCROLL_HAND — pass-through (Pydantic already bounds delta) ────────
+        elif t == "SCROLL_HAND":
+            pass
+
+        # ── TIMELINE_ZOOM — clamp zoom_factor ────────────────────────────────
+        elif t == "TIMELINE_ZOOM":
+            a = action  # type: TimelineZoomAction
+            nz = _clamp(a.zoom_factor, 0.1, 10.0)
+            if nz != a.zoom_factor:
+                clamped.append(f"TIMELINE_ZOOM factor clamped to {nz:.2f}")
+                action = TimelineZoomAction(type="TIMELINE_ZOOM", zoom_factor=nz)
+
+        # ── MAGNETIC_SNAP_TOGGLE — pass-through ───────────────────────────────
+        elif t == "MAGNETIC_SNAP_TOGGLE":
+            pass
 
         safe.append(action)
 
