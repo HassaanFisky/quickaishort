@@ -4,20 +4,14 @@ const nextConfig = {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || "https://quickai-api-y2cgnbsbxa-uc.a.run.app",
   },
   async headers() {
+    const isolationHeaders = [
+      { key: "Cross-Origin-Opener-Policy",  value: "same-origin" },
+      { key: "Cross-Origin-Embedder-Policy", value: "require-corp" },
+    ];
     return [
-      {
-        source: "/editor/:path*",
-        headers: [
-          {
-            key: "Cross-Origin-Opener-Policy",
-            value: "same-origin",
-          },
-          {
-            key: "Cross-Origin-Embedder-Policy",
-            value: "require-corp",
-          },
-        ],
-      },
+      // SharedArrayBuffer required paths (Whisper.wasm, FFmpeg.wasm, OPFS)
+      { source: "/editor/:path*", headers: isolationHeaders },
+      { source: "/adk/:path*",    headers: isolationHeaders },
     ];
   },
   eslint: { ignoreDuringBuilds: true },

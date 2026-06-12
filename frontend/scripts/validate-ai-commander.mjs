@@ -504,6 +504,28 @@ assert(has(catalogColor, "color-wheels"),  "color-wheels in aiToolCatalog");
 assert(has(catalogColor, "apply-lut"),     "apply-lut in aiToolCatalog");
 assert(has(catalogColor, "reset-color"),   "reset-color in aiToolCatalog");
 
+// ── [19] Phase 4 — OPFS + FFmpeg.wasm decoder ────────────────────────────────
+console.log("\n[19] Phase 4 OPFS + FFmpeg.wasm");
+
+const opfsStorage = read("lib/decode/opfsStorage.ts");
+assert(opfsStorage !== null, "lib/decode/opfsStorage.ts exists");
+assert(has(opfsStorage, "opfsWrite"), "opfsWrite exported from opfsStorage");
+assert(has(opfsStorage, "opfsRead"),  "opfsRead exported from opfsStorage");
+assert(has(opfsStorage, "opfsClear"), "opfsClear exported from opfsStorage");
+
+const ffmpegDecoder = read("lib/decode/ffmpegWasmDecoder.ts");
+assert(ffmpegDecoder !== null, "lib/decode/ffmpegWasmDecoder.ts exists");
+assert(has(ffmpegDecoder, "// @ts-nocheck"), "ffmpegWasmDecoder.ts has @ts-nocheck");
+assert(has(ffmpegDecoder, "ffmpegDecode"),   "ffmpegDecode exported from ffmpegWasmDecoder");
+assert(has(ffmpegDecoder, "LOAD_TIMEOUT_MS"), "LOAD_TIMEOUT_MS CDN-block timeout constant present");
+
+const decoderWorker = read("workers/decoderWorker.ts");
+assert(decoderWorker !== null, "workers/decoderWorker.ts exists");
+assert(has(decoderWorker, "// @ts-nocheck"), "decoderWorker.ts has @ts-nocheck");
+
+const nextCfg = read("../next.config.mjs");
+assert(has(nextCfg, '"/adk/:path*"'), "COOP/COEP headers extended to /adk in next.config.mjs");
+
 // ── Summary ──────────────────────────────────────────────────────────────────
 console.log(`\n${"─".repeat(50)}`);
 console.log(`Assertions: ${passed + failed} total, ${passed} passed, ${failed} failed`);

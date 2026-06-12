@@ -77,6 +77,7 @@ export default function EditorLayout() {
   }, [storeTranscript, storeVideoMetadata, setVideoContext]);
 
   const [exportOpen, setExportOpen] = useState(false);
+  const [localEngineEnabled, setLocalEngineEnabled] = useState(false);
   const [isAdvancedMode, setIsAdvancedMode] = useState(false);
   useEffect(() => {
     setIsAdvancedMode(new URLSearchParams(window.location.search).get("advanced") === "1");
@@ -411,6 +412,23 @@ export default function EditorLayout() {
           >
             <Wand2 size={15} />
           </button>
+
+          {isAdvancedMode && (
+            <button
+              onClick={() => setLocalEngineEnabled((v) => !v)}
+              title={localEngineEnabled ? "Local engine ON — click to disable" : "Use local engine (beta)"}
+              aria-label="Toggle local FFmpeg.wasm decode engine"
+              className={cn(
+                "h-9 px-2 rounded-lg flex items-center gap-1 text-[10px] font-medium border transition-colors",
+                localEngineEnabled
+                  ? "bg-amber-500/15 border-amber-500/40 text-amber-400 hover:bg-amber-500/25"
+                  : "bg-card border-border text-fg-muted hover:text-foreground"
+              )}
+            >
+              <Zap size={11} />
+              {localEngineEnabled ? "Local" : "Local"}
+            </button>
+          )}
 
           <button
             onClick={() => setExportOpen(true)}
