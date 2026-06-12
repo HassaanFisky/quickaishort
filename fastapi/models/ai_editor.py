@@ -617,6 +617,72 @@ class AddFadeOutAction(BaseModel):
     duration_ms: float = Field(default=500.0, ge=10.0, le=10000.0)
 
 
+# ─── Masking Suite actions ────────────────────────────────────────────────────
+
+
+class AddRectMaskAction(BaseModel):
+    """Add a rectangular mask to a clip."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["ADD_RECT_MASK"]
+    clip_id: str = Field(min_length=1, max_length=128)
+    x: float = Field(default=0.0, ge=0.0, le=1.0)
+    y: float = Field(default=0.0, ge=0.0, le=1.0)
+    width: float = Field(default=1.0, ge=0.0, le=1.0)
+    height: float = Field(default=1.0, ge=0.0, le=1.0)
+    feather: float = Field(default=0.0, ge=0.0, le=1.0)
+    invert: bool = False
+
+
+class AddEllipseMaskAction(BaseModel):
+    """Add an elliptical mask to a clip."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["ADD_ELLIPSE_MASK"]
+    clip_id: str = Field(min_length=1, max_length=128)
+    cx: float = Field(default=0.5, ge=0.0, le=1.0)
+    cy: float = Field(default=0.5, ge=0.0, le=1.0)
+    rx: float = Field(default=0.4, ge=0.001, le=1.0)
+    ry: float = Field(default=0.4, ge=0.001, le=1.0)
+    rotation: float = Field(default=0.0, ge=-180.0, le=180.0)
+    feather: float = Field(default=0.0, ge=0.0, le=1.0)
+    invert: bool = False
+
+
+class MaskPoint(BaseModel):
+    x: float = Field(ge=0.0, le=1.0)
+    y: float = Field(ge=0.0, le=1.0)
+
+
+class AddBezierMaskAction(BaseModel):
+    """Add a bezier-path mask to a clip (minimum 3 points)."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["ADD_BEZIER_MASK"]
+    clip_id: str = Field(min_length=1, max_length=128)
+    points: list[MaskPoint] = Field(min_length=3)
+    feather: float = Field(default=0.0, ge=0.0, le=1.0)
+    invert: bool = False
+
+
+class AddAiPersonMaskAction(BaseModel):
+    """Add a MediaPipe AI person segmentation mask to a clip."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["ADD_AI_PERSON_MASK"]
+    clip_id: str = Field(min_length=1, max_length=128)
+    confidence: float = Field(default=0.5, ge=0.0, le=1.0)
+    invert: bool = False
+
+
+class ClearMasksAction(BaseModel):
+    """Remove all masks from a clip."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["CLEAR_MASKS"]
+    clip_id: str = Field(min_length=1, max_length=128)
+
+
 AiEditorAction = Annotated[
     Union[
         AddCaptionAction,
@@ -683,6 +749,11 @@ AiEditorAction = Annotated[
         EnableLimiterAction,
         AddFadeInAction,
         AddFadeOutAction,
+        AddRectMaskAction,
+        AddEllipseMaskAction,
+        AddBezierMaskAction,
+        AddAiPersonMaskAction,
+        ClearMasksAction,
     ],
     Field(discriminator="type"),
 ]

@@ -126,7 +126,13 @@ export interface EditorAction {
     | "ENABLE_DENOISE"        // { clip_id, enabled }
     | "ENABLE_LIMITER"        // { enabled }
     | "ADD_FADE_IN"           // { clip_id, duration_ms }
-    | "ADD_FADE_OUT";         // { clip_id, start_ms, duration_ms }
+    | "ADD_FADE_OUT"          // { clip_id, start_ms, duration_ms }
+    // ─── Phase 6: Masking suite ──────────────────────────────────────────────
+    | "ADD_RECT_MASK"         // { clip_id, x, y, width, height, feather?, invert? }
+    | "ADD_ELLIPSE_MASK"      // { clip_id, cx, cy, rx, ry, rotation?, feather?, invert? }
+    | "ADD_BEZIER_MASK"       // { clip_id, points, feather?, invert? }
+    | "ADD_AI_PERSON_MASK"    // { clip_id, confidence?, invert? }
+    | "CLEAR_MASKS";          // { clip_id }
   payload: Record<string, unknown>;
 }
 
@@ -469,6 +475,10 @@ interface EditorState {
   clipColorState: ClipColorState | null;
   setClipColor: (patch: Partial<ClipColorState> | null) => void;
 
+  // ─── Phase 6: masking suite ───────────────────────────────────────────────
+  maskEnabled: boolean;
+  setMaskEnabled: (enabled: boolean) => void;
+
   // Actions
   setCurrentTime: (time: number) => void;
   setIsPlaying: (playing: boolean) => void;
@@ -611,6 +621,9 @@ export const useEditorStore = create<EditorState>()(
 
       // Phase 3b color suite
       clipColorState: null,
+
+      // Phase 6 masking
+      maskEnabled: false,
 
       // AI Editor initial state
       videoMetadata: null,
@@ -1292,6 +1305,15 @@ export const useEditorStore = create<EditorState>()(
               break;
             case "ADD_FADE_OUT":
               break;
+            case "ADD_RECT_MASK":
+            case "ADD_ELLIPSE_MASK":
+            case "ADD_BEZIER_MASK":
+            case "ADD_AI_PERSON_MASK":
+              store.setMaskEnabled(true);
+              break;
+            case "CLEAR_MASKS":
+              store.setMaskEnabled(false);
+              break;
           }
         });
       },
@@ -1511,6 +1533,8 @@ export const useEditorStore = create<EditorState>()(
             ? { clipColorState: null }
             : { clipColorState: { ...(s.clipColorState ?? {}), ...patch } }
         ),
+
+      setMaskEnabled: (enabled) => set({ maskEnabled: enabled }),
     }),
     {
       name: "EditorStore",

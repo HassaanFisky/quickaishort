@@ -59,6 +59,9 @@ from models.ai_editor import (  # noqa: F401
     SetMasterGainAction,
     AddFadeInAction,
     AddFadeOutAction,
+    AddRectMaskAction,
+    AddEllipseMaskAction,
+    AddBezierMaskAction,
 )
 
 logger = logging.getLogger(__name__)
@@ -645,6 +648,62 @@ def sanitise(
                     start_ms=ns,
                     duration_ms=nd,
                 )
+
+        # ── ADD_RECT_MASK — clamp all coords to [0,1] ─────────────────────────
+        elif t == "ADD_RECT_MASK":
+            a = action  # type: AddRectMaskAction
+            nx = _clamp(a.x, 0.0, 1.0)
+            ny = _clamp(a.y, 0.0, 1.0)
+            nw = _clamp(a.width, 0.0, 1.0)
+            nh = _clamp(a.height, 0.0, 1.0)
+            changed = nx != a.x or ny != a.y or nw != a.width or nh != a.height
+            if changed:
+                clamped.append(f"ADD_RECT_MASK coords clamped for clip {a.clip_id}")
+                action = AddRectMaskAction(
+                    type="ADD_RECT_MASK",
+                    clip_id=a.clip_id,
+                    x=nx,
+                    y=ny,
+                    width=nw,
+                    height=nh,
+                    feather=a.feather,
+                    invert=a.invert,
+                )
+
+        # ── ADD_ELLIPSE_MASK — clamp centre and radii to [0,1] ───────────────
+        elif t == "ADD_ELLIPSE_MASK":
+            a = action  # type: AddEllipseMaskAction
+            ncx = _clamp(a.cx, 0.0, 1.0)
+            ncy = _clamp(a.cy, 0.0, 1.0)
+            nrx = _clamp(a.rx, 0.001, 1.0)
+            nry = _clamp(a.ry, 0.001, 1.0)
+            changed = ncx != a.cx or ncy != a.cy or nrx != a.rx or nry != a.ry
+            if changed:
+                clamped.append(f"ADD_ELLIPSE_MASK coords clamped for clip {a.clip_id}")
+                action = AddEllipseMaskAction(
+                    type="ADD_ELLIPSE_MASK",
+                    clip_id=a.clip_id,
+                    cx=ncx,
+                    cy=ncy,
+                    rx=nrx,
+                    ry=nry,
+                    rotation=a.rotation,
+                    feather=a.feather,
+                    invert=a.invert,
+                )
+
+        # ── ADD_BEZIER_MASK — drop if fewer than 3 points ─────────────────────
+        elif t == "ADD_BEZIER_MASK":
+            a = action  # type: AddBezierMaskAction
+            if len(a.points) < 3:
+                dropped.append(
+                    f"ADD_BEZIER_MASK dropped — only {len(a.points)} points (need ≥3)"
+                )
+                continue
+
+        # ── ADD_AI_PERSON_MASK / CLEAR_MASKS — pass-through ──────────────────
+        elif t in ("ADD_AI_PERSON_MASK", "CLEAR_MASKS"):
+            pass
 
         safe.append(action)
 

@@ -257,7 +257,12 @@ export type AiEditorAction =
   | EnableDenoiseAction
   | EnableLimiterAction
   | AddFadeInAction
-  | AddFadeOutAction;
+  | AddFadeOutAction
+  | AddRectMaskAction
+  | AddEllipseMaskAction
+  | AddBezierMaskAction
+  | AddAiPersonMaskAction
+  | ClearMasksAction;
 
 export interface SetClipGainAction    { type: "SET_CLIP_GAIN";   clip_id: string; gain_db: number }
 export interface SetMasterGainAction  { type: "SET_MASTER_GAIN"; gain_db: number }
@@ -265,6 +270,13 @@ export interface EnableDenoiseAction  { type: "ENABLE_DENOISE";  clip_id: string
 export interface EnableLimiterAction  { type: "ENABLE_LIMITER";  enabled?: boolean }
 export interface AddFadeInAction      { type: "ADD_FADE_IN";     clip_id: string; duration_ms?: number }
 export interface AddFadeOutAction     { type: "ADD_FADE_OUT";    clip_id: string; start_ms?: number; duration_ms?: number }
+
+export interface MaskPoint            { x: number; y: number }
+export interface AddRectMaskAction    { type: "ADD_RECT_MASK";      clip_id: string; x?: number; y?: number; width?: number; height?: number; feather?: number; invert?: boolean }
+export interface AddEllipseMaskAction { type: "ADD_ELLIPSE_MASK";   clip_id: string; cx?: number; cy?: number; rx?: number; ry?: number; rotation?: number; feather?: number; invert?: boolean }
+export interface AddBezierMaskAction  { type: "ADD_BEZIER_MASK";    clip_id: string; points: MaskPoint[]; feather?: number; invert?: boolean }
+export interface AddAiPersonMaskAction{ type: "ADD_AI_PERSON_MASK"; clip_id: string; confidence?: number; invert?: boolean }
+export interface ClearMasksAction     { type: "CLEAR_MASKS";        clip_id: string }
 
 export type AiEditorActionType = AiEditorAction["type"];
 

@@ -935,6 +935,77 @@ export const AI_TOOL_CATALOG: AiTool[] = [
       payload: { clip_id: s.selectedClipId ?? "", start_ms: 0, duration_ms: 500 },
     }],
   },
+  // ─── Masking suite ────────────────────────────────────────────────────────
+  {
+    id: "mask-rect",
+    name: "Mask · Rectangle",
+    description: "Add a rectangular mask to the selected clip with optional feathering and invert.",
+    category: "Visual",
+    iconName: "Square",
+    keywords: ["mask", "rect", "rectangle", "matte", "cutout", "crop"],
+    execMode: "gemini",
+    isEnabled: (s) => !!s.selectedClipId,
+    buildActions: (s) => [{
+      type: "ADD_RECT_MASK",
+      payload: { clip_id: s.selectedClipId ?? "" },
+    }],
+  },
+  {
+    id: "mask-ellipse",
+    name: "Mask · Ellipse",
+    description: "Add an elliptical (oval/circle) mask to the selected clip.",
+    category: "Visual",
+    iconName: "Circle",
+    keywords: ["mask", "ellipse", "oval", "circle", "vignette", "matte"],
+    execMode: "gemini",
+    isEnabled: (s) => !!s.selectedClipId,
+    buildActions: (s) => [{
+      type: "ADD_ELLIPSE_MASK",
+      payload: { clip_id: s.selectedClipId ?? "" },
+    }],
+  },
+  {
+    id: "mask-bezier",
+    name: "Mask · Bezier Path",
+    description: "Add a custom bezier path mask to the selected clip (minimum 3 control points).",
+    category: "Visual",
+    iconName: "PenTool",
+    keywords: ["mask", "bezier", "path", "spline", "freeform", "draw"],
+    execMode: "gemini",
+    isEnabled: (s) => !!s.selectedClipId,
+    buildActions: (s) => [{
+      type: "ADD_BEZIER_MASK",
+      payload: { clip_id: s.selectedClipId ?? "", points: [{ x: 0.1, y: 0.1 }, { x: 0.9, y: 0.1 }, { x: 0.5, y: 0.9 }] },
+    }],
+  },
+  {
+    id: "mask-ai-person",
+    name: "Mask · AI Person",
+    description: "Add a MediaPipe AI segmentation mask that automatically tracks the person in the clip.",
+    category: "Visual",
+    iconName: "User",
+    keywords: ["mask", "ai", "person", "segment", "background", "mediapipe", "cutout"],
+    execMode: "direct",
+    isEnabled: (s) => !!s.selectedClipId,
+    buildActions: (s) => [{
+      type: "ADD_AI_PERSON_MASK",
+      payload: { clip_id: s.selectedClipId ?? "", confidence: 0.5 },
+    }],
+  },
+  {
+    id: "mask-clear",
+    name: "Mask · Clear All",
+    description: "Remove all masks from the selected clip.",
+    category: "Visual",
+    iconName: "Eraser",
+    keywords: ["mask", "clear", "remove", "reset", "delete"],
+    execMode: "direct",
+    isEnabled: (s) => !!s.selectedClipId,
+    buildActions: (s) => [{
+      type: "CLEAR_MASKS",
+      payload: { clip_id: s.selectedClipId ?? "" },
+    }],
+  },
 ];
 
 export function searchTools(query: string, state: ToolExecutionContext): AiTool[] {

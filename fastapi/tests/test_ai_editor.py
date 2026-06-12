@@ -984,3 +984,69 @@ def test_add_fade_out_clamps_start():  # T57
     assert len(safe) == 1
     assert safe[0].start_ms == 30000.0  # type: ignore[attr-defined]
     assert len(clamped) == 1
+
+
+# ─── T58-T62: Masking suite ───────────────────────────────────────────────────
+
+
+def test_add_rect_mask_passthrough():  # T58
+    from models.ai_editor import AddRectMaskAction
+
+    action = AddRectMaskAction(
+        type="ADD_RECT_MASK", clip_id="c1", x=0.1, y=0.1, width=0.8, height=0.8
+    )
+    state = make_state(videoDuration=30.0)
+    safe, clamped, dropped = sanitise([action], state)
+    assert len(safe) == 1
+    assert clamped == []
+
+
+def test_add_ellipse_mask_passthrough():  # T59
+    from models.ai_editor import AddEllipseMaskAction
+
+    action = AddEllipseMaskAction(
+        type="ADD_ELLIPSE_MASK", clip_id="c1", cx=0.5, cy=0.5, rx=0.4, ry=0.3
+    )
+    state = make_state(videoDuration=30.0)
+    safe, clamped, dropped = sanitise([action], state)
+    assert len(safe) == 1
+
+
+def test_add_bezier_mask_pydantic_requires_3_points():  # T60
+    from pydantic import ValidationError
+    from models.ai_editor import AddBezierMaskAction, MaskPoint
+
+    # Pydantic min_length=3 enforces the ≥3 invariant before the sanitiser
+    with pytest.raises(ValidationError):
+        AddBezierMaskAction(
+            type="ADD_BEZIER_MASK",
+            clip_id="c1",
+            points=[MaskPoint(x=0.1, y=0.1), MaskPoint(x=0.9, y=0.5)],
+        )
+
+
+def test_add_bezier_mask_valid_passes():  # T61
+    from models.ai_editor import AddBezierMaskAction, MaskPoint
+
+    action = AddBezierMaskAction(
+        type="ADD_BEZIER_MASK",
+        clip_id="c1",
+        points=[
+            MaskPoint(x=0.0, y=0.0),
+            MaskPoint(x=1.0, y=0.0),
+            MaskPoint(x=0.5, y=1.0),
+        ],
+    )
+    state = make_state(videoDuration=30.0)
+    safe, clamped, dropped = sanitise([action], state)
+    assert len(safe) == 1
+
+
+def test_clear_masks_passthrough():  # T62
+    from models.ai_editor import ClearMasksAction
+
+    action = ClearMasksAction(type="CLEAR_MASKS", clip_id="c1")
+    state = make_state(videoDuration=30.0)
+    safe, clamped, dropped = sanitise([action], state)
+    assert len(safe) == 1
+    assert dropped == []

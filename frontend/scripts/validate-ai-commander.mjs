@@ -561,6 +561,38 @@ assert(has(pyModels20, "ADD_FADE_OUT"),    "ADD_FADE_OUT in ai_editor.py");
 const editorLayoutAttrib = read("components/editor/EditorLayout.tsx");
 assert(has(editorLayoutAttrib, "mozilla/rnnoise"), "RNNoise attribution link in EditorLayout footer");
 
+// ── [21] Phase 6 — Masking suite ─────────────────────────────────────────────
+console.log("\n[21] Phase 6 Masking suite");
+
+const maskTypes = read("lib/masking/maskTypes.ts");
+assert(maskTypes !== null, "lib/masking/maskTypes.ts exists");
+assert(has(maskTypes, "RectMask"),       "RectMask interface in maskTypes.ts");
+assert(has(maskTypes, "EllipseMask"),    "EllipseMask interface in maskTypes.ts");
+assert(has(maskTypes, "BezierMask"),     "BezierMask interface in maskTypes.ts");
+assert(has(maskTypes, "AiPersonMask"),   "AiPersonMask interface in maskTypes.ts");
+
+const maskRenderer = read("lib/masking/maskRenderer.ts");
+assert(maskRenderer !== null, "lib/masking/maskRenderer.ts exists");
+assert(has(maskRenderer, "renderMasks"),     "renderMasks exported from maskRenderer.ts");
+assert(has(maskRenderer, "applyMaskAsAlpha"),"applyMaskAsAlpha exported from maskRenderer.ts");
+
+const pyModels21 = readRoot("fastapi/models/ai_editor.py");
+assert(has(pyModels21, "ADD_RECT_MASK"),      "ADD_RECT_MASK in ai_editor.py");
+assert(has(pyModels21, "ADD_ELLIPSE_MASK"),   "ADD_ELLIPSE_MASK in ai_editor.py");
+assert(has(pyModels21, "ADD_BEZIER_MASK"),    "ADD_BEZIER_MASK in ai_editor.py");
+assert(has(pyModels21, "ADD_AI_PERSON_MASK"), "ADD_AI_PERSON_MASK in ai_editor.py");
+assert(has(pyModels21, "CLEAR_MASKS"),        "CLEAR_MASKS in ai_editor.py");
+
+assert(has(types, '"ADD_RECT_MASK"'),      "ADD_RECT_MASK in ai-editor.ts");
+assert(has(types, '"ADD_BEZIER_MASK"'),    "ADD_BEZIER_MASK in ai-editor.ts");
+assert(has(types, '"ADD_AI_PERSON_MASK"'), "ADD_AI_PERSON_MASK in ai-editor.ts");
+assert(has(types, '"CLEAR_MASKS"'),        "CLEAR_MASKS in ai-editor.ts");
+
+const catalogMask = read("lib/aiToolCatalog.ts");
+assert(has(catalogMask, "mask-rect"),       "mask-rect in aiToolCatalog");
+assert(has(catalogMask, "mask-ai-person"),  "mask-ai-person in aiToolCatalog");
+assert(has(catalogMask, "mask-clear"),      "mask-clear in aiToolCatalog");
+
 // ── Summary ──────────────────────────────────────────────────────────────────
 console.log(`\n${"─".repeat(50)}`);
 console.log(`Assertions: ${passed + failed} total, ${passed} passed, ${failed} failed`);
