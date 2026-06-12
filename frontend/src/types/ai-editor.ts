@@ -183,6 +183,14 @@ export interface ScrollHandAction           { type: "SCROLL_HAND";          delt
 export interface TimelineZoomAction         { type: "TIMELINE_ZOOM";        zoom_factor: number }
 export interface MagneticSnapToggleAction   { type: "MAGNETIC_SNAP_TOGGLE"; enabled?: boolean }
 
+export interface ColorWheelValues           { r?: number; g?: number; b?: number; master?: number }
+export interface CurvePoint                 { x: number; y: number }
+export interface ColorWheelsAction          { type: "COLOR_WHEELS";      clip_id: string; lift?: ColorWheelValues; gamma?: ColorWheelValues; gain?: ColorWheelValues; offset?: ColorWheelValues }
+export interface ColorCurvesAction          { type: "COLOR_CURVES";      clip_id: string; master?: CurvePoint[]; red?: CurvePoint[]; green?: CurvePoint[]; blue?: CurvePoint[] }
+export interface HslSecondariesAction       { type: "HSL_SECONDARIES";   clip_id: string; hue_shift?: number; saturation_adjust?: number; luminance_adjust?: number; qualifier_hue?: number; qualifier_range?: number }
+export interface ApplyLutAction             { type: "APPLY_LUT";         clip_id: string; lut_url: string; lut_size?: number; intensity?: number }
+export interface ResetColorAction           { type: "RESET_COLOR";       clip_id: string }
+
 export type AiEditorAction =
   | AddCaptionAction
   | RemoveCaptionAction
@@ -238,7 +246,12 @@ export type AiEditorAction =
   | SwapClipAction
   | ScrollHandAction
   | TimelineZoomAction
-  | MagneticSnapToggleAction;
+  | MagneticSnapToggleAction
+  | ColorWheelsAction
+  | ColorCurvesAction
+  | HslSecondariesAction
+  | ApplyLutAction
+  | ResetColorAction;
 
 export type AiEditorActionType = AiEditorAction["type"];
 

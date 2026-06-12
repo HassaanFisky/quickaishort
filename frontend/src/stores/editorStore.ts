@@ -113,7 +113,13 @@ export interface EditorAction {
     | "SWAP_CLIP"             // { clip_id, target_clip_id }
     | "SCROLL_HAND"           // { delta_x?, delta_y? }
     | "TIMELINE_ZOOM"         // { zoom_factor }
-    | "MAGNETIC_SNAP_TOGGLE"; // { enabled? }
+    | "MAGNETIC_SNAP_TOGGLE"  // { enabled? }
+    // ─── Phase 3b: Color Suite ───────────────────────────────────────────────
+    | "COLOR_WHEELS"          // { clip_id, lift?, gamma?, gain?, offset? }
+    | "COLOR_CURVES"          // { clip_id, master?, red?, green?, blue? }
+    | "HSL_SECONDARIES"       // { clip_id, hue_shift?, saturation_adjust?, luminance_adjust? }
+    | "APPLY_LUT"             // { clip_id, lut_url, lut_size?, intensity? }
+    | "RESET_COLOR";          // { clip_id }
   payload: Record<string, unknown>;
 }
 
@@ -253,6 +259,22 @@ export type ToolId =
   | "scroll-hand"
   | "timeline-zoom"
   | "magnetic-snap";
+
+export interface ClipColorState {
+  exposure?: number;
+  contrast?: number;
+  saturation?: number;
+  lift?: [number, number, number];
+  gamma?: [number, number, number];
+  gain?: [number, number, number];
+  offset?: [number, number, number];
+  hueShift?: number;
+  satAdjust?: number;
+  lumAdjust?: number;
+  lutUrl?: string | null;
+  lutIntensity?: number;
+  masterCurve?: Array<[number, number]>;
+}
 
 export type AgentStatus = "idle" | "working" | "done" | "error";
 
@@ -436,6 +458,10 @@ interface EditorState {
   activeTimelineTool: ToolId;
   setActiveTimelineTool: (tool: ToolId) => void;
 
+  // ─── Phase 3b: color suite ────────────────────────────────────────────────
+  clipColorState: ClipColorState | null;
+  setClipColor: (patch: Partial<ClipColorState> | null) => void;
+
   // Actions
   setCurrentTime: (time: number) => void;
   setIsPlaying: (playing: boolean) => void;
@@ -575,6 +601,9 @@ export const useEditorStore = create<EditorState>()(
 
       // Phase 4b active timeline tool
       activeTimelineTool: "pointer" as ToolId,
+
+      // Phase 3b color suite
+      clipColorState: null,
 
       // AI Editor initial state
       videoMetadata: null,
@@ -1224,6 +1253,24 @@ export const useEditorStore = create<EditorState>()(
             case "MAGNETIC_SNAP_TOGGLE":
               store.setActiveTimelineTool("magnetic-snap");
               break;
+            case "COLOR_WHEELS":
+            case "COLOR_CURVES":
+            case "HSL_SECONDARIES":
+              store.setClipColor({
+                ...(action.payload.hue_shift !== undefined && { hueShift: action.payload.hue_shift as number }),
+                ...(action.payload.saturation_adjust !== undefined && { satAdjust: action.payload.saturation_adjust as number }),
+                ...(action.payload.luminance_adjust !== undefined && { lumAdjust: action.payload.luminance_adjust as number }),
+              });
+              break;
+            case "APPLY_LUT":
+              store.setClipColor({
+                lutUrl: action.payload.lut_url as string,
+                lutIntensity: (action.payload.intensity as number | undefined) ?? 1,
+              });
+              break;
+            case "RESET_COLOR":
+              store.setClipColor(null);
+              break;
           }
         });
       },
@@ -1436,6 +1483,13 @@ export const useEditorStore = create<EditorState>()(
       setBRollDrawerOpen: (open) => set({ isBRollDrawerOpen: open }),
 
       setActiveTimelineTool: (tool) => set({ activeTimelineTool: tool }),
+
+      setClipColor: (patch) =>
+        set((s) =>
+          patch === null
+            ? { clipColorState: null }
+            : { clipColorState: { ...(s.clipColorState ?? {}), ...patch } }
+        ),
     }),
     {
       name: "EditorStore",

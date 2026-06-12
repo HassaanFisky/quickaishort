@@ -17,7 +17,7 @@ import logging
 import os
 from typing import Any
 
-from models.ai_editor import (
+from models.ai_editor import (  # noqa: F401
     AIEditorCurrentState,
     AiEditorAction,
     AddCaptionAction,
@@ -36,10 +36,10 @@ from models.ai_editor import (
     ViralMoment,
     GenerateHookCaptionAction,
     SuggestStylePresetAction,
-    ExplainLastEditAction,
+    ExplainLastEditAction,  # noqa: F401 — used as inline type comment
     AddBRollAction,
     AddVideoOverlayAction,
-    RemoveOverlayAction,
+    RemoveOverlayAction,  # noqa: F401 — used as inline type comment
     RemoveSilencesAction,
     BladeSplitAction,
     RippleTrimAction,
@@ -53,6 +53,8 @@ from models.ai_editor import (
     InsertEditAction,
     OverwriteEditAction,
     TimelineZoomAction,
+    ApplyLutAction,
+    HslSecondariesAction,
 )
 
 logger = logging.getLogger(__name__)
@@ -542,6 +544,55 @@ def sanitise(
         elif t == "MAGNETIC_SNAP_TOGGLE":
             pass
 
+        # ── COLOR_WHEELS — pass-through (Pydantic bounds each channel) ────────
+        elif t == "COLOR_WHEELS":
+            pass
+
+        # ── COLOR_CURVES — pass-through (Pydantic bounds x/y to [0,1]) ───────
+        elif t == "COLOR_CURVES":
+            pass
+
+        # ── HSL_SECONDARIES — clamp adjustments to declared ranges ────────────
+        elif t == "HSL_SECONDARIES":
+            a = action  # type: HslSecondariesAction
+            nh = _clamp(a.hue_shift, -180.0, 180.0)
+            ns = _clamp(a.saturation_adjust, -100.0, 100.0)
+            nl = _clamp(a.luminance_adjust, -100.0, 100.0)
+            changed = (
+                nh != a.hue_shift
+                or ns != a.saturation_adjust
+                or nl != a.luminance_adjust
+            )
+            if changed:
+                clamped.append(f"HSL_SECONDARIES values clamped for clip {a.clip_id}")
+                action = HslSecondariesAction(
+                    type="HSL_SECONDARIES",
+                    clip_id=a.clip_id,
+                    hue_shift=nh,
+                    saturation_adjust=ns,
+                    luminance_adjust=nl,
+                    qualifier_hue=a.qualifier_hue,
+                    qualifier_range=a.qualifier_range,
+                )
+
+        # ── APPLY_LUT — clamp intensity to [0,1] ─────────────────────────────
+        elif t == "APPLY_LUT":
+            a = action  # type: ApplyLutAction
+            ni = _clamp(a.intensity, 0.0, 1.0)
+            if ni != a.intensity:
+                clamped.append(f"APPLY_LUT intensity clamped to {ni:.3f}")
+                action = ApplyLutAction(
+                    type="APPLY_LUT",
+                    clip_id=a.clip_id,
+                    lut_url=a.lut_url,
+                    lut_size=a.lut_size,
+                    intensity=ni,
+                )
+
+        # ── RESET_COLOR — pass-through ────────────────────────────────────────
+        elif t == "RESET_COLOR":
+            pass
+
         safe.append(action)
 
     return safe, clamped, dropped
@@ -554,7 +605,6 @@ def mock_response(
     state: AIEditorCurrentState,
 ) -> tuple[list[AiEditorAction], str, list[str]]:
     """Return 4 deterministic actions without calling Gemini."""
-    mid = state.videoDuration / 2 if state.videoDuration > 0 else 5.0
     actions: list[AiEditorAction] = [
         TrimAction(type="TRIM", start=0.0, end=max(state.videoDuration, 1.0)),
         AddCaptionAction(

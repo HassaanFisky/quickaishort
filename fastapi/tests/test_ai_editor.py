@@ -762,7 +762,9 @@ def test_overwrite_edit_clamps_time():  # T42
     from models.ai_editor import OverwriteEditAction
 
     state = make_state(videoDuration=15.0)
-    action = OverwriteEditAction(type="OVERWRITE_EDIT", clip_id="c1", insert_time_sec=86400.0)
+    action = OverwriteEditAction(
+        type="OVERWRITE_EDIT", clip_id="c1", insert_time_sec=86400.0
+    )
     safe, clamped, dropped = sanitise([action], state)
     assert len(safe) == 1
     assert safe[0].insert_time_sec <= 15.0  # type: ignore[attr-defined]
@@ -812,6 +814,92 @@ def test_magnetic_snap_toggle_passthrough():  # T46
     safe, clamped, dropped = sanitise([action], state)
     assert len(safe) == 1
     assert safe[0].enabled is True  # type: ignore[attr-defined]
+
+
+# ─── T47-T51: Color Suite ────────────────────────────────────────────────────
+
+
+def test_color_wheels_passthrough():  # T47
+    from models.ai_editor import ColorWheelsAction, ColorWheelValues
+
+    action = ColorWheelsAction(
+        type="COLOR_WHEELS",
+        clip_id="clip1",
+        lift=ColorWheelValues(r=-0.1, g=0.0, b=0.05, master=0.0),
+        gain=ColorWheelValues(r=1.0, g=0.9, b=0.95, master=1.0),
+    )
+    state = make_state(videoDuration=20.0)
+    safe, clamped, dropped = sanitise([action], state)
+    assert len(safe) == 1
+    assert clamped == []
+    assert dropped == []
+
+
+def test_color_curves_passthrough():  # T48
+    from models.ai_editor import ColorCurvesAction, CurvePoint
+
+    action = ColorCurvesAction(
+        type="COLOR_CURVES",
+        clip_id="clip1",
+        master=[
+            CurvePoint(x=0.0, y=0.0),
+            CurvePoint(x=0.5, y=0.6),
+            CurvePoint(x=1.0, y=1.0),
+        ],
+    )
+    state = make_state(videoDuration=20.0)
+    safe, clamped, dropped = sanitise([action], state)
+    assert len(safe) == 1
+    assert safe[0].clip_id == "clip1"  # type: ignore[attr-defined]
+
+
+def test_hsl_secondaries_passthrough():  # T49
+    from models.ai_editor import HslSecondariesAction
+
+    # Pydantic bounds already enforce [-180,180] and [-100,100];
+    # sanitiser acts as a secondary guard — test valid values pass through.
+    action = HslSecondariesAction(
+        type="HSL_SECONDARIES",
+        clip_id="clip1",
+        hue_shift=45.0,
+        saturation_adjust=-20.0,
+        luminance_adjust=10.0,
+    )
+    state = make_state(videoDuration=20.0)
+    safe, clamped, dropped = sanitise([action], state)
+    assert len(safe) == 1
+    a = safe[0]
+    assert a.hue_shift == 45.0  # type: ignore[attr-defined]
+    assert a.saturation_adjust == -20.0  # type: ignore[attr-defined]
+    assert clamped == []
+
+
+def test_apply_lut_passthrough():  # T50
+    from models.ai_editor import ApplyLutAction
+
+    # Pydantic bounds intensity to [0,1]; sanitiser confirms pass-through.
+    action = ApplyLutAction(
+        type="APPLY_LUT",
+        clip_id="clip1",
+        lut_url="https://example.com/film.cube",
+        intensity=0.75,
+    )
+    state = make_state(videoDuration=20.0)
+    safe, clamped, dropped = sanitise([action], state)
+    assert len(safe) == 1
+    assert safe[0].intensity == 0.75  # type: ignore[attr-defined]
+    assert clamped == []
+
+
+def test_reset_color_passthrough():  # T51
+    from models.ai_editor import ResetColorAction
+
+    action = ResetColorAction(type="RESET_COLOR", clip_id="clip1")
+    state = make_state(videoDuration=20.0)
+    safe, clamped, dropped = sanitise([action], state)
+    assert len(safe) == 1
+    assert dropped == []
+    assert clamped == []
 
 
 # ─── T14: engine returns no_op response on Gemini JSON parse failure ──────────

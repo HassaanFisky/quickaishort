@@ -14,7 +14,8 @@ export type ToolCategory =
   | "Visual"
   | "Elements"
   | "Playback"
-  | "Export";
+  | "Export"
+  | "Color";
 
 export type ToolExecutionMode = "direct" | "gemini";
 
@@ -783,6 +784,77 @@ export const AI_TOOL_CATALOG: AiTool[] = [
     execMode: "direct",
     isEnabled: () => process.env.NODE_ENV !== "production",
     buildActions: () => [],
+  },
+  // ─── Color Suite ──────────────────────────────────────────────────────────
+  {
+    id: "color-wheels",
+    name: "Color · Wheels (CDL)",
+    description: "Adjust Lift, Gamma, Gain, and Offset color wheels on the selected clip using CDL-style per-channel controls.",
+    category: "Color",
+    iconName: "Circle",
+    keywords: ["color", "wheels", "lift", "gamma", "gain", "offset", "cdl", "grade"],
+    execMode: "gemini",
+    isEnabled: (s) => !!s.selectedClipId,
+    buildActions: (s) => [{
+      type: "COLOR_WHEELS",
+      payload: { clip_id: s.selectedClipId ?? "" },
+    }],
+  },
+  {
+    id: "color-curves",
+    name: "Color · Curves",
+    description: "Set tone curve control points on master, red, green, and blue channels for precise tonal adjustments.",
+    category: "Color",
+    iconName: "TrendingUp",
+    keywords: ["color", "curves", "tone", "master", "rgb", "grade", "luma"],
+    execMode: "gemini",
+    isEnabled: (s) => !!s.selectedClipId,
+    buildActions: (s) => [{
+      type: "COLOR_CURVES",
+      payload: { clip_id: s.selectedClipId ?? "" },
+    }],
+  },
+  {
+    id: "hsl-secondaries",
+    name: "Color · HSL Secondaries",
+    description: "Shift hue, saturation, or luminance of a specific color range using HSL qualifier and adjustment controls.",
+    category: "Color",
+    iconName: "Palette",
+    keywords: ["hsl", "secondaries", "hue", "saturation", "luminance", "qualifier", "range", "selective"],
+    execMode: "gemini",
+    isEnabled: (s) => !!s.selectedClipId,
+    buildActions: (s) => [{
+      type: "HSL_SECONDARIES",
+      payload: { clip_id: s.selectedClipId ?? "" },
+    }],
+  },
+  {
+    id: "apply-lut",
+    name: "Color · Apply LUT",
+    description: "Apply a 3D .cube LUT file from a URL to the selected clip with adjustable intensity.",
+    category: "Color",
+    iconName: "Film",
+    keywords: ["lut", "cube", "3d lut", "color grade", "film", "look", "cinematic"],
+    execMode: "gemini",
+    isEnabled: (s) => !!s.selectedClipId,
+    buildActions: (s) => [{
+      type: "APPLY_LUT",
+      payload: { clip_id: s.selectedClipId ?? "", lut_url: "" },
+    }],
+  },
+  {
+    id: "reset-color",
+    name: "Color · Reset",
+    description: "Reset all color corrections (wheels, curves, HSL, LUT) for the selected clip to defaults.",
+    category: "Color",
+    iconName: "RotateCcw",
+    keywords: ["color", "reset", "clear", "default", "remove grade"],
+    execMode: "gemini",
+    isEnabled: (s) => !!s.selectedClipId,
+    buildActions: (s) => [{
+      type: "RESET_COLOR",
+      payload: { clip_id: s.selectedClipId ?? "" },
+    }],
   },
 ];
 

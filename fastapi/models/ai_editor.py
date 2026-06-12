@@ -490,6 +490,77 @@ class MagneticSnapToggleAction(BaseModel):
     enabled: Optional[bool] = None
 
 
+# ─── Color Suite actions ──────────────────────────────────────────────────────
+
+
+class ColorWheelValues(BaseModel):
+    r: float = Field(default=0.0, ge=-1.0, le=1.0)
+    g: float = Field(default=0.0, ge=-1.0, le=1.0)
+    b: float = Field(default=0.0, ge=-1.0, le=1.0)
+    master: float = Field(default=0.0, ge=-1.0, le=1.0)
+
+
+class ColorWheelsAction(BaseModel):
+    """Adjust CDL Lift/Gamma/Gain/Offset color wheels for a clip."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["COLOR_WHEELS"]
+    clip_id: str = Field(min_length=1, max_length=128)
+    lift: Optional[ColorWheelValues] = None
+    gamma: Optional[ColorWheelValues] = None
+    gain: Optional[ColorWheelValues] = None
+    offset: Optional[ColorWheelValues] = None
+
+
+class CurvePoint(BaseModel):
+    x: float = Field(ge=0.0, le=1.0)
+    y: float = Field(ge=0.0, le=1.0)
+
+
+class ColorCurvesAction(BaseModel):
+    """Set tone curve control points for master/R/G/B channels."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["COLOR_CURVES"]
+    clip_id: str = Field(min_length=1, max_length=128)
+    master: Optional[list[CurvePoint]] = None
+    red: Optional[list[CurvePoint]] = None
+    green: Optional[list[CurvePoint]] = None
+    blue: Optional[list[CurvePoint]] = None
+
+
+class HslSecondariesAction(BaseModel):
+    """Adjust HSL secondaries (hue/sat/lum shift with hue qualifier)."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["HSL_SECONDARIES"]
+    clip_id: str = Field(min_length=1, max_length=128)
+    hue_shift: float = Field(default=0.0, ge=-180.0, le=180.0)
+    saturation_adjust: float = Field(default=0.0, ge=-100.0, le=100.0)
+    luminance_adjust: float = Field(default=0.0, ge=-100.0, le=100.0)
+    qualifier_hue: float = Field(default=0.0, ge=0.0, le=360.0)
+    qualifier_range: float = Field(default=30.0, ge=1.0, le=180.0)
+
+
+class ApplyLutAction(BaseModel):
+    """Apply a 3D LUT (.cube) to a clip from a URL."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["APPLY_LUT"]
+    clip_id: str = Field(min_length=1, max_length=128)
+    lut_url: str = Field(min_length=1, max_length=2048)
+    lut_size: int = Field(default=33, ge=17, le=65)
+    intensity: float = Field(default=1.0, ge=0.0, le=1.0)
+
+
+class ResetColorAction(BaseModel):
+    """Reset all color corrections for a clip to defaults."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["RESET_COLOR"]
+    clip_id: str = Field(min_length=1, max_length=128)
+
+
 AiEditorAction = Annotated[
     Union[
         AddCaptionAction,
@@ -545,6 +616,11 @@ AiEditorAction = Annotated[
         ScrollHandAction,
         TimelineZoomAction,
         MagneticSnapToggleAction,
+        ColorWheelsAction,
+        ColorCurvesAction,
+        HslSecondariesAction,
+        ApplyLutAction,
+        ResetColorAction,
     ],
     Field(discriminator="type"),
 ]

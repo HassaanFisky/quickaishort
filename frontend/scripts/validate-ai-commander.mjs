@@ -464,6 +464,46 @@ assert(has(types, '"SCROLL_HAND"'),           "SCROLL_HAND in ai-editor.ts");
 assert(has(types, '"TIMELINE_ZOOM"'),         "TIMELINE_ZOOM in ai-editor.ts");
 assert(has(types, '"MAGNETIC_SNAP_TOGGLE"'),  "MAGNETIC_SNAP_TOGGLE in ai-editor.ts");
 
+// ── [18] Phase 3b — Color Suite ──────────────────────────────────────────────
+console.log("\n[18] Phase 3b Color Suite");
+
+const wgslShader = read("lib/webgpu/shaders/colorCorrection.wgsl.ts");
+assert(wgslShader !== null, "lib/webgpu/shaders/colorCorrection.wgsl.ts exists");
+assert(has(wgslShader, "COLOR_CORRECTION_WGSL"), "COLOR_CORRECTION_WGSL exported from shader file");
+assert(has(wgslShader, "REC709_LUMA"), "REC709_LUMA constant in WGSL shader");
+assert(has(wgslShader, "apply_cdl"), "apply_cdl CDL function in WGSL shader");
+assert(has(wgslShader, "texture_3d"), "texture_3d LUT binding in WGSL shader");
+assert(has(wgslShader, "defaultColorParamsBuffer"), "defaultColorParamsBuffer helper exported");
+
+const colorPipeline = read("lib/webgpu/colorPipeline.ts");
+assert(colorPipeline !== null, "lib/webgpu/colorPipeline.ts exists");
+assert(has(colorPipeline, "// @ts-nocheck"), "colorPipeline.ts has @ts-nocheck for WebGPU types");
+assert(has(colorPipeline, "ColorPipeline"), "ColorPipeline class in colorPipeline.ts");
+assert(has(colorPipeline, "isSupported"), "isSupported static method in ColorPipeline");
+
+const colorSuite = read("components/editor/panels/ColorSuite.tsx");
+assert(colorSuite !== null, "components/editor/panels/ColorSuite.tsx exists");
+assert(has(colorSuite, "setClipColor"), "setClipColor used in ColorSuite");
+
+const pyModels18 = readRoot("fastapi/models/ai_editor.py");
+assert(has(pyModels18, "COLOR_WHEELS"),     "COLOR_WHEELS in ai_editor.py");
+assert(has(pyModels18, "COLOR_CURVES"),     "COLOR_CURVES in ai_editor.py");
+assert(has(pyModels18, "HSL_SECONDARIES"),  "HSL_SECONDARIES in ai_editor.py");
+assert(has(pyModels18, "APPLY_LUT"),        "APPLY_LUT in ai_editor.py");
+assert(has(pyModels18, "RESET_COLOR"),      "RESET_COLOR in ai_editor.py");
+
+assert(has(types, '"COLOR_WHEELS"'),    "COLOR_WHEELS in ai-editor.ts");
+assert(has(types, '"COLOR_CURVES"'),    "COLOR_CURVES in ai-editor.ts");
+assert(has(types, '"HSL_SECONDARIES"'), "HSL_SECONDARIES in ai-editor.ts");
+assert(has(types, '"APPLY_LUT"'),       "APPLY_LUT in ai-editor.ts");
+assert(has(types, '"RESET_COLOR"'),     "RESET_COLOR in ai-editor.ts");
+
+const catalogColor = read("lib/aiToolCatalog.ts");
+assert(has(catalogColor, '"Color"'), '"Color" category in aiToolCatalog');
+assert(has(catalogColor, "color-wheels"),  "color-wheels in aiToolCatalog");
+assert(has(catalogColor, "apply-lut"),     "apply-lut in aiToolCatalog");
+assert(has(catalogColor, "reset-color"),   "reset-color in aiToolCatalog");
+
 // ── Summary ──────────────────────────────────────────────────────────────────
 console.log(`\n${"─".repeat(50)}`);
 console.log(`Assertions: ${passed + failed} total, ${passed} passed, ${failed} failed`);
