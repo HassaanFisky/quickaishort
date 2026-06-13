@@ -36,12 +36,10 @@ import { YouTubePlayer } from "./YouTubePlayer";
 import Sidebar from "@/components/layout/Sidebar";
 import { TimelineLoader } from "@/components/ui/TimelineLoader";
 import { LiquidThemeToggle } from "@/components/shared/LiquidThemeToggle";
-import { AICopilot } from "@/components/editor/AICopilot";
 import { AIPanel } from "@/components/editor/AIPanel";
 import YouTubeInputStrip from "./YouTubeInputStrip";
 import VideoWorkspace from "./VideoWorkspace";
 import ExportDialog from "./ExportDialog";
-import axios from "axios";
 
 export default function EditorLayout() {
   const {
@@ -53,10 +51,11 @@ export default function EditorLayout() {
     sourceUrl,
     setThumbnailUrl: storeThumbnail,
     setVideoMetadata,
+    aiPanelOpen,
   } = useEditorStore();
 
   const { runPipeline, cancelPipeline } = useMediaPipeline();
-  const { setOpen: setAICopilotOpen, setVideoContext } = useAIPanel();
+  const { setVideoContext } = useAIPanel();
   const setAIPanelOpen = useEditorStore((s) => s.setAIPanelOpen);
   const { isSidebarCollapsed, leftPanelOpen, rightPanelOpen, setLeftPanelOpen, setRightPanelOpen } = useUIStore();
 
@@ -232,20 +231,21 @@ export default function EditorLayout() {
     } catch (error: unknown) {
       setBackendFailed(true);
       let errMsg = "Process interrupted. Please try another link.";
-      if (axios.isAxiosError(error)) {
-        if (error.code === "ERR_NETWORK") {
+      if (error && typeof error === "object" && "isAxiosError" in error) {
+        const axErr = error as { isAxiosError: boolean; code?: string; response?: { status: number; data: { detail?: string; code?: string } } };
+        if (axErr.code === "ERR_NETWORK") {
           errMsg = "Network Error: Could not connect to the backend server.";
-        } else if (error.response?.data?.code === "YOUTUBE_FETCH_FAILED") {
+        } else if (axErr.response?.data?.code === "YOUTUBE_FETCH_FAILED") {
           toast.warning(
             "YouTube server-side access failed. Upload MP4 instead.",
             { duration: 7000 }
           );
           setProcessing(false, "idle");
           return;
-        } else if (error.response) {
+        } else if (axErr.response) {
           errMsg =
-            (error.response.data as { detail?: string })?.detail ||
-            `Server error ${error.response.status}`;
+            axErr.response.data?.detail ||
+            `Server error ${axErr.response.status}`;
         }
       } else if (error instanceof Error) {
         errMsg = error.message || errMsg;
@@ -432,9 +432,10 @@ export default function EditorLayout() {
 
           <button
             onClick={() => setExportOpen(true)}
-            title="Export"
+            disabled={!sourceUrl || isProcessing}
+            title="Export — Shift+Alt+E"
             aria-label="Export video"
-            className="h-9 px-3 rounded-lg flex items-center gap-1.5 bg-primary/10 border border-primary/25 text-primary text-xs font-bold hover:bg-primary/20 transition-colors"
+            className="h-9 px-3 rounded-lg flex items-center gap-1.5 bg-primary/10 border border-primary/25 text-primary text-xs font-bold hover:bg-primary/20 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
           >
             <Download size={13} />
             Export
@@ -849,11 +850,28 @@ export default function EditorLayout() {
         )}
       </AnimatePresence>
 
-      {/* AI Copilot — simple chat overlay (⋯ icon opens this) */}
-      <AICopilot />
-
       {/* Gemini AI Editor — full action dispatch panel (Sparkles / Ctrl+K opens this) */}
       <AIPanel />
+
+      {/* Floating AI pill — visible when panel is closed and video is loaded */}
+      <AnimatePresence>
+        {!aiPanelOpen && storeVideoMetadata && (
+          <motion.button
+            onClick={() => setAIPanelOpen(true)}
+            className="fixed bottom-5 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 px-4 py-2.5 rounded-full bg-[#111116]/90 backdrop-blur-xl border border-white/[0.08] shadow-[0_8px_32px_rgba(0,0,0,0.5)] hover:border-[#a855f7]/30 hover:shadow-[0_8px_32px_rgba(168,85,247,0.15)] transition-all duration-300 group"
+            initial={{ y: 20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 20, opacity: 0 }}
+            whileHover={{ scale: 1.03 }}
+            whileTap={{ scale: 0.97 }}
+            aria-label="Open AI Editor"
+          >
+            <span className="w-5 h-5 rounded-md bg-[#a855f7]/15 flex items-center justify-center text-[#a855f7] text-xs">✦</span>
+            <span className="text-[11px] font-semibold text-white/60 group-hover:text-white/80 transition-colors">Ask AI to edit...</span>
+            <kbd className="text-[9px] text-white/20 font-mono px-1.5 py-0.5 rounded bg-white/[0.05]">Ctrl+K</kbd>
+          </motion.button>
+        )}
+      </AnimatePresence>
 
       {/* Export dialog — opened via Export button in header */}
       <ExportDialog open={exportOpen} onClose={() => setExportOpen(false)} />

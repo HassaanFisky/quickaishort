@@ -267,12 +267,14 @@ export function AIPanel() {
     <AnimatePresence>
       {aiPanelOpen && (
         <motion.aside
-          className="ai-panel"
-          initial={{ x: "100%", opacity: 0 }}
-          animate={{ x: 0, opacity: 1 }}
-          exit={{ x: "100%", opacity: 0 }}
-          transition={{ type: "spring", damping: 26, stiffness: 240 }}
+          className="fixed bottom-5 left-1/2 z-50 flex flex-col"
+          style={{ width: "min(520px, 92vw)", maxHeight: "55vh", transform: "translateX(-50%)" }}
+          initial={{ y: 40, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: 40, opacity: 0 }}
+          transition={{ type: "spring", damping: 28, stiffness: 260 }}
         >
+        <div className="flex flex-col h-full rounded-2xl overflow-hidden border border-white/[0.08] bg-[#111116]/95 backdrop-blur-2xl shadow-[0_24px_64px_rgba(0,0,0,0.7),0_0_0_1px_rgba(168,85,247,0.1)]">
           {/* ── Header ──────────────────────────────────────────────── */}
           <div className="ai-panel-header">
             <div className="ai-header-left">
@@ -478,6 +480,7 @@ export function AIPanel() {
               </span>
             </div>
           </div>
+        </div>
         </motion.aside>
       )}
     </AnimatePresence>

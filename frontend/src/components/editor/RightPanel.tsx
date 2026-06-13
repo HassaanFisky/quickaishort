@@ -611,7 +611,24 @@ export default function RightPanel() {
   }, [selectedClip, isPreflightRunning, handleRunPreflight, handleExport, isExporting, sourceFile, sourceUrl]);
 
   // ------------------------------------------------------------------
-  // ZERO STATE — show ToolInspector if a tool is active, else placeholder
+  // NO VIDEO — clean empty state
+  // ------------------------------------------------------------------
+  if (!hasVideo) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center text-center p-8 gap-4">
+        <div className="w-14 h-14 rounded-2xl bg-foreground/5 border border-foreground/10 flex items-center justify-center">
+          <Palette className="w-6 h-6 text-muted-foreground/40" />
+        </div>
+        <div>
+          <p className="text-[11px] font-bold text-fg-muted mb-1">No video loaded</p>
+          <p className="text-[10px] text-muted-foreground">Paste a YouTube URL to start editing</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ------------------------------------------------------------------
+  // ZERO STATE — video loaded but no clip yet; show ToolInspector if active
   // ------------------------------------------------------------------
   if (isZeroState) {
     if (activeTool) {

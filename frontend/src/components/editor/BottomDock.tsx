@@ -19,6 +19,9 @@ import {
   Undo2,
   Redo2,
   Trash2,
+  Minus,
+  Plus,
+  Maximize2,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -163,8 +166,9 @@ export default function BottomDock() {
     deleteClip,
   } = useEditorStore();
 
-  const { activeTool, setActiveTool } = useUIStore();
+  const { activeTool, setActiveTool, timelineZoom, setTimelineZoom } = useUIStore();
   const waveformCanvasRef = useRef<HTMLCanvasElement>(null);
+  const timelineScrollRef = useRef<HTMLDivElement>(null);
   const [hoverTime, setHoverTime] = useState<number | null>(null);
   const [hoverX, setHoverX] = useState(0);
   const isDraggingPlayhead = useRef(false);
@@ -348,6 +352,14 @@ export default function BottomDock() {
     toast.success(nextVal ? "AI Voiceover enabled." : "Voiceover disabled.");
   }, [exportSettings.voiceoverEnabled, setExportSetting]);
 
+  const handleTimelineWheel = useCallback((e: React.WheelEvent) => {
+    if (e.altKey) {
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? -0.15 : 0.15;
+      setTimelineZoom(timelineZoom + delta);
+    }
+  }, [timelineZoom, setTimelineZoom]);
+
   const tools: Array<{
     icon: LucideIcon;
     label: string;
@@ -452,7 +464,7 @@ export default function BottomDock() {
           </span>
         </div>
 
-        <div className="flex items-center gap-5">
+        <div className="flex items-center gap-5 flex-1">
           {tools.map(({ icon: Icon, label, toolId, action, tooltip }) => {
             const isActive = activeTool === toolId;
             return (
@@ -506,6 +518,36 @@ export default function BottomDock() {
             </Button>
           )}
         </div>
+        {/* Timeline zoom controls */}
+        <div className="flex items-center gap-1.5 ml-auto shrink-0">
+          <button
+            onClick={() => setTimelineZoom(timelineZoom - 0.25)}
+            className="w-6 h-6 rounded flex items-center justify-center text-muted-foreground/50 hover:text-foreground hover:bg-foreground/10 transition-colors"
+            title="Zoom Out"
+            aria-label="Timeline zoom out"
+          >
+            <Minus className="w-3 h-3" />
+          </button>
+          <span className="text-[9px] font-black text-muted-foreground tabular-nums w-8 text-center">
+            {Math.round(timelineZoom * 100)}%
+          </span>
+          <button
+            onClick={() => setTimelineZoom(timelineZoom + 0.25)}
+            className="w-6 h-6 rounded flex items-center justify-center text-muted-foreground/50 hover:text-foreground hover:bg-foreground/10 transition-colors"
+            title="Zoom In"
+            aria-label="Timeline zoom in"
+          >
+            <Plus className="w-3 h-3" />
+          </button>
+          <button
+            onClick={() => setTimelineZoom(1)}
+            className="w-6 h-6 rounded flex items-center justify-center text-muted-foreground/50 hover:text-foreground hover:bg-foreground/10 transition-colors"
+            title="Fit (100%)"
+            aria-label="Reset timeline zoom"
+          >
+            <Maximize2 className="w-3 h-3" />
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 flex flex-col gap-1.5 overflow-hidden">
@@ -513,11 +555,16 @@ export default function BottomDock() {
         <MultiTrackTimeline />
         <TimeScale duration={duration} />
 
-        {/* Video Track Area */}
-        <div className="flex gap-4 items-center group">
+        {/* Video Track Area — scrollable when zoomed */}
+        <div
+          ref={timelineScrollRef}
+          onWheel={handleTimelineWheel}
+          className="flex gap-4 items-center group overflow-x-auto overflow-y-hidden"
+        >
           <span className="w-16 text-[9px] font-black text-muted-foreground/40 uppercase tracking-widest text-right shrink-0">
             Video
           </span>
+          <div style={{ width: `${timelineZoom * 100}%`, minWidth: "100%", position: "relative" }}>
           <div
             id="video-track-area"
             ref={videoTrackRef}
@@ -530,7 +577,7 @@ export default function BottomDock() {
               setHoverTime((x / rect.width) * duration);
             }}
             onMouseLeave={() => setHoverTime(null)}
-            className="flex-1 h-8 rounded-lg bg-foreground/5 border border-foreground/5 relative overflow-visible cursor-crosshair"
+            className="w-full h-8 rounded-lg bg-foreground/5 border border-foreground/5 relative overflow-visible cursor-crosshair"
           >
             {isProcessing ? (
               /* Pulsing skeleton while pipeline is running */
@@ -610,6 +657,7 @@ export default function BottomDock() {
                 {formatTime(hoverTime)}
               </div>
             )}
+          </div>
           </div>
         </div>
 

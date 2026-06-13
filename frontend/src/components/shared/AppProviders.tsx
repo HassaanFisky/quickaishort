@@ -3,6 +3,7 @@
 import { ReactNode, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SessionProvider } from "next-auth/react";
+import { MotionConfig } from "framer-motion";
 import { ThemeProvider } from "@/components/shared/ThemeProvider";
 import { Toaster } from "@/components/ui/sonner";
 import { PusherProvider } from "@/components/providers/PusherProvider";
@@ -25,25 +26,27 @@ export function AppProviders({ children }: { children: ReactNode }) {
   );
 
   return (
-    <SessionProvider>
-      <QueryClientProvider client={queryClient}>
-        <PusherProvider>
-          <ThemeProvider
-            attribute="class"
-            defaultTheme="dark"
-            enableSystem
-            disableTransitionOnChange
-            themes={["dark", "oled", "light"]}
-          >
-            <SplashScreen />
-            <ErrorBoundary>
-              <PageTransition>{children}</PageTransition>
-            </ErrorBoundary>
-            <Toaster position="top-center" richColors />
-            <SessionExpiryModal />
-          </ThemeProvider>
-        </PusherProvider>
-      </QueryClientProvider>
-    </SessionProvider>
+    <MotionConfig reducedMotion="user">
+      <SessionProvider>
+        <QueryClientProvider client={queryClient}>
+          <PusherProvider>
+            <ThemeProvider
+              attribute="class"
+              defaultTheme="dark"
+              enableSystem
+              disableTransitionOnChange
+              themes={["dark", "oled", "light"]}
+            >
+              <SplashScreen />
+              <ErrorBoundary>
+                <PageTransition>{children}</PageTransition>
+              </ErrorBoundary>
+              <Toaster position="top-center" richColors />
+              <SessionExpiryModal />
+            </ThemeProvider>
+          </PusherProvider>
+        </QueryClientProvider>
+      </SessionProvider>
+    </MotionConfig>
   );
 }
