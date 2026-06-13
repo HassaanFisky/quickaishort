@@ -8,6 +8,8 @@ import {
   Link2,
   Upload,
   AlertCircle,
+  Zap,
+  X,
 } from "lucide-react";
 import { GlowButton } from "@/components/ui/GlowButton";
 import { YouTubePlayer } from "./YouTubePlayer";
@@ -110,15 +112,21 @@ export default function YouTubeInputStrip({
             <div className="flex items-center gap-2 px-1.5 pb-1">
               <div
                 className={cn(
-                  "flex-1 flex items-center gap-2 bg-background border rounded-xl px-3 py-2 transition-colors",
+                  "flex-1 flex items-center gap-2 border rounded-xl px-3 py-2 transition-all duration-200",
                   urlValid === true
-                    ? "border-emerald-500/40"
+                    ? "border-emerald-500/40 bg-emerald-500/[0.03]"
                     : urlValid === false
-                    ? "border-red-500/30"
-                    : "border-border",
+                    ? "border-red-500/40 bg-red-500/[0.03]"
+                    : "border-border bg-background focus-within:border-primary/40 focus-within:shadow-[0_0_0_3px_rgba(168,85,247,0.08)]",
                 )}
               >
-                <Link2 className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                {urlValid === true ? (
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                ) : urlValid === false ? (
+                  <AlertCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                ) : (
+                  <Link2 className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                )}
                 <input
                   type="url"
                   value={urlInput}
@@ -126,31 +134,34 @@ export default function YouTubeInputStrip({
                   placeholder="Paste YouTube URL…"
                   className="flex-1 bg-transparent text-[12px] font-medium text-foreground placeholder:text-muted-foreground outline-none min-w-0"
                   onKeyDown={(e) => {
-                    if (e.key === "Enter") onAnalyze();
+                    if (e.key === "Enter" && !isAnalysing) onAnalyze();
                   }}
                 />
-                {urlValid === false && (
-                  <AlertCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
-                )}
               </div>
-              <GlowButton
-                onClick={isAnalysing ? onCancel : onAnalyze}
-                disabled={!isAnalysing && !urlInput.trim()}
-                className="shrink-0 px-4 py-2 text-[11px]"
-              >
-                {isAnalysing ? (
-                  <span className="flex items-center gap-1.5">
-                    <Loader2 className="w-3 h-3 animate-spin" />
-                    {currentStage === "transcribing"
-                      ? "Transcribing"
-                      : currentStage === "analyzing"
-                      ? "Analyzing"
-                      : "Loading"}
-                  </span>
-                ) : (
-                  "Analyze"
-                )}
-              </GlowButton>
+              {isAnalysing ? (
+                <button
+                  onClick={onCancel}
+                  className="shrink-0 h-9 px-3.5 rounded-xl flex items-center gap-1.5 bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 transition-colors text-[11px] font-bold"
+                >
+                  <X className="w-3 h-3" />
+                  {currentStage === "transcribing"
+                    ? "Transcribing…"
+                    : currentStage === "analyzing"
+                    ? "Analyzing…"
+                    : "Loading…"}
+                </button>
+              ) : (
+                <GlowButton
+                  variant="gradient"
+                  size="sm"
+                  onClick={onAnalyze}
+                  disabled={!urlInput.trim()}
+                  className="shrink-0"
+                >
+                  <Zap size={13} />
+                  Generate
+                </GlowButton>
+              )}
             </div>
 
             {backendFailed && (

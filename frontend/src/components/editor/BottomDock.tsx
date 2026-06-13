@@ -641,10 +641,13 @@ export default function BottomDock() {
             {/* Playhead */}
             {duration > 0 && (
               <div
-                className="absolute top-[-30px] bottom-[-10px] w-0.5 bg-foreground z-30 pointer-events-none"
+                className="absolute top-[-30px] bottom-[-10px] w-0.5 z-30 pointer-events-none"
                 style={{ left: `${playheadPct}%` }}
               >
-                <div className="absolute -top-1 -left-[3px] w-2 h-2 bg-foreground rotate-45 shadow-[0_0_10px_white/30]" />
+                {/* Glow line */}
+                <div className="absolute inset-0 w-px bg-primary shadow-[0_0_8px_rgba(168,85,247,0.5)]" />
+                {/* Head triangle */}
+                <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[5px] border-r-[5px] border-t-[6px] border-l-transparent border-r-transparent border-t-primary drop-shadow-[0_0_4px_rgba(168,85,247,0.6)]" />
               </div>
             )}
 

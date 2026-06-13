@@ -15,11 +15,16 @@ import { cn } from "@/lib/utils";
 
 /* ─── Sub-components ───────────────────────────────────────────────────────── */
 
-function ActionTag({ type }: { type: string }) {
+function ActionTag({ type, index }: { type: string; index: number }) {
   return (
-    <span className="action-tag">
+    <motion.span
+      className="action-tag"
+      initial={{ opacity: 0, scale: 0.9, y: 4 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      transition={{ delay: index * 0.06, duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+    >
       {type.replace(/_/g, " ").toLowerCase()}
-    </span>
+    </motion.span>
   );
 }
 
@@ -383,7 +388,7 @@ export function AIPanel() {
                   {msg.actions && msg.actions.length > 0 && (
                     <div className="action-tags">
                       {msg.actions.map((a, i) => (
-                        <ActionTag key={i} type={a.type} />
+                        <ActionTag key={i} type={a.type} index={i} />
                       ))}
                     </div>
                   )}

@@ -7,7 +7,10 @@ import { useAIPanel } from "@/stores/aiPanelStore";
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import type { DragEvent, ChangeEvent } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import Link from "next/link";
+import Image from "next/image";
 import { GlowButton } from "@/components/ui/GlowButton";
+import QSLogo from "@/components/shared/QSLogo";
 import {
   Link2,
   Loader2,
@@ -320,9 +323,12 @@ export default function EditorLayout() {
 
       {/* Header */}
       <header className="flex items-center justify-between shrink-0">
-        {/* Live status module — single premium element, no duplicate wordmark
-            (the Sidebar already carries brand identity) */}
+        {/* Live status module */}
         <div className="flex items-center gap-2.5 min-w-0">
+          <Link href="/dashboard" className="shrink-0 mr-1" aria-label="Back to Dashboard">
+            <QSLogo variant="mark" size="sm" animated />
+          </Link>
+          <span className="h-4 w-px bg-foreground/8 shrink-0" />
           <div
             className={cn(
               "flex items-center gap-2 pl-2.5 pr-3 py-1.5 rounded-full border backdrop-blur-md transition-colors duration-500",
@@ -435,7 +441,12 @@ export default function EditorLayout() {
             disabled={!sourceUrl || isProcessing}
             title="Export — Shift+Alt+E"
             aria-label="Export video"
-            className="h-9 px-3 rounded-lg flex items-center gap-1.5 bg-primary/10 border border-primary/25 text-primary text-xs font-bold hover:bg-primary/20 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            className={cn(
+              "h-9 px-3.5 rounded-xl flex items-center gap-2 text-xs font-bold transition-all duration-200",
+              sourceUrl && !isProcessing
+                ? "bg-primary text-white shadow-[0_2px_12px_-2px_rgba(168,85,247,0.4)] hover:shadow-[0_4px_20px_-2px_rgba(168,85,247,0.5)] hover:-translate-y-px active:scale-[0.97]"
+                : "bg-foreground/5 border border-foreground/8 text-fg-muted cursor-not-allowed opacity-40"
+            )}
           >
             <Download size={13} />
             Export
@@ -445,7 +456,12 @@ export default function EditorLayout() {
             onClick={() => setAIPanelOpen(true)}
             title="Gemini AI Editor — Ctrl+K"
             aria-label="Open AI Editor"
-            className="h-9 w-9 rounded-lg flex items-center justify-center bg-card border border-border text-fg-muted hover:text-primary transition-colors"
+            className={cn(
+              "h-9 w-9 rounded-xl flex items-center justify-center border transition-all duration-200",
+              aiPanelOpen
+                ? "bg-primary/15 border-primary/30 text-primary shadow-[0_0_12px_rgba(168,85,247,0.2)]"
+                : "bg-card border-border text-fg-muted hover:text-primary hover:border-primary/20"
+            )}
           >
             <Sparkles size={15} />
           </button>
@@ -716,6 +732,41 @@ export default function EditorLayout() {
                 >
                   <YouTubePlayer videoId={youtubePreviewId} className="max-w-lg w-full" />
                 </motion.div>
+              ) : !sourceUrl && !youtubePreviewId && !isAnalysing ? (
+                <motion.div
+                  key="stage-empty"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="w-full h-full flex flex-col items-center justify-center gap-6 text-center p-8"
+                >
+                  <div className="relative">
+                    <div className="absolute inset-0 bg-primary/10 blur-3xl rounded-full scale-150" />
+                    <div className="relative w-20 h-20 rounded-2xl bg-card border border-border flex items-center justify-center shadow-lg">
+                      <Image src="/qs-logo.png" alt="" width={40} height={40} className="object-contain opacity-60" />
+                    </div>
+                  </div>
+                  <div className="max-w-sm">
+                    <h3 className="text-lg font-bold text-foreground mb-2 tracking-tight">
+                      Ready to create
+                    </h3>
+                    <p className="text-sm text-muted-foreground leading-relaxed">
+                      Paste a YouTube URL above to start. The AI will transcribe, find viral moments, and prepare your editing workspace.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3 text-[10px] text-fg-subtle">
+                    <span className="flex items-center gap-1.5">
+                      <kbd className="px-1.5 py-0.5 rounded bg-foreground/5 border border-foreground/8 font-mono text-[9px]">Ctrl</kbd>
+                      <kbd className="px-1.5 py-0.5 rounded bg-foreground/5 border border-foreground/8 font-mono text-[9px]">K</kbd>
+                      <span>AI Editor</span>
+                    </span>
+                    <span className="w-px h-3 bg-foreground/10" />
+                    <span className="flex items-center gap-1.5">
+                      <kbd className="px-1.5 py-0.5 rounded bg-foreground/5 border border-foreground/8 font-mono text-[9px]">?</kbd>
+                      <span>Shortcuts</span>
+                    </span>
+                  </div>
+                </motion.div>
               ) : centerMode === "effects" ? (
                 <motion.div
                   key="stage-effects"
@@ -858,17 +909,27 @@ export default function EditorLayout() {
         {!aiPanelOpen && storeVideoMetadata && (
           <motion.button
             onClick={() => setAIPanelOpen(true)}
-            className="fixed bottom-5 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 px-4 py-2.5 rounded-full bg-[#111116]/90 backdrop-blur-xl border border-white/[0.08] shadow-[0_8px_32px_rgba(0,0,0,0.5)] hover:border-[#a855f7]/30 hover:shadow-[0_8px_32px_rgba(168,85,247,0.15)] transition-all duration-300 group"
+            className="fixed bottom-5 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2.5 px-5 py-3 rounded-2xl bg-card/90 backdrop-blur-xl border border-border/50 shadow-[0_8px_32px_rgba(0,0,0,0.3),0_0_0_1px_rgba(168,85,247,0.06)] hover:border-primary/25 hover:shadow-[0_8px_32px_rgba(168,85,247,0.12)] transition-[border-color,box-shadow] duration-300 group"
             initial={{ y: 20, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 20, opacity: 0 }}
-            whileHover={{ scale: 1.03 }}
+            whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.97 }}
             aria-label="Open AI Editor"
           >
-            <span className="w-5 h-5 rounded-md bg-[#a855f7]/15 flex items-center justify-center text-[#a855f7] text-xs">✦</span>
-            <span className="text-[11px] font-semibold text-white/60 group-hover:text-white/80 transition-colors">Ask AI to edit...</span>
-            <kbd className="text-[9px] text-white/20 font-mono px-1.5 py-0.5 rounded bg-white/[0.05]">Ctrl+K</kbd>
+            <motion.span
+              className="w-6 h-6 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary text-xs"
+              animate={{ scale: [1, 1.08, 1] }}
+              transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+            >
+              ✦
+            </motion.span>
+            <span className="text-[12px] font-semibold text-fg-muted group-hover:text-foreground transition-colors">
+              Ask AI to edit...
+            </span>
+            <kbd className="text-[9px] text-fg-subtle font-mono px-1.5 py-0.5 rounded-md bg-foreground/5 border border-foreground/8">
+              {typeof navigator !== "undefined" && /Mac/.test(navigator.userAgent) ? "⌘K" : "Ctrl+K"}
+            </kbd>
           </motion.button>
         )}
       </AnimatePresence>

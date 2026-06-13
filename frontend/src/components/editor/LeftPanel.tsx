@@ -85,7 +85,7 @@ function DraggableClip({
       {...listeners}
       onClick={onClick}
       className={cn(
-        "group relative p-4 rounded-xl cursor-grab active:cursor-grabbing transition-all duration-300",
+        "group relative p-4 rounded-xl cursor-grab active:cursor-grabbing transition-all duration-200",
         isSelected
           ? "nano-glass bg-primary/10 border-primary/40 border-l-4 border-l-primary shadow-[0_0_20px_rgba(168,85,247,0.1)]"
           : "nano-glass border-border hover:bg-foreground/10 hover:border-border hover:-translate-y-0.5",
