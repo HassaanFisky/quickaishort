@@ -21,10 +21,16 @@ export default function AboutPage() {
         </h1>
         <div className="mt-8 space-y-6 text-muted-foreground leading-relaxed">
           <p>
-            Quick AI Shorts is a pre-publication validation system for short-form
-            video. Other tools tell you <em>which clip</em> to cut. Pre-Flight tells
-            you <em>if it will work</em> — by simulating six distinct audience
-            personas reviewing your clip before you ever post it.
+            Quick AI Shorts is a full-stack short-form video platform — from AI-assisted
+            editing to pre-publication audience validation. Paste a YouTube URL, edit on
+            a multi-track timeline with canvas overlays and AI voice commands, then run
+            your clip through Pre-Flight: six distinct AI audience personas that simulate
+            real viewer behaviour before you ever post.
+          </p>
+          <p>
+            Other tools tell you <em>which clip</em> to cut. We give you the editor to
+            cut it, the AI to direct it, and the intelligence to know <em>if it will
+            work</em> — all in one browser tab.
           </p>
           <p>
             Built for the Google for Startups AI Agents Challenge 2026 by Hassaan

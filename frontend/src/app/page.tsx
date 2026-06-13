@@ -20,7 +20,9 @@ import {
   ChevronRight,
   Zap,
   BarChart,
-  Video
+  Video,
+  Mic,
+  Layers
 } from "lucide-react";
 import { GlowButton } from "@/components/ui/GlowButton";
 import { cn } from "@/lib/utils";
@@ -98,6 +100,24 @@ const FEATURES = [
     title: "Drop-off Mapping",
     body: "See exactly where viewers tune out and why, powered by Gemini 2.5 Flash.",
     className: "md:col-span-2",
+  },
+  {
+    icon: Video,
+    title: "AI Video Editor",
+    body: "Full non-linear editor with canvas, captions, B-roll, and AI-powered scene composition — all in the browser.",
+    className: "md:col-span-2",
+  },
+  {
+    icon: Mic,
+    title: "Edit by Voice or Text",
+    body: "Tell the AI to trim silences, add a caption, or reframe the shot — it executes in one command.",
+    className: "md:col-span-1",
+  },
+  {
+    icon: Layers,
+    title: "Timeline + Canvas",
+    body: "Multi-track timeline with keyframe animations, transitions, and real-time 9:16 preview for Shorts.",
+    className: "md:col-span-1",
   },
 ];
 
@@ -187,7 +207,7 @@ export default function LandingPage() {
                 </motion.h1>
 
                 <motion.p variants={itemVariants} className="text-lg md:text-xl text-muted-foreground mb-10 max-w-xl leading-relaxed text-center">
-                  Run your short through a panel of 6 AI audience personas before you post. Stop guessing — start knowing.
+                  Edit your short with AI, then validate it against 6 audience personas before you post. From timeline to viral — one platform.
                 </motion.p>
 
                 <motion.div variants={itemVariants} className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">

@@ -38,7 +38,7 @@ const PLANS = [
   {
     id: "pro",
     name: "Pro",
-    price: "$19",
+    price: "$29",
     period: "per month",
     description: "Powered by Gemini 2.5 Flash. Elite viral intelligence.",
     features: [

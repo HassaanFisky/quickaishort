@@ -675,15 +675,6 @@ main:focus {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
-  }
-}
-
 /* ======================================================
    Neon Rotating URL Input Border (Task 1)
    ====================================================== */
@@ -1786,12 +1777,6 @@ nav:has(.nav-link:hover) .nav-link:not(:hover) {
   display: inline-block;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
-
-/* Empty states */
-.empty-state             { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 24px; text-align: center; }
-.empty-state-icon        { font-size: 48px; margin-bottom: 16px; opacity: 0.5; }
-.empty-state-title       { font-size: 16px; font-weight: 600; color: var(--text-primary); margin-bottom: 8px; }
-.empty-state-description { font-size: 14px; color: var(--text-secondary); max-width: 300px; }
 
 /* Network error toast */
 .error-banner {
