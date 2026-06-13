@@ -11,7 +11,6 @@ import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import { extractAudioData } from "@/lib/utils/audioExtractor";
 import { ShortcutOverlay } from "@/components/editor/ShortcutOverlay";
 import { BRollDrawer } from "@/components/editor/BRollDrawer";
-import { FloatingChatLauncher } from "@/components/editor/FloatingChatLauncher";
 import { WebGpuPreviewLayer } from "@/components/editor/WebGpuPreviewLayer";
 import { matchShortcut } from "@/lib/shortcuts";
 
@@ -164,10 +163,11 @@ export default function EditorPage() {
         useEditorStore.getState().setBRollDrawerOpen(true);
         return;
       }
-      // Shift+Alt+A (or Cmd+Shift+A on Mac) — toggle floating AI chat
+      // Shift+Alt+A (or Cmd+Shift+A on Mac) — toggle AI editor panel
       if (matchShortcut(e, "toggleFloatingChat")) {
         e.preventDefault();
-        useAIPanel.getState().toggleFloatingChat();
+        const current = useEditorStore.getState().aiPanelOpen;
+        useEditorStore.getState().setAIPanelOpen(!current);
         return;
       }
     };
@@ -195,7 +195,6 @@ export default function EditorPage() {
       <WebGpuPreviewLayer />
       <ShortcutOverlay isOpen={shortcutOverlayOpen} onClose={closeOverlay} />
       <BRollDrawer />
-      <FloatingChatLauncher />
     </ErrorBoundary>
   );
 }

@@ -23,11 +23,6 @@ type AIPanelState = {
   executionOverlay: boolean;
   executionOverlayLabel: string | undefined;
   setExecutionOverlay: (active: boolean, label?: string) => void;
-
-  // Slice A: floating chat overlay
-  isFloatingChatOpen: boolean;
-  toggleFloatingChat: () => void;
-  setFloatingChatOpen: (open: boolean) => void;
 };
 
 export const useAIPanel = create<AIPanelState>((set) => ({
@@ -44,8 +39,4 @@ export const useAIPanel = create<AIPanelState>((set) => ({
   executionOverlay: false,
   executionOverlayLabel: undefined,
   setExecutionOverlay: (active, label) => set({ executionOverlay: active, executionOverlayLabel: label }),
-
-  isFloatingChatOpen: false,
-  toggleFloatingChat: () => set((s) => ({ isFloatingChatOpen: !s.isFloatingChatOpen })),
-  setFloatingChatOpen: (open) => set({ isFloatingChatOpen: open }),
 }));
