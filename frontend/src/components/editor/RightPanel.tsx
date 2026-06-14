@@ -44,11 +44,12 @@ import { useAnimatedCounter } from "@/hooks/useAnimatedCounter";
 import ColorWheels from "@/components/editor/ColorWheels";
 import WaveformMonitor from "@/components/editor/WaveformMonitor";
 import Vectorscope from "@/components/editor/Vectorscope";
+import SpeedRampEditor from "@/components/editor/SpeedRampEditor";
 
 const QUALITY_OPTIONS = ["low", "medium", "high"] as const;
 const FILTER_OPTIONS = ["None", "Urban", "Retro", "Cinematic"] as const;
 
-type AccordionKey = "audio" | "visuals" | "color" | "scopes" | "export";
+type AccordionKey = "audio" | "visuals" | "speed" | "color" | "scopes" | "export";
 
 // ---------------------------------------------------------------------------
 // Toggle component
@@ -943,6 +944,37 @@ export default function RightPanel() {
                     </>
                   )}
                 </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* ── Group: Speed Ramp ────────────────────────────────────────── */}
+      <div className="rounded-xl border border-border overflow-hidden">
+        <AccordionHeader
+          label="Speed Ramp"
+          isOpen={openGroup === "speed"}
+          onToggle={() => toggleGroup("speed")}
+        />
+        <AnimatePresence initial={false}>
+          {openGroup === "speed" && (
+            <motion.div
+              key="speed-body"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+              className="overflow-hidden"
+            >
+              <div className="px-3 pb-4 flex flex-col gap-3 border-t border-border pt-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <Zap className="w-3.5 h-3.5 text-primary" />
+                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-fg-muted">
+                    Time Remapping
+                  </span>
+                </div>
+                <SpeedRampEditor />
               </div>
             </motion.div>
           )}

@@ -3,6 +3,12 @@ import { devtools } from "zustand/middleware";
 import type { RefObject } from "react";
 
 import { Clip, Transcript, CutSegment } from "@/types/pipeline";
+import {
+  upsertKeyframe,
+  deleteKeyframe as deleteKfById,
+  getMotionPath,
+  deleteMotionPath,
+} from "@/lib/motion/keyframeStore";
 
 // ─── AI Editor Types ──────────────────────────────────────────────────────────
 
@@ -156,7 +162,11 @@ export interface EditorAction {
     | "SET_CHROMA_KEY_COLOR"     // { color: string } — hex
     | "SET_CHROMA_KEY_TOLERANCE" // { value: number } — 0-1
     | "SET_CHROMA_KEY_SOFTNESS"  // { value: number } — 0-1
-    | "SET_CHROMA_KEY_SPILL";    // { value: number } — 0-1
+    | "SET_CHROMA_KEY_SPILL"     // { value: number } — 0-1
+    // ─── Phase 21: Speed Ramp ────────────────────────────────────────────────
+    | "SET_SPEED_KEYFRAME"       // { clip_id, time_ms, speed }
+    | "DELETE_SPEED_KEYFRAME"    // { clip_id, time_ms }
+    | "CLEAR_SPEED_RAMP";        // { clip_id }
   payload: Record<string, unknown>;
 }
 
@@ -1487,6 +1497,37 @@ export const useEditorStore = create<EditorState>()(
             case "SET_CHROMA_KEY_SPILL":
               store.setFrameFilter({ chromaKeySpill: action.payload.value as number });
               break;
+            // ─── Phase 21: Speed Ramp ──────────────────────────────────────
+            case "SET_SPEED_KEYFRAME": {
+              const spClipId = action.payload.clip_id as string;
+              const spTimeMs = action.payload.time_ms as number;
+              const spSpeed  = action.payload.speed as number;
+              if (!spClipId || spTimeMs == null || spSpeed == null) break;
+              upsertKeyframe(spClipId, "speed", {
+                id: `speed-${spTimeMs}`,
+                timeMs: spTimeMs,
+                value: Math.max(0.25, Math.min(4.0, spSpeed)),
+                easing: { type: "ease-in-out" },
+              });
+              break;
+            }
+            case "DELETE_SPEED_KEYFRAME": {
+              const dspClipId = action.payload.clip_id as string;
+              const dspTimeMs = action.payload.time_ms as number;
+              if (!dspClipId || dspTimeMs == null) break;
+              deleteKfById(dspClipId, "speed", `speed-${dspTimeMs}`);
+              break;
+            }
+            case "CLEAR_SPEED_RAMP": {
+              const cspClipId = action.payload.clip_id as string;
+              if (!cspClipId) break;
+              const cspPath = getMotionPath(cspClipId);
+              if (cspPath) {
+                cspPath.tracks = cspPath.tracks.filter((t) => t.property !== "speed");
+                if (cspPath.tracks.length === 0) deleteMotionPath(cspClipId);
+              }
+              break;
+            }
           }
         });
       },

@@ -31,7 +31,8 @@ export type AnimatableProperty =
   | "cropLeft"
   | "cropRight"
   | "cropTop"
-  | "cropBottom";
+  | "cropBottom"
+  | "speed"; // speed multiplier over time (1.0 = normal, 0.25–4.0 range)
 
 export interface Keyframe {
   id: string;
