@@ -38,6 +38,11 @@ export interface FrameFilter {
   saturation: number;
   hue: number;
   blur: number;
+  chromaKeyEnabled?: boolean;
+  chromaKeyColor?: string;
+  chromaKeyTolerance?: number;
+  chromaKeySoftness?: number;
+  chromaKeySpill?: number;
 }
 
 export interface TrimMarker {
@@ -145,7 +150,13 @@ export interface EditorAction {
     // ─── Phase 10: Voiceover, SFX, Transitions ──────────────────────────────
     | "ADD_VOICEOVER"         // { clip_id, start_sec?, duration_sec }
     | "ADD_SFX"               // { sfx_id, start_sec?, volume? }
-    | "SET_TRANSITION";       // { clip_id, transition? }
+    | "SET_TRANSITION"        // { clip_id, transition? }
+    // ─── Phase 20: Chroma Key ───────────────────────────────────────────────
+    | "ENABLE_CHROMA_KEY"        // { enabled: boolean }
+    | "SET_CHROMA_KEY_COLOR"     // { color: string } — hex
+    | "SET_CHROMA_KEY_TOLERANCE" // { value: number } — 0-1
+    | "SET_CHROMA_KEY_SOFTNESS"  // { value: number } — 0-1
+    | "SET_CHROMA_KEY_SPILL";    // { value: number } — 0-1
   payload: Record<string, unknown>;
 }
 
@@ -176,6 +187,11 @@ const DEFAULT_FRAME_FILTERS: FrameFilter = {
   saturation: 1,
   hue: 0,
   blur: 0,
+  chromaKeyEnabled: false,
+  chromaKeyColor: "#00FF00",
+  chromaKeyTolerance: 0.3,
+  chromaKeySoftness: 0.1,
+  chromaKeySpill: 0.5,
 };
 
 const DEFAULT_CAPTION_STYLE: CaptionStyle = {
@@ -1454,6 +1470,22 @@ export const useEditorStore = create<EditorState>()(
             case "ADD_SFX":
               break;
             case "SET_TRANSITION":
+              break;
+            // ─── Phase 20: Chroma Key ──────────────────────────────────────────
+            case "ENABLE_CHROMA_KEY":
+              store.setFrameFilter({ chromaKeyEnabled: action.payload.enabled as boolean });
+              break;
+            case "SET_CHROMA_KEY_COLOR":
+              store.setFrameFilter({ chromaKeyColor: action.payload.color as string });
+              break;
+            case "SET_CHROMA_KEY_TOLERANCE":
+              store.setFrameFilter({ chromaKeyTolerance: action.payload.value as number });
+              break;
+            case "SET_CHROMA_KEY_SOFTNESS":
+              store.setFrameFilter({ chromaKeySoftness: action.payload.value as number });
+              break;
+            case "SET_CHROMA_KEY_SPILL":
+              store.setFrameFilter({ chromaKeySpill: action.payload.value as number });
               break;
           }
         });

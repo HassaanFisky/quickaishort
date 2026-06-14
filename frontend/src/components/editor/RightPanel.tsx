@@ -524,6 +524,8 @@ export default function RightPanel() {
     updateClip,
     exportSettings,
     setExportSetting,
+    frameFilters,
+    setFrameFilter,
   } = useEditorStore();
 
   const { activeTool } = useUIStore();
@@ -880,6 +882,66 @@ export default function RightPanel() {
                       </Button>
                     ))}
                   </div>
+                </div>
+
+                {/* Chroma Key */}
+                <div className="flex flex-col gap-3">
+                  <ToggleRow
+                    label="Chroma Key"
+                    sub="Remove green screen background"
+                    enabled={frameFilters.chromaKeyEnabled ?? false}
+                    onToggle={() =>
+                      setFrameFilter({ chromaKeyEnabled: !(frameFilters.chromaKeyEnabled ?? false) })
+                    }
+                    ariaLabel={
+                      (frameFilters.chromaKeyEnabled ?? false)
+                        ? "Disable Chroma Key"
+                        : "Enable Chroma Key"
+                    }
+                  />
+                  {(frameFilters.chromaKeyEnabled ?? false) && (
+                    <>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-fg-muted">
+                          Key Color
+                        </span>
+                        <input
+                          type="color"
+                          value={frameFilters.chromaKeyColor ?? "#00FF00"}
+                          onChange={(e) => setFrameFilter({ chromaKeyColor: e.target.value })}
+                          aria-label="Chroma key color"
+                          className="w-8 h-8 rounded-lg border border-border cursor-pointer bg-transparent p-0.5"
+                        />
+                      </div>
+                      <SliderRow
+                        label="Tolerance"
+                        value={frameFilters.chromaKeyTolerance ?? 0.3}
+                        display={(frameFilters.chromaKeyTolerance ?? 0.3).toFixed(2)}
+                        min={0}
+                        max={1}
+                        step={0.01}
+                        onChange={(v) => setFrameFilter({ chromaKeyTolerance: v })}
+                      />
+                      <SliderRow
+                        label="Softness"
+                        value={frameFilters.chromaKeySoftness ?? 0.1}
+                        display={(frameFilters.chromaKeySoftness ?? 0.1).toFixed(2)}
+                        min={0}
+                        max={1}
+                        step={0.01}
+                        onChange={(v) => setFrameFilter({ chromaKeySoftness: v })}
+                      />
+                      <SliderRow
+                        label="Spill Suppression"
+                        value={frameFilters.chromaKeySpill ?? 0.5}
+                        display={(frameFilters.chromaKeySpill ?? 0.5).toFixed(2)}
+                        min={0}
+                        max={1}
+                        step={0.01}
+                        onChange={(v) => setFrameFilter({ chromaKeySpill: v })}
+                      />
+                    </>
+                  )}
                 </div>
               </div>
             </motion.div>
