@@ -14,6 +14,10 @@ export interface ColorAdjustments {
   offset?: [number, number, number];  // CDL offset per-channel, default [0,0,0]
   lutUrl?: string | null;
   lutIntensity?: number;   // 0–1, default 1
+  vignetteAmount?: number;   // 0 = off, 1 = full, default 0
+  vignetteMidpoint?: number; // radial distance threshold, default 0.5
+  vignetteRoundness?: number; // 0 = oval, 2 = square, default 1
+  vignetteFeather?: number;  // edge softness, default 0.3
 }
 
 interface LutCache {
@@ -167,6 +171,10 @@ export class ColorPipeline {
     buf[12] = gain[0]; buf[13] = gain[1]; buf[14] = gain[2];
     buf[16] = offset[0]; buf[17] = offset[1]; buf[18] = offset[2];
     buf[20] = adj.lutIntensity ?? 1;
+    buf[21] = adj.vignetteAmount   ?? 0;
+    buf[22] = adj.vignetteMidpoint ?? 0.5;
+    buf[23] = adj.vignetteRoundness ?? 1;
+    buf[24] = adj.vignetteFeather  ?? 0.3;
     return buf;
   }
 

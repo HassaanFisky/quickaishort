@@ -41,11 +41,12 @@ import { motion, AnimatePresence } from "framer-motion";
 import { InlinePaywallCard } from "@/components/shared/InlinePaywallCard";
 import { TimelineLoader } from "@/components/ui/TimelineLoader";
 import { useAnimatedCounter } from "@/hooks/useAnimatedCounter";
+import ColorWheels from "@/components/editor/ColorWheels";
 
 const QUALITY_OPTIONS = ["low", "medium", "high"] as const;
 const FILTER_OPTIONS = ["None", "Urban", "Retro", "Cinematic"] as const;
 
-type AccordionKey = "audio" | "visuals" | "export";
+type AccordionKey = "audio" | "visuals" | "color" | "export";
 
 // ---------------------------------------------------------------------------
 // Toggle component
@@ -548,6 +549,22 @@ export default function RightPanel() {
 
   const [openGroup, setOpenGroup] = useState<AccordionKey | null>("audio");
 
+  // Local color state — feeds ColorWheels + exposure/contrast/sat sliders.
+  // Not yet wired to colorPipeline (requires WebGPU feature flag).
+  const [colorAdj, setColorAdj] = React.useState({
+    lift:       [0, 0, 0] as [number, number, number],
+    gamma:      [1, 1, 1] as [number, number, number],
+    gain:       [1, 1, 1] as [number, number, number],
+    exposure:   0,
+    contrast:   1,
+    saturation: 1,
+  });
+  const updateColor = React.useCallback(
+    (patch: Partial<typeof colorAdj>) =>
+      setColorAdj((prev) => ({ ...prev, ...patch })),
+    []
+  );
+
   const toggleGroup = (key: AccordionKey) =>
     setOpenGroup((prev) => (prev === key ? null : key));
 
@@ -868,7 +885,85 @@ export default function RightPanel() {
         </AnimatePresence>
       </div>
 
-      {/* ── Group 3: Export ───────────────────────────────────────────── */}
+      {/* ── Group 3: Color Grading ────────────────────────────────────── */}
+      <div className="rounded-xl border border-border overflow-hidden">
+        <AccordionHeader
+          label="Color Grading"
+          isOpen={openGroup === "color"}
+          onToggle={() => toggleGroup("color")}
+        />
+        <AnimatePresence initial={false}>
+          {openGroup === "color" && (
+            <motion.div
+              key="color-body"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+              className="overflow-hidden"
+            >
+              <div className="px-3 pb-4 flex flex-col gap-4 border-t border-border pt-3">
+                {/* 3-Way Color Wheels */}
+                <ColorWheels
+                  lift={colorAdj.lift}
+                  gamma={colorAdj.gamma}
+                  gain={colorAdj.gain}
+                  onChange={(u) => {
+                    updateColor({
+                      ...(u.lift  && { lift:  u.lift  }),
+                      ...(u.gamma && { gamma: u.gamma }),
+                      ...(u.gain  && { gain:  u.gain  }),
+                    });
+                  }}
+                />
+
+                <div className="h-px bg-border" />
+
+                {/* Exposure / Contrast / Saturation */}
+                <SliderRow
+                  label="Exposure"
+                  value={colorAdj.exposure}
+                  display={colorAdj.exposure >= 0 ? `+${colorAdj.exposure.toFixed(2)} EV` : `${colorAdj.exposure.toFixed(2)} EV`}
+                  min={-3}
+                  max={3}
+                  step={0.05}
+                  onChange={(v) => updateColor({ exposure: v })}
+                />
+                <SliderRow
+                  label="Contrast"
+                  value={colorAdj.contrast}
+                  display={colorAdj.contrast.toFixed(2)}
+                  min={0}
+                  max={2}
+                  step={0.05}
+                  onChange={(v) => updateColor({ contrast: v })}
+                />
+                <SliderRow
+                  label="Saturation"
+                  value={colorAdj.saturation}
+                  display={colorAdj.saturation.toFixed(2)}
+                  min={0}
+                  max={3}
+                  step={0.05}
+                  onChange={(v) => updateColor({ saturation: v })}
+                />
+
+                {/* Reset button */}
+                <button
+                  onClick={() =>
+                    setColorAdj({ lift: [0, 0, 0], gamma: [1, 1, 1], gain: [1, 1, 1], exposure: 0, contrast: 1, saturation: 1 })
+                  }
+                  className="w-full h-8 rounded-lg bg-muted border border-border text-[9px] font-black uppercase tracking-widest text-muted-foreground hover:text-foreground hover:border-border transition-colors"
+                >
+                  Reset All
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* ── Group 4: Export ───────────────────────────────────────────── */}
       <div className="rounded-xl border border-border overflow-hidden">
         <AccordionHeader
           label="Export"

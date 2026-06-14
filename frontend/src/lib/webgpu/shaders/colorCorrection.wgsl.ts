@@ -1,18 +1,22 @@
 /**
  * WGSL color correction fragment shader.
  * Implements: exposure, contrast, saturation (Rec.709), CDL Lift/Gamma/Gain/Offset,
- * and optional 3D LUT trilinear interpolation.
+ * optional 3D LUT trilinear interpolation, and vignette.
  *
- * Uniform layout (128 bytes, std140):
- *   offset 0:  exposure       f32
- *   offset 4:  contrast       f32
- *   offset 8:  saturation     f32
- *   offset 12: lut_enabled    u32
- *   offset 16: lift           vec3<f32> + _pad
- *   offset 32: gamma          vec3<f32> + _pad
- *   offset 48: gain           vec3<f32> + _pad
- *   offset 64: offset_vec     vec3<f32> + _pad
- *   offset 80: lut_intensity  f32 + 3×_pad
+ * Uniform layout (128 bytes):
+ *   offset 0:  exposure          f32
+ *   offset 4:  contrast          f32
+ *   offset 8:  saturation        f32
+ *   offset 12: lut_enabled       u32
+ *   offset 16: lift              vec3<f32> + _pad
+ *   offset 32: gamma             vec3<f32> + _pad
+ *   offset 48: gain              vec3<f32> + _pad
+ *   offset 64: offset_vec        vec3<f32>
+ *   offset 76: lut_intensity     f32
+ *   offset 80: vignette_amount   f32
+ *   offset 84: vignette_midpoint f32
+ *   offset 88: vignette_round    f32
+ *   offset 92: vignette_feather  f32
  */
 
 export const COLOR_CORRECTION_WGSL = /* wgsl */ `
@@ -22,18 +26,22 @@ struct VsOut {
 };
 
 struct ColorParams {
-  exposure:     f32,
-  contrast:     f32,
-  saturation:   f32,
-  lut_enabled:  u32,
-  lift:         vec3<f32>,
-  _pad0:        f32,
-  gamma:        vec3<f32>,
-  _pad1:        f32,
-  gain:         vec3<f32>,
-  _pad2:        f32,
-  offset_vec:   vec3<f32>,
-  lut_intensity:f32,
+  exposure:          f32,
+  contrast:          f32,
+  saturation:        f32,
+  lut_enabled:       u32,
+  lift:              vec3<f32>,
+  _pad0:             f32,
+  gamma:             vec3<f32>,
+  _pad1:             f32,
+  gain:              vec3<f32>,
+  _pad2:             f32,
+  offset_vec:        vec3<f32>,
+  lut_intensity:     f32,
+  vignette_amount:   f32,
+  vignette_midpoint: f32,
+  vignette_round:    f32,
+  vignette_feather:  f32,
 };
 
 @group(0) @binding(0) var srcSmp: sampler;
@@ -60,6 +68,17 @@ fn vs_main(@builtin(vertex_index) i: u32) -> VsOut {
   out.pos = vec4(positions[i], 0.0, 1.0);
   out.uv  = uvs[i];
   return out;
+}
+
+fn apply_vignette(uv: vec2<f32>, col: vec3<f32>) -> vec3<f32> {
+  let center = vec2<f32>(0.5, 0.5);
+  let dist = distance(uv, center);
+  let vig = smoothstep(
+    params.vignette_midpoint - params.vignette_feather,
+    params.vignette_midpoint + params.vignette_feather,
+    dist * (2.0 - params.vignette_round)
+  );
+  return col * (1.0 - vig * params.vignette_amount);
 }
 
 fn apply_cdl(c: vec3<f32>) -> vec3<f32> {
@@ -95,6 +114,11 @@ fn fs_main(in: VsOut) -> @location(0) vec4<f32> {
     let lut_uv  = (clamp(col, vec3<f32>(0.0), vec3<f32>(1.0)) * (lut_dim - 1.0) + 0.5) / lut_dim;
     let lut_col = textureSample(lutTex, srcSmp, lut_uv).rgb;
     col = mix(col, lut_col, params.lut_intensity);
+  }
+
+  // 6. Vignette — darken edges when amount > 0
+  if params.vignette_amount > 0.0 {
+    col = apply_vignette(in.uv, col);
   }
 
   return vec4<f32>(clamp(col, vec3<f32>(0.0), vec3<f32>(1.0)), 1.0);
