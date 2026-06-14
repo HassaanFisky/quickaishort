@@ -68,6 +68,10 @@ export interface Clip {
   status: "pending" | "ready" | "exporting" | "exported";
   automation_status?: "Ready" | "Pending";
   reframing?: ReframingData;
+  /** Phase 23: audio mix bus category */
+  audioCategory?: "dialogue" | "music" | "sfx" | "ambience";
+  /** Phase 23: color label for timeline organisation */
+  colorLabel?: "red" | "blue" | "green" | "yellow" | "purple" | "orange";
 }
 
 export type WorkerStatus =

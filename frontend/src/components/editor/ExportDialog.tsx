@@ -33,14 +33,22 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
   const [selectedPreset, setSelectedPreset] = useState<ExportPreset>(EXPORT_PRESETS[0]);
   const [exporting, setExporting] = useState(false);
   const [progress, setProgress] = useState<ExportProgress | null>(null);
+  const [format, setFormat] = useState<"mp4" | "webm">("mp4");
   const exporterRef = useRef<WebCodecsExporter | null>(null);
+  const setExportSetting = useEditorStore((s) => s.setExportSetting);
 
-  const canUseClientExport = clientSupported && duration > 0 && duration <= MAX_CLIP_SECONDS;
+  const canUseClientExport = clientSupported && duration > 0 && duration <= MAX_CLIP_SECONDS && format === "mp4";
 
   useEffect(() => {
     if (!open) return;
     WebCodecsExporter.isSupported().then(setClientSupported);
   }, [open]);
+
+  // Sync format to store whenever user changes it
+  const handleFormatChange = (f: "mp4" | "webm") => {
+    setFormat(f);
+    setExportSetting("format", f);
+  };
 
   // Compute export range for display — same logic runs inside handleClientExport via getState()
   let rangeStart = 0;
@@ -175,6 +183,29 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
               <button onClick={onClose} className="text-fg-muted hover:text-foreground transition-colors">
                 <X size={16} />
               </button>
+            </div>
+
+            {/* Format toggle */}
+            <div className="mb-3">
+              <p className="text-xs text-fg-muted mb-2 font-medium">Format</p>
+              <div className="flex gap-2">
+                {(["mp4", "webm"] as const).map((fmt) => (
+                  <button
+                    key={fmt}
+                    onClick={() => handleFormatChange(fmt)}
+                    disabled={exporting}
+                    aria-pressed={format === fmt}
+                    className={cn(
+                      "text-[10px] font-bold px-3 py-1.5 rounded-lg border transition-colors uppercase",
+                      format === fmt
+                        ? "bg-primary/20 border-primary/40 text-primary"
+                        : "bg-card border-border text-fg-muted hover:text-foreground",
+                    )}
+                  >
+                    {fmt}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Presets */}

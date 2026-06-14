@@ -166,7 +166,22 @@ export interface EditorAction {
     // ─── Phase 21: Speed Ramp ────────────────────────────────────────────────
     | "SET_SPEED_KEYFRAME"       // { clip_id, time_ms, speed }
     | "DELETE_SPEED_KEYFRAME"    // { clip_id, time_ms }
-    | "CLEAR_SPEED_RAMP";        // { clip_id }
+    | "CLEAR_SPEED_RAMP"         // { clip_id }
+    // ─── Phase 23: Quick-win actions ────────────────────────────────────────
+    | "FREEZE_FRAME"             // { clip_id, time_sec }
+    | "EXTEND_EDIT"              // { clip_id? }
+    | "GOTO_TIMECODE"            // { timecode: string }
+    | "TAG_AUDIO_CATEGORY"       // { clip_id, category }
+    | "MATCH_FRAME"              // {}
+    | "REVERSE_CLIP"             // { clip_id }
+    | "SET_CLIP_COLOR_LABEL"     // { clip_id, color }
+    // ─── Phase 24: Adjustment layers + audio ducking ─────────────────────────
+    | "APPLY_FILTER_TO_ALL"      // { filter, value }
+    | "ENABLE_AUDIO_DUCKING"     // { enabled, threshold?, reduction? }
+    // ─── Phase 25: Grouping, auto-split, track matte ─────────────────────────
+    | "GROUP_CLIPS"              // { clip_ids: string[] }
+    | "AUTO_SPLIT_SCENES"        // { threshold? }
+    | "SET_TRACK_MATTE";         // { clip_id, matte_clip_id }
   payload: Record<string, unknown>;
 }
 
@@ -619,6 +634,22 @@ interface EditorState {
   addTimelineMarker: (time: number, label?: string, color?: TimelineMarker["color"]) => void;
   removeTimelineMarker: (id: string) => void;
   clearTimelineMarkers: () => void;
+
+  // ─── Phase 23: Track muting ─────────────────────────────────────────────────
+  audioMuted: boolean;
+  setAudioMuted: (v: boolean) => void;
+
+  // ─── Phase 24: Audio ducking ─────────────────────────────────────────────────
+  audioDucking: { enabled: boolean; threshold: number; reduction: number };
+  setAudioDucking: (patch: Partial<{ enabled: boolean; threshold: number; reduction: number }>) => void;
+
+  // ─── Phase 25: Clip grouping + project templates + track mattes ──────────────
+  clipGroups: string[][];
+  addClipGroup: (ids: string[]) => void;
+  removeClipGroup: (groupIndex: number) => void;
+  projectTemplate: string | null;
+  setProjectTemplate: (t: string | null) => void;
+  trackMattes: Record<string, string>;
 }
 
 export const useEditorStore = create<EditorState>()(
@@ -688,6 +719,17 @@ export const useEditorStore = create<EditorState>()(
 
       // Phase 6 masking
       maskEnabled: false,
+
+      // Phase 23
+      audioMuted: false,
+
+      // Phase 24
+      audioDucking: { enabled: false, threshold: -20, reduction: 0.5 },
+
+      // Phase 25
+      clipGroups: [],
+      projectTemplate: null,
+      trackMattes: {},
 
       // AI Editor initial state
       videoMetadata: null,
@@ -1528,6 +1570,112 @@ export const useEditorStore = create<EditorState>()(
               }
               break;
             }
+            // ─── Phase 23: Quick-win actions ──────────────────────────────────
+            case "FREEZE_FRAME": {
+              const ffClipId = action.payload.clip_id as string;
+              const ffTime = action.payload.time_sec as number;
+              if (!ffClipId) break;
+              const ffClip = store.suggestions.find((c) => c.id === ffClipId);
+              if (!ffClip) break;
+              store.updateClip(ffClipId, { end: ffClip.start + 5 });
+              if (typeof ffTime === "number") store.setPendingSeek(ffTime);
+              break;
+            }
+            case "EXTEND_EDIT": {
+              const eeClipId = (action.payload.clip_id as string) || store.selectedClipId;
+              if (!eeClipId) break;
+              const eeClip = store.suggestions.find((c) => c.id === eeClipId);
+              if (!eeClip) break;
+              const t = store.currentTime;
+              if (t > eeClip.start && t !== eeClip.end) store.updateClip(eeClipId, { end: t });
+              break;
+            }
+            case "GOTO_TIMECODE": {
+              const tc = action.payload.timecode as string;
+              if (!tc) break;
+              const parts = tc.split(":").map(Number);
+              let sec = 0;
+              if (parts.length === 1) sec = parts[0];
+              else if (parts.length === 2) sec = parts[0] * 60 + parts[1];
+              else if (parts.length === 3) sec = parts[0] * 3600 + parts[1] * 60 + parts[2];
+              if (!isNaN(sec) && sec >= 0) store.setPendingSeek(Math.min(sec, store.duration));
+              break;
+            }
+            case "TAG_AUDIO_CATEGORY": {
+              const tacClipId = action.payload.clip_id as string;
+              const tacCat = action.payload.category as string;
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              if (tacClipId && tacCat) store.updateClip(tacClipId, { audioCategory: tacCat } as any);
+              break;
+            }
+            case "MATCH_FRAME": {
+              const mfClip = store.selectedClipId
+                ? store.suggestions.find((c) => c.id === store.selectedClipId)
+                : store.suggestions[0];
+              if (mfClip) {
+                const mfOffset = store.currentTime - mfClip.start;
+                const mfSrc = (mfClip.inPoint ?? mfClip.start) + mfOffset;
+                store.setPendingSeek(Math.max(0, Math.min(store.duration, mfSrc)));
+              }
+              break;
+            }
+            case "REVERSE_CLIP": {
+              const rvClipId = action.payload.clip_id as string;
+              if (!rvClipId) break;
+              const rvClip = store.suggestions.find((c) => c.id === rvClipId);
+              if (!rvClip) break;
+              store.updateClip(rvClipId, {
+                inPoint: rvClip.outPoint ?? rvClip.end,
+                outPoint: rvClip.inPoint ?? rvClip.start,
+              });
+              break;
+            }
+            case "SET_CLIP_COLOR_LABEL": {
+              const sccClipId = action.payload.clip_id as string;
+              const sccColor = action.payload.color as string;
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              if (sccClipId && sccColor) store.updateClip(sccClipId, { colorLabel: sccColor } as any);
+              break;
+            }
+            // ─── Phase 24: Adjustment layers + audio ducking ──────────────────
+            case "APPLY_FILTER_TO_ALL": {
+              const aftFilter = action.payload.filter as string;
+              const aftValue = action.payload.value;
+              if (aftFilter && aftValue !== undefined) {
+                store.suggestions.forEach((clip) => {
+                  store.updateClip(clip.id, { [aftFilter]: aftValue } as Parameters<typeof store.updateClip>[1]);
+                });
+              }
+              break;
+            }
+            case "ENABLE_AUDIO_DUCKING": {
+              store.setAudioDucking({
+                enabled: action.payload.enabled as boolean,
+                ...(action.payload.threshold !== undefined && { threshold: action.payload.threshold as number }),
+                ...(action.payload.reduction !== undefined && { reduction: action.payload.reduction as number }),
+              });
+              break;
+            }
+            // ─── Phase 25: Grouping, auto-split, track matte ─────────────────
+            case "GROUP_CLIPS": {
+              const gcIds = action.payload.clip_ids as string[];
+              if (gcIds?.length > 1) store.addClipGroup(gcIds);
+              break;
+            }
+            case "AUTO_SPLIT_SCENES": {
+              // Splits at all current timeline markers (scene detection runs separately)
+              const sceneMarkers = store.timelineMarkers.filter((m) => m.label === "Scene");
+              sceneMarkers.forEach((m) => store.splitClipAtTime(m.time));
+              break;
+            }
+            case "SET_TRACK_MATTE": {
+              const stmClipId = action.payload.clip_id as string;
+              const stmMatteId = action.payload.matte_clip_id as string;
+              if (stmClipId && stmMatteId) {
+                set((s) => ({ trackMattes: { ...s.trackMattes, [stmClipId]: stmMatteId } }));
+              }
+              break;
+            }
           }
         });
       },
@@ -1771,6 +1919,20 @@ export const useEditorStore = create<EditorState>()(
         ),
 
       setMaskEnabled: (enabled) => set({ maskEnabled: enabled }),
+
+      // Phase 23
+      setAudioMuted: (v) => set({ audioMuted: v }),
+
+      // Phase 24
+      setAudioDucking: (patch) =>
+        set((s) => ({ audioDucking: { ...s.audioDucking, ...patch } })),
+
+      // Phase 25
+      addClipGroup: (ids) =>
+        set((s) => ({ clipGroups: [...s.clipGroups, ids] })),
+      removeClipGroup: (groupIndex) =>
+        set((s) => ({ clipGroups: s.clipGroups.filter((_, i) => i !== groupIndex) })),
+      setProjectTemplate: (t) => set({ projectTemplate: t }),
     }),
     {
       name: "EditorStore",

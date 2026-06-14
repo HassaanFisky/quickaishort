@@ -46,6 +46,7 @@ function TimelineClip({
   onContextMenu: (e: React.MouseEvent, clipId: string) => void;
 }) {
   const { updateClip, setPendingSeek } = useEditorStore();
+  const playbackSpeed = useEditorStore((s) => s.exportSettings.playbackSpeed);
   const setSnapLine = useUIStore((s) => s.setSnapLine);
   const [isDragging, setIsDragging] = useState(false);
   const [dragType, setDragType] = useState<"move" | "start" | "end" | null>(null);
@@ -176,6 +177,26 @@ function TimelineClip({
         className="absolute right-0 top-0 bottom-0 w-3 cursor-ew-resize hover:bg-primary/50 rounded-r-md"
         onMouseDown={(e) => handleMouseDown(e, "end")}
       />
+
+      {/* Speed badge — shown when global playback speed is not 1× */}
+      {playbackSpeed !== 100 && (
+        <span className="absolute top-0.5 right-4 text-[7px] font-black text-amber-400/80 pointer-events-none">
+          {(playbackSpeed / 100).toFixed(1)}×
+        </span>
+      )}
+
+      {/* Color label dot */}
+      {clip.colorLabel && (
+        <span
+          className="absolute bottom-0.5 left-1 w-1.5 h-1.5 rounded-full pointer-events-none"
+          style={{
+            backgroundColor: {
+              red: "#ef4444", blue: "#3b82f6", green: "#22c55e",
+              yellow: "#f59e0b", purple: "#a855f7", orange: "#f97316",
+            }[clip.colorLabel] ?? "transparent",
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -45,6 +45,8 @@ import ColorWheels from "@/components/editor/ColorWheels";
 import WaveformMonitor from "@/components/editor/WaveformMonitor";
 import Vectorscope from "@/components/editor/Vectorscope";
 import SpeedRampEditor from "@/components/editor/SpeedRampEditor";
+import CurvesEditor from "@/components/editor/CurvesEditor";
+import LoudnessMeter from "@/components/editor/LoudnessMeter";
 
 const QUALITY_OPTIONS = ["low", "medium", "high"] as const;
 const FILTER_OPTIONS = ["None", "Urban", "Retro", "Cinematic"] as const;
@@ -564,6 +566,18 @@ export default function RightPanel() {
     contrast:   1,
     saturation: 1,
   });
+
+  const [vignetteAdj, setVignetteAdj] = React.useState({
+    amount:     0,
+    midpoint:   0.5,
+    roundness:  0.5,
+    feather:    0.3,
+  });
+  const updateVignette = React.useCallback(
+    (patch: Partial<typeof vignetteAdj>) =>
+      setVignetteAdj((prev) => ({ ...prev, ...patch })),
+    []
+  );
   const updateColor = React.useCallback(
     (patch: Partial<typeof colorAdj>) =>
       setColorAdj((prev) => ({ ...prev, ...patch })),
@@ -1046,13 +1060,53 @@ export default function RightPanel() {
 
                 {/* Reset button */}
                 <button
-                  onClick={() =>
-                    setColorAdj({ lift: [0, 0, 0], gamma: [1, 1, 1], gain: [1, 1, 1], exposure: 0, contrast: 1, saturation: 1 })
-                  }
+                  onClick={() => {
+                    setColorAdj({ lift: [0, 0, 0], gamma: [1, 1, 1], gain: [1, 1, 1], exposure: 0, contrast: 1, saturation: 1 });
+                    setVignetteAdj({ amount: 0, midpoint: 0.5, roundness: 0.5, feather: 0.3 });
+                  }}
                   className="w-full h-8 rounded-lg bg-muted border border-border text-[9px] font-black uppercase tracking-widest text-muted-foreground hover:text-foreground hover:border-border transition-colors"
                 >
                   Reset All
                 </button>
+
+                <div className="h-px bg-border" />
+
+                {/* Vignette */}
+                <p className="text-[9px] font-black uppercase tracking-[0.2em] text-fg-muted">Vignette</p>
+                <SliderRow
+                  label="Amount"
+                  value={vignetteAdj.amount}
+                  display={vignetteAdj.amount.toFixed(2)}
+                  min={0} max={1} step={0.01}
+                  onChange={(v) => updateVignette({ amount: v })}
+                />
+                <SliderRow
+                  label="Midpoint"
+                  value={vignetteAdj.midpoint}
+                  display={vignetteAdj.midpoint.toFixed(2)}
+                  min={0} max={1} step={0.01}
+                  onChange={(v) => updateVignette({ midpoint: v })}
+                />
+                <SliderRow
+                  label="Roundness"
+                  value={vignetteAdj.roundness}
+                  display={vignetteAdj.roundness.toFixed(2)}
+                  min={0} max={1} step={0.01}
+                  onChange={(v) => updateVignette({ roundness: v })}
+                />
+                <SliderRow
+                  label="Feather"
+                  value={vignetteAdj.feather}
+                  display={vignetteAdj.feather.toFixed(2)}
+                  min={0} max={1} step={0.01}
+                  onChange={(v) => updateVignette({ feather: v })}
+                />
+
+                <div className="h-px bg-border" />
+
+                {/* RGB Curves */}
+                <p className="text-[9px] font-black uppercase tracking-[0.2em] text-fg-muted">RGB Curves</p>
+                <CurvesEditor />
               </div>
             </motion.div>
           )}
@@ -1096,6 +1150,7 @@ export default function RightPanel() {
                     <p>Angle = hue direction</p>
                     <p className="text-muted-foreground/50 mt-1">Updates ~10fps</p>
                   </div>
+                  <LoudnessMeter />
                 </div>
               </div>
             </motion.div>
