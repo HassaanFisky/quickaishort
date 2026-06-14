@@ -9,7 +9,7 @@ import { getFlag } from "@/lib/featureFlags";
 import { Mp4Mux } from "./mp4Mux";
 
 export const WEBCODECS_FLAG = "webcodecs_export_enabled";
-export const MAX_CLIP_SECONDS = 60;
+export const MAX_CLIP_SECONDS = 300; // 5 minutes — covers all short-form content
 
 export interface ExportPreset {
   label: string;

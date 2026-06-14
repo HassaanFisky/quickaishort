@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Download, Server, Zap, Loader2 } from "lucide-react";
+import { X, Download, Server, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useEditorStore } from "@/stores/editorStore";
@@ -13,6 +13,7 @@ import {
   type ExportPreset,
   type ExportProgress,
 } from "@/lib/export/webCodecsExporter";
+import { formatTime } from "@/lib/utils/formatTime";
 
 interface ExportDialogProps {
   open: boolean;
@@ -23,22 +24,36 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
   const videoElementRef = useEditorStore((s) => s.videoElementRef);
   const duration = useEditorStore((s) => s.duration);
   const dispatchAIActions = useEditorStore((s) => s.dispatchAIActions);
+  const markIn = useEditorStore((s) => s.markIn);
+  const markOut = useEditorStore((s) => s.markOut);
+  const selectedClipId = useEditorStore((s) => s.selectedClipId);
+  const suggestions = useEditorStore((s) => s.suggestions);
 
   const [clientSupported, setClientSupported] = useState<boolean | null>(null);
-  const [flagEnabled, setFlagEnabled] = useState(false);
   const [selectedPreset, setSelectedPreset] = useState<ExportPreset>(EXPORT_PRESETS[0]);
   const [exporting, setExporting] = useState(false);
   const [progress, setProgress] = useState<ExportProgress | null>(null);
   const exporterRef = useRef<WebCodecsExporter | null>(null);
 
-  const canUseClientExport =
-    clientSupported && flagEnabled && duration > 0 && duration <= MAX_CLIP_SECONDS;
+  const canUseClientExport = clientSupported && duration > 0 && duration <= MAX_CLIP_SECONDS;
 
   useEffect(() => {
     if (!open) return;
     WebCodecsExporter.isSupported().then(setClientSupported);
-    WebCodecsExporter.isFlagEnabled().then(setFlagEnabled);
   }, [open]);
+
+  // Compute export range for display — same logic runs inside handleClientExport via getState()
+  let rangeStart = 0;
+  let rangeEnd = duration;
+  if (markIn !== null && markOut !== null && markOut > markIn) {
+    rangeStart = Math.min(markIn, markOut);
+    rangeEnd = Math.max(markIn, markOut);
+  } else if (selectedClipId) {
+    const clip = suggestions.find((c) => c.id === selectedClipId);
+    if (clip) { rangeStart = clip.start; rangeEnd = clip.end; }
+  }
+  const range = { start: rangeStart, end: rangeEnd };
+  const rangeDuration = rangeEnd - rangeStart;
 
   const handleServerExport = useCallback(() => {
     dispatchAIActions([{ type: "EXPORT_CLIP", payload: {} }]);
@@ -47,8 +62,12 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
   }, [dispatchAIActions, onClose]);
 
   const handleClientExport = useCallback(async () => {
-    const video = videoElementRef?.current;
-    if (!video) { toast.error("No video loaded."); return; }
+    const storeVideo = videoElementRef?.current;
+    const video = storeVideo ?? (document.querySelector("video") as HTMLVideoElement | null);
+    if (!video || video.readyState < 2) {
+      toast.error("No video loaded — paste a YouTube URL first.");
+      return;
+    }
 
     setExporting(true);
     setProgress({ encoded: 0, total: 0, cancelled: false });
@@ -60,7 +79,23 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
       await exporter.init(selectedPreset);
 
       const fps = selectedPreset.frameRate;
-      const totalFrames = Math.ceil(duration * fps);
+
+      // Read fresh range from store at encode time
+      const { markIn: mi, markOut: mo, selectedClipId: selId, suggestions: clips, duration: dur, videoMetadata } =
+        useEditorStore.getState();
+
+      let start = 0;
+      let end = dur;
+      if (mi !== null && mo !== null && mo > mi) {
+        start = Math.min(mi, mo);
+        end = Math.max(mi, mo);
+      } else if (selId) {
+        const clip = clips.find((c) => c.id === selId);
+        if (clip) { start = clip.start; end = clip.end; }
+      }
+
+      const exportDuration = end - start;
+      const totalFrames = Math.ceil(exportDuration * fps);
       setProgress({ encoded: 0, total: totalFrames, cancelled: false });
 
       const wasPlaying = !video.paused;
@@ -69,7 +104,7 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
 
       for (let f = 0; f < totalFrames; f++) {
         if (exporter["cancelled"]) break;
-        const timeSec = f / fps;
+        const timeSec = start + f / fps;
         video.currentTime = timeSec;
         await new Promise<void>((res) => {
           video.addEventListener("seeked", () => res(), { once: true });
@@ -84,9 +119,12 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
       if (!exporter["cancelled"]) {
         const blob = await exporter.finalize();
         const url = URL.createObjectURL(blob);
+        const videoTitle = videoMetadata?.title ?? "export";
+        const safeName = videoTitle.replace(/[^a-zA-Z0-9_\- ]/g, "").trim().slice(0, 60) || "export";
+        const filename = `${safeName}_${selectedPreset.label.replace(/\s/g, "_")}.mp4`;
         const a = document.createElement("a");
         a.href = url;
-        a.download = "export.mp4";
+        a.download = filename;
         a.click();
         URL.revokeObjectURL(url);
         toast.success("Export complete!");
@@ -101,7 +139,7 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
       setExporting(false);
       setProgress(null);
     }
-  }, [videoElementRef, duration, selectedPreset, onClose]);
+  }, [videoElementRef, selectedPreset, onClose]);
 
   const handleCancel = useCallback(() => {
     exporterRef.current?.cancel();
@@ -161,6 +199,38 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
               </div>
             </div>
 
+            {/* Export range indicator */}
+            {!exporting && duration > 0 && (
+              <div className="mb-4 p-3 rounded-xl bg-card border border-border">
+                <div className="flex items-center justify-between text-[10px] text-fg-muted mb-1">
+                  <span className="font-black uppercase tracking-widest">Export Range</span>
+                  <span className="font-mono tabular-nums">
+                    {formatTime(range.start)} → {formatTime(range.end)}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 h-1.5 bg-foreground/5 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-primary rounded-full"
+                      style={{
+                        marginLeft: `${duration > 0 ? (range.start / duration) * 100 : 0}%`,
+                        width: `${duration > 0 ? (rangeDuration / duration) * 100 : 100}%`,
+                      }}
+                    />
+                  </div>
+                  <span className="text-[9px] text-fg-muted tabular-nums">
+                    {Math.round(rangeDuration)}s
+                  </span>
+                </div>
+                {markIn !== null && markOut !== null && (
+                  <p className="text-[9px] text-primary mt-1">Using I/O marks</p>
+                )}
+                {markIn === null && selectedClipId && (
+                  <p className="text-[9px] text-emerald-400 mt-1">Using selected clip range</p>
+                )}
+              </div>
+            )}
+
             {/* Progress bar */}
             {exporting && progress && (
               <div className="mb-4">
@@ -188,10 +258,8 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
             {!canUseClientExport && !exporting && (
               <p className="text-[11px] text-fg-muted mb-4">
                 {duration > MAX_CLIP_SECONDS
-                  ? `Clip is ${Math.round(duration)}s (> ${MAX_CLIP_SECONDS}s) — server render required.`
-                  : !clientSupported
-                  ? "WebCodecs not available in this browser — server render required."
-                  : "Enable the webcodecs_export_enabled flag for local export."}
+                  ? `Clip is ${Math.round(duration)}s (> ${MAX_CLIP_SECONDS}s) — use shorter clip or server render.`
+                  : "WebCodecs not available in this browser — try Chrome 94+ or use server render."}
               </p>
             )}
 
