@@ -22,12 +22,14 @@ import {
   Minus,
   Plus,
   Maximize2,
+  ScanLine,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatTime } from "@/lib/utils/formatTime";
 import { toast } from "sonner";
 import MultiTrackTimeline from "@/components/editor/MultiTrackTimeline";
+import { detectScenes } from "@/lib/sceneDetection";
 
 // ---- TimelineClip Component with Trim & Drag Support ----
 function TimelineClip({
@@ -207,9 +209,37 @@ export default function BottomDock() {
     markIn,
     markOut,
     timelineMarkers,
+    addTimelineMarker,
+    videoElementRef,
   } = useEditorStore();
 
   const { activeTool, setActiveTool, timelineZoom, setTimelineZoom, snapLine } = useUIStore();
+  const [detectingScenes, setDetectingScenes] = useState(false);
+
+  const handleDetectScenes = useCallback(async () => {
+    const video =
+      videoElementRef?.current ??
+      (document.querySelector("video") as HTMLVideoElement | null);
+    if (!video) {
+      toast.error("No video loaded — load a video first.");
+      return;
+    }
+    setDetectingScenes(true);
+    toast.info("Scene detection running…");
+    try {
+      const cuts = await detectScenes(video);
+      if (cuts.length === 0) {
+        toast.info("No scene cuts detected. Try a lower threshold.");
+      } else {
+        cuts.forEach((t) => addTimelineMarker(t, `Scene`, "yellow"));
+        toast.success(`Found ${cuts.length} scene cut${cuts.length !== 1 ? "s" : ""}.`);
+      }
+    } catch {
+      toast.error("Scene detection failed.");
+    } finally {
+      setDetectingScenes(false);
+    }
+  }, [videoElementRef, addTimelineMarker]);
   const waveformCanvasRef = useRef<HTMLCanvasElement>(null);
   const timelineScrollRef = useRef<HTMLDivElement>(null);
   const [hoverTime, setHoverTime] = useState<number | null>(null);
@@ -561,8 +591,25 @@ export default function BottomDock() {
             </Button>
           )}
         </div>
+        {/* Detect Scenes */}
+        <button
+          onClick={handleDetectScenes}
+          disabled={detectingScenes || duration === 0}
+          title="Detect Scenes — auto-place markers at cut points"
+          aria-label="Detect scenes"
+          className={cn(
+            "flex items-center gap-1.5 h-7 px-2.5 rounded-lg border text-[9px] font-black uppercase tracking-widest transition-colors ml-auto shrink-0",
+            detectingScenes || duration === 0
+              ? "border-border text-muted-foreground/30 cursor-not-allowed"
+              : "border-yellow-500/30 text-yellow-400/70 hover:text-yellow-400 hover:border-yellow-500/60 hover:bg-yellow-500/8"
+          )}
+        >
+          <ScanLine className={cn("w-3 h-3", detectingScenes && "animate-pulse")} />
+          {detectingScenes ? "Detecting…" : "Scenes"}
+        </button>
+
         {/* Timeline zoom controls */}
-        <div className="flex items-center gap-1.5 ml-auto shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0">
           <button
             onClick={() => setTimelineZoom(timelineZoom - 0.25)}
             className="w-6 h-6 rounded flex items-center justify-center text-muted-foreground/50 hover:text-foreground hover:bg-foreground/10 transition-colors"

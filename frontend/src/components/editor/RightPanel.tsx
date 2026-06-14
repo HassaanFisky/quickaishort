@@ -42,11 +42,13 @@ import { InlinePaywallCard } from "@/components/shared/InlinePaywallCard";
 import { TimelineLoader } from "@/components/ui/TimelineLoader";
 import { useAnimatedCounter } from "@/hooks/useAnimatedCounter";
 import ColorWheels from "@/components/editor/ColorWheels";
+import WaveformMonitor from "@/components/editor/WaveformMonitor";
+import Vectorscope from "@/components/editor/Vectorscope";
 
 const QUALITY_OPTIONS = ["low", "medium", "high"] as const;
 const FILTER_OPTIONS = ["None", "Urban", "Retro", "Cinematic"] as const;
 
-type AccordionKey = "audio" | "visuals" | "color" | "export";
+type AccordionKey = "audio" | "visuals" | "color" | "scopes" | "export";
 
 // ---------------------------------------------------------------------------
 // Toggle component
@@ -963,7 +965,51 @@ export default function RightPanel() {
         </AnimatePresence>
       </div>
 
-      {/* ── Group 4: Export ───────────────────────────────────────────── */}
+      {/* ── Group 4: Scopes ───────────────────────────────────────────── */}
+      <div className="rounded-xl border border-border overflow-hidden">
+        <AccordionHeader
+          label="Scopes"
+          isOpen={openGroup === "scopes"}
+          onToggle={() => toggleGroup("scopes")}
+        />
+        <AnimatePresence initial={false}>
+          {openGroup === "scopes" && (
+            <motion.div
+              key="scopes-body"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+              className="overflow-hidden"
+            >
+              <div className="px-3 pb-4 flex flex-col gap-3 border-t border-border pt-3">
+                <div className="flex flex-col gap-1">
+                  <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">
+                    Waveform
+                  </span>
+                  <WaveformMonitor />
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">
+                      Vectorscope
+                    </span>
+                    <Vectorscope />
+                  </div>
+                  <div className="flex-1 flex flex-col gap-1 text-[9px] text-muted-foreground leading-relaxed pt-6">
+                    <p>Center = neutral</p>
+                    <p>Distance = saturation</p>
+                    <p>Angle = hue direction</p>
+                    <p className="text-muted-foreground/50 mt-1">Updates ~10fps</p>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* ── Group 5: Export ───────────────────────────────────────────── */}
       <div className="rounded-xl border border-border overflow-hidden">
         <AccordionHeader
           label="Export"

@@ -4,8 +4,9 @@ import { useState } from "react";
 import { useEditorStore } from "@/stores/editorStore";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Sparkles, Clock, Film, Zap, Info, Type, Shapes, Scissors, Plus, Flame, Rocket, Lightbulb, Target, CheckCircle2, XCircle, Diamond, Star } from "lucide-react";
+import { Sparkles, Clock, Film, Zap, Info, Type, Shapes, Scissors, Plus, Flame, Rocket, Lightbulb, Target, CheckCircle2, XCircle, Diamond, Star, AlignLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
+import TranscriptEditor from "@/components/editor/TranscriptEditor";
 import { DndContext, closestCenter, type DragEndEvent } from "@dnd-kit/core";
 import {
   SortableContext,
@@ -16,7 +17,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { motion, AnimatePresence } from "framer-motion";
 
-type Tab = "clips" | "text" | "elements";
+type Tab = "clips" | "text" | "elements" | "transcript";
 
 const scoreRamp = (score: number) => {
   if (score >= 90)
@@ -192,9 +193,10 @@ export default function LeftPanel() {
   }
 
   const tabs = [
-    { id: "clips", icon: Scissors, label: "Clips" },
-    { id: "text", icon: Type, label: "Text" },
-    { id: "elements", icon: Shapes, label: "Elements" },
+    { id: "clips",      icon: Scissors,  label: "Clips" },
+    { id: "text",       icon: Type,      label: "Text" },
+    { id: "elements",   icon: Shapes,    label: "Elements" },
+    { id: "transcript", icon: AlignLeft, label: "Script" },
   ];
 
   return (
@@ -381,6 +383,17 @@ export default function LeftPanel() {
                   </button>
                 ))}
               </div>
+            </motion.div>
+          )}
+          {activeTab === "transcript" && (
+            <motion.div
+              key="transcript"
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 20 }}
+              className="rounded-xl border border-border overflow-hidden"
+            >
+              <TranscriptEditor />
             </motion.div>
           )}
         </AnimatePresence>
