@@ -30,7 +30,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error("[ErrorBoundary] Uncaught render error:", error, errorInfo.componentStack);
+    if (process.env.NODE_ENV !== "production") console.error("[ErrorBoundary] Uncaught render error:", error, errorInfo.componentStack);
   }
 
   render() {

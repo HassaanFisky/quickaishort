@@ -331,7 +331,7 @@ export default function EditorLayout() {
           <span className="h-4 w-px bg-foreground/8 shrink-0" />
           <div
             className={cn(
-              "flex items-center gap-2 pl-2.5 pr-3 py-1.5 rounded-full border backdrop-blur-md transition-colors duration-500",
+              "flex items-center gap-2 pl-2.5 pr-3 py-1.5 rounded-full border backdrop-blur-md transition-colors duration-300",
               isProcessing
                 ? "border-amber-400/25 bg-amber-400/[0.06]"
                 : "border-emerald-400/25 bg-emerald-400/[0.06]"
@@ -850,6 +850,7 @@ export default function EditorLayout() {
                 <span className="text-[10px] font-black uppercase tracking-[0.2em] text-fg-muted">Viral Clips</span>
                 <button
                   onClick={() => setLeftPanelOpen(false)}
+                  aria-label="Close clips panel"
                   className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-foreground/10 transition-colors"
                 >
                   <X size={14} />
@@ -888,6 +889,7 @@ export default function EditorLayout() {
                 <span className="text-[10px] font-black uppercase tracking-[0.2em] text-fg-muted">Properties</span>
                 <button
                   onClick={() => setRightPanelOpen(false)}
+                  aria-label="Close properties panel"
                   className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-foreground/10 transition-colors"
                 >
                   <X size={14} />

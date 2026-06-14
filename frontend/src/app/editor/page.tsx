@@ -54,7 +54,7 @@ export default function EditorPage() {
         // The raw Float32Array is GC-eligible once detectSilence returns.
         analysisRef.current.detectSilence({ audioData, sampleRate });
       } catch (err) {
-        console.error("Failed to extract audio for silence detection:", err);
+        if (process.env.NODE_ENV !== "production") console.error("Failed to extract audio for silence detection:", err);
       }
     };
     window.addEventListener("trigger-silence-detect", handleSilenceTrigger);

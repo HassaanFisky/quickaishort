@@ -71,7 +71,7 @@ export function WebGpuPreviewLayer() {
         startLoop();
       })
       .catch((err) => {
-        console.warn("[WebGPU] compositor init failed:", err);
+        if (process.env.NODE_ENV !== "production") console.warn("[WebGPU] compositor init failed:", err);
         compositorRef.current = null;
       });
 

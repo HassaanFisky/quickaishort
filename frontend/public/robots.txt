@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /editor
+Disallow: /dashboard
+Disallow: /settings
+Disallow: /history
+Disallow: /adk
+
+Sitemap: https://quickaishort.online/sitemap.xml

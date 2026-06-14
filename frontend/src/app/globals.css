@@ -1621,6 +1621,18 @@ nav:has(.nav-link:hover) .nav-link:not(:hover) {
   }
 }
 
+/* ── Editor focus ring — keyboard accessibility ─────────────────────── */
+.editor-shell-bg button:focus-visible,
+.editor-shell-bg [role="button"]:focus-visible,
+.editor-shell-bg a:focus-visible,
+.editor-shell-bg input:focus-visible,
+.editor-shell-bg textarea:focus-visible,
+.editor-shell-bg select:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px hsl(var(--bg-base)), 0 0 0 4px hsl(var(--accent-indigo) / 0.6);
+  border-radius: inherit;
+}
+
 /* ======================================================
    UNIVERSAL PLATFORM DESIGN SYSTEM — QuickAI Short
    Apple/MacBook-calibrated dark studio palette.

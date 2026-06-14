@@ -128,7 +128,7 @@ export default function PricingPage() {
       });
     } catch (err) {
       toast.error("Could not open checkout. Please try again.");
-      console.error("Paddle checkout error:", err);
+      if (process.env.NODE_ENV !== "production") console.error("Paddle checkout error:", err);
     } finally {
       setCheckoutLoading(false);
     }

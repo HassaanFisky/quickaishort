@@ -17,7 +17,7 @@ export function PusherProvider({ children }: { children: React.ReactNode }) {
     const cluster = process.env.NEXT_PUBLIC_PUSHER_CLUSTER || "mt1";
 
     if (!pusherKey) {
-      console.warn("Pusher key missing. Real-time updates disabled.");
+      if (process.env.NODE_ENV !== "production") console.warn("Pusher key missing. Real-time updates disabled.");
       return;
     }
 

@@ -93,7 +93,7 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
         onClose();
       }
     } catch (err) {
-      console.error("[ExportDialog]", err);
+      if (process.env.NODE_ENV !== "production") console.error("[ExportDialog]", err);
       toast.error("Export failed — try Server render instead.");
     } finally {
       exporter.dispose();
