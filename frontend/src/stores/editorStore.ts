@@ -520,6 +520,11 @@ interface EditorState {
   setClipRange: (startTime: number, endTime: number) => void;
   setSourceGcsPath: (path: string | null) => void;
   updateClip: (id: string, updates: Partial<Clip>) => void;
+  rippleTrim: (clipId: string, edge: "in" | "out", deltaSec: number) => void;
+  rollingTrim: (clipId: string, neighborId: string, edge: "in" | "out", deltaSec: number) => void;
+  slipClip: (clipId: string, deltaSec: number) => void;
+  slideClip: (clipId: string, deltaSec: number) => void;
+  rippleDelete: (clipId: string) => void;
   setExportSetting: <K extends keyof ExportSettings>(key: K, value: ExportSettings[K]) => void;
   
   // Canvas Actions
@@ -745,6 +750,106 @@ export const useEditorStore = create<EditorState>()(
             c.id === id ? { ...c, ...updates } : c,
           ),
         })),
+
+      rippleTrim: (clipId, edge, deltaSec) =>
+        set((state) => {
+          const sorted = [...state.suggestions].sort((a, b) => a.start - b.start);
+          const idx = sorted.findIndex((c) => c.id === clipId);
+          if (idx === -1) return {};
+          const clip = sorted[idx];
+          let actualDelta: number;
+          if (edge === "out") {
+            const newEnd = Math.max(clip.start + 0.1, Math.min(state.duration, clip.end + deltaSec));
+            actualDelta = newEnd - clip.end;
+            sorted[idx] = { ...clip, end: newEnd, outPoint: (clip.outPoint ?? clip.end) + actualDelta };
+            for (let i = idx + 1; i < sorted.length; i++) {
+              sorted[i] = { ...sorted[i], start: sorted[i].start + actualDelta, end: sorted[i].end + actualDelta };
+            }
+          } else {
+            const newStart = Math.max(0, Math.min(clip.end - 0.1, clip.start + deltaSec));
+            actualDelta = newStart - clip.start;
+            sorted[idx] = { ...clip, start: newStart, inPoint: Math.max(0, (clip.inPoint ?? clip.start) + actualDelta) };
+            for (let i = idx + 1; i < sorted.length; i++) {
+              sorted[i] = { ...sorted[i], start: sorted[i].start - actualDelta, end: sorted[i].end - actualDelta };
+            }
+          }
+          return { undoStack: [...state.undoStack.slice(-49), [...state.suggestions]], redoStack: [], suggestions: sorted };
+        }),
+
+      rollingTrim: (clipId, neighborId, edge, deltaSec) =>
+        set((state) => {
+          const clips = state.suggestions.map((c) => ({ ...c }));
+          const clipIdx = clips.findIndex((c) => c.id === clipId);
+          const neighborIdx = clips.findIndex((c) => c.id === neighborId);
+          if (clipIdx === -1 || neighborIdx === -1) return {};
+          const clip = clips[clipIdx];
+          const neighbor = clips[neighborIdx];
+          if (edge === "out") {
+            const newEnd = Math.max(clip.start + 0.1, Math.min(neighbor.end - 0.1, clip.end + deltaSec));
+            const d = newEnd - clip.end;
+            clips[clipIdx] = { ...clip, end: newEnd, outPoint: (clip.outPoint ?? clip.end) + d };
+            clips[neighborIdx] = { ...neighbor, start: neighbor.start + d, inPoint: Math.max(0, (neighbor.inPoint ?? neighbor.start) + d) };
+          } else {
+            const newStart = Math.max(neighbor.start + 0.1, Math.min(clip.end - 0.1, clip.start + deltaSec));
+            const d = newStart - clip.start;
+            clips[neighborIdx] = { ...neighbor, end: neighbor.end + d, outPoint: (neighbor.outPoint ?? neighbor.end) + d };
+            clips[clipIdx] = { ...clip, start: newStart, inPoint: Math.max(0, (clip.inPoint ?? clip.start) + d) };
+          }
+          return { undoStack: [...state.undoStack.slice(-49), [...state.suggestions]], redoStack: [], suggestions: clips };
+        }),
+
+      slipClip: (clipId, deltaSec) =>
+        set((state) => {
+          const suggestions = state.suggestions.map((c) => {
+            if (c.id !== clipId) return c;
+            const duration = c.end - c.start;
+            const newIn = Math.max(0, (c.inPoint ?? c.start) + deltaSec);
+            return { ...c, inPoint: newIn, outPoint: newIn + duration };
+          });
+          return { undoStack: [...state.undoStack.slice(-49), [...state.suggestions]], redoStack: [], suggestions };
+        }),
+
+      slideClip: (clipId, deltaSec) =>
+        set((state) => {
+          const sorted = [...state.suggestions].sort((a, b) => a.start - b.start);
+          const idx = sorted.findIndex((c) => c.id === clipId);
+          if (idx === -1) return {};
+          const clip = sorted[idx];
+          const duration = clip.end - clip.start;
+          const prev = idx > 0 ? sorted[idx - 1] : null;
+          const next = idx < sorted.length - 1 ? sorted[idx + 1] : null;
+          const prevDuration = prev ? (prev.outPoint ?? prev.end) - (prev.inPoint ?? prev.start) : 0;
+          const nextDuration = next ? (next.outPoint ?? next.end) - (next.inPoint ?? next.start) : 0;
+          const minStart = prev ? clip.start - (prevDuration - 0.1) : 0;
+          const maxStart = next ? clip.start + (nextDuration - 0.1) : Infinity;
+          const newStart = Math.max(minStart, Math.min(maxStart, clip.start + deltaSec));
+          const d = newStart - clip.start;
+          if (d === 0) return {};
+          sorted[idx] = { ...clip, start: newStart, end: newStart + duration };
+          if (prev !== null) {
+            sorted[idx - 1] = { ...prev, end: prev.end + d, outPoint: (prev.outPoint ?? prev.end) + d };
+          }
+          if (next !== null) {
+            sorted[idx + 1] = { ...next, start: next.start + d, inPoint: Math.max(0, (next.inPoint ?? next.start) + d) };
+          }
+          return { undoStack: [...state.undoStack.slice(-49), [...state.suggestions]], redoStack: [], suggestions: sorted };
+        }),
+
+      rippleDelete: (clipId) =>
+        set((state) => {
+          const clip = state.suggestions.find((c) => c.id === clipId);
+          if (!clip) return {};
+          const gapSize = clip.end - clip.start;
+          const suggestions = state.suggestions
+            .filter((c) => c.id !== clipId)
+            .map((c) => c.start >= clip.end ? { ...c, start: c.start - gapSize, end: c.end - gapSize } : c);
+          return {
+            undoStack: [...state.undoStack.slice(-49), [...state.suggestions]],
+            redoStack: [],
+            suggestions,
+            selectedClipId: state.selectedClipId === clipId ? null : state.selectedClipId,
+          };
+        }),
 
       splitClipAtTime: (time) =>
         set((state) => {
@@ -1160,67 +1265,48 @@ export const useEditorStore = create<EditorState>()(
               break;
             }
             case "RIPPLE_TRIM": {
-              const p = action.payload;
               store.setActiveTimelineTool("ripple");
-              const deltaSec = (p.delta_sec as number) ?? 0;
-              const edge = p.edge as "in" | "out";
-              const { trimMarker, duration } = store;
-              if (trimMarker) {
-                if (edge === "in") {
-                  store.setTrimMarker({
-                    startTime: Math.max(0, trimMarker.startTime + deltaSec),
-                    endTime: trimMarker.endTime,
-                  });
-                } else {
-                  store.setTrimMarker({
-                    startTime: trimMarker.startTime,
-                    endTime: Math.min(duration, trimMarker.endTime + deltaSec),
-                  });
-                }
-              }
+              store.rippleTrim(
+                action.payload.clip_id as string,
+                action.payload.edge as "in" | "out",
+                (action.payload.delta_sec as number) ?? 0,
+              );
               break;
             }
             case "ROLLING_TRIM": {
               store.setActiveTimelineTool("rolling");
-              // Rolling trim adjusts the shared edit point — represented as trim marker in/out
-              const p = action.payload;
-              const deltaSec = (p.delta_sec as number) ?? 0;
-              const edge = p.edge as "in" | "out";
-              const { trimMarker, duration } = store;
-              if (trimMarker) {
-                if (edge === "in") {
-                  store.setTrimMarker({
-                    startTime: Math.max(0, trimMarker.startTime + deltaSec),
-                    endTime: trimMarker.endTime,
-                  });
-                } else {
-                  store.setTrimMarker({
-                    startTime: trimMarker.startTime,
-                    endTime: Math.min(duration, trimMarker.endTime + deltaSec),
-                  });
-                }
-              }
+              store.rollingTrim(
+                action.payload.clip_id as string,
+                action.payload.neighbor_id as string,
+                action.payload.edge as "in" | "out",
+                (action.payload.delta_sec as number) ?? 0,
+              );
               break;
             }
             case "SLIP_CLIP": {
               store.setActiveTimelineTool("slip");
-              // Slip: shift playhead to reflect source offset — seek to current + delta
-              const deltaSec = (action.payload.delta_sec as number) ?? 0;
-              const next = Math.max(0, Math.min(store.duration, store.currentTime + deltaSec));
-              store.setPendingSeek(next);
+              const slipClipId = action.payload.clip_id as string;
+              const slipDelta = (action.payload.delta_sec as number) ?? 0;
+              const slipTarget = store.suggestions.find((c) => c.id === slipClipId);
+              if (slipTarget) {
+                const newIn = Math.max(0, (slipTarget.inPoint ?? slipTarget.start) + slipDelta);
+                store.slipClip(slipClipId, slipDelta);
+                store.setPendingSeek(newIn);
+              }
               break;
             }
             case "SLIDE_CLIP": {
               store.setActiveTimelineTool("slide");
-              const deltaSec = (action.payload.delta_sec as number) ?? 0;
-              const next = Math.max(0, Math.min(store.duration, store.currentTime + deltaSec));
-              store.setPendingSeek(next);
+              store.slideClip(
+                action.payload.clip_id as string,
+                (action.payload.delta_sec as number) ?? 0,
+              );
               break;
             }
             case "RIPPLE_DELETE": {
               store.setActiveTimelineTool("ripple-delete");
-              const clipId = action.payload.clip_id as string;
-              if (clipId) store.deleteClip(clipId);
+              const rdClipId = action.payload.clip_id as string;
+              if (rdClipId) store.rippleDelete(rdClipId);
               break;
             }
             case "DURATION_STRETCH": {

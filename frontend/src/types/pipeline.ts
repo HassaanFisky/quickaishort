@@ -48,6 +48,8 @@ export interface Clip {
   id: string;
   start: number;
   end: number;
+  inPoint?: number;
+  outPoint?: number;
   confidence: number;
   reason: string;
   /** Viral score 0–100 returned by the backend analysis pipeline. */
