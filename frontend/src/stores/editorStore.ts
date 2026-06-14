@@ -380,6 +380,13 @@ export interface AiSnapshot {
   currentTime: number;
 }
 
+export interface TimelineMarker {
+  id: string;
+  time: number;
+  label: string;
+  color: "red" | "green" | "blue" | "yellow" | "purple";
+}
+
 const _MAX_AI_STACK = 20;
 
 const DEFAULT_EXPORT_SETTINGS: ExportSettings = {
@@ -577,6 +584,15 @@ interface EditorState {
   applyAiEdits: (actions: any[], options?: { snapshotLabel?: string; seekToFirstEdit?: boolean }) => void;
   setAiSuggestions: (patch: Partial<AiSuggestions>) => void;
   clearAiSuggestions: () => void;
+  markIn: number | null;
+  markOut: number | null;
+  setMarkIn: (t: number | null) => void;
+  setMarkOut: (t: number | null) => void;
+  clearMarks: () => void;
+  timelineMarkers: TimelineMarker[];
+  addTimelineMarker: (time: number, label?: string, color?: TimelineMarker["color"]) => void;
+  removeTimelineMarker: (id: string) => void;
+  clearTimelineMarkers: () => void;
 }
 
 export const useEditorStore = create<EditorState>()(
@@ -630,6 +646,10 @@ export const useEditorStore = create<EditorState>()(
 
       // Pillar-3.7 AI suggestions
       aiSuggestions: { ...DEFAULT_AI_SUGGESTIONS },
+
+      markIn: null,
+      markOut: null,
+      timelineMarkers: [],
 
       // Phase 3a B-Roll drawer
       isBRollDrawerOpen: false,
@@ -1586,6 +1606,9 @@ export const useEditorStore = create<EditorState>()(
           aiUndoStack: [],
           aiRedoStack: [],
           aiSuggestions: { ...DEFAULT_AI_SUGGESTIONS },
+          markIn: null,
+          markOut: null,
+          timelineMarkers: [],
           progress: 0,
           isProcessing: false,
           currentStage: "idle",
@@ -1628,6 +1651,9 @@ export const useEditorStore = create<EditorState>()(
           aiUndoStack: [],
           aiRedoStack: [],
           aiSuggestions: { ...DEFAULT_AI_SUGGESTIONS },
+          markIn: null,
+          markOut: null,
+          timelineMarkers: [],
           videoMetadata: null,
           captions: [],
           trimMarker: null,
@@ -1643,6 +1669,22 @@ export const useEditorStore = create<EditorState>()(
         set((state) => ({ aiSuggestions: { ...state.aiSuggestions, ...patch } })),
 
       clearAiSuggestions: () => set({ aiSuggestions: { ...DEFAULT_AI_SUGGESTIONS } }),
+
+      setMarkIn: (t) => set({ markIn: t }),
+      setMarkOut: (t) => set({ markOut: t }),
+      clearMarks: () => set({ markIn: null, markOut: null }),
+      addTimelineMarker: (time, label = "", color = "purple") =>
+        set((state) => ({
+          timelineMarkers: [
+            ...state.timelineMarkers,
+            { id: crypto.randomUUID(), time, label, color },
+          ].sort((a, b) => a.time - b.time),
+        })),
+      removeTimelineMarker: (id) =>
+        set((state) => ({
+          timelineMarkers: state.timelineMarkers.filter((m) => m.id !== id),
+        })),
+      clearTimelineMarkers: () => set({ timelineMarkers: [] }),
 
       setBRollDrawerOpen: (open) => set({ isBRollDrawerOpen: open }),
 

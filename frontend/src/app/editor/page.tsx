@@ -13,6 +13,8 @@ import { ShortcutOverlay } from "@/components/editor/ShortcutOverlay";
 import { BRollDrawer } from "@/components/editor/BRollDrawer";
 import { WebGpuPreviewLayer } from "@/components/editor/WebGpuPreviewLayer";
 import { matchShortcut } from "@/lib/shortcuts";
+import { toast } from "sonner";
+import { formatTime } from "@/lib/utils/formatTime";
 
 export default function EditorPage() {
   const analysis = useAnalysis();
@@ -72,6 +74,26 @@ export default function EditorPage() {
 
       const b = useShortcutsStore.getState().bindings;
       const store = useEditorStore.getState();
+
+      // I — mark in at playhead
+      if (e.key === "i" && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+        e.preventDefault();
+        store.setMarkIn(store.currentTime);
+        return;
+      }
+      // O — mark out at playhead
+      if (e.key === "o" && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+        e.preventDefault();
+        store.setMarkOut(store.currentTime);
+        return;
+      }
+      // M — add marker at playhead
+      if (e.key === "m" && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+        e.preventDefault();
+        store.addTimelineMarker(store.currentTime);
+        toast.success(`Marker added at ${formatTime(store.currentTime)}`);
+        return;
+      }
 
       if (matchEvent(e, b.playPause)) {
         e.preventDefault();

@@ -44,6 +44,7 @@ function TimelineClip({
   onContextMenu: (e: React.MouseEvent, clipId: string) => void;
 }) {
   const { updateClip, setPendingSeek } = useEditorStore();
+  const setSnapLine = useUIStore((s) => s.setSnapLine);
   const [isDragging, setIsDragging] = useState(false);
   const [dragType, setDragType] = useState<"move" | "start" | "end" | null>(null);
   const startX = useRef(0);
@@ -63,27 +64,66 @@ function TimelineClip({
   useEffect(() => {
     if (!isDragging) return;
 
+    const SNAP_THRESHOLD = 0.2;
+
     const handleMouseMove = (e: MouseEvent) => {
       const deltaX = e.clientX - startX.current;
       const timelineWidth = document.getElementById("video-track-area")?.clientWidth || 1;
       const deltaT = (deltaX / timelineWidth) * duration;
+      const allClips = useEditorStore.getState().suggestions;
 
       if (dragType === "move") {
-        const newStart = Math.max(0, Math.min(duration - (startEnd.current - startStart.current), startStart.current + deltaT));
+        const rawStart = Math.max(0, Math.min(duration - (startEnd.current - startStart.current), startStart.current + deltaT));
         const diff = startEnd.current - startStart.current;
+        let finalStart = rawStart;
+        let snapAt: number | null = null;
+        for (const other of allClips) {
+          if (other.id === clip.id) continue;
+          for (const edge of [other.start, other.end]) {
+            if (Math.abs(rawStart - edge) < SNAP_THRESHOLD) { finalStart = edge; snapAt = edge; break; }
+          }
+          if (snapAt !== null) break;
+          for (const edge of [other.start, other.end]) {
+            if (Math.abs(rawStart + diff - edge) < SNAP_THRESHOLD) { finalStart = edge - diff; snapAt = edge; break; }
+          }
+          if (snapAt !== null) break;
+        }
+        setSnapLine(snapAt);
+        const newStart = Math.max(0, Math.min(duration - diff, finalStart));
         updateClip(clip.id, { start: newStart, end: newStart + diff });
       } else if (dragType === "start") {
-        const newStart = Math.max(0, Math.min(clip.end - 0.5, startStart.current + deltaT));
-        updateClip(clip.id, { start: newStart });
+        const rawStart = Math.max(0, Math.min(clip.end - 0.5, startStart.current + deltaT));
+        let finalStart = rawStart;
+        let snapAt: number | null = null;
+        for (const other of allClips) {
+          if (other.id === clip.id) continue;
+          for (const edge of [other.start, other.end]) {
+            if (Math.abs(rawStart - edge) < SNAP_THRESHOLD) { finalStart = edge; snapAt = edge; break; }
+          }
+          if (snapAt !== null) break;
+        }
+        setSnapLine(snapAt);
+        updateClip(clip.id, { start: Math.max(0, Math.min(finalStart, clip.end - 0.5)) });
       } else if (dragType === "end") {
-        const newEnd = Math.max(clip.start + 0.5, Math.min(duration, startEnd.current + deltaT));
-        updateClip(clip.id, { end: newEnd });
+        const rawEnd = Math.max(clip.start + 0.5, Math.min(duration, startEnd.current + deltaT));
+        let finalEnd = rawEnd;
+        let snapAt: number | null = null;
+        for (const other of allClips) {
+          if (other.id === clip.id) continue;
+          for (const edge of [other.start, other.end]) {
+            if (Math.abs(rawEnd - edge) < SNAP_THRESHOLD) { finalEnd = edge; snapAt = edge; break; }
+          }
+          if (snapAt !== null) break;
+        }
+        setSnapLine(snapAt);
+        updateClip(clip.id, { end: Math.max(finalEnd, clip.start + 0.5) });
       }
     };
 
     const handleMouseUp = () => {
       setIsDragging(false);
       setDragType(null);
+      setSnapLine(null);
     };
 
     window.addEventListener("mousemove", handleMouseMove);
@@ -92,7 +132,7 @@ function TimelineClip({
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
     };
-  }, [isDragging, dragType, duration, clip.id, clip.start, clip.end, updateClip]);
+  }, [isDragging, dragType, duration, clip.id, clip.start, clip.end, updateClip, setSnapLine]);
 
   const left = ((clip.start / duration) * 100).toFixed(2);
   const width = (((clip.end - clip.start) / duration) * 100).toFixed(2);
@@ -164,9 +204,12 @@ export default function BottomDock() {
     undo,
     redo,
     deleteClip,
+    markIn,
+    markOut,
+    timelineMarkers,
   } = useEditorStore();
 
-  const { activeTool, setActiveTool, timelineZoom, setTimelineZoom } = useUIStore();
+  const { activeTool, setActiveTool, timelineZoom, setTimelineZoom, snapLine } = useUIStore();
   const waveformCanvasRef = useRef<HTMLCanvasElement>(null);
   const timelineScrollRef = useRef<HTMLDivElement>(null);
   const [hoverTime, setHoverTime] = useState<number | null>(null);
@@ -649,6 +692,61 @@ export default function BottomDock() {
                 {/* Head triangle */}
                 <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[5px] border-r-[5px] border-t-[6px] border-l-transparent border-r-transparent border-t-primary drop-shadow-[0_0_4px_rgba(168,85,247,0.6)]" />
               </div>
+            )}
+
+            {/* In/Out range highlight */}
+            {markIn !== null && markOut !== null && duration > 0 && markOut > markIn && (
+              <div
+                className="absolute top-0 bottom-0 bg-purple-500/15 border-x border-purple-500/40 pointer-events-none z-10"
+                style={{
+                  left: `${(markIn / duration) * 100}%`,
+                  width: `${((markOut - markIn) / duration) * 100}%`,
+                }}
+              />
+            )}
+            {/* Mark-in line */}
+            {markIn !== null && duration > 0 && (
+              <div
+                className="absolute top-0 bottom-0 w-0.5 bg-purple-400 z-20 pointer-events-none"
+                style={{ left: `${(markIn / duration) * 100}%` }}
+                title={`Mark In: ${formatTime(markIn)}`}
+              >
+                <div className="absolute top-0 left-0 w-2 h-2 border-t-2 border-l-2 border-purple-400" />
+              </div>
+            )}
+            {/* Mark-out line */}
+            {markOut !== null && duration > 0 && (
+              <div
+                className="absolute top-0 bottom-0 w-0.5 bg-purple-400 z-20 pointer-events-none"
+                style={{ left: `${(markOut / duration) * 100}%` }}
+                title={`Mark Out: ${formatTime(markOut)}`}
+              >
+                <div className="absolute top-0 right-0 w-2 h-2 border-t-2 border-r-2 border-purple-400" />
+              </div>
+            )}
+
+            {/* Timeline markers — colored diamonds, click to seek */}
+            {duration > 0 && timelineMarkers.map((marker) => (
+              <button
+                key={marker.id}
+                className="absolute top-0 z-25 -translate-x-1/2 flex flex-col items-center pointer-events-auto focus:outline-none"
+                style={{ left: `${(marker.time / duration) * 100}%` }}
+                title={marker.label ? `${marker.label} — ${formatTime(marker.time)}` : formatTime(marker.time)}
+                onClick={(e) => { e.stopPropagation(); setPendingSeek(marker.time); }}
+              >
+                <div
+                  className="w-2.5 h-2.5 rotate-45 border border-current"
+                  style={{ color: marker.color === "purple" ? "#a855f7" : marker.color === "red" ? "#ef4444" : marker.color === "green" ? "#22c55e" : marker.color === "blue" ? "#3b82f6" : "#f59e0b" }}
+                />
+              </button>
+            ))}
+
+            {/* Magnetic snap line */}
+            {snapLine !== null && duration > 0 && (
+              <div
+                className="absolute top-[-30px] bottom-[-10px] w-px bg-yellow-400/80 z-30 pointer-events-none shadow-[0_0_6px_rgba(250,204,21,0.5)]"
+                style={{ left: `${(snapLine / duration) * 100}%` }}
+              />
             )}
 
             {/* Hover time indicator */}
