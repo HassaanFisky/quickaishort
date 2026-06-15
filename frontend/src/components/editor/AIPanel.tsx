@@ -345,6 +345,15 @@ export function AIPanel() {
                     : "bg-white/20"
                 )}
               />
+              {aiMessages.length > 0 && (
+                <button
+                  onClick={() => useEditorStore.setState({ aiMessages: [] })}
+                  className="text-[9px] text-white/30 hover:text-white/70 transition-colors uppercase tracking-wider px-1"
+                  aria-label="Clear conversation"
+                >
+                  Clear
+                </button>
+              )}
               <button
                 className="ai-close-btn"
                 onClick={() => setAIPanelOpen(false)}

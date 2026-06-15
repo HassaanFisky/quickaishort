@@ -466,14 +466,14 @@ export default function EditorLayout() {
               <button
                 onClick={() => setLeftPanelOpen(!leftPanelOpen)}
                 aria-label="Toggle clips panel"
-                className="h-9 w-9 rounded-lg flex items-center justify-center bg-card border border-border text-fg-muted hover:text-foreground transition-colors lg:hidden"
+                className="h-9 w-9 rounded-xl flex items-center justify-center bg-card border border-border text-fg-muted hover:text-foreground transition-all duration-200 lg:hidden"
               >
                 <PanelLeft size={15} />
               </button>
               <button
                 onClick={() => setRightPanelOpen(!rightPanelOpen)}
                 aria-label="Toggle properties panel"
-                className="h-9 w-9 rounded-lg flex items-center justify-center bg-card border border-border text-fg-muted hover:text-foreground transition-colors lg:hidden"
+                className="h-9 w-9 rounded-xl flex items-center justify-center bg-card border border-border text-fg-muted hover:text-foreground transition-all duration-200 lg:hidden"
               >
                 <PanelRight size={15} />
               </button>
@@ -488,7 +488,7 @@ export default function EditorLayout() {
               centerMode === "effects" ? "Switch to Preview" : "Open Workspace"
             }
             className={cn(
-              "h-9 w-9 rounded-lg flex items-center justify-center border transition-colors",
+              "h-9 w-9 rounded-xl flex items-center justify-center border transition-all duration-200",
               centerMode === "effects"
                 ? "bg-primary/20 border-primary/30 text-primary"
                 : "bg-card border-border text-fg-muted hover:text-foreground"
@@ -503,7 +503,7 @@ export default function EditorLayout() {
               title={localEngineEnabled ? "Local engine ON — click to disable" : "Use local engine (beta)"}
               aria-label="Toggle local FFmpeg.wasm decode engine"
               className={cn(
-                "h-9 px-2 rounded-lg flex items-center gap-1 text-[10px] font-medium border transition-colors",
+                "h-9 px-2 rounded-xl flex items-center gap-1 text-[10px] font-bold border transition-all duration-200",
                 localEngineEnabled
                   ? "bg-amber-500/15 border-amber-500/40 text-amber-400 hover:bg-amber-500/25"
                   : "bg-card border-border text-fg-muted hover:text-foreground"
@@ -860,7 +860,10 @@ export default function EditorLayout() {
                       Ready to create
                     </h3>
                     <p className="text-sm text-muted-foreground leading-relaxed">
-                      Paste a YouTube URL above to start. The AI will transcribe, find viral moments, and prepare your editing workspace.
+                      Paste a YouTube URL, drop a video file, or enter any direct video link.
+                      <span className="text-[10px] text-fg-subtle mt-1 block">
+                        Supports MP4, WebM, MOV · YouTube · Direct URLs
+                      </span>
                     </p>
                   </div>
                   <div className="flex items-center gap-3 text-[10px] text-fg-subtle">
