@@ -26,6 +26,10 @@ import {
   AlignRight,
   Minus,
   Plus,
+  Move,
+  Eye,
+  Layers,
+  RotateCcw,
 } from "lucide-react";
 import { useUIStore, type EditorTool } from "@/stores/uiStore";
 import { useEditorStore } from "@/stores/editorStore";
@@ -47,11 +51,13 @@ import Vectorscope from "@/components/editor/Vectorscope";
 import SpeedRampEditor from "@/components/editor/SpeedRampEditor";
 import CurvesEditor from "@/components/editor/CurvesEditor";
 import LoudnessMeter from "@/components/editor/LoudnessMeter";
+import { WGSL_TRANSITIONS } from "@/lib/transitions/wgslTransitions";
+import { SPLIT_PRESETS } from "@/lib/splitScreenPresets";
 
 const QUALITY_OPTIONS = ["low", "medium", "high"] as const;
 const FILTER_OPTIONS = ["None", "Urban", "Retro", "Cinematic"] as const;
 
-type AccordionKey = "audio" | "visuals" | "speed" | "color" | "scopes" | "export";
+type AccordionKey = "audio" | "visuals" | "speed" | "color" | "scopes" | "transform" | "export";
 
 // ---------------------------------------------------------------------------
 // Toggle component
@@ -529,6 +535,10 @@ export default function RightPanel() {
     setExportSetting,
     frameFilters,
     setFrameFilter,
+    defaultTransition,
+    setDefaultTransition,
+    splitScreenPresetId,
+    setSplitScreenPreset,
   } = useEditorStore();
 
   const { activeTool } = useUIStore();
@@ -989,6 +999,131 @@ export default function RightPanel() {
                   </span>
                 </div>
                 <SpeedRampEditor />
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* ── Group: Transform & Layers ────────────────────────────────── */}
+      <div className="rounded-xl border border-border overflow-hidden">
+        <AccordionHeader
+          label="Transform & Layers"
+          isOpen={openGroup === "transform"}
+          onToggle={() => toggleGroup("transform")}
+        />
+        <AnimatePresence initial={false}>
+          {openGroup === "transform" && (
+            <motion.div
+              key="transform-body"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+              className="overflow-hidden"
+            >
+              <div className="px-4 pb-4 flex flex-col gap-4 border-t border-border pt-3">
+
+                {/* Opacity */}
+                <div className="flex items-center gap-2 mb-1">
+                  <Eye className="w-3.5 h-3.5 text-primary" />
+                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-fg-muted">Opacity</span>
+                </div>
+                <SliderRow
+                  label="Opacity"
+                  value={(frameFilters.opacity ?? 1) * 100}
+                  display={`${Math.round((frameFilters.opacity ?? 1) * 100)}%`}
+                  min={0}
+                  max={100}
+                  step={1}
+                  onChange={(v) => setFrameFilter({ opacity: v / 100 })}
+                />
+
+                <div className="h-px bg-border" />
+
+                {/* Crop */}
+                <div className="flex items-center gap-2">
+                  <Move className="w-3.5 h-3.5 text-primary" />
+                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-fg-muted">Crop</span>
+                </div>
+                <SliderRow label="Top" value={(frameFilters.cropTop ?? 0) * 100} display={`${Math.round((frameFilters.cropTop ?? 0) * 100)}%`} min={0} max={50} step={1} onChange={(v) => setFrameFilter({ cropTop: v / 100 })} />
+                <SliderRow label="Bottom" value={(frameFilters.cropBottom ?? 0) * 100} display={`${Math.round((frameFilters.cropBottom ?? 0) * 100)}%`} min={0} max={50} step={1} onChange={(v) => setFrameFilter({ cropBottom: v / 100 })} />
+                <SliderRow label="Left" value={(frameFilters.cropLeft ?? 0) * 100} display={`${Math.round((frameFilters.cropLeft ?? 0) * 100)}%`} min={0} max={50} step={1} onChange={(v) => setFrameFilter({ cropLeft: v / 100 })} />
+                <SliderRow label="Right" value={(frameFilters.cropRight ?? 0) * 100} display={`${Math.round((frameFilters.cropRight ?? 0) * 100)}%`} min={0} max={50} step={1} onChange={(v) => setFrameFilter({ cropRight: v / 100 })} />
+
+                {/* Pan */}
+                <div className="h-px bg-border" />
+                <span className="text-[9px] font-black uppercase tracking-[0.2em] text-fg-muted">Pan</span>
+                <SliderRow label="Pan X" value={(frameFilters.panX ?? 0) * 100} display={`${Math.round((frameFilters.panX ?? 0) * 100)}%`} min={-100} max={100} step={1} onChange={(v) => setFrameFilter({ panX: v / 100 })} />
+                <SliderRow label="Pan Y" value={(frameFilters.panY ?? 0) * 100} display={`${Math.round((frameFilters.panY ?? 0) * 100)}%`} min={-100} max={100} step={1} onChange={(v) => setFrameFilter({ panY: v / 100 })} />
+
+                <button
+                  onClick={() => setFrameFilter({ cropTop: 0, cropBottom: 0, cropLeft: 0, cropRight: 0, panX: 0, panY: 0 })}
+                  className="w-full h-8 rounded-lg bg-muted border border-border text-[9px] font-black uppercase tracking-widest text-muted-foreground hover:text-foreground hover:border-border transition-colors flex items-center justify-center gap-1.5"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  Reset Crop & Pan
+                </button>
+
+                <div className="h-px bg-border" />
+
+                {/* Background Remove */}
+                <ToggleRow
+                  label="Background Remove"
+                  sub="AI person mask (beta)"
+                  enabled={frameFilters.backgroundRemoveEnabled ?? false}
+                  onToggle={() => setFrameFilter({ backgroundRemoveEnabled: !(frameFilters.backgroundRemoveEnabled ?? false) })}
+                  ariaLabel="Toggle background removal"
+                />
+
+                <div className="h-px bg-border" />
+
+                {/* Default Transition */}
+                <div className="flex items-center gap-2">
+                  <Layers className="w-3.5 h-3.5 text-primary" />
+                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-fg-muted">Default Transition</span>
+                </div>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {Object.keys(WGSL_TRANSITIONS).map((name) => (
+                    <button
+                      key={name}
+                      onClick={() => setDefaultTransition(name)}
+                      className={cn(
+                        "h-9 rounded-lg text-[9px] font-black uppercase tracking-widest border transition-colors",
+                        defaultTransition === name
+                          ? "bg-primary/15 border-primary/30 text-primary"
+                          : "bg-muted border-border text-fg-muted hover:text-foreground hover:border-border"
+                      )}
+                    >
+                      {name.replace("_", " ")}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="h-px bg-border" />
+
+                {/* Split Screen Presets */}
+                <div className="flex items-center gap-2">
+                  <SquareSplitHorizontal className="w-3.5 h-3.5 text-primary" />
+                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-fg-muted">Split Screen</span>
+                </div>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {SPLIT_PRESETS.map((preset) => (
+                    <button
+                      key={preset.id}
+                      onClick={() => setSplitScreenPreset(splitScreenPresetId === preset.id ? null : preset.id)}
+                      title={preset.description}
+                      className={cn(
+                        "h-9 rounded-lg text-[9px] font-black uppercase tracking-widest border transition-colors",
+                        splitScreenPresetId === preset.id
+                          ? "bg-primary/15 border-primary/30 text-primary"
+                          : "bg-muted border-border text-fg-muted hover:text-foreground hover:border-border"
+                      )}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </motion.div>
           )}

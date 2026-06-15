@@ -23,6 +23,7 @@ import {
   Plus,
   Maximize2,
   ScanLine,
+  Music,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -30,6 +31,7 @@ import { formatTime } from "@/lib/utils/formatTime";
 import { toast } from "sonner";
 import MultiTrackTimeline from "@/components/editor/MultiTrackTimeline";
 import { detectScenes } from "@/lib/sceneDetection";
+import { detectBeats } from "@/lib/beatDetection";
 
 // ---- TimelineClip Component with Trim & Drag Support ----
 function TimelineClip({
@@ -236,6 +238,7 @@ export default function BottomDock() {
 
   const { activeTool, setActiveTool, timelineZoom, setTimelineZoom, snapLine } = useUIStore();
   const [detectingScenes, setDetectingScenes] = useState(false);
+  const [detectingBeats, setDetectingBeats] = useState(false);
 
   const handleDetectScenes = useCallback(async () => {
     const video =
@@ -261,6 +264,37 @@ export default function BottomDock() {
       setDetectingScenes(false);
     }
   }, [videoElementRef, addTimelineMarker]);
+
+  const handleDetectBeats = useCallback(async () => {
+    const video =
+      videoElementRef?.current ??
+      (document.querySelector("video") as HTMLVideoElement | null);
+    if (!video || !video.src) {
+      toast.error("No video loaded — load a video first.");
+      return;
+    }
+    setDetectingBeats(true);
+    toast.info("Beat detection running…");
+    try {
+      const audioCtx = new AudioContext();
+      const response = await fetch(video.src);
+      const arrayBuffer = await response.arrayBuffer();
+      const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+      await audioCtx.close();
+      const beats = await detectBeats(audioBuffer, { band: "bass", threshold: 0.65 });
+      if (beats.length === 0) {
+        toast.info("No beats detected. Try a different track.");
+      } else {
+        beats.forEach((t) => addTimelineMarker(t, "Beat", "purple"));
+        toast.success(`Found ${beats.length} beat${beats.length !== 1 ? "s" : ""}.`);
+      }
+    } catch {
+      toast.error("Beat detection failed.");
+    } finally {
+      setDetectingBeats(false);
+    }
+  }, [videoElementRef, addTimelineMarker]);
+
   const waveformCanvasRef = useRef<HTMLCanvasElement>(null);
   const timelineScrollRef = useRef<HTMLDivElement>(null);
   const [hoverTime, setHoverTime] = useState<number | null>(null);
@@ -627,6 +661,23 @@ export default function BottomDock() {
         >
           <ScanLine className={cn("w-3 h-3", detectingScenes && "animate-pulse")} />
           {detectingScenes ? "Detecting…" : "Scenes"}
+        </button>
+
+        {/* Detect Beats */}
+        <button
+          onClick={handleDetectBeats}
+          disabled={detectingBeats || duration === 0}
+          title="Detect Beats — place purple markers at bass hits"
+          aria-label="Detect beats"
+          className={cn(
+            "flex items-center gap-1.5 h-7 px-2.5 rounded-lg border text-[9px] font-black uppercase tracking-widest transition-colors shrink-0",
+            detectingBeats || duration === 0
+              ? "border-border text-muted-foreground/30 cursor-not-allowed"
+              : "border-purple-500/30 text-purple-400/70 hover:text-purple-400 hover:border-purple-500/60 hover:bg-purple-500/8"
+          )}
+        >
+          <Music className={cn("w-3 h-3", detectingBeats && "animate-pulse")} />
+          {detectingBeats ? "Detecting…" : "Beats"}
         </button>
 
         {/* Timeline zoom controls */}

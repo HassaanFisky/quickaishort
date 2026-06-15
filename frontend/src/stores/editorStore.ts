@@ -49,6 +49,15 @@ export interface FrameFilter {
   chromaKeyTolerance?: number;
   chromaKeySoftness?: number;
   chromaKeySpill?: number;
+  // Phase 34: Crop / Pan / Opacity / BG Remove
+  cropTop?: number;
+  cropBottom?: number;
+  cropLeft?: number;
+  cropRight?: number;
+  panX?: number;
+  panY?: number;
+  opacity?: number;
+  backgroundRemoveEnabled?: boolean;
 }
 
 export interface TrimMarker {
@@ -181,7 +190,14 @@ export interface EditorAction {
     // ─── Phase 25: Grouping, auto-split, track matte ─────────────────────────
     | "GROUP_CLIPS"              // { clip_ids: string[] }
     | "AUTO_SPLIT_SCENES"        // { threshold? }
-    | "SET_TRACK_MATTE";         // { clip_id, matte_clip_id }
+    | "SET_TRACK_MATTE"          // { clip_id, matte_clip_id }
+    // ─── Phase 34: Crop / Pan / Opacity / BG Remove / Split Screen ───────────
+    | "SET_CROP"                 // { top, bottom, left, right } — 0-1 fraction
+    | "SET_PAN"                  // { x, y } — -1 to 1
+    | "RESET_CROP_PAN"           // {} — resets crop + pan to zero
+    | "SET_CLIP_OPACITY"         // { value: 0-1 }
+    | "TOGGLE_BACKGROUND_REMOVE" // { enabled?: boolean }
+    | "SET_SPLIT_SCREEN";        // { preset_id: string }
   payload: Record<string, unknown>;
 }
 
@@ -217,6 +233,14 @@ const DEFAULT_FRAME_FILTERS: FrameFilter = {
   chromaKeyTolerance: 0.3,
   chromaKeySoftness: 0.1,
   chromaKeySpill: 0.5,
+  cropTop: 0,
+  cropBottom: 0,
+  cropLeft: 0,
+  cropRight: 0,
+  panX: 0,
+  panY: 0,
+  opacity: 1,
+  backgroundRemoveEnabled: false,
 };
 
 const DEFAULT_CAPTION_STYLE: CaptionStyle = {
@@ -650,6 +674,12 @@ interface EditorState {
   projectTemplate: string | null;
   setProjectTemplate: (t: string | null) => void;
   trackMattes: Record<string, string>;
+
+  // ─── Phase 34: Default transition + split screen ──────────────────────────
+  defaultTransition: string;
+  setDefaultTransition: (name: string) => void;
+  splitScreenPresetId: string | null;
+  setSplitScreenPreset: (id: string | null) => void;
 }
 
 export const useEditorStore = create<EditorState>()(
@@ -730,6 +760,10 @@ export const useEditorStore = create<EditorState>()(
       clipGroups: [],
       projectTemplate: null,
       trackMattes: {},
+
+      // Phase 34
+      defaultTransition: "fade",
+      splitScreenPresetId: null,
 
       // AI Editor initial state
       videoMetadata: null,
@@ -1676,6 +1710,42 @@ export const useEditorStore = create<EditorState>()(
               }
               break;
             }
+            // ─── Phase 34: Crop / Pan / Opacity / BG Remove / Split Screen ───
+            case "SET_CROP": {
+              store.setFrameFilter({
+                cropTop:    (action.payload.top    as number) ?? 0,
+                cropBottom: (action.payload.bottom as number) ?? 0,
+                cropLeft:   (action.payload.left   as number) ?? 0,
+                cropRight:  (action.payload.right  as number) ?? 0,
+              });
+              break;
+            }
+            case "SET_PAN": {
+              store.setFrameFilter({
+                panX: (action.payload.x as number) ?? 0,
+                panY: (action.payload.y as number) ?? 0,
+              });
+              break;
+            }
+            case "RESET_CROP_PAN":
+              store.setFrameFilter({ cropTop: 0, cropBottom: 0, cropLeft: 0, cropRight: 0, panX: 0, panY: 0 });
+              break;
+            case "SET_CLIP_OPACITY": {
+              const opVal = Math.max(0, Math.min(1, (action.payload.value as number) ?? 1));
+              store.setFrameFilter({ opacity: opVal });
+              break;
+            }
+            case "TOGGLE_BACKGROUND_REMOVE": {
+              const bgEnabled = action.payload.enabled !== undefined
+                ? (action.payload.enabled as boolean)
+                : !(store.frameFilters.backgroundRemoveEnabled ?? false);
+              store.setFrameFilter({ backgroundRemoveEnabled: bgEnabled });
+              if (bgEnabled) store.setMaskEnabled(true);
+              break;
+            }
+            case "SET_SPLIT_SCREEN":
+              store.setSplitScreenPreset((action.payload.preset_id as string) || null);
+              break;
           }
         });
       },
@@ -1933,6 +2003,10 @@ export const useEditorStore = create<EditorState>()(
       removeClipGroup: (groupIndex) =>
         set((s) => ({ clipGroups: s.clipGroups.filter((_, i) => i !== groupIndex) })),
       setProjectTemplate: (t) => set({ projectTemplate: t }),
+
+      // Phase 34
+      setDefaultTransition: (name) => set({ defaultTransition: name }),
+      setSplitScreenPreset: (id) => set({ splitScreenPresetId: id }),
     }),
     {
       name: "EditorStore",
