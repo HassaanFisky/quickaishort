@@ -272,8 +272,11 @@ export function AIPanel() {
     <AnimatePresence>
       {aiPanelOpen && (
         <motion.aside
-          className="fixed bottom-5 left-1/2 z-50 flex flex-col"
-          style={{ width: "min(520px, 92vw)", maxHeight: "55vh", transform: "translateX(-50%)" }}
+          drag
+          dragMomentum={false}
+          dragConstraints={{ top: -400, bottom: 200, left: -600, right: 600 }}
+          className="fixed bottom-5 z-50 flex flex-col cursor-grab active:cursor-grabbing"
+          style={{ left: "calc(50% - min(260px, 46vw))", width: "min(520px, 92vw)", maxHeight: "55vh" }}
           initial={{ y: 40, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: 40, opacity: 0 }}
@@ -285,14 +288,10 @@ export function AIPanel() {
             <div className="ai-header-left">
               {/* Gem badge */}
               <div className="ai-header-gem">✦</div>
-              <div className="ai-header-info">
-                <span className="ai-panel-brand">QuickAI Short</span>
-                <span className="ai-panel-title">QuickAI Editor</span>
-              </div>
+              <span className="ai-panel-title">QuickAI Editor</span>
             </div>
 
             <div className="ai-header-right">
-              <span className="ai-header-model">Gemini 2.5</span>
               {/* Status dot */}
               <span
                 className={cn(

@@ -558,7 +558,7 @@ export default function BottomDock() {
           </span>
         </div>
 
-        <div className="flex items-center gap-5 flex-1">
+        <div className="flex items-center gap-5 flex-1 select-none">
           {tools.map(({ icon: Icon, label, toolId, action, tooltip }) => {
             const isActive = activeTool === toolId;
             return (
@@ -630,7 +630,7 @@ export default function BottomDock() {
         </button>
 
         {/* Timeline zoom controls */}
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0 select-none">
           <button
             onClick={() => setTimelineZoom(timelineZoom - 0.25)}
             className="w-6 h-6 rounded flex items-center justify-center text-muted-foreground/50 hover:text-foreground hover:bg-foreground/10 transition-colors"

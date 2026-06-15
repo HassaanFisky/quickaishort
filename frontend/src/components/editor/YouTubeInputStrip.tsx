@@ -4,6 +4,7 @@ import type { ChangeEvent } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   CheckCircle2,
+  ChevronDown,
   Loader2,
   Link2,
   Upload,
@@ -56,19 +57,18 @@ export default function YouTubeInputStrip({
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: -8, opacity: 0 }}
             transition={{ type: "spring", damping: 24, stiffness: 200 }}
-            className="bg-card border border-border rounded-xl px-4 py-2.5 flex items-center justify-between gap-3 shadow-xl"
+            className="bg-card border border-border rounded-xl px-3.5 py-2 flex items-center gap-2.5 shadow-xl"
           >
-            <div className="flex items-center gap-2 min-w-0">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-              <span className="text-[10px] font-black text-fg-muted uppercase tracking-widest truncate">
-                {videoTitle ?? urlInput.slice(0, 50) ?? "Video loaded"}
-              </span>
-            </div>
+            <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />
+            <span className="text-[10px] font-bold text-fg-muted truncate flex-1 min-w-0">
+              {videoTitle ?? urlInput.slice(0, 50) ?? "Video loaded"}
+            </span>
             <button
               onClick={onExpandPanel}
-              className="text-[9px] font-black text-primary hover:text-primary/80 uppercase tracking-widest shrink-0 transition-colors"
+              aria-label="Expand URL bar"
+              className="w-5 h-5 rounded flex items-center justify-center text-fg-subtle hover:text-primary transition-colors shrink-0"
             >
-              Change
+              <ChevronDown className="w-3.5 h-3.5" />
             </button>
           </motion.div>
         ) : (

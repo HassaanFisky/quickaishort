@@ -15,7 +15,6 @@ import {
   Link2,
   Loader2,
   Zap,
-  Smartphone,
   Sparkles,
   CheckCircle2,
   X,
@@ -405,9 +404,9 @@ export default function EditorLayout() {
             onClick={() =>
               setCenterMode(centerMode === "effects" ? "preview" : "effects")
             }
-            title={centerMode === "effects" ? "Back to preview" : "Effects studio"}
+            title={centerMode === "effects" ? "Back to Preview" : "Open Workspace"}
             aria-label={
-              centerMode === "effects" ? "Switch to Preview" : "Open Effects Studio"
+              centerMode === "effects" ? "Switch to Preview" : "Open Workspace"
             }
             className={cn(
               "h-9 w-9 rounded-lg flex items-center justify-center border transition-colors",
@@ -445,7 +444,7 @@ export default function EditorLayout() {
               "h-9 px-3.5 rounded-xl flex items-center gap-2 text-xs font-bold transition-all duration-200",
               sourceUrl && !isProcessing
                 ? "bg-primary text-white shadow-[0_2px_12px_-2px_rgba(168,85,247,0.4)] hover:shadow-[0_4px_20px_-2px_rgba(168,85,247,0.5)] hover:-translate-y-px active:scale-[0.97]"
-                : "bg-foreground/5 border border-foreground/8 text-fg-muted cursor-not-allowed opacity-40"
+                : "bg-foreground/5 border border-foreground/8 text-fg-muted cursor-not-allowed opacity-50"
             )}
           >
             <Download size={13} />
@@ -454,7 +453,7 @@ export default function EditorLayout() {
 
           <button
             onClick={() => setAIPanelOpen(true)}
-            title="Gemini AI Editor — Ctrl+K"
+            title="AI Editor (Ctrl+K)"
             aria-label="Open AI Editor"
             className={cn(
               "h-9 w-9 rounded-xl flex items-center justify-center border transition-all duration-200",
@@ -820,11 +819,6 @@ export default function EditorLayout() {
         </p>
       </footer>
 
-      {/* Floating macro controls — 2xl+ only */}
-      <div className="fixed right-10 top-1/2 -translate-y-1/2 flex flex-col gap-4 z-40 hidden 2xl:flex">
-        <FloatingControls />
-      </div>
-
       {/* Mobile/tablet — Left panel slide-over drawer (advanced mode only) */}
       <AnimatePresence>
         {isAdvancedMode && leftPanelOpen && (
@@ -903,7 +897,7 @@ export default function EditorLayout() {
         )}
       </AnimatePresence>
 
-      {/* Gemini AI Editor — full action dispatch panel (Sparkles / Ctrl+K opens this) */}
+      {/* AI Editor — full action dispatch panel (Sparkles / Ctrl+K opens this) */}
       <AIPanel />
 
       {/* Floating AI pill — visible when panel is closed and video is loaded */}
@@ -942,46 +936,3 @@ export default function EditorLayout() {
   );
 }
 
-function FloatingControls() {
-  const { exportSettings, setExportSetting } = useEditorStore();
-
-  const ASPECT_CYCLE = ["9:16", "1:1"] as const;
-  type AspectOption = (typeof ASPECT_CYCLE)[number];
-
-  const cycleAspectRatio = () => {
-    const idx = ASPECT_CYCLE.indexOf(exportSettings.aspectRatio as AspectOption);
-    const next = ASPECT_CYCLE[(idx + 1) % ASPECT_CYCLE.length];
-    setExportSetting("aspectRatio", next);
-    toast.success(`Aspect ratio: ${next}`);
-  };
-
-  const triggerAutoEnhance = () => {
-    window.dispatchEvent(new Event("trigger-silence-detect"));
-    toast.success("Auto-enhancement triggered");
-  };
-
-  const triggerPreFlight = () => {
-    window.dispatchEvent(new CustomEvent("qai:preflight"));
-  };
-
-  const buttons = [
-    { icon: Smartphone, title: `Aspect Ratio — ${exportSettings.aspectRatio}`, action: cycleAspectRatio },
-    { icon: Zap, title: "Auto-Enhance", action: triggerAutoEnhance },
-    { icon: Sparkles, title: "Pre-Flight", action: triggerPreFlight },
-  ];
-
-  return (
-    <>
-      {buttons.map(({ icon: Icon, title, action }, i) => (
-        <button
-          key={i}
-          onClick={action}
-          aria-label={title}
-          className="w-12 h-12 rounded-xl bg-card border border-border flex items-center justify-center text-fg-muted hover:text-foreground hover:border-border transition-colors"
-        >
-          <Icon className="w-4 h-4" />
-        </button>
-      ))}
-    </>
-  );
-}

@@ -1301,28 +1301,9 @@ nav:has(.nav-link:hover) .nav-link:not(:hover) {
   box-shadow: 0 0 18px rgba(168,85,247,0.4), inset 0 1px 0 rgba(255,255,255,0.12);
 }
 
-.ai-header-info { display: flex; flex-direction: column; gap: 0.1rem; line-height: 1; }
-.ai-panel-brand {
-  font-size: 0.575rem;
-  font-weight: 800;
-  letter-spacing: 0.2em;
-  color: rgba(224,180,255,0.6);
-  text-transform: uppercase;
-}
 .ai-panel-title { font-size: 0.825rem; font-weight: 900; letter-spacing: 0.04em; color: #f8f2ff; }
 
 .ai-header-right { display: flex; align-items: center; gap: 0.5rem; }
-.ai-header-model {
-  font-size: 0.575rem;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  color: rgba(224,180,255,0.5);
-  text-transform: uppercase;
-  background: rgba(168,85,247,0.12);
-  border: 1px solid rgba(168,85,247,0.22);
-  padding: 0.2em 0.55em;
-  border-radius: 0.3rem;
-}
 
 .ai-gem-icon { color: #e0b4ff; font-size: 1rem; }
 

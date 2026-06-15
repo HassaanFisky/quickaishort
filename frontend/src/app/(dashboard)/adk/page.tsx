@@ -652,7 +652,7 @@ export default function ADKPage() {
 
   return (
     /* Extra bottom padding so the sticky bar never overlaps content */
-    <div className="max-w-3xl mx-auto py-8 px-4 pb-48">
+    <div className="max-w-4xl mx-auto py-8 px-4 pb-48">
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="relative rounded-3xl overflow-hidden p-8 mb-6">
