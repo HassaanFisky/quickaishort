@@ -325,6 +325,8 @@ function TextPanel() {
             <button
               key={c}
               onClick={() => setColor(c)}
+              aria-label={`Text color ${c}`}
+              aria-pressed={color === c}
               className={cn("w-6 h-6 rounded-full border-2 transition-all", color === c ? "border-white scale-110" : "border-transparent hover:border-border")}
               style={{ backgroundColor: c }}
             />
@@ -339,6 +341,8 @@ function TextPanel() {
             <button
               key={a}
               onClick={() => setAlign(a)}
+              aria-label={`Align ${a}`}
+              aria-pressed={align === a}
               className={cn("w-8 h-7 rounded-md flex items-center justify-center transition-colors", align === a ? "bg-primary text-white" : "text-fg-muted hover:text-foreground")}
             >
               <Icon className="w-3.5 h-3.5" />

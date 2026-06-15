@@ -851,6 +851,7 @@ export default function BottomDock() {
                 className="absolute top-0 z-25 -translate-x-1/2 flex flex-col items-center pointer-events-auto focus:outline-none"
                 style={{ left: `${(marker.time / duration) * 100}%` }}
                 title={marker.label ? `${marker.label} — ${formatTime(marker.time)}` : formatTime(marker.time)}
+                aria-label={marker.label ? `Seek to ${marker.label} at ${formatTime(marker.time)}` : `Seek to ${formatTime(marker.time)}`}
                 onClick={(e) => { e.stopPropagation(); setPendingSeek(marker.time); }}
               >
                 <div
