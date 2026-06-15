@@ -67,7 +67,7 @@ export function useFaceTracker() {
     };
 
     workerRef.current.onerror = (e) => {
-      console.error("[FaceTracker] Worker error:", e.message);
+      if (process.env.NODE_ENV !== "production") console.error("[FaceTracker] Worker error:", e.message);
     };
 
     workerRef.current.postMessage({ type: "init" });

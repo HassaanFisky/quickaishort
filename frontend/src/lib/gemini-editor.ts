@@ -6,8 +6,13 @@ export interface EditorStateContext {
   clipIndex: number | null;
   clipStart: number | null;
   clipEnd: number | null;
+  clipCount: number;
+  selectedClipDuration: number | null;
   totalClips: number;
   videoDuration: number;
+  markIn: number | null;
+  markOut: number | null;
+  timelineMarkerCount: number;
   filter: ExportSettings["filter"];
   audioBoost: number;
   playbackSpeed: number;
@@ -53,15 +58,26 @@ function detectContentKey(title: string): ContentKey {
 export function generateImmediateSuggestions(
   title: string,
   duration: number,
+  ctx?: Pick<EditorStateContext, "markIn" | "markOut" | "clipCount" | "selectedClipDuration">,
 ): string[] {
   const key = detectContentKey(title);
   const base = INSTANT_SUGGESTIONS[key].slice(0, 5);
-  if (duration > 3600) {
-    return ["Extract top 3 viral moments from this long video", ...base].slice(0, 5);
+  const overrides: string[] = [];
+
+  if (ctx?.markIn !== null && ctx?.markOut !== null && ctx?.markIn !== undefined && ctx?.markOut !== undefined) {
+    const rangeLen = Math.round(ctx.markOut - ctx.markIn);
+    overrides.push(`Export your ${rangeLen}s marked range`);
   }
-  if (duration > 600) {
-    return ["Trim to the strongest 90-second segment", ...base].slice(0, 5);
+  if (ctx?.selectedClipDuration && ctx.selectedClipDuration < 60) {
+    overrides.push(`This ${Math.round(ctx.selectedClipDuration)}s clip is short-form ready — export now`);
   }
+  if (ctx?.clipCount && ctx.clipCount > 1) {
+    overrides.push(`You have ${ctx.clipCount} clips — select the highest-scoring one`);
+  }
+
+  if (overrides.length > 0) return [...overrides, ...base].slice(0, 5);
+  if (duration > 3600) return ["Extract top 3 viral moments from this long video", ...base].slice(0, 5);
+  if (duration > 600) return ["Trim to the strongest 90-second segment", ...base].slice(0, 5);
   return base;
 }
 
@@ -211,7 +227,7 @@ export async function getInitialSuggestions(
     });
 
     if (!res.ok) {
-      console.error("[Gemini Editor] /api/ai/suggestions returned", res.status);
+      if (process.env.NODE_ENV !== "production") console.error("[Gemini Editor] /api/ai/suggestions returned", res.status);
       return DEFAULT;
     }
 
@@ -220,7 +236,7 @@ export async function getInitialSuggestions(
       ? data.suggestions
       : DEFAULT;
   } catch (err: unknown) {
-    console.error(
+    if (process.env.NODE_ENV !== "production") console.error(
       "[Gemini Editor] getInitialSuggestions fetch failed:",
       err instanceof Error ? err.message : String(err),
     );

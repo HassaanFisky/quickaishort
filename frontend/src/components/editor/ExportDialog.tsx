@@ -30,6 +30,7 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
   const suggestions = useEditorStore((s) => s.suggestions);
 
   const [clientSupported, setClientSupported] = useState<boolean | null>(null);
+  const [audioSupported] = useState(() => WebCodecsExporter.hasAudioSupport());
   const [selectedPreset, setSelectedPreset] = useState<ExportPreset>(EXPORT_PRESETS[0]);
   const [exporting, setExporting] = useState(false);
   const [progress, setProgress] = useState<ExportProgress | null>(null);
@@ -279,12 +280,24 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
               </div>
             )}
 
-            {/* Client export notice */}
+            {/* Client export notice + audio/video status */}
             {canUseClientExport && !exporting && (
-              <p className="text-[11px] text-fg-muted mb-4 flex items-center gap-1.5">
-                <Zap size={11} className="text-primary shrink-0" />
-                Hardware-accelerated local export — stays on your device, instant download.
-              </p>
+              <div className="mb-4 space-y-2">
+                <p className="text-[11px] text-fg-muted flex items-center gap-1.5">
+                  <Zap size={11} className="text-primary shrink-0" />
+                  Hardware-accelerated local export — stays on your device, instant download.
+                </p>
+                <div className="flex items-center gap-3 text-[9px] text-fg-subtle">
+                  <span className="flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block shrink-0" />
+                    <span>Video</span>
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className={cn("w-1.5 h-1.5 rounded-full inline-block shrink-0", audioSupported ? "bg-amber-400" : "bg-foreground/20")} />
+                    <span>Audio {audioSupported ? "(basic)" : "(browser unsupported)"}</span>
+                  </span>
+                </div>
+              </div>
             )}
             {!canUseClientExport && !exporting && (
               <p className="text-[11px] text-fg-muted mb-4">

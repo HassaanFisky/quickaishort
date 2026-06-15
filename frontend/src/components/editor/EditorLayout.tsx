@@ -29,6 +29,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { getVideoInfo } from "@/lib/api";
 import { parseYouTubeId } from "@/lib/youtube-utils";
+import { PROJECT_TEMPLATES } from "@/lib/project/templates";
 
 import LeftPanel from "./LeftPanel";
 import RightPanel from "./RightPanel";
@@ -54,6 +55,7 @@ export default function EditorLayout() {
     setThumbnailUrl: storeThumbnail,
     setVideoMetadata,
     aiPanelOpen,
+    setExportSetting,
   } = useEditorStore();
 
   const { runPipeline, cancelPipeline } = useMediaPipeline();
@@ -80,8 +82,19 @@ export default function EditorLayout() {
   const [exportOpen, setExportOpen] = useState(false);
   const [localEngineEnabled, setLocalEngineEnabled] = useState(false);
   const [isAdvancedMode, setIsAdvancedMode] = useState(false);
+  const hasShownShortcutsRef = useRef(false);
   useEffect(() => {
     setIsAdvancedMode(new URLSearchParams(window.location.search).get("advanced") === "1");
+    // First-run welcome toast (once per browser session)
+    if (!sessionStorage.getItem("titan_welcome_shown")) {
+      sessionStorage.setItem("titan_welcome_shown", "1");
+      setTimeout(() => {
+        toast("Welcome to QuickAI Editor", {
+          description: "Paste a YouTube URL or upload a video to start editing.",
+          duration: 5000,
+        });
+      }, 1000);
+    }
   }, []);
 
   const [urlInput, setUrlInput] = useState("");
@@ -91,6 +104,8 @@ export default function EditorLayout() {
   const [backendFailed, setBackendFailed] = useState(false);
   const [centerMode, setCenterMode] = useState<"preview" | "effects">("preview");
   const [panelCollapsed, setPanelCollapsed] = useState(false);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const [lastError, setLastError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const hasAutoImportedRef = useRef(false);
 
@@ -109,6 +124,17 @@ export default function EditorLayout() {
     const t = setTimeout(() => setPanelCollapsed(true), 1500);
     return () => clearTimeout(t);
   }, [sourceUrl, isAnalysing]);
+
+  // Keyboard shortcut hint — fires once after first video load
+  useEffect(() => {
+    if (sourceUrl && !hasShownShortcutsRef.current) {
+      hasShownShortcutsRef.current = true;
+      toast("Pro tip: Use keyboard shortcuts", {
+        description: "Ctrl+K for AI Editor · I/O to mark range · M for markers · ? for all shortcuts",
+        duration: 8000,
+      });
+    }
+  }, [sourceUrl]);
 
   // Keep a ref so the retry listener never needs to re-register when runPipeline
   // recreates (it captures transcription via closure, so it changes every render).
@@ -158,6 +184,9 @@ export default function EditorLayout() {
     }
   }, []);
 
+  const isDirectVideoUrl = (url: string) =>
+    /\.(mp4|webm|mov)([\?#].*)?$/i.test(url.trim());
+
   const handleUrlChange = (e: ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setUrlInput(val);
@@ -171,6 +200,9 @@ export default function EditorLayout() {
     if (videoId) {
       setUrlValid(true);
       setYoutubePreviewId(videoId);
+    } else if (isDirectVideoUrl(val)) {
+      setUrlValid(true);
+      setYoutubePreviewId(null);
     } else {
       setUrlValid(false);
       setYoutubePreviewId(null);
@@ -180,9 +212,20 @@ export default function EditorLayout() {
   const handleAnalyze = async (overrideUrl?: string) => {
     const url = overrideUrl ?? urlInput;
     if (!url.trim()) {
-      toast.error("Please paste a YouTube URL first.");
+      toast.error("Please paste a YouTube URL or direct video URL first.");
       return;
     }
+
+    // Direct video URL — skip backend, load straight into the pipeline
+    if (isDirectVideoUrl(url)) {
+      setBackendFailed(false);
+      setYoutubePreviewId(null);
+      setVideoMetadata({ id: url, url, title: url.split("/").pop() ?? "Video", duration: 0, nativeWidth: 1280, nativeHeight: 720, fps: 30 });
+      setSourceUrl(url);
+      void runPipeline();
+      return;
+    }
+
     const videoId = parseYouTubeId(url);
     if (videoId) {
       setYoutubePreviewId(videoId);
@@ -201,6 +244,7 @@ export default function EditorLayout() {
         setProcessing(false, "idle");
         return;
       }
+      setLastError(null);
       toast.success(`Found: ${info.title}`);
 
       // Whisper tiny.en transcribes at ~10–20× realtime in WASM. Videos over
@@ -252,6 +296,7 @@ export default function EditorLayout() {
       } else if (error instanceof Error) {
         errMsg = error.message || errMsg;
       }
+      setLastError(errMsg);
       toast.error(`Error: ${errMsg}`);
       setProcessing(false, "idle");
     }
@@ -271,6 +316,9 @@ export default function EditorLayout() {
         toast.error("Please select a video file.");
         return;
       }
+      if (file.size > 500 * 1024 * 1024) {
+        toast.warning("File is larger than 500 MB — analysis may be slow or time out on first run.", { duration: 6000 });
+      }
       const url = URL.createObjectURL(file);
       setSourceFile(file, url);
       setBackendFailed(false);
@@ -283,9 +331,13 @@ export default function EditorLayout() {
   const handleDrop = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
+    setIsDraggingOver(false);
     if (e.dataTransfer.files?.[0]) {
       const file = e.dataTransfer.files[0];
       if (file.type.startsWith("video/")) {
+        if (file.size > 500 * 1024 * 1024) {
+          toast.warning("File is larger than 500 MB — analysis may be slow or time out on first run.", { duration: 6000 });
+        }
         const url = URL.createObjectURL(file);
         setSourceFile(file, url);
         runPipeline();
@@ -298,18 +350,45 @@ export default function EditorLayout() {
   const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
+    setIsDraggingOver(true);
+  };
+
+  const handleDragLeave = (e: DragEvent<HTMLDivElement>) => {
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+      setIsDraggingOver(false);
+    }
   };
 
   return (
     <div
       onDrop={handleDrop}
       onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
       className={cn(
-        "editor-shell-bg h-screen w-screen overflow-hidden flex flex-col p-4 gap-4",
+        "editor-shell-bg h-screen w-screen overflow-hidden flex flex-col p-4 gap-4 relative",
         "transition-[padding-left] duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)]",
         isSidebarCollapsed ? "md:pl-20" : "md:pl-[256px]"
       )}
     >
+      {/* Drag-to-import overlay */}
+      <AnimatePresence>
+        {isDraggingOver && (
+          <motion.div
+            key="drag-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 z-[100] flex items-center justify-center pointer-events-none"
+          >
+            <div className="absolute inset-0 bg-primary/10 backdrop-blur-sm border-2 border-dashed border-primary/50 rounded-2xl" />
+            <div className="relative flex flex-col items-center gap-3 text-center">
+              <Upload className="w-12 h-12 text-primary" />
+              <p className="text-base font-bold text-foreground">Drop your video here</p>
+              <p className="text-xs text-fg-muted">MP4, WebM, or MOV</p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       <Sidebar />
 
       <input
@@ -468,6 +547,37 @@ export default function EditorLayout() {
           <LiquidThemeToggle />
         </div>
       </header>
+
+      {/* Error recovery banner */}
+      <AnimatePresence>
+        {lastError && (
+          <motion.div
+            key="error-banner"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="shrink-0 overflow-hidden"
+          >
+            <div className="flex items-center gap-3 px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs">
+              <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+              <span className="flex-1 truncate">{lastError}</span>
+              <button
+                onClick={() => setLastError(null)}
+                className="shrink-0 hover:text-red-300 transition-colors"
+                aria-label="Dismiss error"
+              >
+                <X size={13} />
+              </button>
+              <button
+                onClick={() => { setLastError(null); void handleAnalyze(); }}
+                className="shrink-0 font-bold hover:text-red-300 transition-colors text-[10px] uppercase tracking-widest"
+              >
+                Retry
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Main workspace — 3-column when ?advanced=1, single center column otherwise */}
       <main className={cn(
@@ -764,6 +874,29 @@ export default function EditorLayout() {
                       <kbd className="px-1.5 py-0.5 rounded bg-foreground/5 border border-foreground/8 font-mono text-[9px]">?</kbd>
                       <span>Shortcuts</span>
                     </span>
+                  </div>
+                  {/* Template selector — quick-start presets */}
+                  <div className="w-full max-w-sm">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-fg-subtle mb-2">Start from a template</p>
+                    <div className="grid grid-cols-5 gap-1.5">
+                      {PROJECT_TEMPLATES.map((tpl) => (
+                        <button
+                          key={tpl.id}
+                          onClick={() => {
+                            const ar = tpl.aspectRatio === "16:9" ? "9:16" : tpl.aspectRatio;
+                            setExportSetting("aspectRatio", ar as "9:16" | "1:1");
+                            toast(`Template: ${tpl.label}`, { description: `Aspect ratio set to ${tpl.aspectRatio} · max ${tpl.maxDuration}s`, duration: 3000 });
+                          }}
+                          className="flex flex-col items-center gap-1 px-1 py-2 rounded-xl bg-card border border-border hover:border-primary/40 hover:bg-primary/5 transition-colors group"
+                        >
+                          <div className={cn(
+                            "rounded border border-foreground/10 bg-foreground/5 group-hover:border-primary/30 transition-colors",
+                            tpl.aspectRatio === "9:16" ? "w-3 h-5" : tpl.aspectRatio === "1:1" ? "w-4 h-4" : "w-5 h-3"
+                          )} />
+                          <span className="text-[8px] font-bold text-fg-subtle group-hover:text-primary transition-colors leading-tight text-center">{tpl.label.replace(" ", "\n")}</span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </motion.div>
               ) : centerMode === "effects" ? (

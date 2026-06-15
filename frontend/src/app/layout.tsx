@@ -10,6 +10,7 @@ import { BottomTabBar } from "@/components/layout/BottomTabBar";
 import { RouteFade } from "@/components/shared/RouteFade";
 import { OfflineNotice } from "@/components/shared/OfflineNotice";
 import { CookieConsent } from "@/components/shared/CookieConsent";
+import { ServiceWorkerRegistrar } from "@/components/shared/ServiceWorkerRegistrar";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -85,6 +86,7 @@ export default function RootLayout({
           <BottomTabBar />
           <CommandPalette />
           <CookieConsent />
+          <ServiceWorkerRegistrar />
         </AppProviders>
       </body>
     </html>

@@ -154,7 +154,7 @@ export function useServerExport({ userId }: UseServerExportArgs) {
             finishFailure("Export timed out after 10 minutes.");
           }
         } catch (err) {
-          console.warn("Export status poll failed:", err);
+          if (process.env.NODE_ENV !== "production") console.warn("Export status poll failed:", err);
         }
       }, POLL_INTERVAL_MS);
     },

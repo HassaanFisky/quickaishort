@@ -131,7 +131,7 @@ export default function YouTubeInputStrip({
                   type="url"
                   value={urlInput}
                   onChange={onUrlChange}
-                  placeholder="Paste YouTube URL…"
+                  placeholder="Paste YouTube URL or direct video link (.mp4, .webm)…"
                   className="flex-1 bg-transparent text-[12px] font-medium text-foreground placeholder:text-muted-foreground outline-none min-w-0"
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !isAnalysing) onAnalyze();

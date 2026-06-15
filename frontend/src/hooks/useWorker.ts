@@ -38,7 +38,7 @@ export function useWorker(workerFactory: () => Worker) {
       };
 
       w.onerror = (e) => {
-        console.error("Worker error:", e);
+        if (process.env.NODE_ENV !== "production") console.error("Worker error:", e);
         setStatus("error");
         setError("Worker crashed or failed to load");
       };
@@ -46,7 +46,7 @@ export function useWorker(workerFactory: () => Worker) {
       workerRef.current = w;
       return w;
     } catch (err) {
-      console.error("Failed to initialize worker:", err);
+      if (process.env.NODE_ENV !== "production") console.error("Failed to initialize worker:", err);
       setStatus("error");
       setError("Failed to initialize worker");
       return null;
@@ -65,7 +65,7 @@ export function useWorker(workerFactory: () => Worker) {
     (type: string, payload: unknown) => {
       const w = workerRef.current;
       if (!w) {
-        console.error("Worker not initialized — call initWorker() first");
+        if (process.env.NODE_ENV !== "production") console.error("Worker not initialized — call initWorker() first");
         return;
       }
       w.postMessage({ type, payload });

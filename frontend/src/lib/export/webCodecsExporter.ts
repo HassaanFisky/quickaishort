@@ -33,11 +33,21 @@ export interface ExportProgress {
 
 export class WebCodecsExporter {
   private encoder: any = null;
+  private audioEncoder: any = null;
+  private audioSupported = false;
   private mux: Mp4Mux | null = null;
   private offscreen: OffscreenCanvas | null = null;
   private ctx: OffscreenCanvasRenderingContext2D | null = null;
   private cancelled = false;
   private frameCount = 0;
+
+  hasAudioEncoder(): boolean {
+    return this.audioSupported;
+  }
+
+  static hasAudioSupport(): boolean {
+    return typeof AudioEncoder !== "undefined";
+  }
 
   static async isSupported(): Promise<boolean> {
     try {
@@ -63,18 +73,25 @@ export class WebCodecsExporter {
   async init(preset: ExportPreset): Promise<void> {
     this.cancelled = false;
     this.frameCount = 0;
+    this.audioSupported = false;
     this.offscreen = new OffscreenCanvas(preset.width, preset.height);
     this.ctx = this.offscreen.getContext("2d") as OffscreenCanvasRenderingContext2D;
+
+    const hasAudio = typeof AudioEncoder !== "undefined";
     this.mux = new Mp4Mux({
       width: preset.width,
       height: preset.height,
       frameRate: preset.frameRate,
+      ...(hasAudio ? { sampleRate: 48000, numberOfChannels: 2 } : {}),
     });
+
     this.encoder = new VideoEncoder({
       output: (chunk: any, meta?: any) => {
         this.mux!.addVideoChunk(chunk, meta);
       },
-      error: (e: Error) => console.error("[WebCodecsExporter] encoder error:", e),
+      error: (e: Error) => {
+        if (process.env.NODE_ENV !== "production") console.error("[WebCodecsExporter]", e);
+      },
     });
     await this.encoder.configure({
       codec: "avc1.42001f",
@@ -84,6 +101,28 @@ export class WebCodecsExporter {
       framerate: preset.frameRate,
       hardwareAcceleration: "prefer-hardware",
     });
+
+    if (hasAudio) {
+      try {
+        this.audioEncoder = new AudioEncoder({
+          output: (chunk: any, meta?: any) => {
+            this.mux!.addAudioChunk(chunk, meta);
+          },
+          error: (e: Error) => {
+            if (process.env.NODE_ENV !== "production") console.error("[AudioEncoder]", e);
+          },
+        });
+        await this.audioEncoder.configure({
+          codec: "mp4a.40.2",
+          sampleRate: 48000,
+          numberOfChannels: 2,
+          bitrate: 128_000,
+        });
+        this.audioSupported = true;
+      } catch {
+        this.audioEncoder = null;
+      }
+    }
   }
 
   async encodeFrameAt(
@@ -103,6 +142,9 @@ export class WebCodecsExporter {
   async finalize(): Promise<Blob> {
     if (!this.encoder || !this.mux) throw new Error("WebCodecsExporter not initialized");
     await this.encoder.flush();
+    if (this.audioEncoder && this.audioSupported) {
+      try { await this.audioEncoder.flush(); } catch {}
+    }
     return this.mux.finalize();
   }
 
@@ -112,7 +154,10 @@ export class WebCodecsExporter {
 
   dispose(): void {
     try { this.encoder?.close(); } catch {}
+    try { this.audioEncoder?.close(); } catch {}
     this.encoder = null;
+    this.audioEncoder = null;
+    this.audioSupported = false;
     this.mux = null;
     this.offscreen = null;
     this.ctx = null;

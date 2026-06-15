@@ -54,7 +54,7 @@ export function useDashboardStats({
       })
       .catch((err) => {
         if (cancelled) return;
-        console.warn("Stats fetch failed:", err);
+        if (process.env.NODE_ENV !== "production") console.warn("Stats fetch failed:", err);
         setStats({ ...EMPTY_STATS, user_id: userId });
         setIsReady(true);
         setError("Could not reach the stats service.");
@@ -74,7 +74,7 @@ export function useDashboardStats({
         });
         setTransport("pusher");
       } catch (err) {
-        console.warn("Pusher subscribe failed; falling back to WebSocket", err);
+        if (process.env.NODE_ENV !== "production") console.warn("Pusher subscribe failed; falling back to WebSocket", err);
         openWebSocket(userId, apply, wsRef, setTransport, () => !cancelled);
       }
     } else {
@@ -129,14 +129,14 @@ function openWebSocket(
           apply(parsed.payload as Partial<UserStats>);
         }
       } catch (err) {
-        console.warn("WS message parse failed", err);
+        if (process.env.NODE_ENV !== "production") console.warn("WS message parse failed", err);
       }
     };
     socket.onerror = () => {
       if (alive()) setTransport("rest");
     };
   } catch (err) {
-    console.warn("WebSocket open failed", err);
+    if (process.env.NODE_ENV !== "production") console.warn("WebSocket open failed", err);
     if (alive()) setTransport("rest");
   }
 }

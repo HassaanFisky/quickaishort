@@ -85,6 +85,9 @@ export function AIPanel() {
     exportSettings,
     captions,
     captionsEnabled,
+    markIn,
+    markOut,
+    timelineMarkers,
   } = useEditorStore();
 
   const [inputText, setInputText] = useState("");
@@ -94,6 +97,8 @@ export function AIPanel() {
   const [recentActions, setRecentActions] = useState<string[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const commandHistoryRef = useRef<string[]>([]);
+  const historyIndexRef = useRef(-1);
 
   // Build editor state snapshot for every Gemini call
   const editorState = useMemo((): EditorStateContext => {
@@ -103,12 +108,19 @@ export function AIPanel() {
     const selectedClip = selectedClipId
       ? clips.find((c) => c.id === selectedClipId) ?? null
       : null;
+    const selectedClipDuration =
+      selectedClip ? selectedClip.end - selectedClip.start : null;
     return {
       clipIndex: selectedIndex != null && selectedIndex >= 0 ? selectedIndex : null,
       clipStart: selectedClip?.start ?? null,
       clipEnd: selectedClip?.end ?? null,
+      clipCount: clips.length,
+      selectedClipDuration,
       totalClips: clips.length,
       videoDuration: videoMetadata?.duration ?? 0,
+      markIn: markIn ?? null,
+      markOut: markOut ?? null,
+      timelineMarkerCount: timelineMarkers.length,
       filter: exportSettings.filter,
       audioBoost: exportSettings.audioBoost,
       playbackSpeed: exportSettings.playbackSpeed,
@@ -122,6 +134,7 @@ export function AIPanel() {
   }, [
     clips, selectedClipId, videoMetadata, exportSettings,
     captionsEnabled, captions.length, recentActions,
+    markIn, markOut, timelineMarkers,
   ]);
 
   const handleTranscript = useCallback((text: string, isFinal: boolean) => {
@@ -192,6 +205,13 @@ export function AIPanel() {
       const trimmed = text.trim();
       if (!trimmed || isAIThinking) return;
 
+      // Save to command history (dedupe consecutive duplicates)
+      if (commandHistoryRef.current[commandHistoryRef.current.length - 1] !== trimmed) {
+        commandHistoryRef.current.push(trimmed);
+        if (commandHistoryRef.current.length > 50) commandHistoryRef.current.shift();
+      }
+      historyIndexRef.current = -1;
+
       stopRecording();
       setInputText("");
       setInterimText("");
@@ -255,6 +275,28 @@ export function AIPanel() {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       sendMessage(inputText);
+      return;
+    }
+    // Arrow up/down — navigate command history
+    if (e.key === "ArrowUp" && commandHistoryRef.current.length > 0) {
+      e.preventDefault();
+      const next = historyIndexRef.current < commandHistoryRef.current.length - 1
+        ? historyIndexRef.current + 1
+        : historyIndexRef.current;
+      historyIndexRef.current = next;
+      const cmd = commandHistoryRef.current[commandHistoryRef.current.length - 1 - next];
+      if (cmd !== undefined) setInputText(cmd);
+    }
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      if (historyIndexRef.current <= 0) {
+        historyIndexRef.current = -1;
+        setInputText("");
+      } else {
+        historyIndexRef.current -= 1;
+        const cmd = commandHistoryRef.current[commandHistoryRef.current.length - 1 - historyIndexRef.current];
+        if (cmd !== undefined) setInputText(cmd);
+      }
     }
   };
 

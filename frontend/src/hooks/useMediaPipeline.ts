@@ -193,7 +193,7 @@ export function useMediaPipeline() {
         )
         .catch((err: unknown) => {
           const msg = err instanceof Error ? err.message : String(err);
-          console.warn("[useMediaPipeline] GCS upload failed (non-fatal):", msg);
+          if (process.env.NODE_ENV !== "production") console.warn("[useMediaPipeline] GCS upload failed (non-fatal):", msg);
         });
     }
   }, [setProcessing, setProgress, setAgentState, setWaveformPeaks, setSourceGcsPath, transcription]);
