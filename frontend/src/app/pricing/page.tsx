@@ -203,6 +203,11 @@ export default function PricingPage() {
                   <p className="text-sm text-muted-foreground leading-relaxed">
                     {plan.description}
                   </p>
+                  {plan.id === "pro" && (
+                    <p className="text-[10px] text-fg-muted mt-2 leading-relaxed">
+                      Traditional NLE subscriptions start at $22/mo — QuickAI includes editor + AI + Pre-Flight for $29.
+                    </p>
+                  )}
                 </div>
 
                 <ul className="space-y-3 flex-1">

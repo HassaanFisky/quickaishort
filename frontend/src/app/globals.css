@@ -100,9 +100,9 @@
 @layer base {
   :root {
     /* ===== CREATOR LIGHT — pristine, soft whites, legible, no harsh borders ===== */
-    --bg-base:         240 20% 99%;
-    --bg-subtle:       240 24% 97%;
-    --bg-muted:        240 18% 94%;
+    --bg-base:         220 14% 97%;    /* warmer off-white — less eye strain */
+    --bg-subtle:       220 16% 95%;
+    --bg-muted:        220 12% 92%;
     --bg-elevated:     0 0% 100%;
     --border-strong:   240 14% 84%;
     --fg:              240 14% 12%;   /* soft near-black — never pure #000 */
@@ -184,8 +184,8 @@
     --bg-elevated:     240 5% 13%;
     --border-strong:   240 5% 30%;
     --fg:              240 12% 96%;   /* soft white ~#f3f3f6 */
-    --fg-muted:        240 6% 70%;
-    --fg-subtle:       240 5% 55%;
+    --fg-muted:        240 6% 72%;
+    --fg-subtle:       240 5% 58%;
     --accent-indigo:   270 95% 75%;   /* brand purple, vivid on graphite */
     --accent-hover:    270 90% 68%;
     --accent-fg:       240 10% 6%;
@@ -538,12 +538,12 @@ html.liquid-transition::view-transition-new(root) {
 /* ── Marquee (social proof ticker) ─────────────── */
 @keyframes marquee {
   from { transform: translateX(0); }
-  to   { transform: translateX(-50%); }
+  to   { transform: translateX(-33.333%); }
 }
 .marquee-track {
   display: flex;
   width: max-content;
-  animation: marquee 30s linear infinite;
+  animation: marquee 40s linear infinite;
 }
 .marquee-track:hover { animation-play-state: paused; }
 

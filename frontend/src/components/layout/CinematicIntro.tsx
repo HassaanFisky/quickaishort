@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
+import { playBladeSlice } from "@/lib/introSound";
 
 /**
  * CinematicIntro Component
@@ -12,34 +13,11 @@ export const CinematicIntro = ({ onComplete }: { onComplete: () => void }) => {
   const [phase, setPhase] = useState<"entry" | "hold" | "sweep" | "end">("entry");
   const logoWrapRef = useRef<HTMLDivElement>(null);
   const textWrapRef = useRef<HTMLDivElement>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Constants from intro.html
   const T_ENTRY = 1000;
   const T_HOLD = 600;
   const T_SWEEP = 1300;
-
-  // Preload the blade-slice audio on mount so it fires instantly on wipe.
-  // The file must be placed at: frontend/public/sounds/blade-slice-wipe.mp3
-  useEffect(() => {
-    const audio = new Audio("/sounds/blade-slice-wipe.mp3");
-    audio.preload = "auto";
-    audioRef.current = audio;
-    return () => {
-      audioRef.current = null;
-    };
-  }, []);
-
-  const playSound = () => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    // Reset to the start so re-plays are always tight to the visual.
-    audio.currentTime = 0;
-    audio.play().catch(() => {
-      // Silently swallow autoplay-policy blocks (no prior user gesture on
-      // the landing page). Visual wipe still plays; audio is best-effort.
-    });
-  };
 
   useEffect(() => {
     // Phase transitions
@@ -49,7 +27,7 @@ export const CinematicIntro = ({ onComplete }: { onComplete: () => void }) => {
     } else if (phase === "hold") {
       const timer = setTimeout(() => {
         setPhase("sweep");
-        playSound();
+        playBladeSlice();
       }, T_HOLD);
       return () => clearTimeout(timer);
     } else if (phase === "sweep") {

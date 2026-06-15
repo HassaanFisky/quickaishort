@@ -15,7 +15,6 @@ import {
   ArrowRight,
   Play,
   Brain,
-  Shield,
   Star,
   ChevronRight,
   Zap,
@@ -194,20 +193,15 @@ export default function LandingPage() {
                 animate="visible"
                 className="flex flex-col items-center"
               >
-                <motion.div variants={itemVariants} className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-primary mb-8 shadow-[0_0_20px_rgba(168,85,247,0.2)]">
-                  <Shield className="w-3.5 h-3.5" />
-                  Built for Google AI Agents Challenge 2026
-                </motion.div>
-
                 <motion.h1 variants={itemVariants} className="text-5xl md:text-7xl lg:text-[5.5rem] font-black leading-[1.05] tracking-tighter mb-6 text-center">
-                  Know your clip <br className="hidden md:block" />
-                  <span className="brand-gradient-text">
-                    will go viral.
-                  </span>
+                  Your next viral clip{" "}
+                  <br className="hidden md:block" />
+                  <span className="brand-gradient-text">starts here.</span>
                 </motion.h1>
 
                 <motion.p variants={itemVariants} className="text-lg md:text-xl text-muted-foreground mb-10 max-w-xl leading-relaxed text-center">
-                  Edit your short with AI, then validate it against 6 audience personas before you post. From timeline to viral — one platform.
+                  Paste a link. Tell the AI what to edit. Export a short that&apos;s already
+                  been validated by 6 audience personas — before you post.
                 </motion.p>
 
                 <motion.div variants={itemVariants} className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
@@ -226,12 +220,22 @@ export default function LandingPage() {
             {/* Social Proof Ticker */}
             <div className="absolute bottom-10 w-full overflow-hidden">
               <div className="flex items-center gap-8 marquee-track opacity-40 hover:opacity-70 transition-opacity duration-500">
-                {[...Array(2)].map((_, i) => (
+                {[...Array(3)].map((_, i) => (
                   <React.Fragment key={i}>
-                    {["Gemini 2.5 Flash", "Google ADK v1", "Next.js 14", "Framer Motion", "Google Cloud Run", "Tailwind v4"].map((tech) => (
-                      <div key={tech} className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.15em] px-8 text-muted-foreground whitespace-nowrap">
-                        <Zap className="w-3 h-3 text-primary/60" /> {tech}
-                      </div>
+                    {[
+                      "100+ Premiere-grade features",
+                      "Edit with your voice",
+                      "AI finds viral moments",
+                      "No install needed",
+                      "Runs in your browser",
+                      "Export in seconds",
+                      "$29/mo all-in-one",
+                      "6 AI personas test your clip",
+                    ].map((text) => (
+                      <span key={text} className="flex items-center gap-2 text-[11px] font-semibold tracking-wide px-4 text-fg-muted whitespace-nowrap">
+                        <span className="w-1 h-1 rounded-full bg-primary/60 shrink-0" />
+                        {text}
+                      </span>
                     ))}
                   </React.Fragment>
                 ))}
@@ -310,15 +314,17 @@ export default function LandingPage() {
                     key={feature.title}
                     initial={{ opacity: 0, y: 20 }}
                     whileInView={{ opacity: 1, y: 0 }}
-                    whileHover={{ y: -5, transition: spring.smooth }}
+                    whileHover={{ y: -4, transition: { duration: 0.2 } }}
                     whileTap={{ scale: 0.98 }}
                     viewport={{ once: true, margin: "-40px" }}
                     transition={{ ...spring.smooth, delay: i * 0.07 }}
                     className={cn(
-                      "liquid-panel p-7 group relative overflow-hidden rounded-2xl cursor-pointer",
+                      "liquid-panel p-7 group relative overflow-hidden rounded-2xl cursor-pointer transition-shadow duration-300 hover:shadow-[0_8px_32px_rgba(168,85,247,0.08)]",
                       feature.className
                     )}
                   >
+                    {/* Ambient glow on hover */}
+                    <div className="absolute -top-12 -right-12 w-32 h-32 bg-primary/5 rounded-full blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
                     <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center mb-5 group-hover:bg-primary/15 transition-colors duration-200">
                       <feature.icon className="w-5 h-5 text-primary" />
                     </div>

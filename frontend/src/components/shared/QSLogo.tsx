@@ -55,7 +55,7 @@ function Wordmark({ size }: { size: Size }) {
       )}
       style={{ letterSpacing: "-0.03em" }}
     >
-      Quick{" "}
+      <span className="text-foreground">Quick</span>{" "}
       <span
         className="bg-clip-text text-transparent"
         style={{
@@ -65,7 +65,7 @@ function Wordmark({ size }: { size: Size }) {
       >
         AI
       </span>{" "}
-      Shorts
+      <span className="text-foreground">Shorts</span>
     </span>
   );
 }
