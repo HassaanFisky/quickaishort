@@ -28,6 +28,7 @@ import { AIPanel } from "@/components/ai/AIPanel";
 import { spring } from "@/lib/animations";
 import { ActivityFeed } from "@/components/dashboard/ActivityFeed";
 import { UsageStatsCard } from "@/components/dashboard/UsageStatsCard";
+import { AnalyticsSummaryCard } from "@/components/dashboard/AnalyticsSummaryCard";
 import type { ExportRecord } from "@/types/models";
 import { buildExportDownloadUrl } from "@/lib/api";
 
@@ -384,6 +385,7 @@ export default function DashboardPage() {
         {/* Usage + activity sidebar */}
         <div className="space-y-6">
           <UsageStatsCard stats={stats} loading={!isReady} />
+          <AnalyticsSummaryCard />
           <div className="rounded-2xl border border-white/[0.06] bg-[hsl(var(--bg-subtle))]/80 p-6">
             <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground block mb-4">
               Recent Activity

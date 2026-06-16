@@ -15,6 +15,7 @@ import {
 } from "@/lib/export/webCodecsExporter";
 import { extractAudioBuffer, audioBufferToChunks } from "@/lib/export/audioExtractor";
 import { formatTime } from "@/lib/utils/formatTime";
+import { trackEvent } from "@/lib/analytics";
 
 interface ExportDialogProps {
   open: boolean;
@@ -66,10 +67,11 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
   const rangeDuration = rangeEnd - rangeStart;
 
   const handleServerExport = useCallback(() => {
+    trackEvent({ name: "export_started", props: { presetId: `server:${selectedPreset.label}`, durationSec: Math.round(rangeDuration) } });
     dispatchAIActions([{ type: "EXPORT_CLIP", payload: {} }]);
     toast.info("Server render queued — you'll get a download link when ready.");
     onClose();
-  }, [dispatchAIActions, onClose]);
+  }, [dispatchAIActions, onClose, selectedPreset, rangeDuration]);
 
   const handleClientExport = useCallback(async () => {
     const storeVideo = videoElementRef?.current;
@@ -78,6 +80,9 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
       toast.error("No video loaded — paste a YouTube URL first.");
       return;
     }
+
+    const exportStartedAt = performance.now();
+    trackEvent({ name: "export_started", props: { presetId: selectedPreset.label, durationSec: Math.round(rangeDuration) } });
 
     setExporting(true);
     setProgress({ encoded: 0, total: 0, cancelled: false });
@@ -165,11 +170,23 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
         a.download = filename;
         a.click();
         URL.revokeObjectURL(url);
+        trackEvent({
+          name: "export_completed",
+          props: {
+            presetId: selectedPreset.label,
+            outputBytes: blob.size,
+            latencyMs: Math.round(performance.now() - exportStartedAt),
+          },
+        });
         toast.success("Export complete!");
         onClose();
       }
     } catch (err) {
       if (process.env.NODE_ENV !== "production") console.error("[ExportDialog]", err);
+      trackEvent({
+        name: "export_failed",
+        props: { presetId: selectedPreset.label, errorType: err instanceof Error ? err.name : "Unknown" },
+      });
       toast.error("Export failed — try Server render instead.");
     } finally {
       exporter.dispose();

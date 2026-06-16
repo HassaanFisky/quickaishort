@@ -3,6 +3,7 @@
 import { Component, ReactNode } from "react";
 import Link from "next/link";
 import { AlertTriangle, RefreshCcw, LayoutGrid } from "lucide-react";
+import { trackEvent } from "@/lib/analytics";
 
 interface Props {
   children: ReactNode;
@@ -31,6 +32,10 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     if (process.env.NODE_ENV !== "production") console.error("[ErrorBoundary] Uncaught render error:", error, errorInfo.componentStack);
+    trackEvent({
+      name: "editor_error",
+      props: { errorType: error.name, componentStack: errorInfo.componentStack?.slice(0, 500) },
+    });
   }
 
   render() {

@@ -357,6 +357,10 @@ from routers.broll_router import router as broll_router
 
 app.include_router(broll_router)
 
+from routers.analytics import router as analytics_router
+
+app.include_router(analytics_router)
+
 
 def get_real_ip(request: Request) -> str:
     """

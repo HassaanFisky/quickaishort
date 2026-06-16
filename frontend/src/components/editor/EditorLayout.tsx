@@ -34,6 +34,7 @@ import { parseYouTubeId } from "@/lib/youtube-utils";
 import { PROJECT_TEMPLATES } from "@/lib/project/templates";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useSwipeGesture } from "@/hooks/useTouchGestures";
+import { trackEvent } from "@/lib/analytics";
 
 import LeftPanel from "./LeftPanel";
 import RightPanel from "./RightPanel";
@@ -257,6 +258,7 @@ export default function EditorLayout() {
       setYoutubePreviewId(null);
       setVideoMetadata({ id: url, url, title: url.split("/").pop() ?? "Video", duration: 0, nativeWidth: 1280, nativeHeight: 720, fps: 30 });
       setSourceUrl(url);
+      trackEvent({ name: "video_loaded", props: { source: "upload", durationSec: 0 } });
       void runPipeline();
       return;
     }
@@ -308,6 +310,7 @@ export default function EditorLayout() {
         fps: 30,
       });
       setSourceUrl(url);
+      trackEvent({ name: "video_loaded", props: { source: "youtube", durationSec: Math.round(info.duration ?? 0) } });
       void runPipeline();
     } catch (error: unknown) {
       setBackendFailed(true);
@@ -358,6 +361,7 @@ export default function EditorLayout() {
       setSourceFile(file, url);
       setBackendFailed(false);
       setYoutubePreviewId(null);
+      trackEvent({ name: "video_loaded", props: { source: "upload", durationSec: 0 } });
       runPipeline();
     },
     [setSourceFile, runPipeline]

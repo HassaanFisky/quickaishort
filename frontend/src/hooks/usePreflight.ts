@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import axios from "axios";
 import { runPreflight } from "@/lib/api";
+import { trackEvent } from "@/lib/analytics";
 import type { ClipCandidatePayload, PreflightResult } from "@/types/preflight";
 
 export interface UsePreflightReturn {
@@ -40,6 +41,10 @@ export function usePreflight(): UsePreflightReturn {
       try {
         const res = await runPreflight(youtubeUrl, candidates, isPremium, userId);
         setResult(res);
+        trackEvent({
+          name: "preflight_run",
+          props: { consensusScore: res.weighted_consensus_score, personaCount: res.persona_votes.length },
+        });
       } catch (err: unknown) {
         if (axios.isAxiosError(err)) {
           if (err.response?.status === 402) {

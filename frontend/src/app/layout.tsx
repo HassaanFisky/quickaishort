@@ -11,6 +11,7 @@ import { RouteFade } from "@/components/shared/RouteFade";
 import { OfflineNotice } from "@/components/shared/OfflineNotice";
 import { CookieConsent } from "@/components/shared/CookieConsent";
 import { ServiceWorkerRegistrar } from "@/components/shared/ServiceWorkerRegistrar";
+import { RouteAnalytics } from "@/lib/analytics";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -78,6 +79,7 @@ export default function RootLayout({
         <SkipLink />
         <div className="living-water-bg" />
         <AppProviders>
+          <RouteAnalytics />
           <PaddleProvider />
           <OfflineNotice />
           <main id="main" tabIndex={-1}>

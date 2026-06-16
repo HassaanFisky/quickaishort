@@ -1,4 +1,5 @@
 import type { GeminiResponse, VideoAnalysis, VideoMetadata, ExportSettings } from "@/stores/editorStore";
+import { trackEvent } from "@/lib/analytics";
 
 // ─── Editor state snapshot passed with every Gemini call ──────────────────────
 
@@ -181,30 +182,49 @@ export async function callGeminiEditor(
   history: { role: string; content: string }[],
   editorState?: EditorStateContext | null,
 ): Promise<GeminiResponse> {
-  const res = await fetch("/api/ai/editor", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      message: userMessage,
-      videoMetadata,
-      videoAnalysis,
-      history,
-      editorState: editorState ?? null,
-    }),
-  });
+  const startedAt = performance.now();
+  const commandType = userMessage.trim().slice(0, 40).toLowerCase();
 
-  if (!res.ok) {
-    let errMsg = `HTTP ${res.status}`;
-    try {
-      const body = await res.json();
-      if (body.error) errMsg = body.error;
-    } catch {
-      // ignore parse error, use HTTP status as message
+  try {
+    const res = await fetch("/api/ai/editor", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: userMessage,
+        videoMetadata,
+        videoAnalysis,
+        history,
+        editorState: editorState ?? null,
+      }),
+    });
+
+    if (!res.ok) {
+      let errMsg = `HTTP ${res.status}`;
+      try {
+        const body = await res.json();
+        if (body.error) errMsg = body.error;
+      } catch {
+        // ignore parse error, use HTTP status as message
+      }
+      throw new Error(errMsg);
     }
-    throw new Error(errMsg);
-  }
 
-  return res.json() as Promise<GeminiResponse>;
+    const data = (await res.json()) as GeminiResponse;
+    trackEvent({
+      name: "ai_command_sent",
+      props: { commandType, success: true, latencyMs: Math.round(performance.now() - startedAt) },
+    });
+    for (const action of data.actions ?? []) {
+      trackEvent({ name: "feature_used", props: { featureId: action.type, context: "ai_command" } });
+    }
+    return data;
+  } catch (err) {
+    trackEvent({
+      name: "ai_command_sent",
+      props: { commandType, success: false, latencyMs: Math.round(performance.now() - startedAt) },
+    });
+    throw err;
+  }
 }
 
 export async function getInitialSuggestions(
