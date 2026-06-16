@@ -197,6 +197,20 @@ export default function EditorPage() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  // Post-checkout welcome — fired by the pricing page redirect once Pro
+  // activation is confirmed (see app/pricing/page.tsx handleActivated).
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("welcome") !== "1") return;
+    toast.success("Welcome to QuickAI Short Pro", {
+      description: "Elite Viral Intelligence, unlimited Pre-Flight runs, and priority processing are now unlocked.",
+      duration: 6000,
+    });
+    params.delete("welcome");
+    const query = params.toString();
+    window.history.replaceState(null, "", query ? `${window.location.pathname}?${query}` : window.location.pathname);
+  }, []);
+
   // Push detected silence segments into store
   useEffect(() => {
     if (analysis.lastMessage?.type === "silence_detected") {

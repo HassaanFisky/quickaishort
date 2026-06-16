@@ -34,6 +34,9 @@ import {
   Trash2,
   FileText,
   ExternalLink,
+  CreditCard,
+  Sparkles,
+  Mail,
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
@@ -50,11 +53,14 @@ import {
 } from "@/stores/shortcutsStore";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
+import { getStats } from "@/lib/api";
+import { EMPTY_STATS, type UserStats } from "@/types/stats";
 
-type Tab = "profile" | "appearance" | "export" | "editor" | "shortcuts" | "notifications" | "privacy";
+type Tab = "profile" | "billing" | "appearance" | "export" | "editor" | "shortcuts" | "notifications" | "privacy";
 
 const TABS: { id: Tab; icon: LucideIcon; label: string }[] = [
   { id: "profile", icon: User, label: "Profile" },
+  { id: "billing", icon: CreditCard, label: "Billing" },
   { id: "appearance", icon: Palette, label: "Appearance" },
   { id: "export", icon: Download, label: "Export" },
   { id: "editor", icon: Sliders, label: "Editor" },
@@ -110,6 +116,20 @@ export default function SettingsPage() {
   const [notifyCompletion, setNotifyCompletion] = useLocalSetting<boolean>("qai_notify_completion", true);
   const [notifyAnalysis, setNotifyAnalysis] = useLocalSetting<boolean>("qai_notify_analysis", true);
   const [notifyCritical, setNotifyCritical] = useLocalSetting<boolean>("qai_notify_critical", true);
+
+  const [billingStats, setBillingStats] = useState<UserStats>(EMPTY_STATS);
+  const [billingLoading, setBillingLoading] = useState(true);
+  const userId = (session?.user as { id?: string } | undefined)?.id ?? session?.user?.email ?? "";
+  useEffect(() => {
+    if (activeTab !== "billing" || !userId) return;
+    let cancelled = false;
+    setBillingLoading(true);
+    getStats(userId)
+      .then((s) => { if (!cancelled) setBillingStats({ ...EMPTY_STATS, ...s, user_id: userId }); })
+      .catch(() => { if (!cancelled) setBillingStats({ ...EMPTY_STATS, user_id: userId }); })
+      .finally(() => { if (!cancelled) setBillingLoading(false); });
+    return () => { cancelled = true; };
+  }, [activeTab, userId]);
 
   return (
     <div className="container mx-auto px-6 py-12 max-w-6xl space-y-12">
@@ -212,6 +232,75 @@ export default function SettingsPage() {
                     onReset={() => setDisplayName(session?.user?.name ?? "")}
                   />
                 </>
+              )}
+
+              {/* ── BILLING ── */}
+              {activeTab === "billing" && (
+                <Card className="depth-card glass-surface rounded-[2.5rem] border-foreground/5 p-4">
+                  <CardHeader className="pb-8">
+                    <CardTitle className="text-2xl font-black tracking-tight">Billing</CardTitle>
+                    <CardDescription className="text-base font-medium">Your plan, credits, and subscription status.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-8">
+                    <div className="flex items-center gap-8 p-6 rounded-3xl bg-foreground/[0.03] border border-foreground/5">
+                      <div className="w-16 h-16 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+                        <Sparkles className="w-7 h-7 text-primary" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-3 mb-1">
+                          <h3 className="font-black text-2xl tracking-tight">
+                            {billingLoading ? "—" : billingStats.is_pro ? "Pro" : "Free"}
+                          </h3>
+                          <Badge variant="outline" className={cn(
+                            "text-[9px] font-black uppercase tracking-widest",
+                            billingStats.is_pro ? "bg-primary/10 border-primary/20 text-primary" : "bg-foreground/5 border-foreground/10 text-muted-foreground",
+                          )}>
+                            {billingStats.is_pro ? "Active" : "No subscription"}
+                          </Badge>
+                        </div>
+                        <p className="text-sm font-medium text-muted-foreground">
+                          {billingStats.is_pro ? "$29/month · billed via Paddle" : "Upgrade for Elite Viral Intelligence and unlimited Pre-Flight runs."}
+                        </p>
+                      </div>
+                      {!billingStats.is_pro && (
+                        <Button className="h-11 px-6 rounded-2xl font-black uppercase tracking-widest text-[10px] shrink-0" asChild>
+                          <Link href="/pricing">Upgrade</Link>
+                        </Button>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="p-5 rounded-2xl border border-border bg-foreground/[0.02] space-y-1">
+                        <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground opacity-70">Credits balance</Label>
+                        <p className="text-2xl font-black tabular-nums">{billingLoading ? "—" : billingStats.credits_balance}</p>
+                      </div>
+                      <div className="p-5 rounded-2xl border border-border bg-foreground/[0.02] space-y-1">
+                        <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground opacity-70">Lifetime exports</Label>
+                        <p className="text-2xl font-black tabular-nums">{billingLoading ? "—" : billingStats.export_count}</p>
+                      </div>
+                    </div>
+
+                    {/* Self-serve cancellation/invoices require a Paddle customer-portal
+                        session via PADDLE_API_KEY, which isn't configured on this backend
+                        (only the webhook receiver exists today). Route to support instead
+                        of fabricating a non-functional Cancel/Invoices button. */}
+                    <div className="p-5 rounded-2xl border border-border bg-foreground/[0.02] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                      <div className="space-y-1">
+                        <p className="text-sm font-bold tracking-tight text-foreground">Manage subscription</p>
+                        <p className="text-[13px] font-medium text-muted-foreground leading-snug max-w-md">
+                          Paddle emails a receipt with your invoice and a self-serve management link after every charge.
+                          For anything else — including cancellation — contact support.
+                        </p>
+                      </div>
+                      <Button variant="outline" className="h-10 px-5 rounded-xl font-bold text-sm shrink-0" asChild>
+                        <a href="mailto:support@quickaishort.online">
+                          <Mail className="w-3.5 h-3.5 mr-2" />
+                          Contact support
+                        </a>
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
               )}
 
               {/* ── APPEARANCE ── */}
