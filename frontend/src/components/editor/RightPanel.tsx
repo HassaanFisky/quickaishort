@@ -43,7 +43,7 @@ import { toast } from "sonner";
 import type { PreflightResult, PersonaVote, Recommendation } from "@/types/preflight";
 import { motion, AnimatePresence } from "framer-motion";
 import { InlinePaywallCard } from "@/components/shared/InlinePaywallCard";
-import { TimelineLoader } from "@/components/ui/TimelineLoader";
+import { PersonaThinkingCard, PREFLIGHT_PERSONAS } from "@/components/editor/PersonaThinkingCard";
 import { useAnimatedCounter } from "@/hooks/useAnimatedCounter";
 import ColorWheels from "@/components/editor/ColorWheels";
 import WaveformMonitor from "@/components/editor/WaveformMonitor";
@@ -1548,10 +1548,10 @@ export default function RightPanel() {
           )}
 
           {isPreflightRunning && (
-            <div className="flex justify-center py-4">
-              <TimelineLoader
-                phases={["Analyzing...", "Simulating...", "Scoring...", "Grounding..."]}
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 py-1">
+              {PREFLIGHT_PERSONAS.map((persona, i) => (
+                <PersonaThinkingCard key={persona.id} persona={persona} delay={i * 0.1} />
+              ))}
             </div>
           )}
 
