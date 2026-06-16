@@ -7,6 +7,8 @@
  */
 import { getFlag } from "@/lib/featureFlags";
 import { Mp4Mux } from "./mp4Mux";
+import { applyFrameComposite } from "./frameCompositor";
+import type { FrameFilter, Caption, ExportSettings } from "@/stores/editorStore";
 
 export const WEBCODECS_FLAG = "webcodecs_export_enabled";
 export const MAX_CLIP_SECONDS = 300; // 5 minutes — covers all short-form content
@@ -40,9 +42,19 @@ export class WebCodecsExporter {
   private ctx: OffscreenCanvasRenderingContext2D | null = null;
   private cancelled = false;
   private frameCount = 0;
+  private activeFilter: FrameFilter | null = null;
+  private activeFilterPreset: ExportSettings["filter"] = "None";
+  private activeCaptions: Caption[] = [];
 
   hasAudioEncoder(): boolean {
     return this.audioSupported;
+  }
+
+  /** Sets the color filter / preset / captions baked into every frame from here on. */
+  setFrameContext(filter: FrameFilter, captions: Caption[], presetFilter: ExportSettings["filter"] = "None"): void {
+    this.activeFilter = filter;
+    this.activeCaptions = captions;
+    this.activeFilterPreset = presetFilter;
   }
 
   static hasAudioSupport(): boolean {
@@ -129,9 +141,21 @@ export class WebCodecsExporter {
     source: HTMLVideoElement,
     timestampUs: number,
     frameRate: number,
+    sourceTimeSec?: number,
   ): Promise<void> {
     if (this.cancelled || !this.encoder || !this.ctx || !this.offscreen) return;
-    this.ctx.drawImage(source, 0, 0, this.offscreen.width, this.offscreen.height);
+
+    if (this.activeFilter) {
+      applyFrameComposite(this.ctx, source, this.offscreen.width, this.offscreen.height, {
+        filter: this.activeFilter,
+        presetFilter: this.activeFilterPreset,
+        captions: this.activeCaptions,
+        currentTimeSec: sourceTimeSec,
+      });
+    } else {
+      this.ctx.drawImage(source, 0, 0, this.offscreen.width, this.offscreen.height);
+    }
+
     const frame = new VideoFrame(this.offscreen, { timestamp: timestampUs });
     const isKey = this.frameCount % Math.max(1, Math.round(frameRate * 2)) === 0;
     this.encoder.encode(frame, { keyFrame: isKey });

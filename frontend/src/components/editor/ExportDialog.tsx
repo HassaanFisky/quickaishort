@@ -91,8 +91,19 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
       const fps = selectedPreset.frameRate;
 
       // Read fresh range from store at encode time
-      const { markIn: mi, markOut: mo, selectedClipId: selId, suggestions: clips, duration: dur, videoMetadata } =
-        useEditorStore.getState();
+      const {
+        markIn: mi,
+        markOut: mo,
+        selectedClipId: selId,
+        suggestions: clips,
+        duration: dur,
+        videoMetadata,
+        frameFilters,
+        captions,
+        exportSettings,
+      } = useEditorStore.getState();
+
+      exporter.setFrameContext(frameFilters, captions ?? [], exportSettings.filter);
 
       let start = 0;
       let end = dur;
@@ -119,7 +130,7 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
         await new Promise<void>((res) => {
           video.addEventListener("seeked", () => res(), { once: true });
         });
-        await exporter.encodeFrameAt(video, f * (1_000_000 / fps), fps);
+        await exporter.encodeFrameAt(video, f * (1_000_000 / fps), fps, timeSec);
         setProgress({ encoded: f + 1, total: totalFrames, cancelled: false });
       }
 
