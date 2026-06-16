@@ -24,6 +24,7 @@ import {
   Maximize2,
   ScanLine,
   Music,
+  MoreHorizontal,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -32,20 +33,34 @@ import { toast } from "sonner";
 import MultiTrackTimeline from "@/components/editor/MultiTrackTimeline";
 import { detectScenes } from "@/lib/sceneDetection";
 import { detectBeats } from "@/lib/beatDetection";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { useLongPress, usePinchGesture } from "@/hooks/useTouchGestures";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
+const PINCH_HINT_KEY = "qai_pinch_hint_seen";
 
 // ---- TimelineClip Component with Trim & Drag Support ----
 function TimelineClip({
   clip,
   duration,
   isSelected,
+  isMobile,
   onSelect,
   onContextMenu,
+  onOpenInspector,
 }: {
   clip: Clip;
   duration: number;
   isSelected: boolean;
+  isMobile: boolean;
   onSelect: () => void;
-  onContextMenu: (e: React.MouseEvent, clipId: string) => void;
+  onContextMenu: (point: { clientX: number; clientY: number }, clipId: string) => void;
+  onOpenInspector: () => void;
 }) {
   const { updateClip, setPendingSeek } = useEditorStore();
   const playbackSpeed = useEditorStore((s) => s.exportSettings.playbackSpeed);
@@ -55,6 +70,26 @@ function TimelineClip({
   const startX = useRef(0);
   const startStart = useRef(0);
   const startEnd = useRef(0);
+  const clipRef = useRef<HTMLDivElement | null>(null);
+  const lastTapAt = useRef(0);
+
+  useLongPress(clipRef, {
+    enabled: isMobile,
+    onLongPress: (point) => {
+      onSelect();
+      onContextMenu(point, clip.id);
+    },
+  });
+
+  const handleTap = useCallback(() => {
+    const now = performance.now();
+    if (now - lastTapAt.current < 350) {
+      onOpenInspector();
+      lastTapAt.current = 0;
+    } else {
+      lastTapAt.current = now;
+    }
+  }, [onOpenInspector]);
 
   const handleMouseDown = (e: React.MouseEvent, type: "move" | "start" | "end") => {
     e.stopPropagation();
@@ -64,6 +99,7 @@ function TimelineClip({
     startStart.current = clip.start;
     startEnd.current = clip.end;
     onSelect();
+    if (isMobile && type === "move") handleTap();
   };
 
   useEffect(() => {
@@ -144,23 +180,27 @@ function TimelineClip({
 
   return (
     <div
+      ref={clipRef}
       className={cn(
-        "absolute top-0.5 bottom-0.5 rounded-md flex items-center transition-shadow select-none",
+        "absolute top-0.5 bottom-0.5 rounded-md flex items-center transition-shadow select-none touch-manipulation",
         isSelected
           ? "bg-gradient-to-r from-primary/40 to-primary/20 border-2 border-primary shadow-[0_0_15px_hsl(var(--primary)/0.3)] z-10"
           : "bg-foreground/10 border border-foreground/10 hover:bg-foreground/20",
         isDragging && "opacity-80 scale-[1.02] z-50",
       )}
-      style={{ left: `${left}%`, width: `${width}%` }}
+      style={{ left: `${left}%`, width: `${width}%`, minWidth: isMobile ? "60px" : undefined }}
       onMouseDown={(e) => handleMouseDown(e, "move")}
       onContextMenu={(e) => { e.preventDefault(); onContextMenu(e, clip.id); }}
     >
       {/* Left Trim Handle */}
       <div
-        className="absolute left-0 top-0 bottom-0 w-3 cursor-ew-resize hover:bg-primary/50 rounded-l-md"
+        className={cn(
+          "absolute left-0 top-0 bottom-0 cursor-ew-resize hover:bg-primary/50 rounded-l-md",
+          isMobile ? "w-5" : "w-3",
+        )}
         onMouseDown={(e) => handleMouseDown(e, "start")}
       />
-      
+
       {/* Middle Label / Grabber */}
       <div className="flex-1 flex items-center justify-center overflow-hidden px-2 pointer-events-none">
         <GripVertical className="w-2.5 h-2.5 text-foreground/20 mr-1 shrink-0" />
@@ -176,7 +216,10 @@ function TimelineClip({
 
       {/* Right Trim Handle */}
       <div
-        className="absolute right-0 top-0 bottom-0 w-3 cursor-ew-resize hover:bg-primary/50 rounded-r-md"
+        className={cn(
+          "absolute right-0 top-0 bottom-0 cursor-ew-resize hover:bg-primary/50 rounded-r-md",
+          isMobile ? "w-5" : "w-3",
+        )}
         onMouseDown={(e) => handleMouseDown(e, "end")}
       />
 
@@ -239,6 +282,25 @@ export default function BottomDock() {
   const { activeTool, setActiveTool, timelineZoom, setTimelineZoom, snapLine } = useUIStore();
   const [detectingScenes, setDetectingScenes] = useState(false);
   const [detectingBeats, setDetectingBeats] = useState(false);
+  const isMobile = useMediaQuery("(max-width: 768px)");
+  const isCompact = useMediaQuery("(max-width: 480px)");
+
+  const handlePinchZoom = useCallback((scale: number) => {
+    setTimelineZoom(useUIStore.getState().timelineZoom * scale);
+  }, [setTimelineZoom]);
+
+  const hasShownPinchHintRef = useRef(false);
+  useEffect(() => {
+    if (!isMobile || duration === 0 || hasShownPinchHintRef.current) return;
+    if (typeof localStorage !== "undefined" && localStorage.getItem(PINCH_HINT_KEY)) return;
+    hasShownPinchHintRef.current = true;
+    toast.info("Pinch the timeline to zoom in or out.", { duration: 4000 });
+    try {
+      localStorage.setItem(PINCH_HINT_KEY, "1");
+    } catch {
+      /* localStorage unavailable — hint just shows again next session */
+    }
+  }, [isMobile, duration]);
 
   const handleDetectScenes = useCallback(async () => {
     const video =
@@ -302,6 +364,8 @@ export default function BottomDock() {
   const isDraggingPlayhead = useRef(false);
   const [contextMenu, setContextMenu] = useState<{ clipId: string; x: number; y: number } | null>(null);
 
+  usePinchGesture(timelineScrollRef, { onPinch: handlePinchZoom, enabled: isMobile });
+
   // Close context menu on outside click
   useEffect(() => {
     if (!contextMenu) return;
@@ -311,11 +375,15 @@ export default function BottomDock() {
   }, [contextMenu]);
 
   const handleClipContextMenu = useCallback(
-    (e: React.MouseEvent, clipId: string) => {
-      setContextMenu({ clipId, x: e.clientX, y: e.clientY });
+    (point: { clientX: number; clientY: number }, clipId: string) => {
+      setContextMenu({ clipId, x: point.clientX, y: point.clientY });
     },
     [],
   );
+
+  const handleOpenInspector = useCallback(() => {
+    window.dispatchEvent(new CustomEvent("qai:mobile-inspector-open"));
+  }, []);
 
   const duplicateClip = useCallback(
     (clipId: string) => {
@@ -541,7 +609,7 @@ export default function BottomDock() {
 
   return (
     <div className="w-full h-full flex flex-col gap-4 animate-in slide-in-from-bottom-4 duration-500">
-      <div className="flex items-center justify-between px-2">
+      <div className="flex items-center justify-between px-2 flex-wrap gap-y-2">
         <div className="flex items-center gap-3">
           <Button
             variant="ghost"
@@ -550,9 +618,12 @@ export default function BottomDock() {
             title="Undo — Ctrl+Z"
             aria-label="Undo"
             disabled={undoStack.length === 0}
-            className="undo-btn h-8 w-8 text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed"
+            className={cn(
+              "undo-btn text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed touch-manipulation",
+              isMobile ? "h-12 w-12" : "h-8 w-8",
+            )}
           >
-            <Undo2 className="undo-icon w-4 h-4" aria-hidden="true" />
+            <Undo2 className={cn("undo-icon", isMobile ? "w-5 h-5" : "w-4 h-4")} aria-hidden="true" />
           </Button>
           <Button
             variant="ghost"
@@ -561,37 +632,76 @@ export default function BottomDock() {
             title="Redo — Ctrl+Shift+Z"
             aria-label="Redo"
             disabled={redoStack.length === 0}
-            className="redo-btn h-8 w-8 text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed"
+            className={cn(
+              "redo-btn text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed touch-manipulation",
+              isMobile ? "h-12 w-12" : "h-8 w-8",
+            )}
           >
-            <Redo2 className="redo-icon w-4 h-4" aria-hidden="true" />
+            <Redo2 className={cn("redo-icon", isMobile ? "w-5 h-5" : "w-4 h-4")} aria-hidden="true" />
           </Button>
           <Button
             variant="ghost"
             size="icon"
             aria-label={isPlaying ? "Pause" : "Play"}
-            className="w-8 h-8 text-foreground/60 hover:text-primary transition-colors"
+            className={cn(
+              "text-foreground/60 hover:text-primary transition-colors touch-manipulation",
+              isMobile ? "h-16 w-16" : "w-8 h-8",
+            )}
             onClick={() => setIsPlaying(!isPlaying)}
           >
             {isPlaying ? (
-              <Pause className="w-4 h-4 fill-current" aria-hidden="true" />
+              <Pause className={cn("fill-current", isMobile ? "w-7 h-7" : "w-4 h-4")} aria-hidden="true" />
             ) : (
-              <Play className="w-4 h-4 fill-current" aria-hidden="true" />
+              <Play className={cn("fill-current", isMobile ? "w-7 h-7" : "w-4 h-4")} aria-hidden="true" />
             )}
           </Button>
           <Button
             variant="ghost"
             size="icon"
             aria-label="Stop"
-            className="w-8 h-8 text-foreground/60 hover:text-primary transition-colors"
+            className={cn(
+              "text-foreground/60 hover:text-primary transition-colors touch-manipulation",
+              isMobile ? "h-12 w-12" : "w-8 h-8",
+            )}
             onClick={stopPlayback}
           >
-            <Square className="w-3.5 h-3.5 fill-current" aria-hidden="true" />
+            <Square className={cn("fill-current", isMobile ? "w-5 h-5" : "w-3.5 h-3.5")} aria-hidden="true" />
           </Button>
-          <span className="text-[10px] font-mono text-muted-foreground/60 tabular-nums select-none">
+          <span
+            className={cn(
+              "font-mono text-muted-foreground/60 tabular-nums select-none",
+              isMobile ? "text-sm" : "text-[10px]",
+            )}
+          >
             {formatTime(currentTime)} / {formatTime(duration)}
           </span>
         </div>
 
+        {isCompact ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                aria-label="More tools"
+                className="h-12 w-12 rounded-xl flex items-center justify-center text-foreground/60 hover:text-primary hover:bg-foreground/5 transition-colors touch-manipulation"
+              >
+                <MoreHorizontal className="w-5 h-5" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-48">
+              {tools.map(({ icon: Icon, label, toolId, action, tooltip }) => (
+                <DropdownMenuItem
+                  key={label}
+                  title={tooltip}
+                  onClick={() => { action(); setActiveTool(toolId); }}
+                  className={cn(activeTool === toolId && "text-primary")}
+                >
+                  <Icon className="w-4 h-4 mr-2" aria-hidden="true" />
+                  {label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : (
         <div className="flex items-center gap-5 flex-1 select-none">
           {tools.map(({ icon: Icon, label, toolId, action, tooltip }) => {
             const isActive = activeTool === toolId;
@@ -603,7 +713,8 @@ export default function BottomDock() {
                 aria-label={tooltip}
                 aria-pressed={isActive}
                 className={cn(
-                  "flex items-center gap-2 group cursor-pointer focus:outline-none transition-all duration-200",
+                  "flex items-center gap-2 group cursor-pointer focus:outline-none transition-all duration-200 touch-manipulation",
+                  isMobile && "py-2",
                   isActive && "relative"
                 )}
               >
@@ -612,14 +723,16 @@ export default function BottomDock() {
                 )}
                 <Icon
                   className={cn(
-                    "w-4 h-4 transition-colors relative",
+                    "transition-colors relative",
+                    isMobile ? "w-5 h-5" : "w-4 h-4",
                     isActive ? "text-primary" : "text-foreground/40 group-hover:text-primary"
                   )}
                   aria-hidden={true}
                 />
                 <span
                   className={cn(
-                    "text-[10px] font-black uppercase tracking-widest transition-colors relative",
+                    "font-black uppercase tracking-widest transition-colors relative",
+                    isMobile ? "text-[11px]" : "text-[10px]",
                     isActive ? "text-primary" : "text-foreground/40 group-hover:text-primary"
                   )}
                 >
@@ -646,6 +759,7 @@ export default function BottomDock() {
             </Button>
           )}
         </div>
+        )}
         {/* Detect Scenes */}
         <button
           onClick={handleDetectScenes}
@@ -684,7 +798,10 @@ export default function BottomDock() {
         <div className="flex items-center gap-1.5 shrink-0 select-none">
           <button
             onClick={() => setTimelineZoom(timelineZoom - 0.25)}
-            className="w-6 h-6 rounded flex items-center justify-center text-muted-foreground/50 hover:text-foreground hover:bg-foreground/10 transition-colors"
+            className={cn(
+              "rounded flex items-center justify-center text-muted-foreground/50 hover:text-foreground hover:bg-foreground/10 transition-colors touch-manipulation",
+              isMobile ? "w-9 h-9" : "w-6 h-6",
+            )}
             title="Zoom Out"
             aria-label="Timeline zoom out"
           >
@@ -695,7 +812,10 @@ export default function BottomDock() {
           </span>
           <button
             onClick={() => setTimelineZoom(timelineZoom + 0.25)}
-            className="w-6 h-6 rounded flex items-center justify-center text-muted-foreground/50 hover:text-foreground hover:bg-foreground/10 transition-colors"
+            className={cn(
+              "rounded flex items-center justify-center text-muted-foreground/50 hover:text-foreground hover:bg-foreground/10 transition-colors touch-manipulation",
+              isMobile ? "w-9 h-9" : "w-6 h-6",
+            )}
             title="Zoom In"
             aria-label="Timeline zoom in"
           >
@@ -703,7 +823,10 @@ export default function BottomDock() {
           </button>
           <button
             onClick={() => setTimelineZoom(1)}
-            className="w-6 h-6 rounded flex items-center justify-center text-muted-foreground/50 hover:text-foreground hover:bg-foreground/10 transition-colors"
+            className={cn(
+              "rounded flex items-center justify-center text-muted-foreground/50 hover:text-foreground hover:bg-foreground/10 transition-colors touch-manipulation",
+              isMobile ? "w-9 h-9" : "w-6 h-6",
+            )}
             title="Fit (100%)"
             aria-label="Reset timeline zoom"
           >
@@ -721,7 +844,10 @@ export default function BottomDock() {
         <div
           ref={timelineScrollRef}
           onWheel={handleTimelineWheel}
-          className="flex gap-4 items-center group overflow-x-auto overflow-y-hidden"
+          className={cn(
+            "flex gap-4 items-center group overflow-x-auto overflow-y-hidden",
+            isMobile && "touch-pan-x",
+          )}
         >
           <span className="w-16 text-[9px] font-black text-muted-foreground/40 uppercase tracking-widest text-right shrink-0">
             Video
@@ -739,7 +865,10 @@ export default function BottomDock() {
               setHoverTime((x / rect.width) * duration);
             }}
             onMouseLeave={() => setHoverTime(null)}
-            className="w-full h-8 rounded-lg bg-foreground/5 border border-foreground/5 relative overflow-visible cursor-crosshair"
+            className={cn(
+              "w-full rounded-lg bg-foreground/5 border border-foreground/5 relative overflow-visible cursor-crosshair",
+              isMobile ? "h-12" : "h-8",
+            )}
           >
             {isProcessing ? (
               /* Pulsing skeleton while pipeline is running */
@@ -763,8 +892,10 @@ export default function BottomDock() {
                   clip={clip}
                   duration={duration}
                   isSelected={clip.id === selectedClipId}
+                  isMobile={isMobile}
                   onSelect={() => selectClip(clip.id)}
                   onContextMenu={handleClipContextMenu}
+                  onOpenInspector={handleOpenInspector}
                 />
               ))
             ) : (
@@ -808,8 +939,12 @@ export default function BottomDock() {
               >
                 {/* Glow line */}
                 <div className="absolute inset-0 w-px bg-primary shadow-[0_0_8px_rgba(168,85,247,0.5)]" />
-                {/* Head triangle */}
-                <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[5px] border-r-[5px] border-t-[6px] border-l-transparent border-r-transparent border-t-primary drop-shadow-[0_0_4px_rgba(168,85,247,0.6)]" />
+                {/* Head triangle / thumb grip */}
+                {isMobile ? (
+                  <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 w-5 h-5 rounded-full bg-primary border-2 border-white/80 shadow-[0_0_8px_rgba(168,85,247,0.7)]" />
+                ) : (
+                  <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[5px] border-r-[5px] border-t-[6px] border-l-transparent border-r-transparent border-t-primary drop-shadow-[0_0_4px_rgba(168,85,247,0.6)]" />
+                )}
               </div>
             )}
 
@@ -887,7 +1022,7 @@ export default function BottomDock() {
           <span className="w-16 text-[9px] font-black text-muted-foreground/40 uppercase tracking-widest text-right shrink-0">
             Audio
           </span>
-          <div className="flex-1 h-7 rounded-lg bg-foreground/5 border border-foreground/5 relative overflow-hidden">
+          <div className={cn("flex-1 rounded-lg bg-foreground/5 border border-foreground/5 relative overflow-hidden", isMobile ? "h-10" : "h-7")}>
             {waveformPeaks ? (
               <canvas
                 ref={waveformCanvasRef}
@@ -904,11 +1039,14 @@ export default function BottomDock() {
           </div>
         </div>
       </div>
-      {/* Right-click context menu */}
+      {/* Right-click / long-press context menu */}
       {contextMenu && (
         <div
           className="fixed z-50 bg-card border border-border rounded-xl shadow-2xl py-1 min-w-[148px] overflow-hidden"
-          style={{ top: contextMenu.y, left: contextMenu.x }}
+          style={{
+            top: Math.min(contextMenu.y, window.innerHeight - 160),
+            left: Math.min(contextMenu.x, window.innerWidth - 160),
+          }}
           onMouseDown={(e) => e.stopPropagation()}
         >
           {[
@@ -931,7 +1069,8 @@ export default function BottomDock() {
               key={label}
               onClick={onClick}
               className={cn(
-                "w-full text-left px-3 py-2 text-[11px] font-bold flex items-center justify-between hover:bg-foreground/8 transition-colors",
+                "w-full text-left px-3 font-bold flex items-center justify-between hover:bg-foreground/8 transition-colors touch-manipulation",
+                isMobile ? "py-3 text-[12px]" : "py-2 text-[11px]",
                 danger ? "text-red-400 hover:bg-red-500/10" : "text-foreground/80",
               )}
             >

@@ -24,12 +24,16 @@ import {
   PanelLeft,
   PanelRight,
   Download,
+  SlidersHorizontal,
+  GripHorizontal,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { getVideoInfo } from "@/lib/api";
 import { parseYouTubeId } from "@/lib/youtube-utils";
 import { PROJECT_TEMPLATES } from "@/lib/project/templates";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { useSwipeGesture } from "@/hooks/useTouchGestures";
 
 import LeftPanel from "./LeftPanel";
 import RightPanel from "./RightPanel";
@@ -56,6 +60,7 @@ export default function EditorLayout() {
     setVideoMetadata,
     aiPanelOpen,
     setExportSetting,
+    selectedClipId,
   } = useEditorStore();
 
   const { runPipeline, cancelPipeline } = useMediaPipeline();
@@ -108,6 +113,36 @@ export default function EditorLayout() {
   const [lastError, setLastError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const hasAutoImportedRef = useRef(false);
+
+  // Mobile inspector bottom-sheet — lightweight (non-advanced-mode) replacement
+  // for the desktop inline RightPanel, since RightPanel is otherwise only
+  // mounted inside isAdvancedMode-gated sections below.
+  const isMobile = useMediaQuery("(max-width: 768px)");
+  const [mobileInspectorOpen, setMobileInspectorOpen] = useState(false);
+  const mobileSheetRef = useRef<HTMLDivElement | null>(null);
+  const lastAutoOpenedClipId = useRef<string | null>(null);
+
+  useSwipeGesture(mobileSheetRef, {
+    enabled: isMobile && mobileInspectorOpen,
+    onSwipe: (direction, distance) => {
+      if (direction === "down" && distance > 60) setMobileInspectorOpen(false);
+    },
+  });
+
+  useEffect(() => {
+    if (!isMobile || isAdvancedMode) return;
+    const openSheet = () => setMobileInspectorOpen(true);
+    window.addEventListener("qai:mobile-inspector-open", openSheet);
+    return () => window.removeEventListener("qai:mobile-inspector-open", openSheet);
+  }, [isMobile, isAdvancedMode]);
+
+  useEffect(() => {
+    if (!isMobile || isAdvancedMode) return;
+    if (selectedClipId && selectedClipId !== lastAutoOpenedClipId.current) {
+      lastAutoOpenedClipId.current = selectedClipId;
+      setMobileInspectorOpen(true);
+    }
+  }, [isMobile, isAdvancedMode, selectedClipId]);
 
   // Derived from editorStore.isProcessing so it accurately reflects the pipeline
   // lifecycle: true while setProcessing(true,...) is active, false after
@@ -1029,6 +1064,59 @@ export default function EditorLayout() {
                 <RightPanel />
               </div>
             </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Mobile — Inspector FAB + bottom-sheet (simple/non-advanced mode only;
+          advanced mode already has the right-side slide-over drawer above). */}
+      {isMobile && !isAdvancedMode && storeVideoMetadata && (
+        <button
+          onClick={() => setMobileInspectorOpen(true)}
+          aria-label="Open clip inspector"
+          className="fixed bottom-5 right-5 z-40 h-14 w-14 rounded-full bg-card/90 backdrop-blur-xl border border-border/50 shadow-[0_8px_32px_rgba(0,0,0,0.3)] flex items-center justify-center text-fg-muted hover:text-primary hover:border-primary/30 transition-colors touch-manipulation"
+        >
+          <SlidersHorizontal size={18} />
+        </button>
+      )}
+      <AnimatePresence>
+        {isMobile && !isAdvancedMode && mobileInspectorOpen && (
+          <>
+            <motion.div
+              key="mobile-inspector-backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 bg-black/60 z-40"
+              onClick={() => setMobileInspectorOpen(false)}
+            />
+            <motion.div
+              key="mobile-inspector-sheet"
+              ref={mobileSheetRef}
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 30, stiffness: 300 }}
+              className="fixed left-0 right-0 bottom-0 z-50 max-h-[75vh] bg-card border-t border-border rounded-t-3xl flex flex-col overflow-hidden touch-pan-y"
+            >
+              <div className="flex flex-col items-center pt-2.5 pb-1 shrink-0">
+                <GripHorizontal size={16} className="text-foreground/20" aria-hidden="true" />
+              </div>
+              <div className="flex items-center justify-between px-4 py-2 border-b border-border shrink-0">
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-fg-muted">Properties</span>
+                <button
+                  onClick={() => setMobileInspectorOpen(false)}
+                  aria-label="Close properties panel"
+                  className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-foreground/10 transition-colors"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-foreground/10 [&::-webkit-scrollbar-thumb]:rounded-full">
+                <RightPanel />
+              </div>
+            </motion.div>
           </>
         )}
       </AnimatePresence>

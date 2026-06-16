@@ -3,6 +3,8 @@
 import { X } from "lucide-react";
 import { useEditorStore } from "@/stores/editorStore";
 import { formatTime } from "@/lib/utils/formatTime";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { cn } from "@/lib/utils";
 import type { BRollElement, VideoOverlayElement } from "@/stores/editorStore";
 
 interface TrackLaneProps {
@@ -12,6 +14,7 @@ interface TrackLaneProps {
   duration: number;
   onRemove: (id: string) => void;
   onLabelClick?: () => void;
+  isMobile: boolean;
 }
 
 function TrackLane({
@@ -21,6 +24,7 @@ function TrackLane({
   duration,
   onRemove,
   onLabelClick,
+  isMobile,
 }: TrackLaneProps) {
   return (
     <div className="flex items-center gap-2">
@@ -31,7 +35,12 @@ function TrackLane({
       >
         {label}
       </button>
-      <div className="flex-1 relative h-7 bg-foreground/5 rounded-lg border border-foreground/5">
+      <div
+        className={cn(
+          "flex-1 relative bg-foreground/5 rounded-lg border border-foreground/5",
+          isMobile ? "h-12" : "h-7",
+        )}
+      >
         {elements.map((el) => {
           const leftPct = duration > 0 ? (el.start_sec / duration) * 100 : 0;
           const widthPct = duration > 0 ? (el.duration_sec / duration) * 100 : 0;
@@ -50,7 +59,10 @@ function TrackLane({
               <button
                 onClick={() => onRemove(el.id)}
                 aria-label={`Remove ${title || label} clip`}
-                className="opacity-0 group-hover:opacity-100 ml-0.5 p-0.5 rounded hover:bg-black/30 transition-opacity shrink-0"
+                className={cn(
+                  "ml-0.5 rounded hover:bg-black/30 transition-opacity shrink-0",
+                  isMobile ? "p-1.5 opacity-70" : "p-0.5 opacity-0 group-hover:opacity-100",
+                )}
                 onKeyDown={(e) => {
                   if (e.key === "Delete" || e.key === "Backspace") {
                     e.preventDefault();
@@ -58,7 +70,7 @@ function TrackLane({
                   }
                 }}
               >
-                <X className="w-2.5 h-2.5" />
+                <X className={isMobile ? "w-3.5 h-3.5" : "w-2.5 h-2.5"} />
               </button>
             </div>
           );
@@ -73,6 +85,7 @@ export default function MultiTrackTimeline() {
   const removeElement = useEditorStore((s) => s.removeElement);
   const duration = useEditorStore((s) => s.duration);
   const setBRollDrawerOpen = useEditorStore((s) => s.setBRollDrawerOpen);
+  const isMobile = useMediaQuery("(max-width: 768px)");
 
   const brollElements = elements.filter(
     (e): e is BRollElement => e.type === "BROLL",
@@ -95,6 +108,7 @@ export default function MultiTrackTimeline() {
           duration={duration}
           onRemove={removeElement}
           onLabelClick={() => setBRollDrawerOpen(true)}
+          isMobile={isMobile}
         />
       )}
       {overlayElements.length > 0 && (
@@ -104,6 +118,7 @@ export default function MultiTrackTimeline() {
           elements={overlayElements}
           duration={duration}
           onRemove={removeElement}
+          isMobile={isMobile}
         />
       )}
     </div>
