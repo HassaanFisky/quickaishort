@@ -718,6 +718,9 @@ const LEAVES_DEVICE = [
 function PrivacyTab() {
   const [analytics, setAnalytics] = useLocalSetting<boolean>("qai_privacy_analytics", true);
   const [rememberHistory, setRememberHistory] = useLocalSetting<boolean>("qai_privacy_history", true);
+  const [productUpdates, setProductUpdates] = useLocalSetting<boolean>("qai_email_product_updates", true);
+  const [weeklyDigest, setWeeklyDigest] = useLocalSetting<boolean>("qai_email_weekly_digest", false);
+  const [marketingEmails, setMarketingEmails] = useLocalSetting<boolean>("qai_email_marketing", false);
 
   const clearLocalData = () => {
     try {
@@ -806,6 +809,38 @@ function PrivacyTab() {
             description="Keep your recent projects and undo history in this browser for faster resumes."
             checked={rememberHistory}
             onCheckedChange={setRememberHistory}
+            border
+          />
+        </CardContent>
+      </Card>
+
+      {/* Email preferences */}
+      <Card className="depth-card glass-surface rounded-[2.5rem] border-foreground/5 p-4">
+        <CardHeader className="pb-6">
+          <CardTitle className="text-xl font-black tracking-tight">Email preferences</CardTitle>
+          <CardDescription className="text-base font-medium">
+            Account essentials (welcome, billing receipts) always send — these control everything else.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <ToggleRow
+            label="Product updates"
+            description="New features, important changes, and the occasional roadmap note."
+            checked={productUpdates}
+            onCheckedChange={setProductUpdates}
+          />
+          <ToggleRow
+            label="Weekly digest"
+            description="Your exports, AI runs, and credits — summarized once a week."
+            checked={weeklyDigest}
+            onCheckedChange={setWeeklyDigest}
+            border
+          />
+          <ToggleRow
+            label="Marketing"
+            description="Offers, promotions, and partner announcements."
+            checked={marketingEmails}
+            onCheckedChange={setMarketingEmails}
             border
           />
         </CardContent>

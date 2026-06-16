@@ -4,6 +4,7 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import connectDB from "@/lib/db/mongodb";
 import User from "@/lib/db/models/user";
 import bcrypt from "bcryptjs";
+import { triggerWelcomeEmail } from "@/lib/email";
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -50,13 +51,15 @@ export const authOptions: NextAuthOptions = {
           const existingUser = await User.findOne({ email: user.email });
 
           if (!existingUser) {
+            const name = user.name || user.email?.split("@")[0] || "User";
             await User.create({
               googleId: account.providerAccountId,
               email: user.email,
               // Google occasionally omits displayName; fall back gracefully.
-              name: user.name || user.email?.split("@")[0] || "User",
+              name,
               image: user.image,
             });
+            if (user.email) triggerWelcomeEmail(user.email, name);
           } else {
             existingUser.lastLoginAt = new Date();
             existingUser.googleId = account.providerAccountId;

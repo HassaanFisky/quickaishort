@@ -142,6 +142,9 @@ export default function PricingPage() {
   }, [userId]);
 
   const handleActivated = useCallback(() => {
+    fetch("/api/account/notify-pro-activated", { method: "POST" }).catch(() => {
+      /* best-effort — the welcome toast on /editor still confirms activation */
+    });
     window.setTimeout(() => router.push("/editor?welcome=1"), 1200);
   }, [router]);
 

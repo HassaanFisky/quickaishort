@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import connectDB from "@/lib/db/mongodb";
 import User from "@/lib/db/models/user";
 import bcrypt from "bcryptjs";
+import { triggerWelcomeEmail } from "@/lib/email";
 
 export async function POST(req: Request) {
   try {
@@ -38,6 +39,8 @@ export async function POST(req: Request) {
       email,
       password: hashedPassword,
     });
+
+    triggerWelcomeEmail(email, name);
 
     return Response.json(
       { message: "User registered successfully", userId: user._id },

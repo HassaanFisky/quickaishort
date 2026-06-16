@@ -361,6 +361,10 @@ from routers.analytics import router as analytics_router
 
 app.include_router(analytics_router)
 
+from routers.email_router import router as email_router
+
+app.include_router(email_router)
+
 
 def get_real_ip(request: Request) -> str:
     """
