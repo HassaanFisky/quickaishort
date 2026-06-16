@@ -39,6 +39,37 @@ fn fs(in: VsOut) -> @location(0) vec4<f32> {
 }
 `;
 
+export type BlendMode =
+  | "normal"
+  | "multiply"
+  | "screen"
+  | "overlay"
+  | "darken"
+  | "lighten"
+  | "color-dodge"
+  | "color-burn";
+
+// Canvas 2D globalCompositeOperation mapping
+export const BLEND_MODE_MAP: Record<BlendMode, GlobalCompositeOperation> = {
+  normal: "source-over",
+  multiply: "multiply",
+  screen: "screen",
+  overlay: "overlay",
+  darken: "darken",
+  lighten: "lighten",
+  "color-dodge": "color-dodge" as GlobalCompositeOperation,
+  "color-burn": "color-burn" as GlobalCompositeOperation,
+};
+
+export interface LayerTransform {
+  x: number; // 0-1, position
+  y: number;
+  width: number; // 0-1, scale
+  height: number;
+  opacity: number; // 0-1
+  rotation: number; // degrees
+}
+
 export class WebGpuCompositor {
   private device: GPUDevice | null = null;
   private context: GPUCanvasContext | null = null;
@@ -139,6 +170,43 @@ export class WebGpuCompositor {
     pass.end();
     this.device.queue.submit([encoder.finish()]);
     texture.destroy();
+  }
+
+  /**
+   * Draws a video frame onto a caller-owned canvas-2D context with transform,
+   * opacity, and blend mode — used to layer multiple tracks (V2 over V1) during
+   * export. Takes its own 2D context rather than `this.context` because a
+   * canvas already configured for "webgpu" cannot also serve a "2d" context.
+   * WebGPU multi-pass layering is a future optimization; this is the MVP path.
+   */
+  async compositeLayer(
+    ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
+    source: HTMLVideoElement | VideoFrame | HTMLCanvasElement,
+    transform: LayerTransform,
+    blendMode: BlendMode = "normal",
+  ): Promise<void> {
+    const canvasWidth = ctx.canvas.width;
+    const canvasHeight = ctx.canvas.height;
+    if (!canvasWidth || !canvasHeight) return;
+
+    const srcWidth =
+      source instanceof VideoFrame ? source.displayWidth : (source as HTMLVideoElement).videoWidth || source.width;
+    const srcHeight =
+      source instanceof VideoFrame ? source.displayHeight : (source as HTMLVideoElement).videoHeight || source.height;
+    if (!srcWidth || !srcHeight) return;
+
+    const destX = transform.x * canvasWidth;
+    const destY = transform.y * canvasHeight;
+    const destWidth = transform.width * canvasWidth;
+    const destHeight = transform.height * canvasHeight;
+
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, Math.min(1, transform.opacity));
+    ctx.globalCompositeOperation = BLEND_MODE_MAP[blendMode];
+    ctx.translate(destX + destWidth / 2, destY + destHeight / 2);
+    if (transform.rotation) ctx.rotate((transform.rotation * Math.PI) / 180);
+    ctx.drawImage(source as CanvasImageSource, -destWidth / 2, -destHeight / 2, destWidth, destHeight);
+    ctx.restore();
   }
 
   dispose(): void {
