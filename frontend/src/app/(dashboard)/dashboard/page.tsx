@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import {
@@ -12,8 +12,11 @@ import {
   ChevronRight,
   Sparkles,
   LayoutGrid,
+  Upload,
+  Search,
 } from "lucide-react";
 import { useDashboardStats } from "@/hooks/useDashboardStats";
+import { useVideoThumbnail } from "@/hooks/useVideoThumbnail";
 import { useAIPanel } from "@/stores/aiPanelStore";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
@@ -23,23 +26,15 @@ import { InlineError } from "@/components/shared/InlineError";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { AIPanel } from "@/components/ai/AIPanel";
 import { spring } from "@/lib/animations";
+import { ActivityFeed } from "@/components/dashboard/ActivityFeed";
+import { UsageStatsCard } from "@/components/dashboard/UsageStatsCard";
+import type { ExportRecord } from "@/types/models";
+import { buildExportDownloadUrl } from "@/lib/api";
 
 const CREDITS_LOW_THRESHOLD = 10;
 
-interface ProjectRecord {
-  _id: string;
-  source?: { title?: string; url?: string; thumbnail?: string };
-  status?: string;
-  viralScore?: number;
-  createdAt?: string;
-}
-
-function viralScoreColor(score: number): string {
-  if (score >= 90) return "from-pink-500 to-purple-500 text-white shadow-[0_0_15px_rgba(236,72,153,0.3)]";
-  if (score >= 71) return "bg-purple-500/20 text-purple-400 border-purple-500/30";
-  if (score >= 41) return "bg-amber-500/20 text-amber-400 border-amber-500/30";
-  return "bg-zinc-500/20 text-zinc-400 border-zinc-500/30";
-}
+type QualityFilter = "all" | ExportRecord["settings"]["quality"];
+type SortMode = "recent" | "duration";
 
 function StatCard({
   label,
@@ -89,12 +84,12 @@ function StatCard({
   );
 }
 
-function ProjectCard({ project, index }: { project: ProjectRecord; index: number }) {
-  const score = project.viralScore;
-  const date = project.createdAt
-    ? new Date(project.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-    : "—";
-  const title = project.source?.title || "Untitled Intelligence";
+function ExportCard({ record, index }: { record: ExportRecord; index: number }) {
+  const date = new Date(record.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  const title = record.output?.filename ?? `Export ${record.clipId.slice(0, 6)}`;
+  const downloadUrl = record.downloadUrl ? buildExportDownloadUrl(record.downloadUrl) : null;
+  const thumbnail = useVideoThumbnail(downloadUrl);
+  const durationLabel = record.output?.duration ? `${Math.round(record.output.duration)}s` : null;
 
   return (
     <motion.div
@@ -103,33 +98,26 @@ function ProjectCard({ project, index }: { project: ProjectRecord; index: number
       transition={{ delay: index * 0.05 }}
     >
       <Link
-        href={`/editor?project=${project._id}`}
+        href={downloadUrl ?? "/history"}
+        target={downloadUrl ? "_blank" : undefined}
+        rel={downloadUrl ? "noopener noreferrer" : undefined}
         className="group block relative rounded-2xl border border-white/[0.06] bg-[hsl(var(--bg-subtle))]/60 overflow-hidden spring-hover hover:border-primary/20"
       >
-        <div
-          className="aspect-video w-full relative overflow-hidden bg-zinc-900"
-        >
-          {project.source?.thumbnail ? (
-            <img src={project.source.thumbnail} alt={title} className="w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-700" />
+        <div className="aspect-video w-full relative overflow-hidden bg-zinc-900">
+          {thumbnail ? (
+            <img src={thumbnail} alt={title} className="w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-700" />
           ) : (
              <div className="absolute inset-0 bg-gradient-to-br from-zinc-800 to-zinc-950 flex items-center justify-center">
                 <LayoutGrid className="w-8 h-8 text-white/5" />
              </div>
           )}
           <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent opacity-60" />
-          
-          {typeof score === "number" && (
-            <div className={cn(
-              "absolute top-3 right-3 rounded-full px-2.5 py-1 text-[9px] font-black uppercase tracking-wider border",
-              score >= 90
-                ? "bg-gradient-to-r from-pink-500 to-purple-500 text-white border-transparent shadow-[0_4px_16px_rgba(236,72,153,0.35)]"
-                : viralScoreColor(score)
-            )}>
-              {score}
-            </div>
-          )}
+
+          <div className="absolute top-3 right-3 rounded-full px-2.5 py-1 text-[9px] font-black uppercase tracking-wider border bg-zinc-500/20 text-zinc-300 border-zinc-500/30">
+            {record.settings.quality}
+          </div>
         </div>
-        
+
         <div className="p-5">
           <h3 className="text-sm font-black truncate text-foreground/90 group-hover:text-foreground transition-colors mb-2">
             {title}
@@ -138,6 +126,7 @@ function ProjectCard({ project, index }: { project: ProjectRecord; index: number
             <div className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground/60">
               <Clock className="w-3 h-3" />
               <span>{date}</span>
+              {durationLabel && <span>· {durationLabel}</span>}
             </div>
             <div className="p-1.5 rounded-full bg-foreground/5 opacity-0 group-hover:opacity-100 transition-all">
               <ChevronRight className="w-3 h-3 text-primary" />
@@ -157,7 +146,7 @@ function DashboardEmptyState() {
     >
       <EmptyState
         icon={FolderOpen}
-        title="No projects active"
+        title="No exports yet"
         body="Drop a YouTube URL into the editor to start your first viral sequence. AI-powered editing, 100+ features, export in seconds."
         actionLabel="Create First Project"
         actionHref="/editor"
@@ -176,9 +165,11 @@ export default function DashboardPage() {
   const { stats, isReady, error } = useDashboardStats({ userId });
   const { isOpen: aiPanelOpen, setOpen: setAIPanelOpen, setVideoContext } = useAIPanel();
 
-  const [projects, setProjects] = useState<ProjectRecord[] | null>(null);
-  const [projectsError, setProjectsError] = useState(false);
-  const [exportCount, setExportCount] = useState<number | null>(null);
+  const [exports, setExports] = useState<ExportRecord[] | null>(null);
+  const [exportsError, setExportsError] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [qualityFilter, setQualityFilter] = useState<QualityFilter>("all");
+  const [sortMode, setSortMode] = useState<SortMode>("recent");
 
   // Dashboard shows the general assistant — clear any video context from the editor
   useEffect(() => {
@@ -188,31 +179,22 @@ export default function DashboardPage() {
   useEffect(() => {
     let cancelled = false;
 
-    fetch("/api/projects")
+    fetch("/api/exports")
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
       })
-      .then((data: ProjectRecord[]) => {
+      .then((data: ExportRecord[]) => {
         if (!cancelled) {
-          setProjects(Array.isArray(data) ? data : []);
-          setProjectsError(false);
+          setExports(Array.isArray(data) ? data : []);
+          setExportsError(false);
         }
       })
       .catch(() => {
         if (!cancelled) {
-          setProjects([]);
-          setProjectsError(true);
+          setExports([]);
+          setExportsError(true);
         }
-      });
-
-    fetch("/api/exports")
-      .then((r) => (r.ok ? r.json() : []))
-      .then((data: unknown[]) => {
-        if (!cancelled) setExportCount(Array.isArray(data) ? data.length : 0);
-      })
-      .catch(() => {
-        if (!cancelled) setExportCount(0);
       });
 
     return () => {
@@ -220,7 +202,26 @@ export default function DashboardPage() {
     };
   }, []);
 
-  const projectsLoading = projects === null;
+  const exportsLoading = exports === null;
+  const exportCount = exports?.length ?? null;
+
+  const visibleExports = useMemo(() => {
+    if (!exports) return [];
+    const q = searchQuery.trim().toLowerCase();
+    return exports
+      .filter((e) => qualityFilter === "all" || e.settings.quality === qualityFilter)
+      .filter((e) => {
+        if (!q) return true;
+        const title = (e.output?.filename ?? e.clipId).toLowerCase();
+        return title.includes(q);
+      })
+      .sort((a, b) => {
+        if (sortMode === "duration") {
+          return (b.output?.duration ?? 0) - (a.output?.duration ?? 0);
+        }
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      });
+  }, [exports, searchQuery, qualityFilter, sortMode]);
 
   return (
     <div className="max-w-7xl mx-auto space-y-12 py-8 px-4 relative">
@@ -244,6 +245,12 @@ export default function DashboardPage() {
         </div>
         
         <div className="flex items-center gap-3">
+          <GlowButton variant="glass" size="lg" asChild className="h-12 px-6 rounded-2xl text-sm font-bold">
+            <Link href="/editor">
+              <Upload className="w-4 h-4 mr-2" aria-hidden="true" />
+              Import Video
+            </Link>
+          </GlowButton>
           <GlowButton variant="gradient" size="lg" asChild className="h-12 px-7 rounded-2xl text-sm font-bold">
             <Link href="/editor">
               <Plus className="w-4 h-4 mr-2" aria-hidden="true" />
@@ -257,8 +264,8 @@ export default function DashboardPage() {
       <section aria-label="Account summary" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
           label="Total Projects"
-          value={projects?.length ?? stats.total_projects}
-          loading={projectsLoading && !isReady}
+          value={stats.total_projects}
+          loading={!isReady}
           icon={FolderOpen}
           color="bg-blue-500"
         />
@@ -272,7 +279,7 @@ export default function DashboardPage() {
         <StatCard
           label="Exports"
           value={exportCount ?? stats.export_count}
-          loading={projectsLoading && !isReady}
+          loading={exportsLoading && !isReady}
           icon={TrendingUp}
           color="bg-pink-500"
         />
@@ -298,41 +305,92 @@ export default function DashboardPage() {
         />
       )}
 
-      {/* Recent projects */}
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-          <Clock className="w-4 h-4 text-muted-foreground" />
-          <h2 className="text-base font-bold text-foreground/80">Recent Projects</h2>
-        </div>
-        <Link
-          href="/history"
-          className="group flex items-center gap-1.5 text-[12px] font-semibold text-muted-foreground hover:text-foreground transition-colors duration-[160ms]"
-        >
-          All history <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform duration-[160ms]" />
-        </Link>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Recent exports */}
+        <div className="lg:col-span-2 space-y-6">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center gap-2.5">
+              <Clock className="w-4 h-4 text-muted-foreground" />
+              <h2 className="text-base font-bold text-foreground/80">Recent Exports</h2>
+            </div>
+            <Link
+              href="/history"
+              className="group flex items-center gap-1.5 text-[12px] font-semibold text-muted-foreground hover:text-foreground transition-colors duration-[160ms]"
+            >
+              All history <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform duration-[160ms]" />
+            </Link>
+          </div>
+
+          {/* Search + sort + quality filter */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="relative flex-1 min-w-[180px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground/60" aria-hidden="true" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search exports…"
+                aria-label="Search exports by filename"
+                className="w-full h-9 pl-9 pr-3 rounded-xl bg-foreground/[0.03] border border-foreground/5 text-[12px] font-medium text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary/40 transition-colors"
+              />
+            </div>
+            <div className="flex gap-1 p-1 bg-foreground/[0.03] rounded-xl border border-foreground/5">
+              {(["all", "low", "medium", "high"] as const).map((q) => (
+                <button
+                  key={q}
+                  onClick={() => setQualityFilter(q)}
+                  className={cn(
+                    "h-7 px-2.5 rounded-lg text-[10px] font-bold uppercase tracking-wide transition-colors capitalize",
+                    qualityFilter === q ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
+            <select
+              value={sortMode}
+              onChange={(e) => setSortMode(e.target.value as SortMode)}
+              aria-label="Sort exports"
+              className="h-9 px-3 rounded-xl bg-foreground/[0.03] border border-foreground/5 text-[12px] font-medium text-foreground focus:outline-none focus:border-primary/40 transition-colors"
+            >
+              <option value="recent">Most recent</option>
+              <option value="duration">Longest first</option>
+            </select>
+          </div>
+
+          {exportsLoading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              {[1, 2].map(i => (
+                <div key={i} className="rounded-[2.5rem] border border-foreground/5 bg-secondary/20 overflow-hidden h-[240px] animate-pulse" />
+              ))}
+            </div>
+          ) : exportsError ? (
+            <InlineError
+              title="Couldn't load exports"
+              body="There was a problem reaching the exports service. Please refresh the page to try again."
+            />
+          ) : visibleExports.length === 0 ? (
+            <DashboardEmptyState />
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              {visibleExports.slice(0, 6).map((record, i) => (
+                <ExportCard key={record._id} record={record} index={i} />
+              ))}
+            </div>
+          )}
         </div>
 
-        {projectsLoading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[1, 2, 3].map(i => (
-              <div key={i} className="rounded-[2.5rem] border border-foreground/5 bg-secondary/20 overflow-hidden h-[240px] animate-pulse" />
-            ))}
+        {/* Usage + activity sidebar */}
+        <div className="space-y-6">
+          <UsageStatsCard stats={stats} loading={!isReady} />
+          <div className="rounded-2xl border border-white/[0.06] bg-[hsl(var(--bg-subtle))]/80 p-6">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground block mb-4">
+              Recent Activity
+            </span>
+            <ActivityFeed exports={exports ?? []} />
           </div>
-        ) : projectsError ? (
-          <InlineError
-            title="Couldn't load projects"
-            body="There was a problem reaching the projects service. Please refresh the page to try again."
-          />
-        ) : projects.length === 0 ? (
-          <DashboardEmptyState />
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {projects.slice(0, 6).map((p, i) => (
-              <ProjectCard key={p._id} project={p} index={i} />
-            ))}
-          </div>
-        )}
+        </div>
       </div>
 
       {/* Floating AI assistant button — bottom-right */}
