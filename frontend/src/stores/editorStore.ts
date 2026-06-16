@@ -9,6 +9,7 @@ import {
   getMotionPath,
   deleteMotionPath,
 } from "@/lib/motion/keyframeStore";
+import { Track, createDefaultTracks } from "@/types/timeline";
 
 // ─── AI Editor Types ──────────────────────────────────────────────────────────
 
@@ -680,6 +681,14 @@ interface EditorState {
   setDefaultTransition: (name: string) => void;
   splitScreenPresetId: string | null;
   setSplitScreenPreset: (id: string | null) => void;
+
+  // ─── Phase 36: Multi-track timeline data model ─────────────────────────────
+  // Runs in parallel with the flat `suggestions[]` array — no breaking changes.
+  tracks: Track[];
+  addTrack: (type: "video" | "audio") => void;
+  removeTrack: (trackId: string) => void;
+  setTrackLocked: (trackId: string, locked: boolean) => void;
+  setTrackMuted: (trackId: string, muted: boolean) => void;
 }
 
 export const useEditorStore = create<EditorState>()(
@@ -764,6 +773,9 @@ export const useEditorStore = create<EditorState>()(
       // Phase 34
       defaultTransition: "fade",
       splitScreenPresetId: null,
+
+      // Phase 36
+      tracks: createDefaultTracks(),
 
       // AI Editor initial state
       videoMetadata: null,
@@ -1903,6 +1915,7 @@ export const useEditorStore = create<EditorState>()(
           progress: 0,
           isProcessing: false,
           currentStage: "idle",
+          tracks: createDefaultTracks(),
         }),
 
       reset: () =>
@@ -1954,6 +1967,7 @@ export const useEditorStore = create<EditorState>()(
           aiPanelOpen: false,
           videoAnalysis: null,
           videoElementRef: null,
+          tracks: createDefaultTracks(),
         }),
 
       setAiSuggestions: (patch) =>
@@ -2007,6 +2021,39 @@ export const useEditorStore = create<EditorState>()(
       // Phase 34
       setDefaultTransition: (name) => set({ defaultTransition: name }),
       setSplitScreenPreset: (id) => set({ splitScreenPresetId: id }),
+
+      // Phase 36
+      addTrack: (type) =>
+        set((s) => {
+          const count = s.tracks.filter((t) => t.type === type).length + 1;
+          const label = type === "video" ? `V${count}` : `A${count}`;
+          const id = `${type[0]}${count}`;
+          return {
+            tracks: [
+              ...s.tracks,
+              {
+                id,
+                type,
+                label,
+                clips: [],
+                locked: false,
+                muted: false,
+                solo: false,
+                height: type === "video" ? 32 : 24,
+              },
+            ],
+          };
+        }),
+      removeTrack: (trackId) =>
+        set((s) => ({ tracks: s.tracks.filter((t) => t.id !== trackId) })),
+      setTrackLocked: (trackId, locked) =>
+        set((s) => ({
+          tracks: s.tracks.map((t) => (t.id === trackId ? { ...t, locked } : t)),
+        })),
+      setTrackMuted: (trackId, muted) =>
+        set((s) => ({
+          tracks: s.tracks.map((t) => (t.id === trackId ? { ...t, muted } : t)),
+        })),
     }),
     {
       name: "EditorStore",
