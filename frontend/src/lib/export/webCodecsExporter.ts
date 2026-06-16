@@ -139,6 +139,22 @@ export class WebCodecsExporter {
     this.frameCount++;
   }
 
+  async encodeAudioChunk(chunk: { data: Float32Array; timestamp: number; numberOfFrames: number }): Promise<void> {
+    if (!this.audioEncoder || !this.audioSupported || this.cancelled) return;
+
+    const audioData = new AudioData({
+      format: "f32-planar",
+      sampleRate: 48000,
+      numberOfFrames: chunk.numberOfFrames,
+      numberOfChannels: 2,
+      timestamp: chunk.timestamp,
+      data: chunk.data,
+    });
+
+    this.audioEncoder.encode(audioData);
+    audioData.close();
+  }
+
   async finalize(): Promise<Blob> {
     if (!this.encoder || !this.mux) throw new Error("WebCodecsExporter not initialized");
     await this.encoder.flush();

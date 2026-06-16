@@ -13,6 +13,7 @@ import {
   type ExportPreset,
   type ExportProgress,
 } from "@/lib/export/webCodecsExporter";
+import { extractAudioBuffer, audioBufferToChunks } from "@/lib/export/audioExtractor";
 import { formatTime } from "@/lib/utils/formatTime";
 
 interface ExportDialogProps {
@@ -124,6 +125,23 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
 
       video.currentTime = originalTime;
       if (wasPlaying) video.play().catch(() => {});
+
+      if (!exporter["cancelled"] && exporter.hasAudioEncoder()) {
+        const audioSrc = video.currentSrc || video.src;
+        if (audioSrc) {
+          const audioBuffer = await extractAudioBuffer(audioSrc, {
+            sampleRate: 48000,
+            startSec: start,
+            endSec: end,
+          });
+          if (audioBuffer) {
+            const chunks = audioBufferToChunks(audioBuffer);
+            for (const chunk of chunks) {
+              await exporter.encodeAudioChunk(chunk);
+            }
+          }
+        }
+      }
 
       if (!exporter["cancelled"]) {
         const blob = await exporter.finalize();
@@ -293,8 +311,8 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
                     <span>Video</span>
                   </span>
                   <span className="flex items-center gap-1">
-                    <span className={cn("w-1.5 h-1.5 rounded-full inline-block shrink-0", audioSupported ? "bg-amber-400" : "bg-foreground/20")} />
-                    <span>Audio {audioSupported ? "(basic)" : "(browser unsupported)"}</span>
+                    <span className={cn("w-1.5 h-1.5 rounded-full inline-block shrink-0", audioSupported ? "bg-emerald-400" : "bg-foreground/20")} />
+                    <span>Audio {audioSupported ? "✓" : "(unsupported)"}</span>
                   </span>
                 </div>
               </div>
