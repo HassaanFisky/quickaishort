@@ -159,7 +159,7 @@ export default function EditorPage() {
         window.dispatchEvent(new CustomEvent("qai:export"));
         return;
       }
-      // C — cut at playhead (razor tool alias, standard in Premiere/DaVinci)
+      // C — cut at playhead (razor tool alias, standard NLE convention)
       if (matchEvent(e, b.cutClip)) {
         e.preventDefault();
         if (store.suggestions.length > 0) store.splitClipAtTime(store.currentTime);

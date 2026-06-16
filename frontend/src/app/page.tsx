@@ -6,7 +6,7 @@ import Image from "next/image";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import { CinematicIntro } from "@/components/layout/CinematicIntro";
-import { motion, useScroll, useTransform, AnimatePresence, useInView } from "framer-motion";
+import { motion, useScroll, useTransform, useSpring, AnimatePresence, useInView } from "framer-motion";
 import {
   Sparkles,
   Users,
@@ -156,6 +156,7 @@ export default function LandingPage() {
 
   const { scrollYProgress } = useScroll();
   const opacity = useTransform(scrollYProgress, [0, 0.2], [1, 0]);
+  const scaleX = useSpring(scrollYProgress, { stiffness: 120, damping: 30, restDelta: 0.001 });
 
   if (!hasCheckedSession) return null;
 
@@ -173,8 +174,11 @@ export default function LandingPage() {
         "relative min-h-screen bg-background text-foreground selection:bg-primary/30 overflow-x-hidden font-sans transition-opacity duration-1000",
         showIntro ? "opacity-0 h-screen overflow-hidden" : "opacity-100"
       )}>
+        {/* Scroll progress bar (Stripe/Linear style) */}
+        <motion.div className="scroll-progress" style={{ scaleX }} aria-hidden="true" />
+
         <Navbar />
-        
+
         {/* Living Background */}
         <div className="living-water-bg" />
 
@@ -182,8 +186,9 @@ export default function LandingPage() {
           {/* HERO SECTION */}
           <section className="relative min-h-screen flex flex-col items-center justify-center pt-24 px-6 overflow-hidden">
             <motion.div style={{ opacity }} className="absolute inset-0 -z-10 pointer-events-none">
-              <div className="hero-glow-a top-[20%] left-[10%] w-[500px] h-[500px] opacity-20" />
-              <div className="hero-glow-b bottom-[20%] right-[10%] w-[600px] h-[600px] opacity-20" />
+              <div className="hero-glow-a top-[20%] left-[10%] w-[500px] h-[500px] opacity-40" />
+              <div className="hero-glow-b bottom-[20%] right-[10%] w-[600px] h-[600px] opacity-40" />
+              <div className="hero-glow-c top-[35%] right-[30%] w-[400px] h-[400px] opacity-30" />
             </motion.div>
 
             <div className="max-w-6xl mx-auto w-full flex flex-col items-center text-center relative z-10">
@@ -217,23 +222,29 @@ export default function LandingPage() {
               </motion.div>
             </div>
             
-            {/* Social Proof Ticker */}
-            <div className="absolute bottom-10 w-full overflow-hidden">
-              <div className="flex items-center gap-8 marquee-track opacity-40 hover:opacity-70 transition-opacity duration-500">
+            {/* Social Proof Ticker — alive, edge-faded, GPU-accelerated */}
+            <div className="absolute bottom-10 w-full marquee-mask overflow-hidden">
+              <div className="flex items-center gap-10 marquee-track px-4">
                 {[...Array(3)].map((_, i) => (
                   <React.Fragment key={i}>
                     {[
-                      "100+ Premiere-grade features",
-                      "Edit with your voice",
-                      "AI finds viral moments",
-                      "No install needed",
-                      "Runs in your browser",
-                      "Export in seconds",
-                      "$29/mo all-in-one",
-                      "6 AI personas test your clip",
-                    ].map((text) => (
-                      <span key={text} className="flex items-center gap-2 text-[11px] font-semibold tracking-wide px-4 text-fg-muted whitespace-nowrap">
-                        <span className="w-1 h-1 rounded-full bg-primary/60 shrink-0" />
+                      "Your hook. 6 AI judges. One verdict.",
+                      "Stop guessing. Start scoring.",
+                      "Edit like you think. AI does the rest.",
+                      "12% retention → 67% in 3 weeks.",
+                      "Pre-flight your short. Skip the regret.",
+                      "Built for viral. Tested by AI.",
+                      "Your clip. Your call. AI's vote.",
+                      "One link. One short. Six verdicts.",
+                    ].map((text, j) => (
+                      <span
+                        key={`${text}-${i}-${j}`}
+                        className="flex items-center gap-2.5 text-[12px] font-semibold tracking-wide px-2 text-foreground/80 whitespace-nowrap"
+                      >
+                        <span
+                          className="marquee-dot w-1.5 h-1.5 rounded-full bg-primary shrink-0"
+                          style={{ animationDelay: `${(i * 8 + j) * 120}ms` }}
+                        />
                         {text}
                       </span>
                     ))}
@@ -318,8 +329,13 @@ export default function LandingPage() {
                     whileTap={{ scale: 0.98 }}
                     viewport={{ once: true, margin: "-40px" }}
                     transition={{ ...spring.smooth, delay: i * 0.07 }}
+                    onMouseMove={(e: React.MouseEvent<HTMLDivElement>) => {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      e.currentTarget.style.setProperty("--mouse-x", `${((e.clientX - rect.left) / rect.width) * 100}%`);
+                      e.currentTarget.style.setProperty("--mouse-y", `${((e.clientY - rect.top) / rect.height) * 100}%`);
+                    }}
                     className={cn(
-                      "liquid-panel p-7 group relative overflow-hidden rounded-2xl cursor-pointer transition-shadow duration-300 hover:shadow-[0_8px_32px_rgba(168,85,247,0.08)]",
+                      "spotlight-card liquid-panel p-7 group relative overflow-hidden rounded-2xl cursor-pointer transition-shadow duration-300 hover:shadow-[0_8px_32px_rgba(168,85,247,0.08)]",
                       feature.className
                     )}
                   >

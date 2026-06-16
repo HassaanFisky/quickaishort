@@ -537,15 +537,43 @@ html.liquid-transition::view-transition-new(root) {
 
 /* ── Marquee (social proof ticker) ─────────────── */
 @keyframes marquee {
-  from { transform: translateX(0); }
-  to   { transform: translateX(-33.333%); }
+  from { transform: translate3d(0, 0, 0); }
+  to   { transform: translate3d(-33.333%, 0, 0); }
+}
+@keyframes marquee-dot-pulse {
+  0%, 100% { transform: scale(1);   opacity: 0.8; }
+  50%      { transform: scale(1.4); opacity: 1;   }
 }
 .marquee-track {
   display: flex;
   width: max-content;
-  animation: marquee 40s linear infinite;
+  animation: marquee 22s linear infinite;
+  will-change: transform;
+  transform: translateZ(0); /* force GPU compositor layer */
 }
 .marquee-track:hover { animation-play-state: paused; }
+
+.marquee-mask {
+  --mask-fade: 80px;
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    black var(--mask-fade),
+    black calc(100% - var(--mask-fade)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    black var(--mask-fade),
+    black calc(100% - var(--mask-fade)),
+    transparent 100%
+  );
+}
+
+.marquee-dot {
+  animation: marquee-dot-pulse 2s ease-in-out infinite;
+}
 
 /* ── Hero ambient glow ──────────────────────────── */
 @keyframes hero-pulse {
@@ -565,6 +593,17 @@ html.liquid-transition::view-transition-new(root) {
   background: hsl(var(--accent));
   filter: blur(140px);
   animation: hero-pulse 10s ease-in-out infinite 2s;
+}
+@keyframes hero-pulse-c {
+  0%, 100% { opacity: 0.05; transform: scale(0.9);  }
+  50%      { opacity: 0.16; transform: scale(1.15); }
+}
+.hero-glow-c {
+  position: absolute;
+  border-radius: 50%;
+  background: #ec4899;
+  filter: blur(130px);
+  animation: hero-pulse-c 9s ease-in-out infinite 4s;
 }
 
 /* ── Count-up flash (score reveal) ─────────────── */
@@ -623,12 +662,19 @@ html.liquid-transition::view-transition-new(root) {
     scroll-behavior: auto !important;
   }
 
-  .marquee-track,
   .hero-glow-a,
   .hero-glow-b,
+  .hero-glow-c,
   .elite-ring,
   .living-water-bg::after {
     animation: none !important;
+  }
+
+  /* Marquee: keep decorative motion alive but slower (Stripe/Linear pattern) —
+     a slow, pausable, purely-horizontal ticker doesn't trigger vestibular
+     issues the way parallax/zoom motion does. */
+  .marquee-track {
+    animation: marquee 60s linear infinite !important;
   }
 }
 
@@ -1929,4 +1975,38 @@ nav:has(.nav-link:hover) .nav-link:not(:hover) {
     radial-gradient(120% 80% at 50% 0%, rgba(168, 85, 247, 0.10) 0%, transparent 60%),
     radial-gradient(100% 80% at 100% 100%, rgba(236, 72, 153, 0.06) 0%, transparent 55%);
 }
+
+/* ── Premium scroll progress (landing page) ─────── */
+.scroll-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, hsl(var(--primary)), hsl(var(--accent-indigo)));
+  transform-origin: 0 50%;
+  z-index: 100;
+  pointer-events: none;
+}
+
+/* ── Spotlight cursor on feature cards ──────────── */
+.spotlight-card {
+  position: relative;
+  isolation: isolate;
+}
+.spotlight-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: radial-gradient(
+    450px circle at var(--mouse-x, 50%) var(--mouse-y, 50%),
+    hsl(var(--primary) / 0.18),
+    transparent 50%
+  );
+  opacity: 0;
+  transition: opacity 200ms ease-out;
+  pointer-events: none;
+}
+.spotlight-card:hover::before { opacity: 1; }
 
