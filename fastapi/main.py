@@ -58,6 +58,7 @@ try:
         dsn=os.getenv("SENTRY_DSN"),
         integrations=[FastApiIntegration()],
         traces_sample_rate=0.1,
+        environment=os.getenv("ENV", "development"),
     )
 
     # Initialize Sentry for Celery worker error tracking

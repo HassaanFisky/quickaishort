@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
+import * as Sentry from "@sentry/nextjs";
 import { API_URL } from "@/lib/api";
 
 // ─── Event catalog ──────────────────────────────────────────────────────────
@@ -79,7 +80,14 @@ function writeQueue(queue: QueuedEvent[]): void {
 }
 
 export function trackEvent(event: AnalyticsEvent): void {
-  if (typeof window === "undefined" || !isOptedIn()) return;
+  if (typeof window === "undefined") return;
+  // editor_error is non-fatal-error monitoring (Sentry), not usage telemetry —
+  // report it regardless of the analytics opt-out, mirroring how ErrorBoundary
+  // already reports fatal errors unconditionally.
+  if (event.name === "editor_error") {
+    Sentry.captureMessage(`editor_error: ${event.props.errorType}`, "warning");
+  }
+  if (!isOptedIn()) return;
   const queue = readQueue();
   queue.push({ name: event.name, props: event.props, ts: Date.now() });
   while (queue.length > MAX_QUEUE) queue.shift();

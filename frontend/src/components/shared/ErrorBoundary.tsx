@@ -3,6 +3,7 @@
 import { Component, ReactNode } from "react";
 import Link from "next/link";
 import { AlertTriangle, RefreshCcw, LayoutGrid } from "lucide-react";
+import * as Sentry from "@sentry/nextjs";
 import { trackEvent } from "@/lib/analytics";
 
 interface Props {
@@ -35,6 +36,9 @@ export class ErrorBoundary extends Component<Props, State> {
     trackEvent({
       name: "editor_error",
       props: { errorType: error.name, componentStack: errorInfo.componentStack?.slice(0, 500) },
+    });
+    Sentry.captureException(error, {
+      contexts: { react: { componentStack: errorInfo.componentStack } },
     });
   }
 
