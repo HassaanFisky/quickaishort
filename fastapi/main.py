@@ -586,6 +586,8 @@ def health_check():
         "storage_status": "connected" if firestore_ok else "disconnected",
         "redis_status": "ready" if redis_ok else "unreachable",
         "agent_ready_state": "ready" if _ADK_AVAILABLE else "unavailable",
+        "build_sha": os.getenv("BUILD_SHA", "dev"),
+        "sentry": "configured" if os.getenv("SENTRY_DSN") else "no-op",
     }
 
 
