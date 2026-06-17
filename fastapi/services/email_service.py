@@ -114,7 +114,9 @@ async def send_pro_activation_email(user_email: str, user_name: str) -> bool:
         '<br><br><a href="https://quickaishort.online/editor?welcome=1" style="color:#a855f7;font-weight:700;">'
         "Start editing →</a>",
     )
-    return await _send("pro_activation", user_email, "Welcome to QuickAI Short Pro", html)
+    return await _send(
+        "pro_activation", user_email, "Welcome to QuickAI Short Pro", html
+    )
 
 
 async def send_weekly_digest(user_email: str, stats: dict) -> bool:

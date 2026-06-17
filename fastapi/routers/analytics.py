@@ -129,7 +129,12 @@ def _aggregate(docs: list[dict], days: int) -> dict:
 
     ai_events = [d for d in docs if d.get("name") == "ai_command_sent"]
     ai_success_rate = (
-        round(100 * sum(1 for d in ai_events if d.get("props", {}).get("success")) / len(ai_events), 1)
+        round(
+            100
+            * sum(1 for d in ai_events if d.get("props", {}).get("success"))
+            / len(ai_events),
+            1,
+        )
         if ai_events
         else None
     )
@@ -137,9 +142,12 @@ def _aggregate(docs: list[dict], days: int) -> dict:
     preflight_scores = [
         d.get("props", {}).get("consensusScore")
         for d in docs
-        if d.get("name") == "preflight_run" and isinstance(d.get("props", {}).get("consensusScore"), (int, float))
+        if d.get("name") == "preflight_run"
+        and isinstance(d.get("props", {}).get("consensusScore"), (int, float))
     ]
-    avg_preflight_score = round(statistics.mean(preflight_scores), 1) if preflight_scores else None
+    avg_preflight_score = (
+        round(statistics.mean(preflight_scores), 1) if preflight_scores else None
+    )
 
     # Approximate session length per client_id: span between first and last
     # event timestamp within the window. Crude but dependency-free.
@@ -154,7 +162,9 @@ def _aggregate(docs: list[dict], days: int) -> dict:
         for ts_list in spans_by_client.values()
         if len(ts_list) > 1
     ]
-    avg_session_minutes = round(statistics.mean(session_minutes), 1) if session_minutes else None
+    avg_session_minutes = (
+        round(statistics.mean(session_minutes), 1) if session_minutes else None
+    )
 
     return {
         "days": days,

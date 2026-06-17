@@ -1014,23 +1014,27 @@ async def reward_referral_bonus(
     if referred_snap.exists:
         data = referred_snap.to_dict() or {}
         new_balance = data.get("credits_balance", 0) + body.amount
-        referred_ref.update({
-            "credits_balance": new_balance,
-            "updated_at": now,
-        })
+        referred_ref.update(
+            {
+                "credits_balance": new_balance,
+                "updated_at": now,
+            }
+        )
     else:
-        referred_ref.set({
-            "user_id": body.referred_user_id,
-            "credits_balance": body.amount + 100,  # starter + bonus
-            "is_pro": False,
-            "is_premium": False,
-            "total_projects": 0,
-            "total_duration_processed": 0.0,
-            "export_count": 0,
-            "ai_runs": 0,
-            "created_at": now,
-            "updated_at": now,
-        })
+        referred_ref.set(
+            {
+                "user_id": body.referred_user_id,
+                "credits_balance": body.amount + 100,  # starter + bonus
+                "is_pro": False,
+                "is_premium": False,
+                "total_projects": 0,
+                "total_duration_processed": 0.0,
+                "export_count": 0,
+                "ai_runs": 0,
+                "created_at": now,
+                "updated_at": now,
+            }
+        )
 
     # 2. Update referrer's stats
     referrer_ref = db.collection("UserStats").document(body.referrer_user_id)
@@ -1038,35 +1042,42 @@ async def reward_referral_bonus(
     if referrer_snap.exists:
         rdata = referrer_snap.to_dict() or {}
         r_new_balance = rdata.get("credits_balance", 0) + body.amount
-        referrer_ref.update({
-            "credits_balance": r_new_balance,
-            "updated_at": now,
-        })
+        referrer_ref.update(
+            {
+                "credits_balance": r_new_balance,
+                "updated_at": now,
+            }
+        )
     else:
-        referrer_ref.set({
-            "user_id": body.referrer_user_id,
-            "credits_balance": body.amount + 100,  # starter + bonus
-            "is_pro": False,
-            "is_premium": False,
-            "total_projects": 0,
-            "total_duration_processed": 0.0,
-            "export_count": 0,
-            "ai_runs": 0,
-            "created_at": now,
-            "updated_at": now,
-        })
+        referrer_ref.set(
+            {
+                "user_id": body.referrer_user_id,
+                "credits_balance": body.amount + 100,  # starter + bonus
+                "is_pro": False,
+                "is_premium": False,
+                "total_projects": 0,
+                "total_duration_processed": 0.0,
+                "export_count": 0,
+                "ai_runs": 0,
+                "created_at": now,
+                "updated_at": now,
+            }
+        )
 
     # 3. Log to Firestore referral_conversions collection for audit
-    db.collection("referral_conversions").add({
-        "referred_user_id": body.referred_user_id,
-        "referrer_user_id": body.referrer_user_id,
-        "amount": body.amount,
-        "timestamp": now,
-    })
+    db.collection("referral_conversions").add(
+        {
+            "referred_user_id": body.referred_user_id,
+            "referrer_user_id": body.referrer_user_id,
+            "amount": body.amount,
+            "timestamp": now,
+        }
+    )
 
     # 4. Invalidate caches for both users
     from services.stats_service import invalidate_premium_cache
     from services.queue_service import async_redis_conn
+
     for uid in (body.referred_user_id, body.referrer_user_id):
         try:
             await invalidate_premium_cache(uid)
