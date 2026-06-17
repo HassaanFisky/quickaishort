@@ -6,6 +6,8 @@ import User from "@/lib/db/models/user";
 import bcrypt from "bcryptjs";
 import { triggerWelcomeEmail } from "@/lib/email";
 
+import crypto from "crypto";
+
 export const authOptions: NextAuthOptions = {
   providers: [
     GoogleProvider({
@@ -51,13 +53,33 @@ export const authOptions: NextAuthOptions = {
           const existingUser = await User.findOne({ email: user.email });
 
           if (!existingUser) {
+            let referredBy = null;
+            try {
+              const { cookies } = await import("next/headers");
+              const cookieStore = cookies();
+              const refCookie = cookieStore.get("NEXT_REFERRAL")?.value;
+              if (refCookie) {
+                const referrer = await User.findOne({ referralCode: refCookie });
+                if (referrer) {
+                  referredBy = refCookie;
+                }
+              }
+            } catch (err) {
+              if (process.env.NODE_ENV !== "production") {
+                console.error("[auth] Google sign-in referral resolution failed:", err);
+              }
+            }
+
             const name = user.name || user.email?.split("@")[0] || "User";
+            const newReferralCode = "qs-" + crypto.randomBytes(4).toString("hex");
+
             await User.create({
               googleId: account.providerAccountId,
               email: user.email,
-              // Google occasionally omits displayName; fall back gracefully.
               name,
               image: user.image,
+              referralCode: newReferralCode,
+              referredBy,
             });
             if (user.email) triggerWelcomeEmail(user.email, name);
           } else {
@@ -68,7 +90,9 @@ export const authOptions: NextAuthOptions = {
         } catch (error) {
           // Log the failure for observability but do NOT return false.
           // Returning false here produces "AccessDenied" for a legitimately authenticated user.
-          console.error("[auth] Google sign-in DB persistence failed:", error);
+          if (process.env.NODE_ENV !== "production") {
+            console.error("[auth] Google sign-in DB persistence failed:", error);
+          }
         }
         return true;
       }

@@ -19,6 +19,7 @@ import {
   Shield,
   Bell,
   User,
+  Users,
   Save,
   Palette,
   Download,
@@ -42,6 +43,7 @@ import {
 import Link from "next/link";
 import { toast } from "sonner";
 import { useState, useEffect } from "react";
+import { useTranslations } from "@/lib/i18n";
 import { useEditorStore } from "@/stores/editorStore";
 import {
   useShortcutsStore,
@@ -56,7 +58,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { getStats } from "@/lib/api";
 import { EMPTY_STATS, type UserStats } from "@/types/stats";
 
-type Tab = "profile" | "billing" | "appearance" | "export" | "editor" | "shortcuts" | "notifications" | "privacy";
+type Tab = "profile" | "billing" | "appearance" | "export" | "editor" | "shortcuts" | "notifications" | "privacy" | "referral";
 
 const TABS: { id: Tab; icon: LucideIcon; label: string }[] = [
   { id: "profile", icon: User, label: "Profile" },
@@ -67,6 +69,7 @@ const TABS: { id: Tab; icon: LucideIcon; label: string }[] = [
   { id: "shortcuts", icon: Keyboard, label: "Shortcuts" },
   { id: "notifications", icon: Bell, label: "Notifications" },
   { id: "privacy", icon: Shield, label: "Privacy" },
+  { id: "referral", icon: Users, label: "Referrals" },
 ];
 
 const THEMES = [
@@ -489,6 +492,9 @@ export default function SettingsPage() {
 
               {/* ── PRIVACY ── */}
               {activeTab === "privacy" && <PrivacyTab />}
+
+              {/* ── REFERRAL ── */}
+              {activeTab === "referral" && <ReferralsTab />}
             </motion.div>
           </AnimatePresence>
         </div>
@@ -889,6 +895,118 @@ function PrivacyTab() {
               </span>
               <ExternalLink className="w-3.5 h-3.5 text-muted-foreground group-hover:text-foreground transition-colors" />
             </Link>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function ReferralsTab() {
+  const [data, setData] = useState<{ credits: number; referrals: number; referralCode: string } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [copied, setCopied] = useState(false);
+  const t = useTranslations();
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    fetch("/api/account/credits")
+      .then((r) => r.json())
+      .then((res) => {
+        if (active) {
+          setData(res);
+          setLoading(false);
+        }
+      })
+      .catch(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const shareUrl = data?.referralCode
+    ? `https://quickaishort.online/signup?ref=${data.referralCode}`
+    : "https://quickaishort.online/signup";
+
+  const copyToClipboard = () => {
+    if (typeof navigator !== "undefined") {
+      navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      toast.success(t("referral.copied") || "Copied to clipboard!");
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <Card className="depth-card glass-surface rounded-[2.5rem] border-foreground/5 p-4">
+        <CardHeader className="pb-6">
+          <CardTitle className="text-2xl font-black tracking-tight">{t("referral.title")}</CardTitle>
+          <CardDescription className="text-base font-medium">
+            {t("referral.subtitle")}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="p-6 rounded-[1.75rem] bg-primary/[0.06] border border-primary/15 flex items-start gap-4">
+            <div className="w-11 h-11 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+              <Users className="w-5 h-5 text-primary" />
+            </div>
+            <div className="space-y-1.5 flex-1">
+              <p className="text-lg font-bold tracking-tight text-foreground">{t("referral.yourLink")}</p>
+              <div className="flex gap-2 items-center mt-2 max-w-xl">
+                <Input
+                  value={loading ? "Loading..." : shareUrl}
+                  readOnly
+                  className="h-11 rounded-xl bg-foreground/[0.03] border-foreground/5 font-mono text-xs focus:outline-none"
+                />
+                <Button
+                  onClick={copyToClipboard}
+                  disabled={loading}
+                  className="h-11 px-5 rounded-xl font-bold text-xs shrink-0"
+                >
+                  {copied ? t("referral.copied") : t("referral.copy")}
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="p-5 rounded-2xl border border-border bg-foreground/[0.02] space-y-1">
+              <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground opacity-70">
+                {t("referral.totalReferrals")}
+              </Label>
+              <p className="text-2xl font-black tabular-nums">{loading ? "—" : data?.referrals ?? 0}</p>
+            </div>
+            <div className="p-5 rounded-2xl border border-border bg-foreground/[0.02] space-y-1">
+              <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground opacity-70">
+                {t("referral.creditsEarned")}
+              </Label>
+              <p className="text-2xl font-black tabular-nums">{loading ? "—" : data?.credits ?? 0}</p>
+            </div>
+          </div>
+
+          <div className="p-5 rounded-2xl border border-border bg-foreground/[0.02] space-y-4">
+            <h3 className="font-bold text-base text-foreground">{t("referral.howItWorks")}</h3>
+            <ol className="space-y-3 pl-1">
+              <li className="text-sm font-medium text-muted-foreground leading-snug flex items-start gap-3">
+                <span className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">1</span>
+                <span>{t("referral.step1")}</span>
+              </li>
+              <li className="text-sm font-medium text-muted-foreground leading-snug flex items-start gap-3">
+                <span className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">2</span>
+                <span>{t("referral.step2")}</span>
+              </li>
+              <li className="text-sm font-medium text-muted-foreground leading-snug flex items-start gap-3">
+                <span className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">3</span>
+                <span>{t("referral.step3")}</span>
+              </li>
+            </ol>
+            <p className="text-xs text-muted-foreground pt-2 border-t border-foreground/5 mt-4">
+              {t("referral.mutualBenefit")}
+            </p>
           </div>
         </CardContent>
       </Card>

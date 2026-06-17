@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Zap, Sparkles, FolderOpen, TrendingUp } from "lucide-react";
 import { GlowButton } from "@/components/ui/GlowButton";
 import type { UserStats } from "@/types/stats";
+import { useState, useEffect } from "react";
 
 interface UsageStatsCardProps {
   stats: UserStats;
@@ -17,6 +18,30 @@ interface UsageStatsCardProps {
  * progress bars — see Phase 43 commit notes.
  */
 export function UsageStatsCard({ stats, loading }: UsageStatsCardProps) {
+  const [referralCredits, setReferralCredits] = useState<number | null>(null);
+  const [refLoading, setRefLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    fetch("/api/account/credits")
+      .then((r) => r.json())
+      .then((data) => {
+        if (active) {
+          setReferralCredits(data.credits || 0);
+          setRefLoading(false);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setReferralCredits(0);
+          setRefLoading(false);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const rows = [
     { label: "Projects", value: stats.total_projects, icon: FolderOpen },
     { label: "Exports", value: stats.export_count, icon: TrendingUp },
@@ -40,19 +65,36 @@ export function UsageStatsCard({ stats, loading }: UsageStatsCardProps) {
         </span>
       </div>
 
-      <div className="flex items-center gap-3 p-4 rounded-xl bg-emerald-500/[0.06] border border-emerald-500/15">
-        <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
-          <Zap className="w-4 h-4 text-emerald-400" aria-hidden="true" />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="flex items-center gap-3 p-4 rounded-xl bg-emerald-500/[0.06] border border-emerald-500/15">
+          <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
+            <Zap className="w-4 h-4 text-emerald-400" aria-hidden="true" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[11px] text-muted-foreground">Base credits</p>
+            {loading ? (
+              <div className="h-5 w-12 rounded bg-white/[0.06] animate-pulse mt-0.5" />
+            ) : (
+              <p className="text-lg font-black tabular-nums leading-none">{stats.credits_balance}</p>
+            )}
+          </div>
         </div>
-        <div className="min-w-0">
-          <p className="text-[11px] text-muted-foreground">Credits balance</p>
-          {loading ? (
-            <div className="h-5 w-12 rounded bg-white/[0.06] animate-pulse mt-0.5" />
-          ) : (
-            <p className="text-lg font-black tabular-nums leading-none">{stats.credits_balance}</p>
-          )}
+
+        <div className="flex items-center gap-3 p-4 rounded-xl bg-primary/[0.06] border border-primary/15">
+          <div className="w-9 h-9 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+            <Sparkles className="w-4 h-4 text-primary" aria-hidden="true" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[11px] text-muted-foreground">Referral credits</p>
+            {refLoading ? (
+              <div className="h-5 w-12 rounded bg-white/[0.06] animate-pulse mt-0.5" />
+            ) : (
+              <p className="text-lg font-black tabular-nums leading-none">{referralCredits}</p>
+            )}
+          </div>
         </div>
       </div>
+
 
       <div className="grid grid-cols-3 gap-3">
         {rows.map(({ label, value, icon: Icon }) => (

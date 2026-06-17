@@ -41,6 +41,10 @@ const UserSchema = new Schema({
   },
   resetToken:       { type: String, select: false },
   resetTokenExpiry: { type: Date,   select: false },
+  referralCode: { type: String, unique: true, sparse: true },
+  referredBy: { type: String, default: null },
+  referralCredits: { type: Number, default: 0 },
+  referralRewarded: { type: Boolean, default: false },
 });
 
 const User = models.User || model("User", UserSchema);
