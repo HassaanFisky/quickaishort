@@ -1,0 +1,142 @@
+{
+  "nav": {
+    "features": "Fonctionnalités",
+    "pricing": "Tarifs",
+    "dashboard": "Tableau de bord",
+    "newProject": "Nouveau Projet",
+    "signIn": "Se connecter",
+    "getStarted": "Commencer",
+    "settings": "Paramètres",
+    "logOut": "Se déconnecter"
+  },
+  "hero": {
+    "badge": "Studio Vidéo IA",
+    "headline": "Transformez N'importe Quelle Vidéo en Shorts Viraux",
+    "subheadline": "Collez un lien YouTube. Gemini analyse, découpe, sous-titre et exporte en quelques secondes — sans téléchargement, sans attente.",
+    "cta": "Commencer Gratuitement",
+    "ctaSub": "Aucune carte bancaire requise",
+    "watchDemo": "Voir la Démo"
+  },
+  "pricing": {
+    "badge": "Tarifs",
+    "headline": "Un Seul Plan. Toute la Puissance.",
+    "subheadline": "Sans niveaux, sans limites cachées. Tout ce qu'il faut pour devenir viral.",
+    "monthly": "Mensuel",
+    "yearly": "Annuel",
+    "savePercent": "Économisez 30%",
+    "free": {
+      "name": "Gratuit",
+      "price": "0 $",
+      "period": "/mois",
+      "cta": "Commencer Gratuitement",
+      "description": "Créez des shorts viraux avec l'IA"
+    },
+    "pro": {
+      "name": "Pro",
+      "price": "29 $",
+      "period": "/mois",
+      "cta": "Passer à Pro",
+      "description": "Tout ce dont vous avez besoin pour du contenu viral à grande échelle",
+      "badge": "Le Plus Populaire"
+    },
+    "faq": {
+      "title": "Questions Fréquentes",
+      "subtitle": "Tout ce que vous devez savoir sur QuickAI Shorts."
+    }
+  },
+  "editor": {
+    "newProject": "Nouveau Projet",
+    "importVideo": "Importer une Vidéo",
+    "export": "Exporter",
+    "aiAssistant": "Assistant IA",
+    "preflight": "Pré-vol",
+    "timeline": "Chronologie",
+    "preview": "Aperçu",
+    "captions": "Sous-titres",
+    "effects": "Effets",
+    "audio": "Audio",
+    "loading": "Chargement…",
+    "analyzing": "Analyse en cours…",
+    "exporting": "Exportation…"
+  },
+  "dashboard": {
+    "welcome": "Bon retour",
+    "studio": "Studio",
+    "studioReady": "Votre studio est prêt.",
+    "totalProjects": "Total des Projets",
+    "viralScans": "Analyses Virales",
+    "exports": "Exportations",
+    "credits": "Crédits",
+    "recentExports": "Exportations Récentes",
+    "allHistory": "Tout l'historique",
+    "noExports": "Aucune exportation pour l'instant",
+    "noExportsBody": "Collez une URL YouTube dans l'éditeur pour démarrer votre première séquence virale.",
+    "createFirst": "Créer le Premier Projet",
+    "importVideo": "Importer une Vidéo",
+    "newProject": "Nouveau Projet",
+    "searchExports": "Rechercher des exportations…",
+    "mostRecent": "Plus récent",
+    "longestFirst": "Le plus long d'abord",
+    "recentActivity": "Activité Récente"
+  },
+  "settings": {
+    "title": "Paramètres du Studio",
+    "subtitle": "Affinez votre environnement IA professionnel.",
+    "profile": "Profil",
+    "billing": "Facturation",
+    "appearance": "Apparence",
+    "export": "Exportation",
+    "editor": "Éditeur",
+    "shortcuts": "Raccourcis",
+    "notifications": "Notifications",
+    "privacy": "Confidentialité",
+    "referral": "Parrainages",
+    "save": "Synchroniser les Modifications",
+    "reset": "Réinitialiser"
+  },
+  "auth": {
+    "signIn": "Se connecter",
+    "signUp": "S'inscrire",
+    "signOut": "Se déconnecter",
+    "continueWithGoogle": "Continuer avec Google",
+    "orContinueWith": "ou continuer avec",
+    "email": "Adresse e-mail",
+    "password": "Mot de passe",
+    "name": "Nom",
+    "forgotPassword": "Mot de passe oublié ?",
+    "noAccount": "Pas encore de compte ?",
+    "haveAccount": "Vous avez déjà un compte ?",
+    "createAccount": "Créer un compte"
+  },
+  "errors": {
+    "generic": "Une erreur s'est produite. Veuillez réessayer.",
+    "notFound": "Page introuvable.",
+    "unauthorized": "Vous devez vous connecter pour accéder à cette page.",
+    "forbidden": "Vous n'avez pas la permission d'accéder à ceci.",
+    "serverError": "Une erreur serveur s'est produite. Veuillez réessayer plus tard.",
+    "networkError": "Erreur réseau. Vérifiez votre connexion et réessayez.",
+    "insufficientCredits": "Crédits insuffisants. Veuillez mettre à niveau votre abonnement.",
+    "statsUnavailable": "Les statistiques se mettent à jour",
+    "statsUnavailableBody": "Nous n'avons pas pu accéder au service de statistiques. Vos projets sont toujours là.",
+    "exportsUnavailable": "Impossible de charger les exportations",
+    "exportsUnavailableBody": "Un problème est survenu lors de l'accès au service d'exportation. Veuillez actualiser la page."
+  },
+  "referral": {
+    "title": "Programme de Parrainage",
+    "subtitle": "Invitez des amis et gagnez des crédits quand ils passent Pro.",
+    "yourLink": "Votre Lien de Parrainage",
+    "copy": "Copier le Lien",
+    "copied": "Copié !",
+    "howItWorks": "Comment Ça Fonctionne",
+    "step1": "Partagez votre lien de parrainage personnel",
+    "step2": "Votre ami s'inscrit et passe à Pro",
+    "step3": "Vous recevez tous les deux 100 crédits",
+    "stats": "Vos Statistiques de Parrainage",
+    "totalReferrals": "Total des Parrainages",
+    "creditsEarned": "Crédits Gagnés",
+    "referralCredits": "Crédits de Parrainage",
+    "noReferrals": "Pas encore de parrainages. Partagez votre lien pour commencer à gagner !",
+    "creditAmount": "100 crédits",
+    "mutualBenefit": "Vous et votre ami recevez chacun 100 crédits quand il passe à Pro."
+  }
+}

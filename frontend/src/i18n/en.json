@@ -1,0 +1,142 @@
+{
+  "nav": {
+    "features": "Features",
+    "pricing": "Pricing",
+    "dashboard": "Dashboard",
+    "newProject": "New Project",
+    "signIn": "Sign In",
+    "getStarted": "Get Started",
+    "settings": "Settings",
+    "logOut": "Log out"
+  },
+  "hero": {
+    "badge": "AI-Powered Video Studio",
+    "headline": "Transform Any Video Into Viral Shorts",
+    "subheadline": "Paste a YouTube link. Gemini analyzes, trims, captions, and exports in seconds — no uploads, no waiting, no creative blocks.",
+    "cta": "Start Creating Free",
+    "ctaSub": "No credit card required",
+    "watchDemo": "Watch Demo"
+  },
+  "pricing": {
+    "badge": "Pricing",
+    "headline": "One Plan. Full Power.",
+    "subheadline": "No tiers, no hidden limits. Everything you need to go viral.",
+    "monthly": "Monthly",
+    "yearly": "Yearly",
+    "savePercent": "Save 30%",
+    "free": {
+      "name": "Free",
+      "price": "$0",
+      "period": "/month",
+      "cta": "Get Started Free",
+      "description": "Start creating viral shorts with AI"
+    },
+    "pro": {
+      "name": "Pro",
+      "price": "$29",
+      "period": "/month",
+      "cta": "Upgrade to Pro",
+      "description": "Everything you need for viral content at scale",
+      "badge": "Most Popular"
+    },
+    "faq": {
+      "title": "Frequently Asked Questions",
+      "subtitle": "Everything you need to know about QuickAI Shorts."
+    }
+  },
+  "editor": {
+    "newProject": "New Project",
+    "importVideo": "Import Video",
+    "export": "Export",
+    "aiAssistant": "AI Assistant",
+    "preflight": "Pre-Flight",
+    "timeline": "Timeline",
+    "preview": "Preview",
+    "captions": "Captions",
+    "effects": "Effects",
+    "audio": "Audio",
+    "loading": "Loading...",
+    "analyzing": "Analyzing...",
+    "exporting": "Exporting..."
+  },
+  "dashboard": {
+    "welcome": "Welcome back",
+    "studio": "Studio",
+    "studioReady": "Your studio is ready.",
+    "totalProjects": "Total Projects",
+    "viralScans": "Viral Scans",
+    "exports": "Exports",
+    "credits": "Credits",
+    "recentExports": "Recent Exports",
+    "allHistory": "All history",
+    "noExports": "No exports yet",
+    "noExportsBody": "Drop a YouTube URL into the editor to start your first viral sequence.",
+    "createFirst": "Create First Project",
+    "importVideo": "Import Video",
+    "newProject": "New Project",
+    "searchExports": "Search exports…",
+    "mostRecent": "Most recent",
+    "longestFirst": "Longest first",
+    "recentActivity": "Recent Activity"
+  },
+  "settings": {
+    "title": "Studio Settings",
+    "subtitle": "Fine-tune your professional AI environment.",
+    "profile": "Profile",
+    "billing": "Billing",
+    "appearance": "Appearance",
+    "export": "Export",
+    "editor": "Editor",
+    "shortcuts": "Shortcuts",
+    "notifications": "Notifications",
+    "privacy": "Privacy",
+    "referral": "Referrals",
+    "save": "Synchronize Changes",
+    "reset": "Reset"
+  },
+  "auth": {
+    "signIn": "Sign In",
+    "signUp": "Sign Up",
+    "signOut": "Sign Out",
+    "continueWithGoogle": "Continue with Google",
+    "orContinueWith": "or continue with",
+    "email": "Email",
+    "password": "Password",
+    "name": "Name",
+    "forgotPassword": "Forgot password?",
+    "noAccount": "Don't have an account?",
+    "haveAccount": "Already have an account?",
+    "createAccount": "Create account"
+  },
+  "errors": {
+    "generic": "Something went wrong. Please try again.",
+    "notFound": "Page not found.",
+    "unauthorized": "You need to sign in to access this page.",
+    "forbidden": "You don't have permission to access this.",
+    "serverError": "A server error occurred. Please try again later.",
+    "networkError": "Network error. Check your connection and try again.",
+    "insufficientCredits": "Insufficient credits. Please upgrade your plan.",
+    "statsUnavailable": "Stats are catching up",
+    "statsUnavailableBody": "We couldn't reach the stats service. Your projects are still here.",
+    "exportsUnavailable": "Couldn't load exports",
+    "exportsUnavailableBody": "There was a problem reaching the exports service. Please refresh."
+  },
+  "referral": {
+    "title": "Referral Program",
+    "subtitle": "Invite friends and earn credits when they go Pro.",
+    "yourLink": "Your Referral Link",
+    "copy": "Copy Link",
+    "copied": "Copied!",
+    "howItWorks": "How It Works",
+    "step1": "Share your personal referral link",
+    "step2": "Friend signs up and upgrades to Pro",
+    "step3": "You both receive 100 credits",
+    "stats": "Your Referral Stats",
+    "totalReferrals": "Total Referrals",
+    "creditsEarned": "Credits Earned",
+    "referralCredits": "Referral Credits",
+    "noReferrals": "No referrals yet. Share your link to start earning!",
+    "creditAmount": "100 credits",
+    "mutualBenefit": "Both you and your friend get 100 credits when they upgrade to Pro."
+  }
+}

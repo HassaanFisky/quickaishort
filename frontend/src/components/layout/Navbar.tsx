@@ -13,15 +13,18 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { History, Settings, LogOut, LayoutDashboard, Plus } from "lucide-react";
+import { History, Settings, LogOut, LayoutDashboard, Plus, Globe } from "lucide-react";
 import Link from "next/link";
 import { LiquidThemeToggle } from "@/components/shared/LiquidThemeToggle";
 import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
+import { useLocale, setLocale, useTranslations } from "@/lib/i18n";
 
 export default function Navbar() {
   const { data: session, status } = useSession();
   const [isScrolled, setIsScrolled] = useState(false);
+  const currentLocale = useLocale();
+  const t = useTranslations();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -52,25 +55,73 @@ export default function Navbar() {
             <QSLogo variant="full" size="md" animated />
           </Link>
           <div className="hidden md:flex items-center gap-0.5">
-            {[["/#features", "Features"], ["/pricing", "Pricing"]].map(([href, label]) => (
-              <Link
-                key={href}
-                href={href}
-                className={cn(
-                  "text-[13px] font-medium text-muted-foreground hover:text-foreground px-3 py-2 rounded-lg",
-                  "transition-[color,background-color] duration-[160ms] ease-[cubic-bezier(0.22,1,0.36,1)]",
-                  "hover:bg-white/[0.04]",
-                  "focus-visible:outline-none focus-visible:[box-shadow:0_0_0_2px_#020203,_0_0_0_4px_rgba(168,85,247,0.6)]",
-                )}
-              >
-                {label}
-              </Link>
-            ))}
+            <Link
+              href="/#features"
+              className={cn(
+                "text-[13px] font-medium text-muted-foreground hover:text-foreground px-3 py-2 rounded-lg",
+                "transition-[color,background-color] duration-[160ms] ease-[cubic-bezier(0.22,1,0.36,1)]",
+                "hover:bg-white/[0.04]",
+                "focus-visible:outline-none focus-visible:[box-shadow:0_0_0_2px_#020203,_0_0_0_4px_rgba(168,85,247,0.6)]",
+              )}
+            >
+              {t("nav.features")}
+            </Link>
+            <Link
+              href="/pricing"
+              className={cn(
+                "text-[13px] font-medium text-muted-foreground hover:text-foreground px-3 py-2 rounded-lg",
+                "transition-[color,background-color] duration-[160ms] ease-[cubic-bezier(0.22,1,0.36,1)]",
+                "hover:bg-white/[0.04]",
+                "focus-visible:outline-none focus-visible:[box-shadow:0_0_0_2px_#020203,_0_0_0_4px_rgba(168,85,247,0.6)]",
+              )}
+            >
+              {t("nav.pricing")}
+            </Link>
           </div>
         </div>
 
         <div className="flex items-center gap-4">
           <LiquidThemeToggle />
+          
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9 rounded-xl text-muted-foreground hover:text-foreground hover:bg-white/[0.04] p-0"
+                aria-label="Select Language"
+              >
+                <Globe className="w-4 h-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="nano-glass text-foreground border-white/10 p-1" align="end">
+              <DropdownMenuItem
+                onClick={() => setLocale("en")}
+                className={cn("focus:bg-white/5 cursor-pointer rounded-lg p-2 text-xs", currentLocale === "en" && "font-bold text-primary")}
+              >
+                English
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => setLocale("es")}
+                className={cn("focus:bg-white/5 cursor-pointer rounded-lg p-2 text-xs", currentLocale === "es" && "font-bold text-primary")}
+              >
+                Español
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => setLocale("fr")}
+                className={cn("focus:bg-white/5 cursor-pointer rounded-lg p-2 text-xs", currentLocale === "fr" && "font-bold text-primary")}
+              >
+                Français
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => setLocale("hi")}
+                className={cn("focus:bg-white/5 cursor-pointer rounded-lg p-2 text-xs", currentLocale === "hi" && "font-bold text-primary")}
+              >
+                हिन्दी
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
           {status === "authenticated" ? (
             <>
               <div className="hidden md:flex items-center gap-2">
@@ -82,7 +133,7 @@ export default function Navbar() {
                 >
                   <Link href="/dashboard">
                     <LayoutDashboard className="w-4 h-4 mr-2" />
-                    Dashboard
+                    {t("nav.dashboard")}
                   </Link>
                 </Button>
                 <GlowButton
@@ -93,7 +144,7 @@ export default function Navbar() {
                 >
                   <Link href="/editor">
                     <Plus className="w-4 h-4 mr-2" />
-                    New Project
+                    {t("nav.newProject")}
                   </Link>
                 </GlowButton>
               </div>
@@ -158,7 +209,7 @@ export default function Navbar() {
                   >
                     <Link href="/dashboard">
                       <LayoutDashboard className="w-4 h-4 mr-2 text-muted-foreground" />
-                      Dashboard
+                      {t("nav.dashboard")}
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem
@@ -167,7 +218,7 @@ export default function Navbar() {
                   >
                     <Link href="/settings">
                       <Settings className="w-4 h-4 mr-2 text-muted-foreground" />
-                      Settings
+                      {t("nav.settings")}
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator className="bg-white/5" />
@@ -176,7 +227,7 @@ export default function Navbar() {
                     onClick={() => signOut()}
                   >
                     <LogOut className="w-4 h-4 mr-2" />
-                    Log out
+                    {t("nav.logOut")}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -188,10 +239,10 @@ export default function Navbar() {
                 asChild
                 className="text-[13px] font-semibold text-muted-foreground hover:text-foreground hover:bg-white/[0.04] rounded-xl h-9 px-4"
               >
-                <Link href="/signin">Sign In</Link>
+                <Link href="/signin">{t("nav.signIn")}</Link>
               </Button>
               <GlowButton asChild size="sm" variant="gradient" className="h-9 px-5 rounded-xl text-[13px]">
-                <Link href="/signup">Get Started</Link>
+                <Link href="/signup">{t("nav.getStarted")}</Link>
               </GlowButton>
             </div>
           )}
@@ -200,3 +251,4 @@ export default function Navbar() {
     </header>
   );
 }
+

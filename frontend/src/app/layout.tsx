@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter as Geist, JetBrains_Mono as Geist_Mono, Montserrat } from "next/font/google";
 import "./globals.css";
+import { cookies } from "next/headers";
 
 import { AppProviders } from "@/components/shared/AppProviders";
 import { CommandPalette } from "@/components/layout/CommandPalette";
@@ -71,8 +72,11 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const cookieStore = cookies();
+  const locale = cookieStore.get("NEXT_LOCALE")?.value || "en";
+
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang={locale} suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${montserrat.variable} antialiased`}
       >
@@ -94,3 +98,4 @@ export default function RootLayout({
     </html>
   );
 }
+

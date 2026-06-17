@@ -1,0 +1,142 @@
+{
+  "nav": {
+    "features": "Funciones",
+    "pricing": "Precios",
+    "dashboard": "Panel",
+    "newProject": "Nuevo Proyecto",
+    "signIn": "Iniciar Sesión",
+    "getStarted": "Comenzar",
+    "settings": "Configuración",
+    "logOut": "Cerrar Sesión"
+  },
+  "hero": {
+    "badge": "Estudio de Video con IA",
+    "headline": "Transforma Cualquier Video en Shorts Virales",
+    "subheadline": "Pega un enlace de YouTube. Gemini analiza, recorta, subtitula y exporta en segundos — sin subidas, sin esperas.",
+    "cta": "Comenzar Gratis",
+    "ctaSub": "No se requiere tarjeta de crédito",
+    "watchDemo": "Ver Demo"
+  },
+  "pricing": {
+    "badge": "Precios",
+    "headline": "Un Plan. Toda la Potencia.",
+    "subheadline": "Sin niveles, sin límites ocultos. Todo lo que necesitas para ser viral.",
+    "monthly": "Mensual",
+    "yearly": "Anual",
+    "savePercent": "Ahorra 30%",
+    "free": {
+      "name": "Gratis",
+      "price": "$0",
+      "period": "/mes",
+      "cta": "Comenzar Gratis",
+      "description": "Empieza a crear shorts virales con IA"
+    },
+    "pro": {
+      "name": "Pro",
+      "price": "$29",
+      "period": "/mes",
+      "cta": "Actualizar a Pro",
+      "description": "Todo lo que necesitas para contenido viral a escala",
+      "badge": "Más Popular"
+    },
+    "faq": {
+      "title": "Preguntas Frecuentes",
+      "subtitle": "Todo lo que necesitas saber sobre QuickAI Shorts."
+    }
+  },
+  "editor": {
+    "newProject": "Nuevo Proyecto",
+    "importVideo": "Importar Video",
+    "export": "Exportar",
+    "aiAssistant": "Asistente IA",
+    "preflight": "Pre-vuelo",
+    "timeline": "Línea de tiempo",
+    "preview": "Vista previa",
+    "captions": "Subtítulos",
+    "effects": "Efectos",
+    "audio": "Audio",
+    "loading": "Cargando...",
+    "analyzing": "Analizando...",
+    "exporting": "Exportando..."
+  },
+  "dashboard": {
+    "welcome": "Bienvenido de vuelta",
+    "studio": "Estudio",
+    "studioReady": "Tu estudio está listo.",
+    "totalProjects": "Total de Proyectos",
+    "viralScans": "Análisis Virales",
+    "exports": "Exportaciones",
+    "credits": "Créditos",
+    "recentExports": "Exportaciones Recientes",
+    "allHistory": "Todo el historial",
+    "noExports": "Sin exportaciones aún",
+    "noExportsBody": "Añade una URL de YouTube al editor para comenzar tu primera secuencia viral.",
+    "createFirst": "Crear Primer Proyecto",
+    "importVideo": "Importar Video",
+    "newProject": "Nuevo Proyecto",
+    "searchExports": "Buscar exportaciones…",
+    "mostRecent": "Más reciente",
+    "longestFirst": "Más largo primero",
+    "recentActivity": "Actividad Reciente"
+  },
+  "settings": {
+    "title": "Configuración del Estudio",
+    "subtitle": "Ajusta tu entorno profesional de IA.",
+    "profile": "Perfil",
+    "billing": "Facturación",
+    "appearance": "Apariencia",
+    "export": "Exportar",
+    "editor": "Editor",
+    "shortcuts": "Atajos",
+    "notifications": "Notificaciones",
+    "privacy": "Privacidad",
+    "referral": "Referencias",
+    "save": "Sincronizar Cambios",
+    "reset": "Restablecer"
+  },
+  "auth": {
+    "signIn": "Iniciar Sesión",
+    "signUp": "Registrarse",
+    "signOut": "Cerrar Sesión",
+    "continueWithGoogle": "Continuar con Google",
+    "orContinueWith": "o continuar con",
+    "email": "Correo electrónico",
+    "password": "Contraseña",
+    "name": "Nombre",
+    "forgotPassword": "¿Olvidaste tu contraseña?",
+    "noAccount": "¿No tienes cuenta?",
+    "haveAccount": "¿Ya tienes cuenta?",
+    "createAccount": "Crear cuenta"
+  },
+  "errors": {
+    "generic": "Algo salió mal. Por favor, inténtalo de nuevo.",
+    "notFound": "Página no encontrada.",
+    "unauthorized": "Necesitas iniciar sesión para acceder a esta página.",
+    "forbidden": "No tienes permiso para acceder a esto.",
+    "serverError": "Ocurrió un error del servidor. Por favor, inténtalo más tarde.",
+    "networkError": "Error de red. Comprueba tu conexión e inténtalo de nuevo.",
+    "insufficientCredits": "Créditos insuficientes. Actualiza tu plan.",
+    "statsUnavailable": "Las estadísticas se están actualizando",
+    "statsUnavailableBody": "No pudimos alcanzar el servicio de estadísticas. Tus proyectos siguen aquí.",
+    "exportsUnavailable": "No se pudieron cargar las exportaciones",
+    "exportsUnavailableBody": "Hubo un problema al acceder al servicio de exportaciones. Por favor, actualiza la página."
+  },
+  "referral": {
+    "title": "Programa de Referidos",
+    "subtitle": "Invita amigos y gana créditos cuando se hagan Pro.",
+    "yourLink": "Tu Enlace de Referido",
+    "copy": "Copiar Enlace",
+    "copied": "¡Copiado!",
+    "howItWorks": "Cómo Funciona",
+    "step1": "Comparte tu enlace de referido personal",
+    "step2": "Tu amigo se registra y actualiza a Pro",
+    "step3": "Ambos reciben 100 créditos",
+    "stats": "Tus Estadísticas de Referidos",
+    "totalReferrals": "Total de Referidos",
+    "creditsEarned": "Créditos Ganados",
+    "referralCredits": "Créditos de Referido",
+    "noReferrals": "Aún no hay referidos. ¡Comparte tu enlace para comenzar a ganar!",
+    "creditAmount": "100 créditos",
+    "mutualBenefit": "Tú y tu amigo reciben 100 créditos cuando se actualiza a Pro."
+  }
+}
