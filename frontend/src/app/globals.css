@@ -107,7 +107,7 @@
     --border-strong:   240 14% 84%;
     --fg:              240 14% 12%;   /* soft near-black â€” never pure #000 */
     --fg-muted:        240 8% 38%;    /* darkened for AA contrast on white */
-    --fg-subtle:       240 6% 48%;    /* was 62% (too faint â†’ blended) */
+    --fg-subtle:       240 8% 36%;    /* AA-safe on white; fixed weak light mode */
     --accent-indigo:   270 91% 56%;   /* brand purple, AA on white */
     --accent-hover:    270 85% 50%;
     --accent-fg:       0 0% 100%;
@@ -153,7 +153,7 @@
     --muted-foreground: var(--fg-subtle);
     --accent: var(--accent-soft);
     --accent-foreground: var(--accent-indigo);
-    --border: 240 16% 91%;   /* soft, low-contrast â€” no harsh outlines */
+    --border: 240 14% 86%;   /* visible on light cards without harsh outlines */
     --input: 240 14% 86%;
     --ring: var(--accent-indigo);
     --destructive: 0 84% 60%;
@@ -2009,5 +2009,6 @@ nav:has(.nav-link:hover) .nav-link:not(:hover) {
   pointer-events: none;
 }
 .spotlight-card:hover::before { opacity: 1; }
+
 
 
