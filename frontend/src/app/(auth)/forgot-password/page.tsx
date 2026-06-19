@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import Link from "next/link";
@@ -53,7 +53,7 @@ export default function ForgotPasswordPage() {
         transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
         className="w-full max-w-[400px]"
       >
-        <Card className="w-full bg-[hsl(var(--bg-base))]/80 backdrop-blur-2xl border border-white/[0.08] shadow-[0_32px_80px_-16px_rgba(0,0,0,0.7)] rounded-3xl overflow-hidden relative">
+        <Card className="w-full bg-card/90 backdrop-blur-2xl border border-border shadow-[var(--card-shadow)] rounded-3xl overflow-hidden relative">
           <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-primary/60 to-transparent" />
 
           <CardHeader className="text-center space-y-5 pt-10 pb-2">
@@ -63,7 +63,7 @@ export default function ForgotPasswordPage() {
               </div>
             </div>
             <div className="space-y-1.5">
-              <CardTitle className="text-2xl font-black tracking-tight text-white">
+              <CardTitle className="text-2xl font-black tracking-tight text-foreground">
                 {sent ? "Check your inbox" : "Forgot password?"}
               </CardTitle>
               <CardDescription className="text-[13px] text-muted-foreground">
@@ -126,7 +126,7 @@ export default function ForgotPasswordPage() {
                       autoComplete="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="h-12 pl-10 rounded-xl bg-white/[0.04] border-white/[0.08] text-white placeholder:text-muted-foreground/40 focus-visible:border-primary/60 focus-visible:bg-primary/5 transition-[background-color,border-color] duration-[160ms]"
+                      className="h-12 pl-10 rounded-xl bg-card border-border text-foreground placeholder:text-muted-foreground/40 focus-visible:border-primary/60 focus-visible:bg-primary/5 transition-[background-color,border-color] duration-[160ms]"
                     />
                   </div>
 
@@ -153,3 +153,4 @@ export default function ForgotPasswordPage() {
     </div>
   );
 }
+

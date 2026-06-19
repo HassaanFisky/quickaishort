@@ -1,4 +1,4 @@
-@import "tailwindcss";
+﻿@import "tailwindcss";
 @import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
@@ -82,7 +82,7 @@
   --text-44: 2.75rem;
   --text-44--line-height: 1.1;
 
-  /* === Dark studio palette → Tailwind utilities ===
+  /* === Dark studio palette â†’ Tailwind utilities ===
      Usage: bg-studio-base, text-studio-primary, border-studio, etc. */
   --color-studio-base:      var(--bg-primary);
   --color-studio-surface:   var(--bg-secondary);
@@ -99,21 +99,21 @@
 
 @layer base {
   :root {
-    /* ===== CREATOR LIGHT — pristine, soft whites, legible, no harsh borders ===== */
-    --bg-base:         220 14% 97%;    /* warmer off-white — less eye strain */
-    --bg-subtle:       220 16% 95%;
-    --bg-muted:        220 12% 92%;
+    /* ===== CREATOR LIGHT â€” pristine, soft whites, legible, no harsh borders ===== */
+    --bg-base:         220 14% 97%;    /* warmer off-white â€” less eye strain */
+    --bg-subtle:       220 18% 94%;
+    --bg-muted:        220 14% 90%;
     --bg-elevated:     0 0% 100%;
     --border-strong:   240 14% 84%;
-    --fg:              240 14% 12%;   /* soft near-black — never pure #000 */
+    --fg:              240 14% 12%;   /* soft near-black â€” never pure #000 */
     --fg-muted:        240 8% 38%;    /* darkened for AA contrast on white */
-    --fg-subtle:       240 6% 48%;    /* was 62% (too faint → blended) */
+    --fg-subtle:       240 6% 48%;    /* was 62% (too faint â†’ blended) */
     --accent-indigo:   270 91% 56%;   /* brand purple, AA on white */
     --accent-hover:    270 85% 50%;
     --accent-fg:       0 0% 100%;
-    --accent-soft:     270 100% 97%;
+    --accent-soft:     270 95% 94%;
 
-    /* === Brand Tokens (locked — viral score ramp uses these) === */
+    /* === Brand Tokens (locked â€” viral score ramp uses these) === */
     --brand-purple:   #a855f7;
     --brand-blue:     #3b82f6;
     --brand-pink:     #ec4899;
@@ -153,16 +153,16 @@
     --muted-foreground: var(--fg-subtle);
     --accent: var(--accent-soft);
     --accent-foreground: var(--accent-indigo);
-    --border: 240 16% 91%;   /* soft, low-contrast — no harsh outlines */
-    --input: 240 16% 91%;
+    --border: 240 16% 91%;   /* soft, low-contrast â€” no harsh outlines */
+    --input: 240 14% 86%;
     --ring: var(--accent-indigo);
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
     --radius: 0.625rem;
 
     --glass-bg: rgba(255, 255, 255, 0.9);
-    --glass-border: rgba(20, 20, 45, 0.06);
-    --card-shadow: 0 4px 24px -8px rgba(31, 38, 135, 0.08);
+    --glass-border: rgba(20, 20, 45, 0.1);
+    --card-shadow: 0 8px 32px -8px rgba(31, 38, 135, 0.12), 0 1px 2px rgba(15, 23, 42, 0.06);
     --gradient-from: #7c3aed;
     --gradient-to: rgba(124, 58, 237, 0.55);
 
@@ -177,7 +177,7 @@
   }
 
   .dark {
-    /* ===== STUDIO DARK — Anthropic-grade neutral graphite, soft contrasted text ===== */
+    /* ===== STUDIO DARK â€” Anthropic-grade neutral graphite, soft contrasted text ===== */
     --bg-base:         240 6% 8%;     /* ~#131316 */
     --bg-subtle:       240 5% 11%;    /* panels ~#1a1a1d */
     --bg-muted:        240 5% 16%;    /* controls ~#26262b */
@@ -225,7 +225,7 @@
   }
 
   .oled {
-    /* ===== OLED PITCH — pure black, zero distraction, vibrant accent ===== */
+    /* ===== OLED PITCH â€” pure black, zero distraction, vibrant accent ===== */
     --bg-base:         0 0% 0%;       /* true black for OLED pixel-off */
     --bg-subtle:       0 0% 4%;
     --bg-muted:        0 0% 9%;
@@ -293,7 +293,7 @@
   }
 
   .glass-surface {
-    /* Theme-reactive elevated surface — was hardcoded #141417 (broke light themes) */
+    /* Theme-reactive elevated surface â€” was hardcoded #141417 (broke light themes) */
     background: hsl(var(--card));
     border: 1px solid var(--glass-border);
     box-shadow: var(--card-shadow);
@@ -336,7 +336,7 @@
       0 0 0 4px rgba(168, 85, 247, 0.6);
   }
 
-  /* Solid surface tiers (glassmorphism removed — blur causes perf issues on Cloud Run origins) */
+  /* Solid surface tiers (glassmorphism removed â€” blur causes perf issues on Cloud Run origins) */
   .glass {
     background: #0e0e11;
     border: 1px solid rgba(255, 255, 255, 0.07);
@@ -350,13 +350,13 @@
       0 0 0 1px rgba(255, 255, 255, 0.04) inset;
   }
 
-  /* Brand gradient text (blue → purple → pink) */
+  /* Brand gradient text (blue â†’ purple â†’ pink) */
   .brand-gradient-text {
     @apply bg-clip-text text-transparent;
     background-image: linear-gradient(135deg, #3b82f6 0%, #a855f7 55%, #ec4899 100%);
   }
 
-  /* Ambient purple glow — use on cards at 90+ viral score */
+  /* Ambient purple glow â€” use on cards at 90+ viral score */
   .glow-purple {
     box-shadow:
       0 0 0 1px rgba(168, 85, 247, 0.25),
@@ -516,7 +516,7 @@ html.liquid-transition::view-transition-new(root) {
 }
 
 /* =============================================
-   ADDITIONAL UTILITY CLASSES — QuickAI Studio
+   ADDITIONAL UTILITY CLASSES â€” QuickAI Studio
    ============================================= */
 
 /* Ghost border used in Footer + sections */
@@ -524,7 +524,7 @@ html.liquid-transition::view-transition-new(root) {
   border-color: hsl(var(--foreground) / 0.06);
 }
 
-/* Interactive — click / hover feedback */
+/* Interactive â€” click / hover feedback */
 .interactive {
   cursor: pointer;
   transition:
@@ -535,7 +535,7 @@ html.liquid-transition::view-transition-new(root) {
 .interactive:hover  { opacity: 1; filter: brightness(1.12); }
 .interactive:active { transform: scale(0.97); filter: brightness(0.9); }
 
-/* ── Marquee (social proof ticker) ─────────────── */
+/* â”€â”€ Marquee (social proof ticker) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 @keyframes marquee {
   from { transform: translate3d(0, 0, 0); }
   to   { transform: translate3d(-33.333%, 0, 0); }
@@ -575,7 +575,7 @@ html.liquid-transition::view-transition-new(root) {
   animation: marquee-dot-pulse 2s ease-in-out infinite;
 }
 
-/* ── Hero ambient glow ──────────────────────────── */
+/* â”€â”€ Hero ambient glow â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 @keyframes hero-pulse {
   0%, 100% { opacity: 0.07; transform: scale(1);    }
   50%       { opacity: 0.13; transform: scale(1.08); }
@@ -606,7 +606,7 @@ html.liquid-transition::view-transition-new(root) {
   animation: hero-pulse-c 9s ease-in-out infinite 4s;
 }
 
-/* ── Count-up flash (score reveal) ─────────────── */
+/* â”€â”€ Count-up flash (score reveal) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 @keyframes score-reveal {
   from { opacity: 0; transform: scale(0.8) translateY(6px); }
   to   { opacity: 1; transform: scale(1) translateY(0);     }
@@ -614,7 +614,7 @@ html.liquid-transition::view-transition-new(root) {
 .score-reveal { animation: score-reveal 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
 
 
-/* ── Gradient border trick (used on CTA card) ───── */
+/* â”€â”€ Gradient border trick (used on CTA card) â”€â”€â”€â”€â”€ */
 .gradient-border {
   position: relative;
   background: var(--glass-bg);
@@ -633,7 +633,7 @@ html.liquid-transition::view-transition-new(root) {
   pointer-events: none;
 }
 
-/* ── Staggered fade-in rows ─────────────────────── */
+/* â”€â”€ Staggered fade-in rows â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 @keyframes fade-up {
   from { opacity: 0; transform: translateY(20px); }
   to   { opacity: 1; transform: translateY(0);    }
@@ -670,7 +670,7 @@ html.liquid-transition::view-transition-new(root) {
     animation: none !important;
   }
 
-  /* Marquee: keep decorative motion alive but slower (Stripe/Linear pattern) —
+  /* Marquee: keep decorative motion alive but slower (Stripe/Linear pattern) â€”
      a slow, pausable, purely-horizontal ticker doesn't trigger vestibular
      issues the way parallax/zoom motion does. */
   .marquee-track {
@@ -818,7 +818,7 @@ main:focus {
   animation-duration: 4s;
 }
 
-/* Analysing state — persistent fast-spinning glow ring while Generate is processing */
+/* Analysing state â€” persistent fast-spinning glow ring while Generate is processing */
 .neon-url-container[data-analyzing] .neon-url-spin-layer,
 .neon-url-container[data-analyzing] .neon-url-glow-layer {
   opacity: 1;
@@ -839,7 +839,7 @@ main:focus {
 }
 
 /* ======================================================
-   Dashboard Stats Card — Ambient Neon Glow (Task 2)
+   Dashboard Stats Card â€” Ambient Neon Glow (Task 2)
    ====================================================== */
 
 @keyframes stat-glow-spin {
@@ -898,7 +898,7 @@ nav:has(.nav-link:hover) .nav-link:not(:hover) {
     opacity 0.18s ease;
 }
 
-/* Scissors — snip motion on hover */
+/* Scissors â€” snip motion on hover */
 @keyframes scissors-snip {
   0%   { transform: rotate(0deg) scale(1); }
   20%  { transform: rotate(-18deg) scale(1.18); }
@@ -912,7 +912,7 @@ nav:has(.nav-link:hover) .nav-link:not(:hover) {
   animation: scissors-snip 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-/* Clapperboard — arm lifts on hover, snaps on click */
+/* Clapperboard â€” arm lifts on hover, snaps on click */
 @keyframes clapper-lift {
   0%   { transform: rotate(0deg); }
   100% { transform: rotate(-15deg) translateY(-1px); }
@@ -933,7 +933,7 @@ nav:has(.nav-link:hover) .nav-link:not(:hover) {
   animation: clapper-snap 0.4s ease forwards;
 }
 
-/* Clock — anti-clockwise full spin on click */
+/* Clock â€” anti-clockwise full spin on click */
 @keyframes clock-rewind {
   from { transform: rotate(0deg); }
   to   { transform: rotate(-360deg); }
@@ -943,7 +943,7 @@ nav:has(.nav-link:hover) .nav-link:not(:hover) {
   animation: clock-rewind 0.6s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* Settings — gear rotation on hover */
+/* Settings â€” gear rotation on hover */
 @keyframes gear-rotate {
   from { transform: rotate(0deg); }
   to   { transform: rotate(360deg); }
@@ -953,7 +953,7 @@ nav:has(.nav-link:hover) .nav-link:not(:hover) {
   animation: gear-rotate 1s ease;
 }
 
-/* Dashboard — pulse on active state */
+/* Dashboard â€” pulse on active state */
 @keyframes dash-active-pulse {
   0%, 100% { opacity: 1; transform: scale(1); }
   50%       { opacity: 0.72; transform: scale(0.92); }
@@ -1093,7 +1093,7 @@ nav:has(.nav-link:hover) .nav-link:not(:hover) {
   animation: redo-nudge 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-/* ── AI Video Editor styles ─────────────────────────────────────────────── */
+/* â”€â”€ AI Video Editor styles â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 .video-wrapper {
   position: relative;
@@ -1581,7 +1581,7 @@ nav:has(.nav-link:hover) .nav-link:not(:hover) {
 
 .voice-error { font-size: 0.7rem; color: var(--color-error); margin: 0; padding: 0 0.25rem; }
 
-/* ─── TimelineLoader / UploadLoader ─── */
+/* â”€â”€â”€ TimelineLoader / UploadLoader â”€â”€â”€ */
 @keyframes tl-shimmer {
   from { transform: translateX(-100%); }
   to   { transform: translateX(250%); }
@@ -1648,7 +1648,7 @@ nav:has(.nav-link:hover) .nav-link:not(:hover) {
   }
 }
 
-/* ── Editor focus ring — keyboard accessibility ─────────────────────── */
+/* â”€â”€ Editor focus ring â€” keyboard accessibility â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .editor-shell-bg button:focus-visible,
 .editor-shell-bg [role="button"]:focus-visible,
 .editor-shell-bg a:focus-visible,
@@ -1661,13 +1661,13 @@ nav:has(.nav-link:hover) .nav-link:not(:hover) {
 }
 
 /* ======================================================
-   UNIVERSAL PLATFORM DESIGN SYSTEM — QuickAI Short
+   UNIVERSAL PLATFORM DESIGN SYSTEM â€” QuickAI Short
    Apple/MacBook-calibrated dark studio palette.
    All editor components reference these vars directly.
    ====================================================== */
 
 :root {
-  /* ── Background tiers — void-black, no blue cast ───────────────────── */
+  /* â”€â”€ Background tiers â€” void-black, no blue cast â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
   --bg-primary:   #09090c;   /* near-void (matches #0a0a0a CLAUDE.md) */
   --bg-secondary: #111116;   /* panel background */
   --bg-tertiary:  #17171d;   /* interactive surfaces */
@@ -1681,54 +1681,54 @@ nav:has(.nav-link:hover) .nav-link:not(:hover) {
   --color-accent-studio: #a855f7;
   --color-text-title:    #f5f5f7;
 
-  /* ── Border tiers — Apple ultra-subtle dividers ──────────────────────── */
+  /* â”€â”€ Border tiers â€” Apple ultra-subtle dividers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
   --border-primary:   rgba(255, 255, 255, 0.07);
   --border-secondary: rgba(255, 255, 255, 0.13);
   --border-focus:     rgba(168, 85, 247, 0.65);
 
-  /* ── Text tiers — Apple F5F5F7 precision scale ───────────────────────── */
+  /* â”€â”€ Text tiers â€” Apple F5F5F7 precision scale â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
   --text-primary:   #f5f5f7;   /* Apple label white */
   --text-secondary: #98989f;   /* Apple secondary label */
   --text-tertiary:  #636368;   /* Apple tertiary label */
   --text-inverse:   #09090c;
 
-  /* ── Accent — brand locked ───────────────────────────────────────────── */
+  /* â”€â”€ Accent â€” brand locked â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
   --accent-primary:        #a855f7;  /* brand purple */
   --accent-primary-muted:  rgba(168, 85, 247, 0.18);
   --accent-secondary:      #7c3aed;
   --accent-tertiary:       #5b21b6;
   --accent-pink:           #ec4899;
 
-  /* ── Semantic — Apple system colours ─────────────────────────────────── */
+  /* â”€â”€ Semantic â€” Apple system colours â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
   --color-success: #30d158;   /* Apple system green */
   --color-warning: #ffd60a;   /* Apple system yellow */
   --color-error:   #ff453a;   /* Apple system red */
   --color-info:    #0a84ff;   /* Apple system blue */
 
-  /* ── Spacing scale (4 px grid) ───────────────────────────────────────── */
+  /* â”€â”€ Spacing scale (4 px grid) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
   --space-1:  4px;   --space-2:  8px;   --space-3:  12px;
   --space-4:  16px;  --space-5:  20px;  --space-6:  24px;
   --space-8:  32px;  --space-10: 40px;  --space-12: 48px;
   --space-16: 64px;
 
-  /* ── Radius scale ────────────────────────────────────────────────────── */
+  /* â”€â”€ Radius scale â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
   --radius-sm:   4px;  --radius-md:  6px;   --radius-lg:  10px;
   --radius-xl:   14px; --radius-2xl: 18px;  --radius-full: 9999px;
 
-  /* ── Elevation shadows — calibrated for dark displays ────────────────── */
+  /* â”€â”€ Elevation shadows â€” calibrated for dark displays â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
   --shadow-sm: 0 1px 3px  rgba(0, 0, 0, 0.5);
   --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.6);
   --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.72);
   --shadow-xl: 0 24px 64px rgba(0, 0, 0, 0.85);
   --shadow-glow: 0 0 32px rgba(168, 85, 247, 0.4);
 
-  /* ── Transitions ─────────────────────────────────────────────────────── */
+  /* â”€â”€ Transitions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
   --transition-fast:   0.1s cubic-bezier(0.4, 0, 0.2, 1);
   --transition-normal: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   --transition-slow:   0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* ── Reusable component classes ──────────────────────── */
+/* â”€â”€ Reusable component classes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 /* Buttons */
 .btn {
@@ -1830,7 +1830,7 @@ nav:has(.nav-link:hover) .nav-link:not(:hover) {
   font-size: 13px;
 }
 
-/* ── Typography scale ────────────────────────────────── */
+/* â”€â”€ Typography scale â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .text-display {
   font-size: 32px;
   font-weight: 700;
@@ -1879,14 +1879,14 @@ nav:has(.nav-link:hover) .nav-link:not(:hover) {
   color: var(--text-tertiary);
 }
 
-/* ── Elevation system ────────────────────────────────── */
+/* â”€â”€ Elevation system â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .elevation-0 { box-shadow: none; }
 .elevation-1 { box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25), 0 1px 2px rgba(0, 0, 0, 0.2); }
 .elevation-2 { box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35), 0 2px 4px rgba(0, 0, 0, 0.2); }
 .elevation-3 { box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45), 0 4px 8px rgba(0, 0, 0, 0.25); }
 .elevation-4 { box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6), 0 8px 16px rgba(0, 0, 0, 0.3); }
 
-/* ── Button danger variant ───────────────────────────── */
+/* â”€â”€ Button danger variant â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .btn-danger {
   background: #dc2626;
   border-color: #dc2626;
@@ -1894,7 +1894,7 @@ nav:has(.nav-link:hover) .nav-link:not(:hover) {
 }
 .btn-danger:hover:not(:disabled) { background: #b91c1c; border-color: #b91c1c; }
 
-/* ── Input hover / disabled states ──────────────────── */
+/* â”€â”€ Input hover / disabled states â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .input:hover:not(:focus):not(:disabled) {
   border-color: var(--border-secondary);
 }
@@ -1904,11 +1904,11 @@ nav:has(.nav-link:hover) .nav-link:not(:hover) {
   background: var(--bg-secondary);
 }
 
-/* ── Panel body / footer ─────────────────────────────── */
+/* â”€â”€ Panel body / footer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .panel-body   { padding: 16px 18px; }
 .panel-footer { padding: 12px 18px; border-top: 1px solid var(--border-primary); background: var(--bg-secondary); }
 
-/* ── Spacing utilities (4px grid) ───────────────────── */
+/* â”€â”€ Spacing utilities (4px grid) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .pad-1 { padding: 4px; }
 .pad-2 { padding: 8px; }
 .pad-3 { padding: 12px; }
@@ -1916,12 +1916,12 @@ nav:has(.nav-link:hover) .nav-link:not(:hover) {
 .pad-5 { padding: 20px; }
 .pad-6 { padding: 24px; }
 
-/* ── Transition utilities ────────────────────────────── */
+/* â”€â”€ Transition utilities â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .transition-fast   { transition: all 0.1s ease; }
 .transition-normal { transition: all 0.2s ease; }
 .transition-slow   { transition: all 0.35s ease; }
 
-/* ── Animation keyframes + utilities ────────────────── */
+/* â”€â”€ Animation keyframes + utilities â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 @keyframes fadeIn  { from { opacity: 0; } to { opacity: 1; } }
 @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
 @keyframes slideUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -1930,7 +1930,7 @@ nav:has(.nav-link:hover) .nav-link:not(:hover) {
 .fade-out { animation: fadeOut 0.2s ease forwards; }
 .slide-up { animation: slideUp 0.25s ease forwards; }
 
-/* ── Empty state overrides ───────────────────────────── */
+/* â”€â”€ Empty state overrides â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .empty-state {
   display: flex;
   flex-direction: column;
@@ -1954,8 +1954,8 @@ nav:has(.nav-link:hover) .nav-link:not(:hover) {
 .empty-state-title       { font-size: 14px; font-weight: 600; color: var(--text-primary); margin: 0; }
 .empty-state-description { font-size: 12px; color: var(--text-tertiary); max-width: 220px; line-height: 1.5; margin: 0; }
 
-/* ── Editor studio surfaces ───────────────────────────────────────────────
-   Subtle, premium depth for the editor — no flat slab, no hard outlines.
+/* â”€â”€ Editor studio surfaces â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+   Subtle, premium depth for the editor â€” no flat slab, no hard outlines.
    Two faint accent glows (top + bottom-right) read as ambient studio light. */
 @keyframes shimmer {
   0%   { transform: translateX(-150%); }
@@ -1976,7 +1976,7 @@ nav:has(.nav-link:hover) .nav-link:not(:hover) {
     radial-gradient(100% 80% at 100% 100%, rgba(236, 72, 153, 0.06) 0%, transparent 55%);
 }
 
-/* ── Premium scroll progress (landing page) ─────── */
+/* â”€â”€ Premium scroll progress (landing page) â”€â”€â”€â”€â”€â”€â”€ */
 .scroll-progress {
   position: fixed;
   top: 0;
@@ -1989,7 +1989,7 @@ nav:has(.nav-link:hover) .nav-link:not(:hover) {
   pointer-events: none;
 }
 
-/* ── Spotlight cursor on feature cards ──────────── */
+/* â”€â”€ Spotlight cursor on feature cards â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .spotlight-card {
   position: relative;
   isolation: isolate;
@@ -2009,4 +2009,5 @@ nav:has(.nav-link:hover) .nav-link:not(:hover) {
   pointer-events: none;
 }
 .spotlight-card:hover::before { opacity: 1; }
+
 

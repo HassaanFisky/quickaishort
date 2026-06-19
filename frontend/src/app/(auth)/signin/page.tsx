@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
@@ -66,7 +66,7 @@ export default function SignInPage() {
         transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
         className="w-full max-w-[400px]"
       >
-        <Card className="w-full bg-[hsl(var(--bg-base))]/80 backdrop-blur-2xl border border-white/[0.08] shadow-[0_32px_80px_-16px_rgba(0,0,0,0.7)] rounded-3xl overflow-hidden relative">
+        <Card className="w-full bg-card/90 backdrop-blur-2xl border border-border shadow-[var(--card-shadow)] rounded-3xl overflow-hidden relative">
           <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-primary/60 to-transparent" />
 
           <CardHeader className="text-center space-y-5 pt-10 pb-2">
@@ -82,7 +82,7 @@ export default function SignInPage() {
               </div>
             </div>
             <div className="space-y-1.5">
-              <CardTitle className="text-2xl font-black tracking-tight text-white">
+              <CardTitle className="text-2xl font-black tracking-tight text-foreground">
                 Welcome back
               </CardTitle>
               <CardDescription className="text-[13px] text-muted-foreground">
@@ -113,7 +113,7 @@ export default function SignInPage() {
                   autoComplete="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="h-12 pl-10 rounded-xl bg-white/[0.04] border-white/[0.08] text-white placeholder:text-muted-foreground/40 focus-visible:border-primary/60 focus-visible:bg-primary/5 transition-[background-color,border-color] duration-[160ms]"
+                  className="h-12 pl-10 rounded-xl bg-card border-border text-foreground placeholder:text-muted-foreground/40 focus-visible:border-primary/60 focus-visible:bg-primary/5 transition-[background-color,border-color] duration-[160ms]"
                 />
               </div>
 
@@ -127,7 +127,7 @@ export default function SignInPage() {
                   autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="h-12 pl-10 rounded-xl bg-white/[0.04] border-white/[0.08] text-white placeholder:text-muted-foreground/40 focus-visible:border-primary/60 focus-visible:bg-primary/5 transition-[background-color,border-color] duration-[160ms]"
+                  className="h-12 pl-10 rounded-xl bg-card border-border text-foreground placeholder:text-muted-foreground/40 focus-visible:border-primary/60 focus-visible:bg-primary/5 transition-[background-color,border-color] duration-[160ms]"
                 />
               </div>
 
@@ -152,9 +152,9 @@ export default function SignInPage() {
             </form>
 
             <div className="my-6 relative flex items-center">
-              <div className="flex-grow border-t border-white/[0.06]" />
+              <div className="flex-grow border-t border-border" />
               <span className="flex-shrink-0 mx-4 text-[12px] text-muted-foreground">or</span>
-              <div className="flex-grow border-t border-white/[0.06]" />
+              <div className="flex-grow border-t border-border" />
             </div>
 
             <Button
@@ -162,7 +162,7 @@ export default function SignInPage() {
               variant="outline"
               disabled={loading}
               onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
-              className="w-full h-12 rounded-xl border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.07] text-white text-[13px] font-semibold transition-[background-color,border-color] duration-[160ms]"
+              className="w-full h-12 rounded-xl border-border bg-card hover:bg-muted/70 text-foreground text-[13px] font-semibold transition-[background-color,border-color] duration-[160ms]"
             >
               <svg className="mr-2.5 h-4 w-4 shrink-0" viewBox="0 0 24 24" aria-hidden>
                 <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
@@ -175,7 +175,7 @@ export default function SignInPage() {
 
             <p className="mt-6 text-center text-[12px] text-muted-foreground">
               No account?{" "}
-              <Link href="/signup" className="text-primary hover:text-white transition-colors duration-[160ms] font-semibold underline-offset-4 hover:underline">
+              <Link href="/signup" className="text-primary hover:text-foreground transition-colors duration-[160ms] font-semibold underline-offset-4 hover:underline">
                 Create one
               </Link>
             </p>
@@ -185,3 +185,4 @@ export default function SignInPage() {
     </div>
   );
 }
+
