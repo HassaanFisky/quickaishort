@@ -15,6 +15,7 @@ import {
 } from "@/lib/export/webCodecsExporter";
 import { extractAudioBuffer, audioBufferToChunks } from "@/lib/export/audioExtractor";
 import { formatTime } from "@/lib/utils/formatTime";
+import { getExportContextFromManifest } from "@/lib/export/renderManifestExportContext";
 import { trackEvent } from "@/lib/analytics";
 
 interface ExportDialogProps {
@@ -110,12 +111,11 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
         suggestions: clips,
         duration: dur,
         videoMetadata,
-        frameFilters,
-        captions,
-        exportSettings,
       } = useEditorStore.getState();
 
-      exporter.setFrameContext(frameFilters, captions ?? [], exportSettings.filter);
+      const { frameFilters, captions, exportFilterPreset } = getExportContextFromManifest(renderManifest);
+
+      exporter.setFrameContext(frameFilters, captions, exportFilterPreset);
 
       let start = 0;
       let end = dur;
