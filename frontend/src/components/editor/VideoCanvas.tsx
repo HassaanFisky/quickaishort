@@ -26,6 +26,7 @@ import { InteractiveCanvas } from "./InteractiveCanvas";
 import { useAIPanel } from "@/stores/aiPanelStore";
 import { cn } from "@/lib/utils";
 import { formatTime } from "@/lib/utils/formatTime";
+import { getPreviewContextFromManifest } from "@/lib/render/renderManifestPreviewContext";
 
 declare global {
   interface Window {
@@ -100,9 +101,24 @@ export default function VideoCanvas() {
   const [displayUrl, setDisplayUrl] = useState<string | null>(null);
 
   // RenderManifest is prepared here for preview/export parity; existing preview path stays unchanged in Phase 51.
+  // Phase 53 consumes manifest timing for preview readiness; visual output remains on existing CanvasLayer/CaptionOverlay paths.
   const latestManifestRef = useRef(compiledManifest);
+  const previewContextRef = useRef(getPreviewContextFromManifest(compiledManifest));
+  const activeManifestCaptionIdsRef = useRef<string[]>([]);
+  const activeManifestOverlayIdsRef = useRef<string[]>([]);
+
   useEffect(() => {
     latestManifestRef.current = compiledManifest;
+    previewContextRef.current = getPreviewContextFromManifest(compiledManifest);
+
+    if (compiledManifest && process.env.NODE_ENV !== "production") {
+      const arrayFields = ["tracks", "clips", "captions", "overlays", "effects", "keyframes"] as const;
+      for (const field of arrayFields) {
+        if (!compiledManifest[field] || !Array.isArray(compiledManifest[field])) {
+          console.warn(`[VideoCanvas Debug Validation] Manifest array field "${field}" is missing or invalid.`);
+        }
+      }
+    }
   }, [timelineRevision, compiledManifest]);
 
   // Web Audio API chain — MediaElementSource → BiquadFilter → GainNode
@@ -352,6 +368,11 @@ export default function VideoCanvas() {
     const animate = () => {
       if (videoRef.current && !videoRef.current.paused && !videoRef.current.ended) {
         detectRef.current(videoRef.current);
+        const t = videoRef.current.currentTime;
+        if (previewContextRef.current) {
+          activeManifestCaptionIdsRef.current = previewContextRef.current.activeCaptionIdsAt(t);
+          activeManifestOverlayIdsRef.current = previewContextRef.current.activeOverlayIdsAt(t);
+        }
       }
       id = requestAnimationFrame(animate);
     };
@@ -482,7 +503,14 @@ export default function VideoCanvas() {
                   onPlay={() => setIsPlaying(true)}
                   onPause={() => setIsPlaying(false)}
                   onTimeUpdate={() => {
-                    if (videoRef.current) setCurrentTime(videoRef.current.currentTime);
+                    if (videoRef.current) {
+                      const t = videoRef.current.currentTime;
+                      setCurrentTime(t);
+                      if (previewContextRef.current) {
+                        activeManifestCaptionIdsRef.current = previewContextRef.current.activeCaptionIdsAt(t);
+                        activeManifestOverlayIdsRef.current = previewContextRef.current.activeOverlayIdsAt(t);
+                      }
+                    }
                   }}
                   onError={() => {
                     if (proxyRetry < 1 && displayUrl) {
@@ -530,8 +558,9 @@ export default function VideoCanvas() {
         <CaptionOverlay
           videoRef={videoRef}
           transcript={captionsEnabled && transcript ? transcript : undefined}
+          manifestActiveCaptionIds={activeManifestCaptionIdsRef.current}
         />
-        <CanvasLayer />
+        <CanvasLayer manifestActiveOverlayIds={activeManifestOverlayIdsRef.current} />
         <InteractiveCanvas />
 
         {/* AI execution overlay — pointer-events:none so cancel button above stays clickable */}

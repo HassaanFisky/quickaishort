@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { useEditorStore } from "@/stores/editorStore";
 import { WebGpuCompositor } from "@/lib/webgpu/compositor";
 import { getFlag } from "@/lib/featureFlags";
+import { getPreviewContextFromManifest } from "@/lib/render/renderManifestPreviewContext";
 
 const FPS_30_MS = 1000 / 30;
 
@@ -19,8 +20,10 @@ export function WebGpuPreviewLayer() {
 
   // Phase 51 keeps the current single-frame WebGPU draw path; manifest ref prepares future multi-layer parity.
   const latestManifestRef = useRef(compiledManifest);
+  const previewContextRef = useRef(getPreviewContextFromManifest(compiledManifest));
   useEffect(() => {
     latestManifestRef.current = compiledManifest;
+    previewContextRef.current = getPreviewContextFromManifest(compiledManifest);
   }, [timelineRevision, compiledManifest]);
 
   const prefersReducedMotion =

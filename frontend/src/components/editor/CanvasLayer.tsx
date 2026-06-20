@@ -6,7 +6,11 @@ import { motion, useMotionValue } from "framer-motion";
 import { X, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export function CanvasLayer() {
+interface CanvasLayerProps {
+  manifestActiveOverlayIds?: string[];
+}
+
+export function CanvasLayer({ manifestActiveOverlayIds }: CanvasLayerProps = {}) {
   const { canvasElements, updateCanvasElement, removeCanvasElement } = useEditorStore();
 
   return (

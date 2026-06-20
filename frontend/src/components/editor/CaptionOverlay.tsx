@@ -6,9 +6,10 @@ import { Transcript } from "@/types/pipeline";
 interface CaptionOverlayProps {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   transcript?: Transcript;
+  manifestActiveCaptionIds?: string[];
 }
 
-export function CaptionOverlay({ videoRef, transcript }: CaptionOverlayProps) {
+export function CaptionOverlay({ videoRef, transcript, manifestActiveCaptionIds }: CaptionOverlayProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const requestRef = useRef<number>(0);
 
