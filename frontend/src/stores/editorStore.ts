@@ -10,6 +10,8 @@ import {
   deleteMotionPath,
 } from "@/lib/motion/keyframeStore";
 import { Track, createDefaultTracks } from "@/types/timeline";
+import { RenderManifest } from "@/lib/render/renderManifest";
+import { compileRenderManifest, validateRenderManifest } from "@/lib/render/compileRenderManifest";
 
 // ─── AI Editor Types ──────────────────────────────────────────────────────────
 
@@ -689,6 +691,11 @@ interface EditorState {
   removeTrack: (trackId: string) => void;
   setTrackLocked: (trackId: string, locked: boolean) => void;
   setTrackMuted: (trackId: string, muted: boolean) => void;
+
+  // ─── Phase 51: RenderManifest v1 + AI Transaction Layer ──────────────────
+  timelineRevision: number;
+  compiledManifest: RenderManifest | null;
+  rebuildRenderManifest: () => void;
 }
 
 export const useEditorStore = create<EditorState>()(
@@ -776,6 +783,10 @@ export const useEditorStore = create<EditorState>()(
 
       // Phase 36
       tracks: createDefaultTracks(),
+
+      // Phase 51
+      timelineRevision: 0,
+      compiledManifest: null,
 
       // AI Editor initial state
       videoMetadata: null,
@@ -1873,6 +1884,7 @@ export const useEditorStore = create<EditorState>()(
         });
 
         store.dispatchAIActions(translated);
+        store.rebuildRenderManifest();
 
         // Seek to the first action that has a meaningful time field
         if (options?.seekToFirstEdit !== false) {
@@ -1916,6 +1928,8 @@ export const useEditorStore = create<EditorState>()(
           isProcessing: false,
           currentStage: "idle",
           tracks: createDefaultTracks(),
+          timelineRevision: 0,
+          compiledManifest: null,
         }),
 
       reset: () =>
@@ -1968,6 +1982,8 @@ export const useEditorStore = create<EditorState>()(
           videoAnalysis: null,
           videoElementRef: null,
           tracks: createDefaultTracks(),
+          timelineRevision: 0,
+          compiledManifest: null,
         }),
 
       setAiSuggestions: (patch) =>
@@ -2054,6 +2070,22 @@ export const useEditorStore = create<EditorState>()(
         set((s) => ({
           tracks: s.tracks.map((t) => (t.id === trackId ? { ...t, muted } : t)),
         })),
+
+      rebuildRenderManifest: () => {
+        const state = useEditorStore.getState();
+        const manifest = compileRenderManifest(state);
+        set({
+          compiledManifest: manifest,
+          timelineRevision: state.timelineRevision + 1,
+        });
+
+        const errors = validateRenderManifest(manifest);
+        if (errors.length > 0) {
+          if (process.env.NODE_ENV !== "production") {
+            console.warn("[RenderManifest Validation Errors]:", errors);
+          }
+        }
+      },
     }),
     {
       name: "EditorStore",

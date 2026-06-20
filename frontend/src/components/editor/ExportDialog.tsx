@@ -74,6 +74,13 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
   }, [dispatchAIActions, onClose, selectedPreset, rangeDuration]);
 
   const handleClientExport = useCallback(async () => {
+    const storeState = useEditorStore.getState();
+    if (storeState.compiledManifest === null) {
+      storeState.rebuildRenderManifest();
+    }
+    // Phase 51: canonical manifest is available for export parity; current encoder path remains unchanged.
+    const renderManifest = useEditorStore.getState().compiledManifest;
+
     const storeVideo = videoElementRef?.current;
     const video = storeVideo ?? (document.querySelector("video") as HTMLVideoElement | null);
     if (!video || video.readyState < 2) {

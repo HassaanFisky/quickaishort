@@ -14,6 +14,14 @@ export function WebGpuPreviewLayer() {
   const compositorRef = useRef<WebGpuCompositor | null>(null);
   const rafRef = useRef<number | null>(null);
   const videoRef = useEditorStore((s) => s.videoElementRef);
+  const compiledManifest = useEditorStore((s) => s.compiledManifest);
+  const timelineRevision = useEditorStore((s) => s.timelineRevision);
+
+  // Phase 51 keeps the current single-frame WebGPU draw path; manifest ref prepares future multi-layer parity.
+  const latestManifestRef = useRef(compiledManifest);
+  useEffect(() => {
+    latestManifestRef.current = compiledManifest;
+  }, [timelineRevision, compiledManifest]);
 
   const prefersReducedMotion =
     typeof window !== "undefined" &&

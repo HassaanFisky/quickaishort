@@ -91,11 +91,19 @@ export default function VideoCanvas() {
     setYtVideoId,
     setClipRange,
     setVideoMetadata,
+    compiledManifest,
+    timelineRevision,
   } = useEditorStore();
 
   const { isReady, reframingData, detect } = useFaceTracker();
   const { executionOverlay, executionOverlayLabel } = useAIPanel();
   const [displayUrl, setDisplayUrl] = useState<string | null>(null);
+
+  // RenderManifest is prepared here for preview/export parity; existing preview path stays unchanged in Phase 51.
+  const latestManifestRef = useRef(compiledManifest);
+  useEffect(() => {
+    latestManifestRef.current = compiledManifest;
+  }, [timelineRevision, compiledManifest]);
 
   // Web Audio API chain — MediaElementSource → BiquadFilter → GainNode
   useEffect(() => {
