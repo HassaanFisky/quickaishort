@@ -27,6 +27,7 @@ import { useAIPanel } from "@/stores/aiPanelStore";
 import { cn } from "@/lib/utils";
 import { formatTime } from "@/lib/utils/formatTime";
 import { getPreviewContextFromManifest } from "@/lib/render/renderManifestPreviewContext";
+import { RenderCaption, RenderOverlay } from "@/lib/render/renderManifest";
 
 declare global {
   interface Window {
@@ -106,10 +107,19 @@ export default function VideoCanvas() {
   const previewContextRef = useRef(getPreviewContextFromManifest(compiledManifest));
   const activeManifestCaptionIdsRef = useRef<string[]>([]);
   const activeManifestOverlayIdsRef = useRef<string[]>([]);
+  const activeManifestCaptionsRef = useRef<RenderCaption[]>([]);
+  const activeManifestOverlaysRef = useRef<RenderOverlay[]>([]);
 
   useEffect(() => {
     latestManifestRef.current = compiledManifest;
     previewContextRef.current = getPreviewContextFromManifest(compiledManifest);
+
+    // Sync refs on manifest changes
+    const t = videoRef.current?.currentTime ?? currentTime;
+    activeManifestCaptionIdsRef.current = previewContextRef.current.activeCaptionIdsAt(t);
+    activeManifestOverlayIdsRef.current = previewContextRef.current.activeOverlayIdsAt(t);
+    activeManifestCaptionsRef.current = previewContextRef.current.activeCaptionsAt(t);
+    activeManifestOverlaysRef.current = previewContextRef.current.activeOverlaysAt(t);
 
     if (compiledManifest && process.env.NODE_ENV !== "production") {
       const arrayFields = ["tracks", "clips", "captions", "overlays", "effects", "keyframes"] as const;
@@ -119,7 +129,7 @@ export default function VideoCanvas() {
         }
       }
     }
-  }, [timelineRevision, compiledManifest]);
+  }, [timelineRevision, compiledManifest]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Web Audio API chain — MediaElementSource → BiquadFilter → GainNode
   useEffect(() => {
@@ -372,6 +382,8 @@ export default function VideoCanvas() {
         if (previewContextRef.current) {
           activeManifestCaptionIdsRef.current = previewContextRef.current.activeCaptionIdsAt(t);
           activeManifestOverlayIdsRef.current = previewContextRef.current.activeOverlayIdsAt(t);
+          activeManifestCaptionsRef.current = previewContextRef.current.activeCaptionsAt(t);
+          activeManifestOverlaysRef.current = previewContextRef.current.activeOverlaysAt(t);
         }
       }
       id = requestAnimationFrame(animate);
@@ -509,6 +521,8 @@ export default function VideoCanvas() {
                       if (previewContextRef.current) {
                         activeManifestCaptionIdsRef.current = previewContextRef.current.activeCaptionIdsAt(t);
                         activeManifestOverlayIdsRef.current = previewContextRef.current.activeOverlayIdsAt(t);
+                        activeManifestCaptionsRef.current = previewContextRef.current.activeCaptionsAt(t);
+                        activeManifestOverlaysRef.current = previewContextRef.current.activeOverlaysAt(t);
                       }
                     }
                   }}
@@ -559,8 +573,12 @@ export default function VideoCanvas() {
           videoRef={videoRef}
           transcript={captionsEnabled && transcript ? transcript : undefined}
           manifestActiveCaptionIds={activeManifestCaptionIdsRef.current}
+          manifestActiveCaptions={activeManifestCaptionsRef.current}
         />
-        <CanvasLayer manifestActiveOverlayIds={activeManifestOverlayIdsRef.current} />
+        <CanvasLayer
+          manifestActiveOverlayIds={activeManifestOverlayIdsRef.current}
+          manifestActiveOverlays={activeManifestOverlaysRef.current}
+        />
         <InteractiveCanvas />
 
         {/* AI execution overlay — pointer-events:none so cancel button above stays clickable */}

@@ -5,24 +5,70 @@ import { useEffect } from "react";
 import { motion, useMotionValue } from "framer-motion";
 import { X, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { RenderOverlay } from "@/lib/render/renderManifest";
+
+// Phase 54: manifest overlays render as lightweight preview placeholders; legacy elements remain fallback.
 
 interface CanvasLayerProps {
   manifestActiveOverlayIds?: string[];
+  manifestActiveOverlays?: RenderOverlay[];
 }
 
-export function CanvasLayer({ manifestActiveOverlayIds }: CanvasLayerProps = {}) {
+export function CanvasLayer({
+  manifestActiveOverlayIds,
+  manifestActiveOverlays,
+}: CanvasLayerProps = {}) {
   const { canvasElements, updateCanvasElement, removeCanvasElement } = useEditorStore();
+
+  const hasManifestOverlays =
+    Array.isArray(manifestActiveOverlays) && manifestActiveOverlays.length > 0;
 
   return (
     <div className="absolute inset-0 pointer-events-none overflow-hidden">
-      {canvasElements.map((el) => (
-        <DraggableElement
-          key={el.id}
-          element={el}
-          onUpdate={(updates) => updateCanvasElement(el.id, updates)}
-          onRemove={() => removeCanvasElement(el.id)}
-        />
-      ))}
+      {hasManifestOverlays ? (
+        // Phase 54: Manifest-driven lightweight overlay placeholders
+        manifestActiveOverlays!.map((overlay) => {
+          const x = typeof overlay.x === "number" ? overlay.x : 50;
+          const y = typeof overlay.y === "number" ? overlay.y : 50;
+          const scale = typeof overlay.scale === "number" ? overlay.scale : 1;
+          const rotation = typeof overlay.rotation === "number" ? overlay.rotation : 0;
+          const opacity = typeof overlay.opacity === "number" ? Math.min(1, Math.max(0, overlay.opacity)) : 0.85;
+          const label = overlay.type ?? "overlay";
+
+          return (
+            <div
+              key={overlay.id}
+              className="absolute pointer-events-none select-none"
+              style={{
+                left: `${x}%`,
+                top: `${y}%`,
+                transform: `translate(-50%, -50%) scale(${scale}) rotate(${rotation}deg)`,
+                opacity,
+              }}
+            >
+              <div
+                className={cn(
+                  "px-3 py-1.5 rounded-lg border border-white/20",
+                  "bg-black/40 backdrop-blur-sm",
+                  "text-[10px] font-black uppercase tracking-widest text-white/80"
+                )}
+              >
+                {label}
+              </div>
+            </div>
+          );
+        })
+      ) : (
+        // Legacy store-driven canvas elements (fallback)
+        canvasElements.map((el) => (
+          <DraggableElement
+            key={el.id}
+            element={el}
+            onUpdate={(updates) => updateCanvasElement(el.id, updates)}
+            onRemove={() => removeCanvasElement(el.id)}
+          />
+        ))
+      )}
     </div>
   );
 }
