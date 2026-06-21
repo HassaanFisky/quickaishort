@@ -5,14 +5,17 @@ Wraps the existing VideoService.download_segment_sync() with:
 - Redis metadata cache (1 hour TTL) so identical video+range combos skip re-download
 - Structured per-tier logging so failures are debuggable without reading ffmpeg stderr
 
-Tiers:
-  1. yt-dlp + cookies + PoToken sidecar   (most reliable)
-  2. yt-dlp + PoToken only (no cookies)   (fallback when cookies expired)
-  3. Error with diagnostics               (never hangs, always returns quickly)
+Tier order (highest priority → lowest):
+  T0. Residential proxy + cookies + PoToken (proxy_rotator.py)
+  T1. yt-dlp + cookies + PoToken sidecar   (most reliable without proxy)
+  T2. yt-dlp + PoToken only (no cookies)   (fallback when cookies expired)
+  T3. Cobalt public bridge                  (audio-only fallback)
+  T4. GCS fast path                         (re-renders / existing uploads)
 """
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -26,6 +29,7 @@ logger = logging.getLogger(__name__)
 _TIER_TIMEOUT_S = int(os.getenv("VIDEO_ACQUISITION_TIER_TIMEOUT_S", "90"))
 _CACHE_TTL_S = 3600  # 1 hour
 _CACHE_KEY_PREFIX = "acquisition:"
+_YT_403_RE = r"HTTP Error 403|HTTP Error 429|Sign in to confirm"
 
 
 def _cache_key(video_id: str, start_sec: float, end_sec: float) -> str:
@@ -103,8 +107,42 @@ def _from_gcs(gcs_uri: str, start_sec: float, end_sec: float, workdir: Path) -> 
     return trimmed_path
 
 
+def _try_tier0(video_id: str, start_sec: float, end_sec: float, workdir: Path) -> Path:
+    """T0: Residential proxy + cookies + PoToken — the premium bypass path.
+
+    Uses proxy_rotator.acquire_sync() to get a healthy proxy URL, then delegates
+    to VideoService.download_segment_sync() with proxy_url injected.
+    Raises ProxyPoolExhausted / RuntimeError so acquire_video() can fall through.
+    """
+    import re
+    from services.proxy_rotator import ProxyPoolExhausted, acquire_sync, release
+    from services.video_service import VideoService
+
+    proxy = None
+    try:
+        proxy = acquire_sync()
+        if proxy is None:
+            # Circuit is open or pool not configured — skip T0 silently.
+            raise ProxyPoolExhausted("proxy circuit open or pool empty")
+        return VideoService.download_segment_sync(
+            video_id, start_sec, end_sec, workdir, proxy_url=proxy
+        )
+    except Exception as exc:
+        err_str = str(exc)
+        # Detect YouTube actively blocking this proxy
+        if re.search(_YT_403_RE, err_str):
+            logger.warning(
+                "acquisition_t0_yt_block proxy=%s video_id=%s",
+                proxy[:30] if proxy else "none",
+                video_id,
+            )
+        if proxy:
+            release(proxy, success=False)
+        raise
+
+
 def _try_tier1(video_id: str, start_sec: float, end_sec: float, workdir: Path) -> Path:
-    """yt-dlp with cookies + PoToken (full bypass stack)."""
+    """T1: yt-dlp with cookies + PoToken (full bypass stack, no proxy)."""
     from services.video_service import VideoService
 
     return VideoService.download_segment_sync(video_id, start_sec, end_sec, workdir)
@@ -306,7 +344,8 @@ def acquire_video(
 
     failed_tiers: list[dict] = []
 
-    for tier_num, tier_fn in ((1, _try_tier1), (2, _try_tier2)):
+    # T0 first — residential proxy. Skipped gracefully when pool is empty.
+    for tier_num, tier_fn in ((0, _try_tier0), (1, _try_tier1), (2, _try_tier2)):
         t0 = time.time()
         try:
             import concurrent.futures
@@ -345,13 +384,20 @@ def acquire_video(
         except Exception as exc:
             elapsed = time.time() - t0
             err_msg = str(exc)[:300]
-            logger.warning(
-                "acquisition_tier_failed tier=%d video_id=%s elapsed=%.2fs error=%s",
-                tier_num,
-                video_id,
-                elapsed,
-                err_msg,
-            )
+            # T0 ProxyPoolExhausted is an expected non-error — log at DEBUG
+            from services.proxy_rotator import ProxyPoolExhausted
+            if tier_num == 0 and isinstance(exc, ProxyPoolExhausted):
+                logger.debug(
+                    "acquisition_t0_skipped video_id=%s reason=%s", video_id, err_msg
+                )
+            else:
+                logger.warning(
+                    "acquisition_tier_failed tier=%d video_id=%s elapsed=%.2fs error=%s",
+                    tier_num,
+                    video_id,
+                    elapsed,
+                    err_msg,
+                )
             failed_tiers.append(
                 {"tier": tier_num, "error": err_msg, "elapsed_s": round(elapsed, 2)}
             )
@@ -362,3 +408,80 @@ def acquire_video(
         "failed_tiers": failed_tiers,
         "error": f"All {len(failed_tiers)} acquisition tiers failed for video {video_id}",
     }
+
+
+async def get_stream_manifests(video_id: str) -> dict:
+    """Return DASH/HLS manifest URLs without downloading segments.
+
+    The frontend plays these directly via <video src=...>, avoiding any
+    proxying of media bytes through Cloud Run. Falls back through the
+    proxy / cookie / PoToken chain identically to acquire_video().
+
+    Returns:
+        {"status": "ready", "video_id": str, "title": str, "duration": float,
+         "thumbnail": str, "formats": [...]}
+    """
+    import yt_dlp
+    from app.utils.youtube_auth import inject_ydl_bypass
+    from services.proxy_rotator import ProxyPoolExhausted, acquire, release
+
+    url = f"https://www.youtube.com/watch?v={video_id}"
+    base_opts = inject_ydl_bypass(
+        {"quiet": True, "no_warnings": True, "skip_download": True}
+    )
+
+    proxy = None
+    try:
+        try:
+            proxy = await acquire()
+            if proxy:
+                base_opts["proxy"] = proxy
+        except ProxyPoolExhausted:
+            pass  # Fall through without proxy
+
+        loop = asyncio.get_event_loop()
+        info = await asyncio.wait_for(
+            loop.run_in_executor(
+                None,
+                lambda: yt_dlp.YoutubeDL(base_opts).extract_info(url, download=False),
+            ),
+            timeout=45.0,
+        )
+
+        formats = [
+            {
+                "format_id": f.get("format_id"),
+                "ext": f.get("ext"),
+                "height": f.get("height"),
+                "width": f.get("width"),
+                "tbr": f.get("tbr"),
+                "url": f.get("url"),
+                "protocol": f.get("protocol"),
+                "acodec": f.get("acodec"),
+                "vcodec": f.get("vcodec"),
+            }
+            for f in info.get("formats", [])
+            if f.get("url") and f.get("ext") in ("mp4", "webm", "m4a")
+        ][:12]
+
+        if proxy:
+            release(proxy, success=True)
+
+        return {
+            "status": "ready",
+            "video_id": video_id,
+            "title": info.get("title"),
+            "duration": info.get("duration"),
+            "thumbnail": info.get("thumbnail"),
+            "formats": formats,
+        }
+
+    except Exception as exc:
+        if proxy:
+            release(proxy, success=False)
+        logger.warning(
+            "get_stream_manifests_failed video_id=%s error=%s",
+            video_id,
+            str(exc)[:200],
+        )
+        return {"status": "error", "video_id": video_id, "error": str(exc)[:200]}

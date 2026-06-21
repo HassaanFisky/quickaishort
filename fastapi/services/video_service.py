@@ -150,6 +150,8 @@ class VideoService:
         start: float,
         end: float,
         workdir,
+        *,
+        proxy_url: Optional[str] = None,
     ) -> Path:
         """
         Fully synchronous segment downloader for use inside RQ worker.
@@ -157,6 +159,11 @@ class VideoService:
         RQ workers must not call asyncio.run() — it raises RuntimeError
         if an event loop is already running (Python 3.12+). This method
         uses yt-dlp (already synchronous) and httpx.Client (sync) only.
+
+        Args:
+            proxy_url: Optional residential proxy URL (http://user:pass@host:port).
+                       When provided, this is the T0 path; when None, the
+                       standard T1 path runs without a proxy.
         """
         if video_id.startswith(("http://", "https://")):
             url = video_id
@@ -166,7 +173,7 @@ class VideoService:
 
         output_path = Path(workdir) / f"{video_id}_{int(start)}_{int(end)}.mp4"
 
-        # Tier 1: yt-dlp android_music (no browser cookies, works on Cloud Run)
+        # T0/T1: yt-dlp with optional residential proxy
         ydl_opts = inject_ydl_bypass(
             {
                 "format": "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
@@ -181,15 +188,28 @@ class VideoService:
                 },
             }
         )
-        try:
+        if proxy_url:
+            ydl_opts["proxy"] = proxy_url
+            logger.info(
+                "[VideoService] sync_download tier0 (proxy) for %s via %s",
+                video_id,
+                proxy_url[:30],
+            )
+        else:
             logger.info("[VideoService] sync_download tier1 yt-dlp for %s", video_id)
+
+        try:
             yt_dlp.YoutubeDL(ydl_opts).download([url])
             if output_path.exists() and output_path.stat().st_size > 0:
                 return output_path
         except Exception as exc:
-            logger.warning("[VideoService] sync_download yt-dlp failed: %s", exc)
+            logger.warning(
+                "[VideoService] sync_download yt-dlp failed (proxy=%s): %s",
+                bool(proxy_url),
+                exc,
+            )
 
-        # Tier 2: Cobalt sync fallback
+        # Cobalt sync fallback (T2 / T3 depending on caller context)
         try:
             api_url = os.getenv("COBALT_API_URL", "https://api.cobalt.tools/")
             api_key = os.getenv("COBALT_API_KEY")
@@ -209,7 +229,7 @@ class VideoService:
                 video_url = resp.json().get("url")
                 if video_url:
                     logger.info(
-                        "[VideoService] sync_download tier2 cobalt stream for %s",
+                        "[VideoService] sync_download cobalt stream for %s",
                         video_id,
                     )
                     with httpx.Client(timeout=120.0, follow_redirects=True) as dl:

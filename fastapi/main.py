@@ -306,6 +306,13 @@ async def lifespan(_app: FastAPI):
         try:
             await run_startup_checks()
             await _billing_ensure_indexes()
+            # Warm the residential proxy pool from PROXY_POOL_URL env var.
+            # No-op when PROXY_POOL_URL is not configured.
+            try:
+                from services.proxy_rotator import warm_pool
+                warm_pool()
+            except Exception as _proxy_err:
+                logger.warning("proxy_pool_warm_failed: %s", _proxy_err)
             global _STARTUP_COMPLETE
             _STARTUP_COMPLETE = True
         except Exception as e:
@@ -685,6 +692,34 @@ def debug_tiers(request: Request):
         "tiers": svc.tier_states(),
         "ready": svc.is_ready(),
     }
+
+
+# ---- Stream Info (DASH/HLS manifest — no bytes proxied) ----------------------
+
+
+@limiter.limit("30/minute")
+@app.get("/api/stream-info")
+async def stream_info(
+    request: Request,
+    url: str,
+    verified_user_id: str = Depends(get_verified_user_id),
+):
+    """Return DASH/HLS manifest URLs for a YouTube video without downloading.
+
+    The frontend uses these URLs to play the video directly in the browser
+    via <video src=...>, completely bypassing Cloud Run bandwidth costs.
+    Falls through T0 (residential proxy if configured) → T1 (no proxy).
+    """
+    from services.video_acquisition import get_stream_manifests
+
+    video_id = _require_youtube_url(url)
+    result = await get_stream_manifests(video_id)
+    if result.get("status") != "ready":
+        raise HTTPException(
+            status_code=503,
+            detail=f"Stream info unavailable: {result.get('error', 'unknown error')}",
+        )
+    return result
 
 
 # ---- Analyze ------------------------------------------------------------------

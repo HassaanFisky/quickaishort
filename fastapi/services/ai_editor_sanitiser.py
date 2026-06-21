@@ -815,3 +815,102 @@ def mock_response(
         f"Mock: applied {len(sanitised)} demo edits (MOCK_AI_EDITOR=true).",
         suggestions,
     )
+
+
+# ─── QEP patch validator (Pillar III) ─────────────────────────────────────────
+
+
+def validate_patches(raw_patches: list[dict], project_clip_ids: set[str] | None = None):
+    """Validate a list of raw dicts from an AI agent against the QepPatch allow-list.
+
+    Args:
+        raw_patches:       List of raw action dicts emitted by the AI agent.
+        project_clip_ids:  Optional set of valid clip_id / track_id values from
+                           the user's current Project.qep. When provided, any
+                           patch referencing an unknown ID is rejected.
+
+    Returns:
+        A list of validated QepPatch model instances.
+
+    Raises:
+        HTTPException(422): On any validation failure (unknown type, field
+                            out-of-range, or unknown clip/track reference).
+    """
+    from fastapi import HTTPException
+    from pydantic import ValidationError
+
+    try:
+        from agent.action_models import QepPatch, VALID_ACTION_TYPES
+        from pydantic import TypeAdapter
+    except ImportError as exc:
+        logger.error("validate_patches: action_models import failed: %s", exc)
+        raise HTTPException(status_code=500, detail="Action catalogue unavailable")
+
+    ta: TypeAdapter = TypeAdapter(QepPatch)
+    validated = []
+
+    for i, raw in enumerate(raw_patches):
+        if not isinstance(raw, dict):
+            _emit_patch_failure("unknown", "not_a_dict")
+            raise HTTPException(
+                status_code=422,
+                detail=f"Patch #{i} is not a JSON object",
+            )
+
+        action_type = raw.get("type", "<missing>")
+
+        # Fast allow-list check before Pydantic (cheaper)
+        if action_type not in VALID_ACTION_TYPES:
+            _emit_patch_failure(action_type, "unknown_type")
+            raise HTTPException(
+                status_code=422,
+                detail=f"Patch #{i}: unknown action type '{action_type}'",
+            )
+
+        try:
+            patch = ta.validate_python(raw)
+        except ValidationError as exc:
+            first_err = exc.errors()[0]
+            field = ".".join(str(l) for l in first_err.get("loc", []))
+            _emit_patch_failure(action_type, field)
+            raise HTTPException(
+                status_code=422,
+                detail=f"Patch #{i} ({action_type}): validation error on field '{field}': {first_err.get('msg')}",
+            )
+
+        # Optional: reject patches referencing clip/track IDs not in the project
+        if project_clip_ids is not None:
+            ref_id = (
+                getattr(patch, "clip_id", None)
+                or getattr(patch, "track_id", None)
+                or getattr(patch, "after_clip_id", None)
+                or getattr(patch, "from_clip_id", None)
+            )
+            if ref_id and ref_id not in project_clip_ids:
+                _emit_patch_failure(action_type, "unknown_clip_id")
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Patch #{i} ({action_type}): '{ref_id}' does not exist in this project",
+                )
+
+        validated.append(patch)
+
+    return validated
+
+
+def _emit_patch_failure(action_type: str, field: str) -> None:
+    """Log patch validation failure to Sentry and structured logs."""
+    logger.warning(
+        "ai_patch_validation_failure action_type=%s field=%s",
+        action_type,
+        field,
+    )
+    try:
+        import sentry_sdk
+        sentry_sdk.capture_message(
+            f"AI patch rejected: type={action_type} field={field}",
+            level="warning",
+        )
+    except Exception:
+        pass
+
