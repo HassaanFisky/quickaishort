@@ -5,6 +5,8 @@ import axios from "axios";
 import { runPreflight } from "@/lib/api";
 import { trackEvent } from "@/lib/analytics";
 import type { ClipCandidatePayload, PreflightResult } from "@/types/preflight";
+import { useEditorStore } from "@/stores/editorStore";
+import { buildPreflightFixPlan } from "@/lib/preflight/preflightFixPlan";
 
 export interface UsePreflightReturn {
   isRunning: boolean;
@@ -37,10 +39,13 @@ export function usePreflight(): UsePreflightReturn {
       setError(null);
       setIsPremiumGated(false);
       setResult(null);
+      useEditorStore.getState().clearPreflightFixPlan();
 
       try {
         const res = await runPreflight(youtubeUrl, candidates, isPremium, userId);
         setResult(res);
+        const store = useEditorStore.getState();
+        store.setPreflightFixPlan(buildPreflightFixPlan(res, store));
         trackEvent({
           name: "preflight_run",
           props: { consensusScore: res.weighted_consensus_score, personaCount: res.persona_votes.length },
@@ -71,6 +76,7 @@ export function usePreflight(): UsePreflightReturn {
     setResult(null);
     setError(null);
     setIsPremiumGated(false);
+    useEditorStore.getState().clearPreflightFixPlan();
   }, []);
 
   return { isRunning, result, error, isPremiumGated, triggerPreflight, reset };

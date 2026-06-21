@@ -12,6 +12,7 @@ import {
 import { Track, createDefaultTracks } from "@/types/timeline";
 import { RenderManifest } from "@/lib/render/renderManifest";
 import { compileRenderManifest, validateRenderManifest } from "@/lib/render/compileRenderManifest";
+import type { PreflightFixPlan } from "@/lib/preflight/preflightFixPlan";
 
 // ─── AI Editor Types ──────────────────────────────────────────────────────────
 
@@ -550,6 +551,10 @@ interface EditorState {
 
   // ─── AI intelligent tool suggestions (Pillar-3.7) ─────────────────────────
   aiSuggestions: AiSuggestions;
+  preflightFixPlan: PreflightFixPlan | null;
+  setPreflightFixPlan: (plan: PreflightFixPlan | null) => void;
+  clearPreflightFixPlan: () => void;
+  applyPreflightFixSuggestion: (suggestionId: string) => void;
 
   // ─── Phase 3a: B-Roll drawer UI flag ──────────────────────────────────────
   isBRollDrawerOpen: boolean;
@@ -749,6 +754,7 @@ export const useEditorStore = create<EditorState>()(
 
       // Pillar-3.7 AI suggestions
       aiSuggestions: { ...DEFAULT_AI_SUGGESTIONS },
+      preflightFixPlan: null,
 
       markIn: null,
       markOut: null,
@@ -1921,6 +1927,7 @@ export const useEditorStore = create<EditorState>()(
           aiUndoStack: [],
           aiRedoStack: [],
           aiSuggestions: { ...DEFAULT_AI_SUGGESTIONS },
+          preflightFixPlan: null,
           markIn: null,
           markOut: null,
           timelineMarkers: [],
@@ -1969,6 +1976,7 @@ export const useEditorStore = create<EditorState>()(
           aiUndoStack: [],
           aiRedoStack: [],
           aiSuggestions: { ...DEFAULT_AI_SUGGESTIONS },
+          preflightFixPlan: null,
           markIn: null,
           markOut: null,
           timelineMarkers: [],
@@ -1990,6 +1998,36 @@ export const useEditorStore = create<EditorState>()(
         set((state) => ({ aiSuggestions: { ...state.aiSuggestions, ...patch } })),
 
       clearAiSuggestions: () => set({ aiSuggestions: { ...DEFAULT_AI_SUGGESTIONS } }),
+
+      setPreflightFixPlan: (plan) => set({ preflightFixPlan: plan }),
+      clearPreflightFixPlan: () => set({ preflightFixPlan: null }),
+
+      applyPreflightFixSuggestion: (suggestionId) => {
+        const store = useEditorStore.getState();
+        const plan = store.preflightFixPlan;
+        const suggestion = plan?.suggestions.find((s) => s.id === suggestionId);
+        if (!suggestion || suggestion.actions.length === 0) return;
+
+        store.pushAiSnapshot("Pre-Flight fix");
+        store.dispatchAIActions(suggestion.actions);
+        store.rebuildRenderManifest();
+
+        set((state) => ({
+          preflightFixPlan: state.preflightFixPlan
+            ? {
+                ...state.preflightFixPlan,
+                suggestions: state.preflightFixPlan.suggestions.map((s) =>
+                  s.id === suggestionId ? { ...s, applied: true } : s,
+                ),
+              }
+            : null,
+        }));
+
+        store.addAIMessage({
+          role: "assistant",
+          content: `Applied Pre-Flight fix: ${suggestion.title}`,
+        });
+      },
 
       setMarkIn: (t) => set({ markIn: t }),
       setMarkOut: (t) => set({ markOut: t }),

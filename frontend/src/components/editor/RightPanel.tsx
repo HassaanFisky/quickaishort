@@ -1756,6 +1756,21 @@ function PersonaCard({ vote, index }: { vote: PersonaVote; index: number }) {
   );
 }
 
+function ImpactBadge({ impact }: { impact: "low" | "medium" | "high" }) {
+  const cls =
+    impact === "high"
+      ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+      : impact === "medium"
+        ? "bg-amber-500/10 border-amber-500/20 text-amber-400"
+        : "bg-muted border-border text-muted-foreground";
+
+  return (
+    <span className={`inline-flex px-2 py-0.5 rounded-full border text-[9px] font-black uppercase tracking-widest ${cls}`}>
+      {impact} impact
+    </span>
+  );
+}
+
 function PreflightResultsPanel({
   result,
   onReset,
@@ -1767,6 +1782,8 @@ function PreflightResultsPanel({
   selectedClipId: string | null;
   updateClip: (id: string, updates: { start?: number; end?: number }) => void;
 }) {
+  const preflightFixPlan = useEditorStore((s) => s.preflightFixPlan);
+  const applyPreflightFixSuggestion = useEditorStore((s) => s.applyPreflightFixSuggestion);
   const scoreStyle = viralScoreColor(result.weighted_consensus_score);
   const isViral = result.weighted_consensus_score >= 90;
   const animatedScore = useAnimatedCounter(result.weighted_consensus_score);
@@ -1825,6 +1842,66 @@ function PreflightResultsPanel({
           ))}
         </div>
       )}
+
+      {preflightFixPlan?.suggestions.length ? (
+        <div className="mt-4 pt-4 border-t border-border flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-fg-muted">
+              Recommended fixes
+            </span>
+            <span className="text-[9px] text-muted-foreground">
+              Apply, then run Pre-Flight again
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 gap-2">
+            {preflightFixPlan.suggestions.map((suggestion) => {
+              const hasActions = suggestion.actions.length > 0;
+              return (
+                <div
+                  key={suggestion.id}
+                  className="rounded-xl border border-border bg-muted/35 p-3 flex flex-col gap-2"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-[12px] font-black text-foreground leading-snug">
+                        {suggestion.title}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground leading-relaxed mt-1">
+                        {suggestion.reason}
+                      </p>
+                    </div>
+                    <ImpactBadge impact={suggestion.expectedImpact} />
+                  </div>
+
+                  {(typeof suggestion.startSec === "number" || typeof suggestion.endSec === "number") && (
+                    <p className="text-[9px] font-mono text-muted-foreground">
+                      {typeof suggestion.startSec === "number" ? `${suggestion.startSec.toFixed(1)}s` : "—"}
+                      {" → "}
+                      {typeof suggestion.endSec === "number" ? `${suggestion.endSec.toFixed(1)}s` : "—"}
+                    </p>
+                  )}
+
+                  <button
+                    type="button"
+                    disabled={!hasActions || suggestion.applied}
+                    onClick={() => applyPreflightFixSuggestion(suggestion.id)}
+                    className={
+                      suggestion.applied
+                        ? "h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-black uppercase tracking-widest text-emerald-400 cursor-default"
+                        : hasActions
+                          ? "h-8 rounded-lg bg-primary text-primary-foreground text-[10px] font-black uppercase tracking-widest hover:brightness-110 transition"
+                          : "h-8 rounded-lg bg-secondary/60 text-muted-foreground text-[10px] font-black uppercase tracking-widest cursor-not-allowed"
+                    }
+                  >
+                    {suggestion.applied ? "Applied — run again to compare" : hasActions ? "Apply Fix" : "Manual Review"}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
 
       {/* Smart trim */}
       {result.refined_clip && (
