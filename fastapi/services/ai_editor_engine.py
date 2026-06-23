@@ -85,18 +85,15 @@ ALWAYS return this exact JSON format:
 }
 """
 
+
 async def process_editor_command(
-    command: str,
-    user_tier: str = "free",
-    project_context: dict = None
+    command: str, user_tier: str = "free", project_context: dict = None
 ) -> dict:
 
     # Get right model based on task + user tier
     tier = UserTier.PRO if user_tier == "pro" else UserTier.FREE
     model_config = get_model_for_task(
-        task_type=TaskType.EDITOR_COMMAND,
-        user_tier=tier,
-        command=command
+        task_type=TaskType.EDITOR_COMMAND, user_tier=tier, command=command
     )
 
     # Build context string
@@ -112,8 +109,8 @@ async def process_editor_command(
             generation_config=genai.GenerationConfig(
                 temperature=model_config.temperature,
                 max_tokens=model_config.max_tokens,
-                response_mime_type="application/json"
-            )
+                response_mime_type="application/json",
+            ),
         )
 
         prompt = f"User command: {command}{context_str}"
@@ -126,26 +123,19 @@ async def process_editor_command(
 
     except json.JSONDecodeError as e:
         raise HTTPException(
-            status_code=422,
-            detail=f"AI returned invalid JSON: {str(e)}"
+            status_code=422, detail=f"AI returned invalid JSON: {str(e)}"
         )
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Gemini API error: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Gemini API error: {str(e)}")
 
 
 async def stream_editor_command(
-    command: str,
-    user_tier: str = "free"
+    command: str, user_tier: str = "free"
 ) -> AsyncGenerator[str, None]:
 
     tier = UserTier.PRO if user_tier == "pro" else UserTier.FREE
     model_config = get_model_for_task(
-        task_type=TaskType.EDITOR_COMMAND,
-        user_tier=tier,
-        command=command
+        task_type=TaskType.EDITOR_COMMAND, user_tier=tier, command=command
     )
 
     model = genai.GenerativeModel(
@@ -154,13 +144,10 @@ async def stream_editor_command(
         generation_config=genai.GenerationConfig(
             temperature=model_config.temperature,
             max_output_tokens=model_config.max_tokens,
-        )
+        ),
     )
 
-    response = model.generate_content(
-        f"User command: {command}",
-        stream=True
-    )
+    response = model.generate_content(f"User command: {command}", stream=True)
 
     for chunk in response:
         if chunk.text:
@@ -201,6 +188,7 @@ SET_NOISE_REDUCTION { type, value: 0-100 }
 SET_PLAYBACK_SPEED { type, value: 50-200 }
 ... (rest of legacy catalog omitted for brevity, referencing original)
 """
+
 
 def _compute_silence_trims(
     transcript: list[TranscriptChunk],
@@ -323,6 +311,7 @@ async def run_ai_editor(
     for item in raw_actions_data:
         try:
             from pydantic import TypeAdapter
+
             ta: TypeAdapter[Any] = TypeAdapter(AiEditorAction)
             valid_actions.append(ta.validate_python(item))
         except Exception as exc:

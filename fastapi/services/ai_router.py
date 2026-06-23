@@ -2,6 +2,7 @@ import os
 from enum import Enum
 from dataclasses import dataclass
 
+
 class TaskType(str, Enum):
     SIMPLE_COMMAND = "simple_command"
     EDITOR_COMMAND = "editor_command"
@@ -9,9 +10,11 @@ class TaskType(str, Enum):
     BACKGROUND = "background"
     ESCALATION = "escalation"
 
+
 class UserTier(str, Enum):
     FREE = "free"
     PRO = "pro"
+
 
 @dataclass
 class ModelConfig:
@@ -19,15 +22,23 @@ class ModelConfig:
     temperature: float
     max_tokens: int
 
+
 SIMPLE_KEYWORDS = [
-    "add caption", "trim", "cut", "mute", "volume",
-    "speed up", "slow down", "rotate", "crop", "flip"
+    "add caption",
+    "trim",
+    "cut",
+    "mute",
+    "volume",
+    "speed up",
+    "slow down",
+    "rotate",
+    "crop",
+    "flip",
 ]
 
+
 def get_model_for_task(
-    task_type: TaskType,
-    user_tier: UserTier = UserTier.FREE,
-    command: str = ""
+    task_type: TaskType, user_tier: UserTier = UserTier.FREE, command: str = ""
 ) -> ModelConfig:
 
     # FREE TIER — always cheapest model
@@ -35,7 +46,7 @@ def get_model_for_task(
         return ModelConfig(
             model_name=os.getenv("GEMINI_FREE_MODEL", "gemini-2.5-flash-lite"),
             temperature=0.3,
-            max_tokens=2048
+            max_tokens=2048,
         )
 
     # BACKGROUND WORKERS — cheapest for async jobs
@@ -43,7 +54,7 @@ def get_model_for_task(
         return ModelConfig(
             model_name=os.getenv("GEMINI_FREE_MODEL", "gemini-2.5-flash-lite"),
             temperature=0.1,
-            max_tokens=1024
+            max_tokens=1024,
         )
 
     # SIMPLE COMMANDS — budget model
@@ -53,7 +64,7 @@ def get_model_for_task(
         return ModelConfig(
             model_name=os.getenv("GEMINI_BUDGET_MODEL", "gemini-2.5-flash"),
             temperature=0.3,
-            max_tokens=4096
+            max_tokens=4096,
         )
 
     # PREFLIGHT ANALYSIS — primary model
@@ -61,7 +72,7 @@ def get_model_for_task(
         return ModelConfig(
             model_name=os.getenv("GEMINI_PRIMARY_MODEL", "gemini-2.5-flash"),
             temperature=0.4,
-            max_tokens=8192
+            max_tokens=8192,
         )
 
     # ESCALATION — pro model only when needed
@@ -69,12 +80,12 @@ def get_model_for_task(
         return ModelConfig(
             model_name=os.getenv("GEMINI_PRO_MODEL", "gemini-2.5-pro"),
             temperature=0.5,
-            max_tokens=16384
+            max_tokens=16384,
         )
 
     # DEFAULT — primary model (editor commands)
     return ModelConfig(
         model_name=os.getenv("GEMINI_PRIMARY_MODEL", "gemini-2.5-flash"),
         temperature=0.4,
-        max_tokens=8192
+        max_tokens=8192,
     )

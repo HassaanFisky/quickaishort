@@ -973,4 +973,3 @@ class EditorCommandResponse(BaseModel):
     feedback: str
     fallback: str
     model_used: str
-

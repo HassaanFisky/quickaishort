@@ -28,9 +28,9 @@ logger = logging.getLogger(__name__)
 
 _POOL_KEY = "proxy:pool:active"
 _HEALTH_KEY_PREFIX = "proxy:health:"
-_HEALTH_TTL_S = 300          # 5-minute health cache
+_HEALTH_TTL_S = 300  # 5-minute health cache
 _CHECK_URL = "https://www.youtube.com/generate_204"
-_SRANDMEMBER_N = 5            # How many candidates to draw per acquire()
+_SRANDMEMBER_N = 5  # How many candidates to draw per acquire()
 
 
 def _get_circuit() -> "RedisCircuitBreaker":  # noqa: F821 — lazy import
@@ -51,6 +51,7 @@ def _get_circuit() -> "RedisCircuitBreaker":  # noqa: F821 — lazy import
 
 def _get_redis():
     from services.queue_service import redis_conn
+
     return redis_conn
 
 

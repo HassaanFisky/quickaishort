@@ -386,6 +386,7 @@ def acquire_video(
             err_msg = str(exc)[:300]
             # T0 ProxyPoolExhausted is an expected non-error — log at DEBUG
             from services.proxy_rotator import ProxyPoolExhausted
+
             if tier_num == 0 and isinstance(exc, ProxyPoolExhausted):
                 logger.debug(
                     "acquisition_t0_skipped video_id=%s reason=%s", video_id, err_msg
@@ -496,8 +497,7 @@ async def analyze_video_metadata_with_ai(metadata: dict) -> dict:
     from services.ai_router import get_model_for_task, TaskType, UserTier
 
     model_config = get_model_for_task(
-        task_type=TaskType.BACKGROUND,
-        user_tier=UserTier.FREE
+        task_type=TaskType.BACKGROUND, user_tier=UserTier.FREE
     )
 
     model = genai.GenerativeModel(
@@ -505,8 +505,8 @@ async def analyze_video_metadata_with_ai(metadata: dict) -> dict:
         generation_config=genai.GenerationConfig(
             temperature=0.2,
             max_output_tokens=1024,
-            response_mime_type="application/json"
-        )
+            response_mime_type="application/json",
+        ),
     )
 
     prompt = f"""
@@ -524,4 +524,3 @@ async def analyze_video_metadata_with_ai(metadata: dict) -> dict:
 
     response = model.generate_content(prompt)
     return {"ai_analysis": response.text, "model": model_config.model_name}
-

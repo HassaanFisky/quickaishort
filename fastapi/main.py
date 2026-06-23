@@ -310,6 +310,7 @@ async def lifespan(_app: FastAPI):
             # No-op when PROXY_POOL_URL is not configured.
             try:
                 from services.proxy_rotator import warm_pool
+
                 warm_pool()
             except Exception as _proxy_err:
                 logger.warning("proxy_pool_warm_failed: %s", _proxy_err)

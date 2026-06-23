@@ -907,10 +907,10 @@ def _emit_patch_failure(action_type: str, field: str) -> None:
     )
     try:
         import sentry_sdk
+
         sentry_sdk.capture_message(
             f"AI patch rejected: type={action_type} field={field}",
             level="warning",
         )
     except Exception:
         pass
-

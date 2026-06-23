@@ -16,8 +16,8 @@ from typing import List, Literal, Optional, Union, Annotated
 
 from pydantic import BaseModel, Field
 
-
 # ── Text overlays ──────────────────────────────────────────────────────────────
+
 
 class AddTextTrack(BaseModel):
     type: Literal["ADD_TEXT"] = "ADD_TEXT"
@@ -42,6 +42,7 @@ class RemoveTextTrack(BaseModel):
 
 # ── Audio ──────────────────────────────────────────────────────────────────────
 
+
 class ModifyAudioTrack(BaseModel):
     type: Literal["MODIFY_AUDIO"] = "MODIFY_AUDIO"
     track_id: str = Field(..., min_length=1, max_length=64)
@@ -64,6 +65,7 @@ class ModifyAudioTrack(BaseModel):
 
 
 # ── Video edits ────────────────────────────────────────────────────────────────
+
 
 class TrimVideo(BaseModel):
     type: Literal["TRIM_VIDEO"] = "TRIM_VIDEO"
@@ -140,6 +142,7 @@ VALID_ACTION_TYPES: frozenset[str] = frozenset(
 
 
 # ── Director output schema ─────────────────────────────────────────────────────
+
 
 class DirectorOutput(BaseModel):
     """Typed contract for run_director_pipeline() output.

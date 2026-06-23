@@ -35,6 +35,7 @@ router = APIRouter(tags=["AI Editor"])
 
 # ─── Legacy Endpoint ───────────────────────────────────────────────────────────
 
+
 @router.post("/api/ai-edit", response_model=AIEditorResponse)
 async def ai_edit(
     body: AIEditorRequest,
@@ -116,6 +117,7 @@ async def ai_edit(
 
 # ─── New Phase 56 Router Endpoints (prefix /api/ai-editor) ───────────────────
 
+
 @router.post("/api/ai-editor/command", response_model=EditorCommandResponse)
 async def handle_editor_command(request: EditorCommandRequest):
     """
@@ -128,7 +130,7 @@ async def handle_editor_command(request: EditorCommandRequest):
     result = await process_editor_command(
         command=request.command,
         user_tier=request.user_tier,
-        project_context=request.project_context
+        project_context=request.project_context,
     )
     return result
 
@@ -140,11 +142,8 @@ async def handle_editor_command_stream(request: EditorCommandRequest):
     Called from: frontend/src/components/editor/AIPanel.tsx
     """
     return StreamingResponse(
-        stream_editor_command(
-            command=request.command,
-            user_tier=request.user_tier
-        ),
-        media_type="text/event-stream"
+        stream_editor_command(command=request.command, user_tier=request.user_tier),
+        media_type="text/event-stream",
     )
 
 
