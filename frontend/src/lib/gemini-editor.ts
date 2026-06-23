@@ -344,3 +344,106 @@ export function buildVideoContext(
   }
   return parts.join("\n");
 }
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+
+export interface ToolParams {
+  clip_id?: string | null
+  start_time?: number | null
+  end_time?: number | null
+  value?: unknown
+  track_index?: number | null
+  text_content?: string | null
+  speed_factor?: number | null
+}
+
+export interface EditorAction {
+  tool: string
+  params: ToolParams
+  order: number
+}
+
+export interface EditorCommandResponse {
+  intent: string
+  confidence: number
+  actions: EditorAction[]
+  feedback: string
+  fallback: string
+  model_used: string
+}
+
+export interface EditorCommandRequest {
+  command: string
+  user_tier?: "free" | "pro"
+  project_context?: Record<string, unknown>
+  stream?: boolean
+}
+
+// Main function — send command, get back tool actions
+export async function sendEditorCommand(
+  request: EditorCommandRequest
+): Promise<EditorCommandResponse> {
+  const response = await fetch(`${API_BASE}/api/ai-editor/command`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(request),
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}))
+    throw new Error(
+      error.detail || `AI Editor error: ${response.status}`
+    )
+  }
+
+  return response.json()
+}
+
+// Streaming version — for real-time typing effect
+export async function streamEditorCommand(
+  request: EditorCommandRequest,
+  onChunk: (chunk: string) => void,
+  onDone: () => void
+): Promise<void> {
+  const response = await fetch(`${API_BASE}/api/ai-editor/command/stream`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ ...request, stream: true }),
+  })
+
+  if (!response.ok) throw new Error(`Stream error: ${response.status}`)
+  if (!response.body) throw new Error("No response body")
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) {
+      onDone()
+      break
+    }
+    const chunk = decoder.decode(value)
+    const lines = chunk.split("\n")
+    for (const line of lines) {
+      if (line.startsWith("data: ")) {
+        onChunk(line.replace("data: ", ""))
+      }
+    }
+  }
+}
+
+// Health check
+export async function checkAIEditorHealth(): Promise<{
+  status: string
+  primary_model: string
+  free_model: string
+}> {
+  const response = await fetch(`${API_BASE}/api/ai-editor/health`)
+  return response.json()
+}
+

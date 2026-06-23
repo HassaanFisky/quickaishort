@@ -485,3 +485,43 @@ async def get_stream_manifests(video_id: str) -> dict:
             str(exc)[:200],
         )
         return {"status": "error", "video_id": video_id, "error": str(exc)[:200]}
+
+
+async def analyze_video_metadata_with_ai(metadata: dict) -> dict:
+    """
+    After link probe succeeds — use AI to analyze video metadata
+    Runs as background job — uses cheapest model
+    """
+    import google.generativeai as genai
+    from services.ai_router import get_model_for_task, TaskType, UserTier
+
+    model_config = get_model_for_task(
+        task_type=TaskType.BACKGROUND,
+        user_tier=UserTier.FREE
+    )
+
+    model = genai.GenerativeModel(
+        model_name=model_config.model_name,
+        generation_config=genai.GenerationConfig(
+            temperature=0.2,
+            max_output_tokens=1024,
+            response_mime_type="application/json"
+        )
+    )
+
+    prompt = f"""
+    Analyze this video metadata and suggest editing actions:
+    {metadata}
+
+    Return JSON:
+    {{
+      "suggested_edits": ["list of edit suggestions"],
+      "quality_score": 0-10,
+      "platform_fit": {{"youtube_shorts": true/false, "tiktok": true/false}},
+      "hook_strength": "weak/medium/strong"
+    }}
+    """
+
+    response = model.generate_content(prompt)
+    return {"ai_analysis": response.text, "model": model_config.model_name}
+

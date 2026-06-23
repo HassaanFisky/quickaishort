@@ -5,8 +5,9 @@ TypeScript mirror lives at: frontend/src/types/ai-editor.ts
 """
 
 from __future__ import annotations
+from enum import Enum
 
-from typing import Annotated, Any, Literal, Optional, Union
+from typing import Annotated, Any, Literal, Optional, Union, List
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -920,3 +921,56 @@ class AIEditorResponse(BaseModel):
     model: Optional[str]
     clamped: list[str]
     dropped: list[str]
+
+
+class ToolName(str, Enum):
+    SELECTION = "selection_tool"
+    SELECT_FORWARD = "select_forward"
+    SELECT_BACKWARD = "select_backward"
+    RIPPLE_DELETE = "ripple_delete"
+    ROLLING_EDIT = "rolling_edit"
+    RATE_STRETCH = "rate_stretch"
+    RAZOR = "razor_tool"
+    SLIP = "slip_tool"
+    SLIDE = "slide_tool"
+    PEN_KEYFRAME = "pen_keyframe"
+    RECT_MASK = "rect_mask"
+    ELLIPSE_MASK = "ellipse_mask"
+    HAND = "hand_tool"
+    ZOOM = "zoom_tool"
+    TEXT_H = "text_horizontal"
+    TEXT_V = "text_vertical"
+    AI_EXTENDER = "ai_extender"
+
+
+class ToolParams(BaseModel):
+    clip_id: Optional[str] = None
+    start_time: Optional[float] = None
+    end_time: Optional[float] = None
+    value: Optional[Any] = None
+    track_index: Optional[int] = None
+    text_content: Optional[str] = None
+    speed_factor: Optional[float] = None
+
+
+class EditorAction(BaseModel):
+    tool: ToolName
+    params: ToolParams
+    order: int = Field(ge=1)
+
+
+class EditorCommandRequest(BaseModel):
+    command: str = Field(min_length=1, max_length=2000)
+    user_tier: Optional[str] = "free"
+    project_context: Optional[dict] = None
+    stream: Optional[bool] = False
+
+
+class EditorCommandResponse(BaseModel):
+    intent: str
+    confidence: float = Field(ge=0.0, le=1.0)
+    actions: List[EditorAction]
+    feedback: str
+    fallback: str
+    model_used: str
+

@@ -9,7 +9,11 @@ import {
   getInitialSuggestions,
   generateImmediateSuggestions,
   type EditorStateContext,
+  sendEditorCommand,
+  type EditorCommandResponse,
+  type EditorAction as Phase56EditorAction,
 } from "@/lib/gemini-editor";
+import { useSession } from "next-auth/react";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
 import { cn } from "@/lib/utils";
 
@@ -66,9 +70,111 @@ function StreamingText({ text }: { text: string }) {
   );
 }
 
+function translateToolActionToLegacy(action: Phase56EditorAction): any {
+  const tool = action.tool;
+  const p = action.params || {};
+  const val = p.value as any;
+  switch (tool) {
+    case "selection_tool":
+      return { type: "POINTER_SELECT", payload: { clip_id: p.clip_id } };
+    case "select_forward":
+      return { type: "FORWARD_LANE_SELECT", payload: { clip_id: p.clip_id } };
+    case "select_backward":
+      return { type: "BACKWARD_LANE_SELECT", payload: { clip_id: p.clip_id } };
+    case "ripple_delete":
+      return { type: "RIPPLE_DELETE", payload: { clip_id: p.clip_id } };
+    case "rolling_edit":
+      return {
+        type: "ROLLING_TRIM",
+        payload: {
+          clip_id: p.clip_id,
+          edge: val || "out",
+          delta_sec: p.end_time != null && p.start_time != null ? p.end_time - p.start_time : 0
+        }
+      };
+    case "rate_stretch":
+      return { type: "DURATION_STRETCH", payload: { clip_id: p.clip_id, speed_factor: p.speed_factor || val } };
+    case "razor_tool":
+      return { type: "BLADE_SPLIT", payload: { time_sec: p.start_time != null ? p.start_time : (val != null ? val : 0) } };
+    case "slip_tool":
+      return { type: "SLIP_CLIP", payload: { clip_id: p.clip_id, delta_sec: val || 0 } };
+    case "slide_tool":
+      return { type: "SLIDE_CLIP", payload: { clip_id: p.clip_id, delta_sec: val || 0 } };
+    case "pen_keyframe":
+      return {
+        type: "SET_KEYFRAME",
+        payload: {
+          clip_id: p.clip_id,
+          property: val || "position",
+          time_ms: p.start_time != null ? p.start_time * 1000 : 0,
+          value: val != null ? val : 0
+        }
+      };
+    case "rect_mask":
+      return {
+        type: "ADD_RECT_MASK",
+        payload: {
+          clip_id: p.clip_id,
+          x: val?.x || 0.1,
+          y: val?.y || 0.1,
+          width: val?.width || 0.8,
+          height: val?.height || 0.8
+        }
+      };
+    case "ellipse_mask":
+      return {
+        type: "ADD_ELLIPSE_MASK",
+        payload: {
+          clip_id: p.clip_id,
+          cx: val?.cx || 0.5,
+          cy: val?.cy || 0.5,
+          rx: val?.rx || 0.4,
+          ry: val?.ry || 0.4
+        }
+      };
+    case "hand_tool":
+      return {
+        type: "SCROLL_HAND",
+        payload: {
+          delta_x: val?.x || val || 0,
+          delta_y: val?.y || 0
+        }
+      };
+    case "zoom_tool":
+      return { type: "TIMELINE_ZOOM", payload: { zoom_factor: val || 1.0 } };
+    case "text_horizontal":
+      if (val === "auto_caption") {
+        return { type: "TOGGLE_CAPTIONS", payload: { enabled: true } };
+      }
+      return {
+        type: "ADD_CAPTION",
+        payload: {
+          text: p.text_content || val || "",
+          startTime: p.start_time != null ? p.start_time : 0,
+          endTime: p.end_time != null ? p.end_time : 5
+        }
+      };
+    case "text_vertical":
+      return {
+        type: "ADD_CAPTION",
+        payload: {
+          text: p.text_content || val || "",
+          startTime: p.start_time != null ? p.start_time : 0,
+          endTime: p.end_time != null ? p.end_time : 5,
+          style: { position: "middle", vertical: true }
+        }
+      };
+    case "ai_extender":
+      return { type: "AI_EXTENDER", payload: { clip_id: p.clip_id } };
+    default:
+      return { type: tool.toUpperCase(), payload: p };
+  }
+}
+
 /* ─── Main panel ────────────────────────────────────────────────────────────── */
 
 export function AIPanel() {
+  const { data: session } = useSession();
   const {
     aiPanelOpen,
     setAIPanelOpen,
@@ -225,27 +331,32 @@ export function AIPanel() {
       setAIThinking(true);
 
       try {
-        const response = await callGeminiEditor(
-          trimmed,
-          videoMetadata,
-          videoAnalysis,
-          historySnapshot,
-          editorState,
-        );
+        const userTier = session?.user?.isPro || (session?.user as any)?.isPremium ? "pro" : "free";
+        const result = await sendEditorCommand({
+          command: trimmed,
+          user_tier: userTier,
+          project_context: {
+            clip_count: editorState.clipCount,
+            duration: editorState.videoDuration,
+          },
+        });
 
-        if (response.actions.length > 0) {
-          dispatchAIActions(response.actions);
+        const legacyActions = (result.actions || [])
+          .sort((a, b) => a.order - b.order)
+          .map(translateToolActionToLegacy);
+
+        if (legacyActions.length > 0) {
+          dispatchAIActions(legacyActions);
           // Track recent actions for future context (keep last 8)
           setRecentActions((prev) =>
-            [...prev, ...response.actions.map((a) => a.type)].slice(-8),
+            [...prev, ...legacyActions.map((a: any) => a.type)].slice(-8),
           );
         }
-        if (response.suggestions.length > 0) setSuggestions(response.suggestions);
 
         addAIMessage({
           role: "assistant",
-          content: response.message || "Done.",
-          actions: response.actions,
+          content: result.feedback || "Done.",
+          actions: legacyActions,
         });
       } catch (err: unknown) {
         const errMsg = err instanceof Error ? err.message : String(err);
@@ -268,7 +379,7 @@ export function AIPanel() {
         setAIThinking(false);
       }
     },
-    [isAIThinking, stopRecording, addAIMessage, setAIThinking, dispatchAIActions, videoMetadata, videoAnalysis, editorState],
+    [isAIThinking, stopRecording, addAIMessage, setAIThinking, dispatchAIActions, videoMetadata, videoAnalysis, editorState, session],
   );
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
