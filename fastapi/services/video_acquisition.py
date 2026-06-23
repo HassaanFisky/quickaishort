@@ -24,6 +24,8 @@ import time
 from pathlib import Path
 from typing import Any, Optional
 
+from services.gemini_client import call_gemini_text
+
 logger = logging.getLogger(__name__)
 
 _TIER_TIMEOUT_S = int(os.getenv("VIDEO_ACQUISITION_TIER_TIMEOUT_S", "90"))
@@ -493,20 +495,10 @@ async def analyze_video_metadata_with_ai(metadata: dict) -> dict:
     After link probe succeeds — use AI to analyze video metadata
     Runs as background job — uses cheapest model
     """
-    import google.generativeai as genai
     from services.ai_router import get_model_for_task, TaskType, UserTier
 
     model_config = get_model_for_task(
         task_type=TaskType.BACKGROUND, user_tier=UserTier.FREE
-    )
-
-    model = genai.GenerativeModel(
-        model_name=model_config.model_name,
-        generation_config=genai.GenerationConfig(
-            temperature=0.2,
-            max_output_tokens=1024,
-            response_mime_type="application/json",
-        ),
     )
 
     prompt = f"""
@@ -522,5 +514,10 @@ async def analyze_video_metadata_with_ai(metadata: dict) -> dict:
     }}
     """
 
-    response = model.generate_content(prompt)
-    return {"ai_analysis": response.text, "model": model_config.model_name}
+    raw = await call_gemini_text(
+        prompt,
+        model=model_config.model_name,
+        json_mode=True,
+        max_attempts=5,
+    )
+    return {"ai_analysis": raw, "model": model_config.model_name}

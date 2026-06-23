@@ -12,7 +12,6 @@ import json
 import asyncio
 import logging
 from typing import Any, AsyncGenerator
-import google.generativeai as genai
 from fastapi import HTTPException
 
 from models.ai_editor import (
@@ -32,8 +31,6 @@ logger = logging.getLogger(__name__)
 _HARD_TIMEOUT_S = 30
 _MAX_TRANSCRIPT_WORDS = 300
 
-# Configure Gemini once at startup
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 # ─── New Phase 56 System Prompt ──────────────────────────────────────────────
 
@@ -101,23 +98,18 @@ async def process_editor_command(
     if project_context:
         context_str = f"\nProject context: {json.dumps(project_context, indent=2)}"
 
-    # Call Gemini
+    # Call Gemini via centralized client
     try:
-        model = genai.GenerativeModel(
-            model_name=model_config.model_name,
-            system_instruction=EDITOR_SYSTEM_PROMPT,
-            generation_config=genai.GenerationConfig(
-                temperature=model_config.temperature,
-                max_tokens=model_config.max_tokens,
-                response_mime_type="application/json",
-            ),
+        prompt = f"{EDITOR_SYSTEM_PROMPT}\n\nUser command: {command}{context_str}"
+        raw = await call_gemini_text(
+            prompt,
+            model=model_config.model_name,
+            json_mode=True,
+            max_attempts=5,
         )
 
-        prompt = f"User command: {command}{context_str}"
-        response = model.generate_content(prompt)
-
         # Parse JSON response
-        result = json.loads(response.text)
+        result = json.loads(raw)
         result["model_used"] = model_config.model_name
         return result
 
@@ -138,20 +130,14 @@ async def stream_editor_command(
         task_type=TaskType.EDITOR_COMMAND, user_tier=tier, command=command
     )
 
-    model = genai.GenerativeModel(
-        model_name=model_config.model_name,
-        system_instruction=EDITOR_SYSTEM_PROMPT,
-        generation_config=genai.GenerationConfig(
-            temperature=model_config.temperature,
-            max_output_tokens=model_config.max_tokens,
-        ),
+    # No streaming helper in centralized client — call once and yield full response
+    prompt = f"{EDITOR_SYSTEM_PROMPT}\n\nUser command: {command}"
+    raw = await call_gemini_text(
+        prompt,
+        model=model_config.model_name,
+        max_attempts=5,
     )
-
-    response = model.generate_content(f"User command: {command}", stream=True)
-
-    for chunk in response:
-        if chunk.text:
-            yield f"data: {chunk.text}\n\n"
+    yield f"data: {raw}\n\n"
 
 
 # ─── Legacy System prompt (for run_ai_editor) ──────────────────────────────────
