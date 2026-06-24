@@ -87,10 +87,11 @@ def validate_scaffolds() -> list[dict]:
 
             # Search for placeholders
             for pattern in PLACEHOLDER_PATTERNS:
-                if re.search(pattern, content):
+                match = re.search(pattern, content)
+                if match:
                     issues.append({
                         "type": "error",
-                        "message": f"Placeholder pattern '{pattern}' detected in scaffold file: {filename}"
+                        "message": f"Placeholder pattern '{match.group(0)}' detected in scaffold file: {filename}"
                     })
         except Exception as e:
             issues.append({
