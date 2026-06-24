@@ -14,6 +14,8 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 
+from services.agent_runtime import ensure_agent_ready
+
 from models.ai_editor import (
     AIEditorRequest,
     AIEditorResponse,
@@ -42,6 +44,7 @@ async def ai_edit(
     user_id: str = Depends(get_verified_user_id),
 ) -> AIEditorResponse:
     t0 = time.perf_counter()
+    ensure_agent_ready("ai_editor_agent", strict=False)
 
     # Mock short-circuit
     if MOCK_ENABLED:
@@ -127,6 +130,7 @@ async def handle_editor_command(request: EditorCommandRequest):
     if not request.command.strip():
         raise HTTPException(status_code=400, detail="Command cannot be empty")
 
+    ensure_agent_ready("ai_editor_agent", strict=False)
     result = await process_editor_command(
         command=request.command,
         user_tier=request.user_tier,
@@ -141,6 +145,7 @@ async def handle_editor_command_stream(request: EditorCommandRequest):
     Streaming version — for real-time AI typing effect in AIPanel
     Called from: frontend/src/components/editor/AIPanel.tsx
     """
+    ensure_agent_ready("ai_editor_agent", strict=False)
     return StreamingResponse(
         stream_editor_command(command=request.command, user_tier=request.user_tier),
         media_type="text/event-stream",

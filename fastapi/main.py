@@ -110,6 +110,7 @@ from services.project_service import get_project_service
 from services.tts_service import get_tts_service
 from services.music_service import get_music_service
 from services.storage_service import get_storage_service
+from services.agent_runtime import ensure_agent_ready
 
 load_dotenv()
 from services.logging import setup_logging, get_logger, correlation_id
@@ -359,8 +360,10 @@ from routers.pipeline_router import router as pipeline_router
 app.include_router(pipeline_router)
 
 from routers.ai_editor_router import router as ai_editor_router
+from routers.agent_runtime_router import router as agent_runtime_router
 
 app.include_router(ai_editor_router)
+app.include_router(agent_runtime_router)
 
 from routers.broll_router import router as broll_router
 
@@ -1866,6 +1869,7 @@ async def run_preflight(
     body: PreflightRequest,
     verified_user_id: str = Depends(get_verified_user_id),
 ):
+    ensure_agent_ready("preflight_agent", strict=False)
     user_id = verified_user_id or body.user_id
     if not _ADK_AVAILABLE:
         raise HTTPException(
