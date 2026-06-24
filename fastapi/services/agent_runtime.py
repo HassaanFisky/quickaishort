@@ -1,4 +1,4 @@
-"""Agent Runtime Guardrails & Scaffold Verification.
+﻿"""Agent Runtime Guardrails & Scaffold Verification.
 
 This service implements declarative agent scaffolds validation, presence checks,
 and environment variable validation before AI/tool execution.
@@ -7,7 +7,7 @@ and environment variable validation before AI/tool execution.
 import os
 import re
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -152,7 +152,7 @@ def get_agent_runtime_report(agent_name: str | None = None) -> dict:
         }
 
     return {
-        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "scaffolds_directory": str(SCAFFOLDS_DIR),
         "scaffolds_status": "valid" if not any(i["type"] == "error" for i in scaffold_issues) else "invalid",
         "scaffold_issues": scaffold_issues,
@@ -194,3 +194,4 @@ def ensure_agent_ready(agent_name: str, strict: bool = False) -> bool:
             return False
             
     return True
+

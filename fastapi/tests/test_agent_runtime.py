@@ -1,4 +1,4 @@
-"""Tests for Agent Runtime Guardrails & Scaffold Verification.
+﻿"""Tests for Agent Runtime Guardrails & Scaffold Verification.
 
 Run: cd fastapi && PYTHONPATH=. python -m pytest tests/test_agent_runtime.py -v
 """
@@ -150,3 +150,4 @@ def test_router_health_endpoints():
     # Scenario 3: GET with invalid name
     response = client.get("/api/agent-runtime/health/unknown_agent")
     assert response.status_code == 404
+
