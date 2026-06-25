@@ -48,14 +48,17 @@ def test_validate_scaffolds_placeholder_detection():
         ("This is a [TODO] item.", "[TODO]"),
         ("Value is [PLACEHOLDER]", "[PLACEHOLDER]"),
         ("Use YOUR_API_KEY here", "YOUR_"),
-        ("Please CHANGE_ME later", "CHANGE_ME")
+        ("Please CHANGE_ME later", "CHANGE_ME"),
     ]
 
     for content, pattern in dummies:
-        with patch("pathlib.Path.exists", return_value=True), \
-             patch("pathlib.Path.read_text", return_value=content):
+        with patch("pathlib.Path.exists", return_value=True), patch(
+            "pathlib.Path.read_text", return_value=content
+        ):
             issues = validate_scaffolds()
-            assert len(issues) > 0, f"Expected placeholder detection for pattern '{pattern}'"
+            assert (
+                len(issues) > 0
+            ), f"Expected placeholder detection for pattern '{pattern}'"
             assert any(pattern in i["message"] for i in issues)
 
 
@@ -65,9 +68,14 @@ def test_check_environment_for_agent_validation():
     with patch.dict(os.environ, {}, clear=True):
         issues = check_environment_for_agent("ai_editor_agent")
         # Required key GEMINI_API_KEY must be reported as error
-        assert any(i["type"] == "error" and i["variable"] == "GEMINI_API_KEY" for i in issues)
+        assert any(
+            i["type"] == "error" and i["variable"] == "GEMINI_API_KEY" for i in issues
+        )
         # Optional variables reported as warnings
-        assert any(i["type"] == "warning" and i["variable"] == "GEMINI_PRIMARY_MODEL" for i in issues)
+        assert any(
+            i["type"] == "warning" and i["variable"] == "GEMINI_PRIMARY_MODEL"
+            for i in issues
+        )
 
     # Scenario 2: Partially populated environment
     with patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"}, clear=True):
@@ -75,13 +83,16 @@ def test_check_environment_for_agent_validation():
         # Required keys met
         assert not any(i["type"] == "error" for i in issues)
         # Warnings for optional elements still returned
-        assert any(i["type"] == "warning" and i["variable"] == "GEMINI_PRIMARY_MODEL" for i in issues)
+        assert any(
+            i["type"] == "warning" and i["variable"] == "GEMINI_PRIMARY_MODEL"
+            for i in issues
+        )
 
     # Scenario 3: fully populated environment
     full_env = {
         "GEMINI_API_KEY": "test-key",
         "GEMINI_PRIMARY_MODEL": "gemini-2.5-flash",
-        "GEMINI_FREE_MODEL": "gemini-2.5-flash-lite"
+        "GEMINI_FREE_MODEL": "gemini-2.5-flash-lite",
     }
     with patch.dict(os.environ, full_env, clear=True):
         issues = check_environment_for_agent("ai_editor_agent")
@@ -150,4 +161,3 @@ def test_router_health_endpoints():
     # Scenario 3: GET with invalid name
     response = client.get("/api/agent-runtime/health/unknown_agent")
     assert response.status_code == 404
-

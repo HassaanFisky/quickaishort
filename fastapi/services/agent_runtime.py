@@ -15,13 +15,19 @@ logger = logging.getLogger(__name__)
 # Scaffold files are located relative to this file
 SCAFFOLDS_DIR = Path(__file__).resolve().parent.parent / "agent" / "scaffolds"
 
-REQUIRED_SCAFFOLDS = ["SOUL.md", "IDENTITY.md", "AGENTS.md", "MEMORY.md", "BOOTSTRAP.md"]
+REQUIRED_SCAFFOLDS = [
+    "SOUL.md",
+    "IDENTITY.md",
+    "AGENTS.md",
+    "MEMORY.md",
+    "BOOTSTRAP.md",
+]
 
 PLACEHOLDER_PATTERNS = [
     r"\[TODO\]",
     r"\[PLACEHOLDER\]",
     r"\bYOUR_[A-Z0-9_]+\b",
-    r"\bCHANGE_ME\b"
+    r"\bCHANGE_ME\b",
 ]
 
 AGENT_ENV_CONFIGS = {
@@ -61,43 +67,50 @@ def validate_scaffolds() -> list[dict]:
     """Validate all required scaffolds exist and are free from placeholders."""
     issues = []
     if not SCAFFOLDS_DIR.exists():
-        issues.append({
-            "type": "error",
-            "message": f"Scaffolds directory does not exist: {SCAFFOLDS_DIR}"
-        })
+        issues.append(
+            {
+                "type": "error",
+                "message": f"Scaffolds directory does not exist: {SCAFFOLDS_DIR}",
+            }
+        )
         return issues
 
     for filename in REQUIRED_SCAFFOLDS:
         file_path = SCAFFOLDS_DIR / filename
         if not file_path.exists():
-            issues.append({
-                "type": "error",
-                "message": f"Missing required scaffold file: {filename}"
-            })
+            issues.append(
+                {
+                    "type": "error",
+                    "message": f"Missing required scaffold file: {filename}",
+                }
+            )
             continue
 
         try:
             content = file_path.read_text(encoding="utf-8")
             if not content.strip():
-                issues.append({
-                    "type": "error",
-                    "message": f"Scaffold file is empty: {filename}"
-                })
+                issues.append(
+                    {"type": "error", "message": f"Scaffold file is empty: {filename}"}
+                )
                 continue
 
             # Search for placeholders
             for pattern in PLACEHOLDER_PATTERNS:
                 match = re.search(pattern, content)
                 if match:
-                    issues.append({
-                        "type": "error",
-                        "message": f"Placeholder pattern '{match.group(0)}' detected in scaffold file: {filename}"
-                    })
+                    issues.append(
+                        {
+                            "type": "error",
+                            "message": f"Placeholder pattern '{match.group(0)}' detected in scaffold file: {filename}",
+                        }
+                    )
         except Exception as e:
-            issues.append({
-                "type": "error",
-                "message": f"Failed to read scaffold file '{filename}': {str(e)}"
-            })
+            issues.append(
+                {
+                    "type": "error",
+                    "message": f"Failed to read scaffold file '{filename}': {str(e)}",
+                }
+            )
 
     return issues
 
@@ -107,27 +120,28 @@ def check_environment_for_agent(agent_name: str) -> list[dict]:
     issues = []
     config = AGENT_ENV_CONFIGS.get(agent_name)
     if not config:
-        issues.append({
-            "type": "error",
-            "message": f"Unknown agent name: {agent_name}"
-        })
+        issues.append({"type": "error", "message": f"Unknown agent name: {agent_name}"})
         return issues
 
     for var in config["required"]:
         if not os.environ.get(var):
-            issues.append({
-                "type": "error",
-                "variable": var,
-                "message": f"Missing required environment variable: {var}"
-            })
+            issues.append(
+                {
+                    "type": "error",
+                    "variable": var,
+                    "message": f"Missing required environment variable: {var}",
+                }
+            )
 
     for var in config["optional"]:
         if not os.environ.get(var):
-            issues.append({
-                "type": "warning",
-                "variable": var,
-                "message": f"Missing optional environment variable: {var}"
-            })
+            issues.append(
+                {
+                    "type": "warning",
+                    "variable": var,
+                    "message": f"Missing optional environment variable: {var}",
+                }
+            )
 
     return issues
 
@@ -136,29 +150,35 @@ def get_agent_runtime_report(agent_name: str | None = None) -> dict:
     """Compile agent verification results into a detailed runtime check report."""
     scaffold_issues = validate_scaffolds()
     agents_to_check = [agent_name] if agent_name else list(AGENT_ENV_CONFIGS.keys())
-    
+
     env_issues = {}
     readiness = {}
-    
+
     for agent in agents_to_check:
         issues = check_environment_for_agent(agent)
         env_issues[agent] = issues
-        
+
         has_scaffold_errors = any(i["type"] == "error" for i in scaffold_issues)
         has_env_errors = any(i["type"] == "error" for i in issues)
-        
+
         readiness[agent] = {
             "ready": not (has_scaffold_errors or has_env_errors),
-            "status": "ready" if not (has_scaffold_errors or has_env_errors) else "not_ready"
+            "status": (
+                "ready" if not (has_scaffold_errors or has_env_errors) else "not_ready"
+            ),
         }
 
     return {
         "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "scaffolds_directory": str(SCAFFOLDS_DIR),
-        "scaffolds_status": "valid" if not any(i["type"] == "error" for i in scaffold_issues) else "invalid",
+        "scaffolds_status": (
+            "valid"
+            if not any(i["type"] == "error" for i in scaffold_issues)
+            else "invalid"
+        ),
         "scaffold_issues": scaffold_issues,
         "environment_issues": env_issues,
-        "readiness": readiness
+        "readiness": readiness,
     }
 
 
@@ -166,16 +186,16 @@ def ensure_agent_ready(agent_name: str, strict: bool = False) -> bool:
     """Assert agent readiness. Throws on error in strict mode, logs warnings in non-strict mode."""
     scaffold_issues = validate_scaffolds()
     env_issues = check_environment_for_agent(agent_name)
-    
+
     critical_errors = []
     warnings = []
-    
+
     for issue in scaffold_issues:
         if issue["type"] == "error":
             critical_errors.append(f"Scaffold error: {issue['message']}")
         else:
             warnings.append(f"Scaffold warning: {issue['message']}")
-            
+
     for issue in env_issues:
         if issue["type"] == "error":
             critical_errors.append(f"Environment error: {issue['message']}")
@@ -193,6 +213,5 @@ def ensure_agent_ready(agent_name: str, strict: bool = False) -> bool:
         else:
             logger.warning(f"[NON-STRICT MODE] {error_msg}")
             return False
-            
-    return True
 
+    return True

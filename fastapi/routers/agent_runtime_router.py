@@ -25,8 +25,7 @@ async def get_all_agents_health():
     except Exception as exc:
         logger.error("Failed to generate agent runtime health report: %s", exc)
         raise HTTPException(
-            status_code=500,
-            detail="Failed to generate agent runtime health report."
+            status_code=500, detail="Failed to generate agent runtime health report."
         )
 
 
@@ -39,14 +38,16 @@ async def get_agent_health(agent_name: str):
     if agent_name not in AGENT_ENV_CONFIGS:
         raise HTTPException(
             status_code=404,
-            detail=f"Agent '{agent_name}' not found. Available agents: {list(AGENT_ENV_CONFIGS.keys())}"
+            detail=f"Agent '{agent_name}' not found. Available agents: {list(AGENT_ENV_CONFIGS.keys())}",
         )
     try:
         report = get_agent_runtime_report(agent_name=agent_name)
         return report
     except Exception as exc:
-        logger.error("Failed to generate runtime health report for %s: %s", agent_name, exc)
+        logger.error(
+            "Failed to generate runtime health report for %s: %s", agent_name, exc
+        )
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to generate agent runtime health report for '{agent_name}'."
+            detail=f"Failed to generate agent runtime health report for '{agent_name}'.",
         )
