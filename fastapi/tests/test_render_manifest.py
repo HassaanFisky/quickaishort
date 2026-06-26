@@ -1,4 +1,8 @@
-"""Unit tests for RenderManifest Pydantic models."""
+"""Unit tests for RenderManifest Pydantic models (Phase 58 + 59).
+
+Phase 59 tests verify that ExportRequest in main.py correctly accepts, validates,
+and stores an optional RenderManifest without breaking the existing request path.
+"""
 
 import pytest
 from pydantic import ValidationError
@@ -177,3 +181,92 @@ def test_full_complex_manifest():
     assert manifest.effects[0].payload["brightness"] == 1.1
     assert manifest.keyframes[0].value == 1.5
     assert manifest.sourceHash == "sha256-mock-hash"
+
+
+# ---------------------------------------------------------------------------
+# Phase 59 — ExportRequest model integration tests
+# These tests exercise the ExportRequest Pydantic model from models/export_request.py.
+# They do NOT import main.py and therefore require no Redis/Sentry/app startup.
+# ---------------------------------------------------------------------------
+
+from models import ExportRequest  # noqa: E402 — imported after module-level fixtures
+
+# Minimal valid RenderManifest dict that satisfies the schema.
+_VALID_MANIFEST = {
+    "version": 1,
+    "generatedAt": 1718000000000,
+    "timeline": {
+        "fps": 30.0,
+        "width": 1080,
+        "height": 1920,
+        "duration": 15.0,
+    },
+}
+
+# Minimal ExportRequest dict *without* a render_manifest (legacy path).
+_BASE_EXPORT = {
+    "videoId": "abc123",
+    "start_sec": 0.0,
+    "end_sec": 15.0,
+    "user_id": "user-test",
+}
+
+
+def test_export_request_valid_manifest_accepted():
+    """Phase 59: ExportRequest must accept a valid RenderManifest and preserve it."""
+    payload = {**_BASE_EXPORT, "render_manifest": _VALID_MANIFEST}
+    req = ExportRequest(**payload)
+    assert req.render_manifest is not None
+    assert req.render_manifest.version == 1
+    assert req.render_manifest.generatedAt == 1718000000000
+    assert req.render_manifest.timeline.fps == 30.0
+
+    # Serialising back to dict must include a non-None render_manifest key.
+    dumped = req.model_dump()
+    assert "render_manifest" in dumped
+    assert isinstance(dumped["render_manifest"], dict)
+    assert dumped["render_manifest"]["version"] == 1
+
+
+def test_export_request_invalid_manifest_rejected():
+    """Phase 59: ExportRequest must reject a structurally invalid RenderManifest."""
+    # timeline.width is required; omitting it should raise a ValidationError.
+    bad_manifest = {
+        "version": 1,
+        "generatedAt": 1718000000000,
+        "timeline": {
+            "fps": 30.0,
+            # 'width' is intentionally missing
+            "height": 1920,
+            "duration": 15.0,
+        },
+    }
+    with pytest.raises(ValidationError) as exc_info:
+        ExportRequest(**{**_BASE_EXPORT, "render_manifest": bad_manifest})
+
+    errors = exc_info.value.errors()
+    # At least one error should reference the 'width' field inside the manifest.
+    field_paths = [
+        ".".join(str(loc) for loc in err["loc"]) for err in errors
+    ]
+    assert any("width" in path for path in field_paths), (
+        f"Expected a 'width' field error; got: {field_paths}"
+    )
+
+
+def test_export_request_without_manifest_still_works():
+    """Phase 59: legacy ExportRequest without render_manifest must keep working."""
+    req = ExportRequest(**_BASE_EXPORT)
+    assert req.render_manifest is None
+
+    # Core fields must remain intact.
+    assert req.videoId == "abc123"
+    assert req.start_sec == 0.0
+    assert req.end_sec == 15.0
+    assert req.user_id == "user-test"
+
+    # Defaults must remain unchanged.
+    assert req.aspect_ratio == "9:16"
+    assert req.quality == "medium"
+    assert req.watermark_enabled is False
+    assert req.transition_enabled is False

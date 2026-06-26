@@ -8,6 +8,12 @@ from models.render_manifest import (
     RenderKeyframe,
     RenderManifest,
 )
+from models.export_request import (
+    ReframingPayload,
+    CaptionsPayload,
+    CanvasOverlayPayload,
+    ExportRequest,
+)
 
 __all__ = [
     "RenderTimeline",
@@ -18,4 +24,8 @@ __all__ = [
     "RenderEffect",
     "RenderKeyframe",
     "RenderManifest",
+    "ReframingPayload",
+    "CaptionsPayload",
+    "CanvasOverlayPayload",
+    "ExportRequest",
 ]

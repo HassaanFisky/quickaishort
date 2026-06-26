@@ -49,6 +49,12 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from starlette.background import BackgroundTask
 from pydantic import BaseModel, Field
+from models.export_request import (
+    ReframingPayload,
+    CaptionsPayload,
+    CanvasOverlayPayload,
+    ExportRequest,
+)
 
 try:
     from sentry_sdk.integrations.fastapi import FastApiIntegration
@@ -494,44 +500,7 @@ class CreateVideoRequest(BaseModel):
     user_id: str
 
 
-class ReframingPayload(BaseModel):
-    center: dict[str, float]
-    scale: float = 1.0
 
-
-class CaptionsPayload(BaseModel):
-    enabled: bool = False
-    srt_content: str = ""
-    style: Optional[str] = None
-
-
-class CanvasOverlayPayload(BaseModel):
-    type: str
-    content: str
-    x_pct: float
-    y_pct: float
-    scale: float = 1.0
-    rotation: float = 0.0
-
-
-class ExportRequest(BaseModel):
-    videoId: str
-    start_sec: float
-    end_sec: float
-    user_id: str
-    runId: Optional[str] = None
-    aspect_ratio: Literal["9:16", "1:1"] = "9:16"
-    quality: Literal["low", "medium", "high"] = "medium"
-    captions: CaptionsPayload = Field(default_factory=CaptionsPayload)
-    watermark_enabled: bool = False
-    reframing: Optional[ReframingPayload] = None
-    canvas_overlays: List[CanvasOverlayPayload] = Field(default_factory=list)
-    audio_boost: float = 85.0
-    playback_speed: float = 100.0
-    noise_suppression: float = 20.0
-    filter_name: str = "None"
-    transition_enabled: bool = False
-    voiceover_enabled: bool = False
 
 
 class PresignedUrlRequest(BaseModel):
@@ -843,6 +812,11 @@ async def export_video(
         "emotional_peaks": emotional_peaks,
         "cinematic_style": cinematic_style,
         "canvas_overlays": [ov.model_dump() for ov in request.canvas_overlays],
+        # Phase 59: persist validated manifest alongside job options.
+        # render_worker.py does not yet read this field.
+        "render_manifest": (
+            request.render_manifest.model_dump() if request.render_manifest else None
+        ),
     }
 
     try:
