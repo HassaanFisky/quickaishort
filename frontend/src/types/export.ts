@@ -1,3 +1,5 @@
+import type { RenderManifest } from "@/lib/render/renderManifest";
+
 export type ExportQuality = "low" | "medium" | "high";
 export type ExportAspect = "9:16" | "1:1";
 
@@ -40,6 +42,7 @@ export interface ExportRequestPayload {
   filter_name?: string;
   transition_enabled?: boolean;
   voiceover_enabled?: boolean;
+  render_manifest?: RenderManifest | null;
 }
 
 export interface ExportEnqueueResponse {

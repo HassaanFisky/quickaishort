@@ -276,6 +276,12 @@ export function useServerExport({ userId }: UseServerExportArgs) {
         rotation: el.rotation,
       }));
 
+      let compiledManifest = useEditorStore.getState().compiledManifest;
+      if (compiledManifest === null) {
+        useEditorStore.getState().rebuildRenderManifest();
+        compiledManifest = useEditorStore.getState().compiledManifest;
+      }
+
       const payload: ExportRequestPayload = {
         videoId,
         start_sec: clip.start,
@@ -303,6 +309,7 @@ export function useServerExport({ userId }: UseServerExportArgs) {
         filter_name: useEditorStore.getState().exportSettings.filter,
         transition_enabled: useEditorStore.getState().exportSettings.transitionEnabled,
         voiceover_enabled: useEditorStore.getState().exportSettings.voiceoverEnabled,
+        render_manifest: compiledManifest,
       };
 
       setIsExporting(true);
