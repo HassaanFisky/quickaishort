@@ -124,6 +124,15 @@ from services.logging import setup_logging, get_logger, correlation_id
 setup_logging()
 logger = get_logger("api")
 
+# Phase 65: RenderManifest feature flag
+RENDER_MANIFEST_REQUIRED = (
+    os.getenv("RENDER_MANIFEST_REQUIRED", "false").lower() == "true"
+)
+RENDER_MANIFEST_ENABLED = os.getenv("RENDER_MANIFEST_ENABLED", "true").lower() == "true"
+
+if RENDER_MANIFEST_ENABLED:
+    logger.info("render_manifest_enabled", required=RENDER_MANIFEST_REQUIRED)
+
 from services.queue_service import is_overloaded, get_job_cost_est
 
 _STARTUP_COMPLETE = False
@@ -500,9 +509,6 @@ class CreateVideoRequest(BaseModel):
     user_id: str
 
 
-
-
-
 class PresignedUrlRequest(BaseModel):
     filename: str
     content_type: str = "video/mp4"
@@ -747,6 +753,16 @@ async def export_video(
 ):
     user_id = verified_user_id or request.user_id
 
+    # Phase 65: feature flag gate
+    if RENDER_MANIFEST_REQUIRED and not request.render_manifest:
+        raise HTTPException(
+            status_code=422,
+            detail="render_manifest is required – please update your client. Set RENDER_MANIFEST_REQUIRED=false to allow legacy exports temporarily.",
+        )
+    if not RENDER_MANIFEST_ENABLED and request.render_manifest:
+        # Strip manifest if feature is disabled – legacy mode
+        request.render_manifest = None
+
     # Pillar 1: Overload Guardrail
     if is_overloaded():
         raise HTTPException(
@@ -846,6 +862,7 @@ async def export_video(
         "status": "queued",
         "job_id": job_id,
         "subscribe_channel": f"export-{job_id}",
+        "manifest_accepted": bool(request.render_manifest),
     }
 
 

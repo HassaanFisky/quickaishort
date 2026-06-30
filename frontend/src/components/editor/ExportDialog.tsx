@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Download, Server, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useEditorStore } from "@/stores/editorStore";
+import { validateRenderManifest } from "@/lib/render/compileRenderManifest";
 import {
   WebCodecsExporter,
   EXPORT_PRESETS,
@@ -40,6 +41,17 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
   const [format, setFormat] = useState<"mp4" | "webm">("mp4");
   const exporterRef = useRef<WebCodecsExporter | null>(null);
   const setExportSetting = useEditorStore((s) => s.setExportSetting);
+
+  const compiledManifest = useEditorStore(s => s.compiledManifest);
+  const rebuildRenderManifest = useEditorStore(s => s.rebuildRenderManifest);
+
+  const manifestErrors = useMemo(() => {
+    if (!compiledManifest) return ["Manifest not compiled yet – click Rebuild"];
+    return validateRenderManifest(compiledManifest);
+  }, [compiledManifest]);
+
+  const manifestValid = manifestErrors.length === 0;
+  const clipCount = compiledManifest?.clips?.length ?? 0;
 
   const canUseClientExport = clientSupported && duration > 0 && duration <= MAX_CLIP_SECONDS && format === "mp4";
 
@@ -284,6 +296,35 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
               </div>
             </div>
 
+            {/* Phase 63: Manifest validation */}
+            <div className="rounded-xl border p-3 text-xs mb-3" style={{
+              borderColor: manifestValid ? "#22c55e33" : "#ef444433",
+              backgroundColor: manifestValid ? "#22c55e0d" : "#ef44440d"
+            }}>
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-[10px] uppercase tracking-wider text-fg-muted">
+                  RenderManifest {manifestValid ? "✓ Valid" : "⚠ Invalid"}
+                </span>
+                <button
+                  type="button"
+                  onClick={rebuildRenderManifest}
+                  className="text-[10px] font-bold underline opacity-70 hover:opacity-100 transition-opacity"
+                >
+                  Rebuild
+                </button>
+              </div>
+              <div className="text-[10px] text-fg-muted mt-1">
+                {clipCount} clip{clipCount !== 1 ? "s" : ""} · 
+                {compiledManifest ? ` ${compiledManifest.timeline.width}×${compiledManifest.timeline.height} @ ${compiledManifest.timeline.fps}fps` : " no timeline"}
+              </div>
+              {!manifestValid && (
+                <ul className="text-[10px] text-red-400 mt-2 list-disc pl-4 space-y-0.5">
+                  {manifestErrors.slice(0, 5).map((e, i) => <li key={i}>{e}</li>)}
+                  {manifestErrors.length > 5 && <li>… +{manifestErrors.length - 5} more</li>}
+                </ul>
+              )}
+            </div>
+
             {/* Export range indicator */}
             {!exporting && duration > 0 && (
               <div className="mb-4 p-3 rounded-xl bg-card border border-border">
@@ -365,7 +406,9 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
               {canUseClientExport && !exporting && (
                 <button
                   onClick={handleClientExport}
-                  className="flex-1 flex items-center justify-center gap-2 h-9 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary/90 transition-colors"
+                  disabled={!manifestValid}
+                  title={!manifestValid ? manifestErrors.join(", ") : undefined}
+                  className="flex-1 flex items-center justify-center gap-2 h-9 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Download size={13} />
                   Export locally
@@ -382,8 +425,10 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
               ) : (
                 <button
                   onClick={handleServerExport}
+                  disabled={!manifestValid}
+                  title={!manifestValid ? manifestErrors.join(", ") : undefined}
                   className={cn(
-                    "flex items-center justify-center gap-2 h-9 rounded-xl border border-border text-xs font-semibold text-fg-muted hover:text-foreground transition-colors",
+                    "flex items-center justify-center gap-2 h-9 rounded-xl border border-border text-xs font-semibold text-fg-muted hover:text-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
                     canUseClientExport ? "px-4" : "flex-1",
                   )}
                 >

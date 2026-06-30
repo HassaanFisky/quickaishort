@@ -246,12 +246,10 @@ def test_export_request_invalid_manifest_rejected():
 
     errors = exc_info.value.errors()
     # At least one error should reference the 'width' field inside the manifest.
-    field_paths = [
-        ".".join(str(loc) for loc in err["loc"]) for err in errors
-    ]
-    assert any("width" in path for path in field_paths), (
-        f"Expected a 'width' field error; got: {field_paths}"
-    )
+    field_paths = [".".join(str(loc) for loc in err["loc"]) for err in errors]
+    assert any(
+        "width" in path for path in field_paths
+    ), f"Expected a 'width' field error; got: {field_paths}"
 
 
 def test_export_request_without_manifest_still_works():

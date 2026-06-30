@@ -258,3 +258,46 @@ def track_video_processing(
         video_processing_output_bytes.labels(filter_type=filter_type).observe(
             output_size_bytes
         )
+
+
+# ── Phase 64: RenderManifest metrics ──
+manifest_compile_duration_seconds = Histogram(
+    "manifest_compile_duration_seconds",
+    "Time to compile RenderManifest to FFmpeg filter_complex",
+    buckets=(0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5),
+)
+
+manifest_ingest_total = Counter(
+    "manifest_ingest_total",
+    "RenderManifest ingest events",
+    labelnames=["status"],  # valid, invalid, missing
+)
+
+manifest_clips_histogram = Histogram(
+    "manifest_clips_per_job",
+    "Number of clips per manifest",
+    buckets=(1, 2, 3, 5, 10, 20, 50),
+)
+
+manifest_render_duration_seconds = Histogram(
+    "manifest_render_duration_seconds",
+    "End-to-end manifest render time",
+    labelnames=["quality"],
+    buckets=(1, 5, 10, 25, 50, 100, 300, 600),
+)
+
+
+# ── Phase 64 helpers ──
+def track_manifest_ingest(status: str, clip_count: int = 0):
+    """status: valid | invalid | missing"""
+    manifest_ingest_total.labels(status=status).inc()
+    if status == "valid" and clip_count > 0:
+        manifest_clips_histogram.observe(clip_count)
+
+
+def track_manifest_compile(duration_s: float):
+    manifest_compile_duration_seconds.observe(duration_s)
+
+
+def track_manifest_render(duration_s: float, quality: str = "medium"):
+    manifest_render_duration_seconds.labels(quality=quality).observe(duration_s)

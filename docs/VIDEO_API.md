@@ -320,3 +320,53 @@ Search logs by:
 ## Examples
 
 See `tests/test_video_api.py` for complete integration test suite.
+
+---
+
+## Render Manifest API Support
+
+### POST `/api/process-video`
+
+**Phase 65 – RenderManifest support**
+
+```json
+{
+  "videoId": "abc123",
+  "start_sec": 0,
+  "end_sec": 5,
+  "user_id": "user_xyz",
+  "aspect_ratio": "9:16",
+  "quality": "medium",
+  "render_manifest": {
+    "version": 1,
+    "generatedAt": 1718000000000,
+    "timeline": {"fps": 30, "width": 1080, "height": 1920, "duration": 10.5},
+    "tracks": [{"id":"v1","type":"video","label":"V1","locked":false,"muted":false}],
+    "clips": [{"id":"c1","trackId":"v1","sourceId":"input.mp4","startSec":0,"endSec":5,"timelineStartSec":0,"speed":1}],
+    "captions": [],
+    "overlays": [],
+    "effects": [],
+    "keyframes": []
+  }
+}
+```
+
+#### Response Example
+```json
+{
+  "status": "queued",
+  "job_id": "abc123...",
+  "subscribe_channel": "export-abc123...",
+  "manifest_accepted": true
+}
+```
+
+`render_manifest` is **optional** unless `RENDER_MANIFEST_REQUIRED=true` is set server-side.
+
+- Validated with Pydantic `RenderManifest` – 422 on schema error
+- Stored in `options["render_manifest"]` and persisted to Firestore `RenderManifests/{job_id}`
+- Also uploaded to `gs://<exports-bucket>/exports/{user_id}/{job_id}_manifest.json`
+- If missing or invalid, server falls back to legacy `start_sec`/`end_sec` single-clip render
+- Worker metrics: `manifest_ingest_total{status="valid|invalid|missing"}`, `manifest_render_duration_seconds`
+
+See `fastapi/models/render_manifest.py` for full schema – TS parity at `frontend/src/lib/render/renderManifest.ts`.

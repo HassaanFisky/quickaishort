@@ -39,6 +39,11 @@ from services.render_service import (  # noqa: E402
     RenderService,
     WatermarkConfig,
 )
+from services.observability import (  # noqa: E402
+    track_manifest_ingest,
+    track_manifest_compile,
+    track_manifest_render,
+)
 from services.job_persistence import persist_failed_job  # noqa: E402
 from services.render_queue import push_result as _rq_push_result  # noqa: E402
 
@@ -212,6 +217,8 @@ def _build_job(
         filter_name=str(options.get("filter_name", "None")),
         transition_enabled=bool(options.get("transition_enabled", False)),
         voiceover_enabled=bool(options.get("voiceover_enabled", False)),
+        manifest_filter_complex=options.get("_manifest_filter_complex"),
+        manifest_meta=options.get("render_manifest"),
     )
 
     music_id = options.get("music_id")
@@ -256,6 +263,56 @@ async def _async_process_render_task(
     started_at = time.time()
     options = options or {}
     production_plan = options.get("production_plan")
+    render_manifest = options.get("render_manifest")
+
+    # Phase 61: Manifest compile validation
+    if render_manifest:
+        try:
+            from services.manifest_renderer import compile_manifest_to_ffmpeg
+            import time
+
+            t0 = time.time()
+
+            # Mock path to bypass .exists() check during initial compilation
+            class MockPath:
+                def __init__(self, name):
+                    self.name = str(name)
+
+                def exists(self):
+                    return True
+
+                def __truediv__(self, other):
+                    return MockPath(f"{self.name}/{other}")
+
+                def __str__(self):
+                    return self.name
+
+            filter_complex, render_meta = compile_manifest_to_ffmpeg(
+                render_manifest,
+                workdir=Path(tempfile.gettempdir()),
+                input_resolver=lambda sid: MockPath(sid),
+            )
+            compile_s = time.time() - t0
+            track_manifest_compile(compile_s)
+            track_manifest_ingest("valid", render_meta.get("clip_count", 0))
+
+            options["_manifest_filter_complex"] = filter_complex
+            options["_manifest_meta"] = render_meta
+            logger.info(
+                "manifest_render_accepted",
+                clip_count=render_meta.get("clip_count", 0),
+                duration=render_meta.get("duration", 0.0),
+                compile_ms=int(compile_s * 1000),
+            )
+        except Exception as e:
+            logger.error("manifest_render_compile_failed", error=str(e))
+            track_manifest_ingest("invalid", 0)
+            # Fall back to legacy path
+            render_manifest = None
+            options.pop("_manifest_filter_complex", None)
+            options.pop("_manifest_meta", None)
+    else:
+        track_manifest_ingest("missing", 0)
 
     logger.info("processing_render_task_start", job_id=job_id, user_id=user_id)
 
@@ -479,6 +536,27 @@ async def _async_process_render_task(
                 remote_path=remote_filename,
                 content_type="video/mp4",
             )
+
+            # Phase 62: persist manifest
+            try:
+                from services.job_persistence import (
+                    persist_render_manifest,
+                    upload_manifest_to_gcs,
+                )
+
+                manifest = options.get("render_manifest")
+                if manifest:
+                    await persist_render_manifest(
+                        job_id, user_id, manifest, options.get("_manifest_meta")
+                    )
+                    try:
+                        await upload_manifest_to_gcs(job_id, user_id, manifest)
+                    except Exception:
+                        pass
+            except Exception as e:
+                logger.warning(
+                    "manifest_persistence_failed_non_fatal", job_id=job_id, error=str(e)
+                )
         finally:
             try:
                 redis_conn.delete(_LOCK_KEY.format(job_id))
@@ -492,6 +570,12 @@ async def _async_process_render_task(
             "duration_sec": duration_sec,
             "elapsed_sec": time.time() - started_at,
         }
+
+        # Phase 64: render duration metric
+        if options.get("render_manifest"):
+            track_manifest_render(
+                time.time() - started_at, quality=options.get("quality", "medium")
+            )
 
         publish(CHANNEL_EXPORT_COMPLETE, payload)
         publish(

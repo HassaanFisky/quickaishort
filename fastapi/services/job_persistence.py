@@ -1,6 +1,7 @@
 import asyncio
+import json
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from services.db import get_db
 from services.logging import get_logger
@@ -34,6 +35,72 @@ async def persist_failed_job(
         logger.error("failed_to_persist_dead_letter", error=str(e), original_job=job_id)
 
 
+# --- Phase 62: RenderManifest persistence ---
+
+
+async def persist_render_manifest(
+    job_id: str,
+    user_id: str,
+    manifest: Dict[str, Any],
+    meta: Optional[Dict[str, Any]] = None,
+):
+    """Store the RenderManifest used for a render job in Firestore."""
+    if not manifest:
+        return
+    try:
+
+        def _do():
+            get_db().collection("RenderManifests").document(job_id).set(
+                {
+                    "job_id": job_id,
+                    "user_id": user_id,
+                    "manifest": manifest,
+                    "meta": meta or {},
+                    "created_at": datetime.now(timezone.utc),
+                    "schema_version": manifest.get("version", 1),
+                },
+                merge=True,
+            )
+
+        await asyncio.to_thread(_do)
+        logger.info(
+            "manifest_persisted",
+            job_id=job_id,
+            clip_count=len(manifest.get("clips", [])),
+        )
+    except Exception as e:
+        # Non-fatal – don't fail the render because manifest logging failed
+        logger.error("manifest_persist_failed", job_id=job_id, error=str(e))
+
+
+async def upload_manifest_to_gcs(
+    job_id: str,
+    user_id: str,
+    manifest: Dict[str, Any],
+    bucket_name: str | None = None,
+):
+    """Upload manifest.json to GCS exports bucket next to the video."""
+    if not manifest:
+        return None
+    try:
+        from services.storage_service import get_storage_service
+
+        storage = get_storage_service()
+        # Save it under exports/{user_id}/{job_id}_manifest.json next to exports/{user_id}/{job_id}.mp4
+        remote_path = f"exports/{user_id}/{job_id}_manifest.json"
+        data = json.dumps(manifest, indent=2)
+
+        blob = storage._blob(remote_path)
+        await asyncio.to_thread(
+            blob.upload_from_string, data, content_type="application/json"
+        )
+        logger.info("manifest_gcs_uploaded", job_id=job_id, path=remote_path)
+        return remote_path
+    except Exception as e:
+        logger.error("manifest_gcs_failed", job_id=job_id, error=str(e))
+        return None
+
+
 async def cleanup_stale_jobs():
     """Marks jobs in 'processing' for > 4 hours as failed."""
     try:
@@ -41,7 +108,6 @@ async def cleanup_stale_jobs():
 
         def _do():
             db = get_db()
-            # Fetch by status, filter by age in Python to avoid composite index requirement.
             snaps = (
                 db.collection("Projects").where("status", "==", "processing").stream()
             )

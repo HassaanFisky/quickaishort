@@ -219,6 +219,8 @@ class RenderJob:
     filter_name: str = "None"
     transition_enabled: bool = False
     voiceover_enabled: bool = False
+    manifest_filter_complex: Optional[str] = None
+    manifest_meta: Optional[dict] = None
 
 
 @dataclass
@@ -292,6 +294,69 @@ class RenderService:
 
     def _transcode(self, job: RenderJob, source: Path, workdir: Path) -> Path:
         output = workdir / f"export_{uuid.uuid4().hex}.mp4"
+
+        # Phase 61: Manifest-driven render
+        if job.manifest_filter_complex and job.manifest_meta:
+            try:
+                from services.manifest_renderer import compile_manifest_to_ffmpeg
+
+                # Resolve any clip's sourceId to the downloaded `source` file!
+                def input_resolver(sid: str) -> Path:
+                    return source
+
+                filter_complex, render_meta = compile_manifest_to_ffmpeg(
+                    job.manifest_meta, workdir=workdir, input_resolver=input_resolver
+                )
+
+                crf_map = {"low": "28", "medium": "23", "high": "18"}
+                crf = crf_map.get(job.quality, "23")
+                preset = "medium"
+
+                cmd = [
+                    "ffmpeg",
+                    "-y",
+                    "-i",
+                    str(source),
+                    "-filter_complex",
+                    filter_complex,
+                    "-map",
+                    "[vout]",
+                    "-map",
+                    "[aout]",
+                    "-c:v",
+                    "libx264",
+                    "-crf",
+                    crf,
+                    "-preset",
+                    preset,
+                    "-c:a",
+                    "aac",
+                    "-b:a",
+                    "192k",
+                    "-movflags",
+                    "+faststart",
+                    "-threads",
+                    "2",
+                    str(output),
+                ]
+
+                logger.info("manifest_ffmpeg_start cmd=%s", " ".join(cmd))
+                result = subprocess.run(
+                    cmd, timeout=_FFMPEG_FINAL_TIMEOUT, capture_output=True
+                )
+                if result.returncode != 0:
+                    stderr = (result.stderr or b"").decode("utf-8", errors="replace")
+                    raise RuntimeError(
+                        f"ffmpeg exited {result.returncode}: {stderr[-2000:]}"
+                    )
+
+                logger.info("manifest_render_success output=%s", output)
+                return output
+            except Exception as e:
+                logger.exception(
+                    "manifest_render_failed, falling back to legacy render path: %s", e
+                )
+
         captions_path: Optional[Path] = None
         if job.captions.enabled and job.captions.srt_content:
             captions_path = workdir / "captions.srt"
