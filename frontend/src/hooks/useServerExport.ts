@@ -210,7 +210,16 @@ export function useServerExport({ userId }: UseServerExportArgs) {
         transcript,
         captionsEnabled,
         canvasElements,
+        compiledManifest,
+        rebuildRenderManifest,
       } = useEditorStore.getState();
+
+      // Phase 60: ensure we have a fresh manifest
+      let manifest = compiledManifest;
+      if (!manifest) {
+        rebuildRenderManifest();
+        manifest = useEditorStore.getState().compiledManifest;
+      }
 
       const clip = selectedClipId
         ? suggestions.find((c) => c.id === selectedClipId)
@@ -276,12 +285,6 @@ export function useServerExport({ userId }: UseServerExportArgs) {
         rotation: el.rotation,
       }));
 
-      let compiledManifest = useEditorStore.getState().compiledManifest;
-      if (compiledManifest === null) {
-        useEditorStore.getState().rebuildRenderManifest();
-        compiledManifest = useEditorStore.getState().compiledManifest;
-      }
-
       const payload: ExportRequestPayload = {
         videoId,
         start_sec: clip.start,
@@ -309,7 +312,7 @@ export function useServerExport({ userId }: UseServerExportArgs) {
         filter_name: useEditorStore.getState().exportSettings.filter,
         transition_enabled: useEditorStore.getState().exportSettings.transitionEnabled,
         voiceover_enabled: useEditorStore.getState().exportSettings.voiceoverEnabled,
-        render_manifest: compiledManifest,
+        render_manifest: manifest,
       };
 
       setIsExporting(true);
