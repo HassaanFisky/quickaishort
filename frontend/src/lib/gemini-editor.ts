@@ -383,11 +383,26 @@ export interface EditorCommandRequest {
 export async function sendEditorCommand(
   request: EditorCommandRequest
 ): Promise<EditorCommandResponse> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+
+  if (typeof window !== "undefined") {
+    try {
+      const { getSession } = await import("next-auth/react");
+      const session = await getSession();
+      if (session?.backendToken) {
+        headers["Authorization"] = `Bearer ${session.backendToken}`;
+      }
+      if (session?.user?.id) {
+        headers["X-User-Id"] = session.user.id;
+      }
+    } catch {}
+  }
+
   const response = await fetch(`${API_BASE}/api/ai-editor/command`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers,
     body: JSON.stringify(request),
   })
 
@@ -407,11 +422,26 @@ export async function streamEditorCommand(
   onChunk: (chunk: string) => void,
   onDone: () => void
 ): Promise<void> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+
+  if (typeof window !== "undefined") {
+    try {
+      const { getSession } = await import("next-auth/react");
+      const session = await getSession();
+      if (session?.backendToken) {
+        headers["Authorization"] = `Bearer ${session.backendToken}`;
+      }
+      if (session?.user?.id) {
+        headers["X-User-Id"] = session.user.id;
+      }
+    } catch {}
+  }
+
   const response = await fetch(`${API_BASE}/api/ai-editor/command/stream`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers,
     body: JSON.stringify({ ...request, stream: true }),
   })
 

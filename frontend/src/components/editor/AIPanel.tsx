@@ -5,7 +5,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X, Send, Mic, MicOff, Sparkles, Zap } from "lucide-react";
 import { useEditorStore } from "@/stores/editorStore";
 import {
-  callGeminiEditor,
   getInitialSuggestions,
   generateImmediateSuggestions,
   type EditorStateContext,

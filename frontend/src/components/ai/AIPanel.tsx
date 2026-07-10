@@ -43,12 +43,26 @@ export function AIPanel({ embedded = false }: AIPanelProps) {
     addMessage({ role: 'user', content: trimmed });
     setLoading(true);
     try {
-      const res = await fetch('/api/ai/chat', {
+      const res = await fetch('/api/ai/editor', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          messages: [...messages, { role: 'user', content: trimmed }],
-          videoContext,
+          prompt: trimmed,
+          current_state: {
+            videoDuration: videoContext ? 100.0 : 0.0,
+            currentTime: 0.0,
+            elementCount: 0,
+            captionCount: 0,
+            captionsEnabled: false,
+            aspectRatio: "9:16",
+            visualFilter: "None",
+            audioBoost: 100.0,
+            playbackSpeed: 100.0,
+          },
+          transcript: videoContext?.transcript
+            ? [{ text: videoContext.transcript, start: 0.0, end: 100.0 }]
+            : [],
+          video_id: videoContext?.id ?? null,
         }),
       });
       const data = await res.json();

@@ -122,13 +122,32 @@ async def ai_edit(
 
 
 @router.post("/api/ai-editor/command", response_model=EditorCommandResponse)
-async def handle_editor_command(request: EditorCommandRequest):
+async def handle_editor_command(
+    request: EditorCommandRequest,
+    user_id: str = Depends(get_verified_user_id),
+):
     """
     Main endpoint: natural language command → tool action JSON
     Called from: frontend/src/lib/gemini-editor.ts
     """
     if not request.command.strip():
         raise HTTPException(status_code=400, detail="Command cannot be empty")
+
+    try:
+        from services.stats_service import deduct_credits
+
+        ok = await deduct_credits(user_id, 1)
+        if not ok:
+            raise HTTPException(
+                status_code=402,
+                detail="Insufficient credits. Upgrade to Pro to continue.",
+            )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.warning(
+            "handle_editor_command: credit deduction failed for %s: %s (proceeding)", user_id, exc
+        )
 
     ensure_agent_ready("ai_editor_agent", strict=False)
     result = await process_editor_command(
@@ -140,7 +159,10 @@ async def handle_editor_command(request: EditorCommandRequest):
 
 
 @router.post("/api/ai-editor/command/stream")
-async def handle_editor_command_stream(request: EditorCommandRequest):
+async def handle_editor_command_stream(
+    request: EditorCommandRequest,
+    user_id: str = Depends(get_verified_user_id),
+):
     """
     Streaming version — for real-time AI typing effect in AIPanel
     Called from: frontend/src/components/editor/AIPanel.tsx
