@@ -33,7 +33,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Smoke-test imports (bgutil sidecar not needed at build time)
-RUN AUTH_DISABLED=true NEXTAUTH_SECRET=build-check python -c "import main; print('BUILD IMPORT CHECK: PASS')" || exit 1
+RUN NEXTAUTH_SECRET=build-check-dummy-secret-value python -c "import main; print('BUILD IMPORT CHECK: PASS')" || exit 1
 
 COPY start.sh /start.sh
 RUN chmod +x /start.sh

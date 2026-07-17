@@ -62,7 +62,12 @@ render_queue = Queue(
 
 
 def is_overloaded() -> bool:
-    """Returns True if the system is too busy or in safe mode."""
+    """Returns True if the system is too busy or in safe mode.
+
+    Raises RedisConnectionError / RedisTimeoutError when Redis is fully
+    unreachable so callers get a real 503 rather than a misleading
+    "queue overloaded" response that hides the outage.
+    """
     if SAFE_MODE:
         logger.warning("safe_mode_active_rejecting_tasks")
         return True
@@ -75,9 +80,13 @@ def is_overloaded() -> bool:
             )
             return True
         return False
+    except (RedisConnectionError, RedisTimeoutError):
+        # Redis is down — surface the real error, don't mask it as "overloaded".
+        logger.exception("redis_connection_failure_in_queue_health_check")
+        raise
     except Exception as e:
-        logger.error("queue_health_check_failed", error=str(e))
-        # Default to overloaded if we can't talk to Redis (Degraded mode)
+        # Unexpected error: degrade gracefully but log clearly.
+        logger.error("queue_health_check_unexpected_error", error=str(e))
         return True
 
 
