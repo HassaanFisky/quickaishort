@@ -85,15 +85,13 @@ This is the seed of the Studio Tool Runtime on the client.
 
 ---
 
-## Ads / Coming Soon requirement
+## ADK / Coming Soon requirement
 
-**User requirement:** Ads section blurred + Coming Soon.
+**Product requirement:** Sidebar **ADK** = Google Agent Development Kit workspace — intentionally unavailable: premium blur + **Coming Soon** + short professional subtitle + reserved disabled IA skeleton (Agents, Workflows, Tools, Memory, Knowledge, MCP, Integrations, Automation). **Not Ads.**
 
-**Current evidence:**
-- Sidebar nav: Dashboard, Editor, ADK Studio, History, Settings — **no Ads item** (`Sidebar.tsx`).
-- Pricing Agency tier CTA `"Coming Soon"` (`pricing/page.tsx`).
+**Correction:** Earlier docs that said “Ads section” misread ADK. See `EP-008-ADK-ARCHITECTURE-CORRECTION.md` / ADR-013.
 
-**Status:** Requirement not implemented as an Ads section. When Ads is added, enforce blur + Coming Soon gate before any unfinished UI ships.
+**Note:** Pricing Agency tier CTA `"Coming Soon"` (`pricing/page.tsx`) is unrelated billing UX.
 
 ---
 

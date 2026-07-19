@@ -26,7 +26,7 @@ Editor is the product; AI enhances the editor. Chat-primary UX direction (Phase 
 | ADR-012 Bake from Kernel Snapshot | Accepted |
 | EP-007 Workflows/Collab readiness | Design-locked (no multiplayer) |
 | **EP-008 Editor First-Run Product Surface** | **IMPLEMENTED** |
-| **ADR-013 Ingest / Onboarding / Ads CS** | **Accepted** |
+| **ADR-013 Ingest / Onboarding / ADK CS** | **Accepted** (ADK≠Ads correction implemented) |
 | Phase 2 Architectural Truth Review | Binding OS direction |
 
 ## Runtime truth (verified)
@@ -36,7 +36,8 @@ Editor is the product; AI enhances the editor. Chat-primary UX direction (Phase 
 - Orchestrator: `/api/studio/v1/orchestrator`  
 - **Ingest policy:** `GET /api/studio/v1/ingest/policy` (not EP-001)  
 - **Onboarding:** `GET/PUT /api/studio/v1/me/onboarding`  
-- Editor: `IngestSurface` (Upload ≡ URL), lazy `EditorOnboardingTour`, `/ads` Coming Soon  
+- Editor: `IngestSurface` (Upload ≡ URL), lazy `EditorOnboardingTour`  
+- **ADK:** `/adk` Google Agent Development Kit Coming Soon + reserved IA skeleton (not Ads)
 - FE Kernel flag: `NEXT_PUBLIC_STUDIO_PROJECT_KERNEL=1`  
 
 ## Non-negotiables

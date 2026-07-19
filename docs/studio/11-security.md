@@ -48,6 +48,6 @@ See also root `SECURITY.md` — validate claims against code before trust.
 
 ---
 
-## Ads unfinished UI
+## ADK unfinished UI
 
-When Ads ships: must ship blurred + Coming Soon; no live ad network hooks until ready. **No Ads route found today.**
+When ADK (Google Agent Development Kit) workspace is shown before orchestration is ready: must ship blurred + Coming Soon; no live agent execution hooks until ready. **Not an advertisements surface.**

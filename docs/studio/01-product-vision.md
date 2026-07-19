@@ -98,7 +98,7 @@ Closer to ChatGPT than Premiere UI density.
 - Timeline contextual  
 - Panels appear when needed  
 - Clean, premium, low noise  
-- **Ads section** (when present): remain blurred with clear **Coming Soon** — do not expose unfinished ads functionality  
+- **ADK** (Google Agent Development Kit workspace): remain blurred with clear **Coming Soon** + reserved IA skeleton — do not expose unfinished agent orchestration; **not** an advertisements/marketing page (see `EP-008-ADK-ARCHITECTURE-CORRECTION.md`) 
 
 ---
 

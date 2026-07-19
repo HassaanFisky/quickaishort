@@ -5,15 +5,18 @@ const nextConfig = {
   env: {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || "https://quickai-api-y2cgnbsbxa-uc.a.run.app",
   },
+  async redirects() {
+    // EP-008 ADK correction: invalid Ads surface → ADK Coming Soon workspace
+    return [{ source: "/ads", destination: "/adk", permanent: true }];
+  },
   async headers() {
     const isolationHeaders = [
-      { key: "Cross-Origin-Opener-Policy",  value: "same-origin" },
+      { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
       { key: "Cross-Origin-Embedder-Policy", value: "require-corp" },
     ];
     return [
       // SharedArrayBuffer required paths (Whisper.wasm, FFmpeg.wasm, OPFS)
       { source: "/editor/:path*", headers: isolationHeaders },
-      { source: "/adk/:path*",    headers: isolationHeaders },
     ];
   },
   eslint: { ignoreDuringBuilds: true },
@@ -44,12 +47,12 @@ const hasSentryAuthToken = Boolean(process.env.SENTRY_AUTH_TOKEN);
 
 export default hasSentryAuthToken
   ? withSentryConfig(nextConfig, {
-      silent: true,
-      org: process.env.SENTRY_ORG,
-      project: process.env.SENTRY_PROJECT,
-      disableLogger: true,
-      widenClientFileUpload: false,
-      telemetry: false,
-      sourcemaps: { disable: true },
-    })
+    silent: true,
+    org: process.env.SENTRY_ORG,
+    project: process.env.SENTRY_PROJECT,
+    disableLogger: true,
+    widenClientFileUpload: false,
+    telemetry: false,
+    sourcemaps: { disable: true },
+  })
   : nextConfig;

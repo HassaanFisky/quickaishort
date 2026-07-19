@@ -1,12 +1,12 @@
-# EP-008 — Editor First-Run Product Surface (Ingest · Onboarding · Ads Gate · UX Honesty)
+# EP-008 — Editor First-Run Product Surface (Ingest · Onboarding · ADK Gate · UX Honesty)
 
-**Status:** **IMPLEMENTED / FROZEN** — see `EP-008-IMPLEMENTATION-REPORT.md`  
+**Status:** **IMPLEMENTED** — ADK≠Ads correction shipped (`APPROVE ADK CORRECTION`) — see `EP-008-ADK-ARCHITECTURE-CORRECTION.md`  
 **Priority:** P0 — product experience (not feature spam)  
-**ADR:** ADR-013 (Proposed → revise with this revision)  
+**ADR:** ADR-013  
 **Package ID:** **EP-008** (confirmed — do **not** rename to EP-002; Kernel history stays clean)  
 **Depends on:** EP-001 frozen · EP-002 Kernel frozen · EP-003 MediaGraph frozen · EP-005 Chat-Primary  
 **Must not modify:** EP-001 Capability Registry ABI files; EP-002 event model; EP-003 A5a derivation  
-**Approval trail:** Founder **95/100** conditional approval → this revision incorporates mandatory additions → **stop again for final APPROVE**
+**Approval trail:** Founder approved EP-008 FINAL → implementation shipped → **2026-07-20 correction:** ADK ≠ Ads; design-only until founder re-approves ADK workspace UX
 
 ---
 
@@ -14,13 +14,13 @@
 
 | Principle | How EP-008 satisfies it |
 |-----------|-------------------------|
-| Discoverable | Upload + URL equal, always visible; Ads visible as Coming Soon |
+| Discoverable | Upload + URL equal, always visible; ADK visible as Coming Soon |
 | Learnable | Interactive tour teaches by doing, ≤2 minutes |
 | Predictable | Named states: validating → uploading → processing → ready / error |
 | Accessible | Keyboard, SR, touch, desktop; focus trap on tour |
 | Responsive | Mobile / tablet / desktop layouts for IngestSurface |
 | Low cognitive load | One card, two peers; short tour sentences; no redesign |
-| Professional | Hydro-Glass language; Ads never looks broken |
+| Professional | Hydro-Glass language; ADK Coming Soon never looks broken or temporary |
 | Future-proof | Backend-authoritative ingest policy; lazy-loaded surfaces |
 | AI-native OS compatible | No parallel tool dialects; agents can later drive same ingest Intents |
 
@@ -35,7 +35,7 @@
 | EP-001 | Capability Registry ABI | Frozen |
 | EP-002 | Project Kernel | Frozen / implemented |
 | EP-003 | MediaGraph | Implemented |
-| **EP-008** | Editor First-Run + Upload + Onboarding + Ads | **This package** |
+| **EP-008** | Editor First-Run + Upload + Onboarding + ADK Coming Soon | **This package** |
 
 Do not renumber. History stays clean.
 
@@ -58,7 +58,7 @@ Architecture preserved: Capability Registry · MediaGraph · Project Document ·
 | Upload not first-class | `YouTubeInputStrip` shows upload only when `backendFailed` |
 | Narrow format messaging | Drag overlay “MP4, WebM, or MOV”; `accept="video/*"` |
 | No interactive onboarding in tree | No `OnboardingTour` component |
-| No Ads Coming Soon nav | `Sidebar` / `BottomTabBar` lack Ads |
+| ADK workspace Coming Soon | Future Google Agent Development Kit workspace must be intentionally unavailable (premium blur + reserved IA skeleton) — **not** an Ads page |
 | Suggestions | MediaGraph path exists — **do not change architecture** |
 
 ---
@@ -174,12 +174,18 @@ Steps:
 - Non-interactive “Analyzing…” skeleton allowed  
 - Every chip traceable to facets / evidence  
 
-### D6 — Ads
+### D6 — ADK (Google Agent Development Kit) Coming Soon
 
-- Nav item **Ads** (Sidebar + BottomTabBar)  
-- Route `/ads` → blurred premium **Coming Soon** (`ComingSoonGate`)  
-- Theme-consistent; never broken/unfinished/interactive fake  
-- **Lazy-load** Ads page chunk  
+**Correction (2026-07-20):** Prior “Ads” interpretation is **invalid**. ADK ≠ advertisements.
+
+- Sidebar item **ADK** (Sidebar + BottomTabBar) — future Google Agent Development Kit workspace  
+- Opens ADK workspace route → entire workspace behind premium blur (`ComingSoonGate` language)  
+- Center: **Coming Soon** + one short professional subtitle (advanced agent orchestration in a future release)  
+- **Not** a marketing/ads page; no playful art; no temporary-looking UI  
+- **Reserved IA skeleton** (visible, disabled/blurred): ADK · Agents · Workflows · Tools · Memory · Knowledge · MCP · Integrations · Automation  
+- Theme-consistent, responsive, no layout shift / overflow  
+- **Lazy-load** ADK Coming Soon workspace chunk  
+- Full correction text: `EP-008-ADK-ARCHITECTURE-CORRECTION.md`  
 
 ### D7 — Google ADK / OS compatibility
 
@@ -190,13 +196,13 @@ UI must not invent a second tool system. Compatible with:
 - Project Document (Kernel)  
 - Orchestrator  
 - Future autonomous tool execution  
-- Future multi-agent / Coordinator workflows  
+- Future multi-agent / Coordinator / ADK workspace workflows  
 
 Ingest actions remain UI → store / existing APIs; agents may later call the same ingest policy + project bind without UI.
 
 ### D8 — Accessibility (explicit DoD)
 
-- Keyboard navigation for ingest + tour + Ads gate focus  
+- Keyboard navigation for ingest + tour + ADK Coming Soon gate focus  
 - Screen readers: labels, live regions for progress, dialog roles for tour  
 - Responsive layouts 320→1440  
 - Touch targets ≥44px on primary ingest CTAs  
@@ -208,7 +214,7 @@ Ingest actions remain UI → store / existing APIs; agents may later call the sa
 |---------|----------------|
 | Editor shell + URL/upload chrome | Eager (minimal) |
 | Onboarding tour | Dynamic `import()` only when eligible |
-| Ads page | Route-level code split |
+| ADK Coming Soon workspace | Route-level code split |
 | Ingest policy | Fetch once; cache; fail-open to last-known / embedded defaults if API down (still server-validates on PUT) |
 | Heavy upload helpers | Load on first file interaction |
 
@@ -218,9 +224,9 @@ Must not regress editor TTI meaningfully (measure: tour code absent from initial
 
 ## 5. ADR-013 (revised summary)
 
-See `docs/studio/adrs/ADR-013-editor-ingest-onboarding-ads.md`.
+See `docs/studio/adrs/ADR-013-editor-ingest-onboarding-adk.md` (formerly `…-ads.md`; Ads naming retired).
 
-Key additions in this revision: clipboard paste (best-effort), **Media Ingest Policy API** (not EP-001), replace media, lazy-load performance budget, re-approval gate.
+Key additions: clipboard paste (best-effort), **Media Ingest Policy API** (not EP-001), replace media, lazy-load performance budget. **2026-07-20:** D6 corrected from Ads → ADK (Google Agent Development Kit) Coming Soon + reserved IA skeleton.
 
 ---
 
@@ -291,8 +297,8 @@ Error shape (presigned / policy violations):
 | `useIngestPolicy` | Fetch + cache policy |
 | `UploadProgress` | Progress / cancel / retry |
 | `EditorOnboardingTour` | Lazy spotlight controller |
-| `ComingSoonGate` | Ads + reusable |
-| `/ads` page | Lazy route |
+| `ComingSoonGate` | ADK Coming Soon + reusable |
+| ADK workspace route | Lazy route; blurred + reserved IA skeleton (Agents…Automation) |
 | Empty-state copy | Upload **or** URL |
 
 `data-tour-id`: `ingest.upload` · `ingest.url` · `ai.suggestions` · `ai.chat` · `timeline.dock` · `export.button`
@@ -304,7 +310,7 @@ Error shape (presigned / policy violations):
 1. Ship policy endpoint with server defaults (list above).  
 2. FE switches from hardcoded allowlists to policy.  
 3. Onboarding: new users `not_started`; returning users with exports → auto `completed` (no interrupt).  
-4. Ads nav additive.  
+4. ADK Coming Soon workspace additive (never Ads).  
 5. No Kernel / MediaGraph / EP-001 migrations.
 
 ---
@@ -331,14 +337,14 @@ Error shape (presigned / policy violations):
 - [ ] Progress / processing / errors / retry / cancel / replace  
 - [ ] Onboarding once, skippable, persisted, lazy-loaded, &lt;2 min learnability target  
 - [ ] Suggestions MediaGraph-only (no architecture change)  
-- [ ] Ads visible Coming Soon, blurred, theme-native, lazy route  
+- [ ] ADK visible Coming Soon, blurred, theme-native, reserved IA skeleton, lazy route (**not Ads**)  
 - [ ] ADK/OS contracts unbroken; EP-001 untouched  
 - [ ] A11y + responsive matrix  
-- [ ] Performance: tour/ads not on critical path when unused  
+- [ ] Performance: tour / ADK Coming Soon not on critical path when unused  
 - [ ] Tests + tsc/lint + implementation report  
 - [ ] Package freeze after ship  
 
-**Out of DoD:** Chunked resumable upload, full i18n, Ads functionality, EP-001 new edit capabilities, ADK wizard redesign, visual rebrand.
+**Out of DoD:** Chunked resumable upload, full i18n, live ADK agent orchestration features, EP-001 new edit capabilities, visual rebrand.
 
 ---
 
@@ -347,10 +353,11 @@ Error shape (presigned / policy violations):
 1. Ingest policy service + GET + harden presigned  
 2. `useIngestPolicy` + `IngestSurface` + replace/progress  
 3. Clipboard paste path (feature-detect)  
-4. ComingSoonGate + `/ads` + nav (lazy)  
+4. ComingSoonGate + ADK Coming Soon workspace + nav (lazy; reserved IA skeleton) — **after ADK≠Ads correction approved**  
 5. Onboarding API + lazy tour  
 6. Empty-state copy + a11y pass  
 7. Verification + report + freeze  
+8. **Correction follow-up:** remove invalid `/ads` Ads surface from product (code deferred until approval) 
 
 ---
 

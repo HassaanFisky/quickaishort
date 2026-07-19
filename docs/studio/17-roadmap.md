@@ -20,7 +20,7 @@ Phased evolution. Each phase ships independently.
 
 - Default layout: chat column primary, timeline contextual  
 - Dynamic suggestion rail from Analysis aggregate API  
-- Preserve Ads Coming Soon pattern when Ads lands  
+- Preserve ADK Coming Soon pattern (Google Agent Development Kit; not Ads) 
 - Brand rename Shorts → Studio (copy + extension)
 
 ## Phase S3 — Analysis Depth (3–5 weeks)

@@ -10,8 +10,7 @@ import {
   Scissors,
   History as HistoryIcon,
   Settings as SettingsIcon,
-  Clapperboard,
-  Megaphone,
+  Bot,
   LogOut,
   ChevronUp,
   ChevronLeft,
@@ -28,12 +27,11 @@ import { cn } from "@/lib/utils";
 import { useUIStore } from "@/stores/uiStore";
 
 const NAV_ITEMS = [
-  { href: "/dashboard", label: "Dashboard",  icon: LayoutGrid,   linkClass: "nav-dashboard-link",     activeClass: "nav-dashboard-active"    },
-  { href: "/editor",    label: "Editor",      icon: Scissors,     linkClass: "nav-scissors-link",      activeClass: ""                        },
-  { href: "/adk",       label: "ADK Studio",  icon: Clapperboard, linkClass: "nav-clapperboard-link",  activeClass: ""                        },
-  { href: "/ads",       label: "Ads",         icon: Megaphone,    linkClass: "nav-ads-link",           activeClass: ""                        },
-  { href: "/history",   label: "History",     icon: HistoryIcon,  linkClass: "nav-history-link",       activeClass: ""                        },
-  { href: "/settings",  label: "Settings",    icon: SettingsIcon, linkClass: "nav-settings-link",      activeClass: ""                        },
+  { href: "/dashboard", label: "Dashboard", icon: LayoutGrid, linkClass: "nav-dashboard-link", activeClass: "nav-dashboard-active" },
+  { href: "/editor", label: "Editor", icon: Scissors, linkClass: "nav-scissors-link", activeClass: "" },
+  { href: "/adk", label: "ADK", icon: Bot, linkClass: "nav-adk-link", activeClass: "" },
+  { href: "/history", label: "History", icon: HistoryIcon, linkClass: "nav-history-link", activeClass: "" },
+  { href: "/settings", label: "Settings", icon: SettingsIcon, linkClass: "nav-settings-link", activeClass: "" },
 ];
 
 const menuVariants: Variants = {

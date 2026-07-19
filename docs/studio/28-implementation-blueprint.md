@@ -123,7 +123,7 @@
 |-------|-------|
 | Files | `EditorLayout.tsx`, CSS/tailwind grid classes |
 | Change | Default: chat column ≥36% width, canvas center, timeline dock collapsed-to-context height; keep `?advanced=1` for 3-column inspector |
-| Ads | If adding Ads nav: blurred overlay + “Coming Soon” component — CREATE `components/shared/ComingSoonGate.tsx` |
+| ADK | Google Agent Development Kit workspace: blurred Coming Soon + reserved IA skeleton — `ComingSoonGate.tsx` (**not Ads**; see EP-008 ADK correction) |
 | Validate | Visual QA mobile+desktop; no advanced required for AI edit |
 
 ### T-3.2 Suggestion rail API

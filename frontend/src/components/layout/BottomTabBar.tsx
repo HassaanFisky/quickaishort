@@ -7,8 +7,7 @@ import { useEffect } from "react";
 import {
   LayoutGrid,
   Scissors,
-  Clapperboard,
-  Megaphone,
+  Bot,
   History as HistoryIcon,
   Settings as SettingsIcon,
   type LucideIcon,
@@ -22,12 +21,11 @@ interface TabItem {
 }
 
 // Mirrors Sidebar.tsx NAV_ITEMS for desktop/mobile navigation parity.
-// Six tabs — labels shortened for narrow viewports.
+// Labels shortened for narrow viewports where needed.
 const TABS: TabItem[] = [
   { href: "/dashboard", label: "Home", icon: LayoutGrid },
   { href: "/editor", label: "Editor", icon: Scissors },
-  { href: "/adk", label: "Studio", icon: Clapperboard },
-  { href: "/ads", label: "Ads", icon: Megaphone },
+  { href: "/adk", label: "ADK", icon: Bot },
   { href: "/history", label: "Library", icon: HistoryIcon },
   { href: "/settings", label: "Profile", icon: SettingsIcon },
 ];

@@ -82,7 +82,7 @@ Historical snapshot — treat as **archive**, not current. Endpoint PASS table =
 2. Native Gemini function calling absent on AI editor path.  
 3. Instant suggestions = title heuristic map.  
 4. Advanced panels gated by `?advanced=1`.  
-5. No Ads nav item; Coming Soon on Agency pricing only.  
+5. ADK = Google Agent Development Kit Coming Soon (not Ads); Agency pricing “Coming Soon” is unrelated. See EP-008 ADK correction. 
 6. RenderManifest partially consumed by worker.  
 7. Pipeline run endpoint lacks JWT dependency.
 

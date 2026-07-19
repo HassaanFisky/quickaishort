@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 
-const PROTECTED_PREFIXES = ["/dashboard", "/editor", "/settings", "/history", "/adk", "/ads"];
+const PROTECTED_PREFIXES = ["/dashboard", "/editor", "/settings", "/history", "/adk"];
 const AUTH_REDIRECT_FROM = ["/signin"];
 
 export async function middleware(req: NextRequest) {
@@ -30,15 +30,15 @@ export async function middleware(req: NextRequest) {
         decodedFrom = fromParam;
       }
     }
-    
+
     // Ensure the path is strictly relative (starts with single '/') and prevents backslash/slash protocol bypasses
     const isRelative = /^\/[^\/\\]/.test(decodedFrom) || decodedFrom === "/";
 
     // Validate the redirect target against the known protected prefixes to prevent open-redirect
     const isSafe = isRelative && decodedFrom
       ? PROTECTED_PREFIXES.some(
-          (p) => decodedFrom === p || decodedFrom.startsWith(`${p}/`),
-        )
+        (p) => decodedFrom === p || decodedFrom.startsWith(`${p}/`),
+      )
       : false;
     url.pathname = isSafe ? decodedFrom : "/dashboard";
     url.search = "";
@@ -56,8 +56,6 @@ export const config = {
     "/history/:path*",
     "/adk/:path*",
     "/adk",
-    "/ads",
-    "/ads/:path*",
     "/signin",
   ],
 };

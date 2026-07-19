@@ -29,7 +29,7 @@
 
 | Item | Gate |
 |------|------|
-| **EP-008** Editor First-Run Product Surface (upload parity, onboarding, Ads CS) | ✅ Implemented — see `EP-008-IMPLEMENTATION-REPORT.md` |
+| **EP-008** Editor First-Run Product Surface (upload parity, onboarding, ADK CS) | ✅ Implemented — ADK≠Ads correction shipped (`APPROVE ADK CORRECTION`) |
 | ADR-006 native Gemini tool-loop depth | Optional engineering EP |
 | Multiplayer | **Founder approval** (EP-007) |
 | Legacy `Projects` cutover delete | **Founder consent** (irreversible) |

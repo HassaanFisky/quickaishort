@@ -7,7 +7,7 @@ import {
   Scissors,
   History,
   LayoutDashboard,
-  Clapperboard,
+  Bot,
   SquareSplitHorizontal,
   Type,
   Rocket,
@@ -178,8 +178,8 @@ export function CommandPalette() {
             <span>Editor</span>
           </CommandItem>
           <CommandItem onSelect={() => runCommand(() => router.push("/adk"))}>
-            <Clapperboard className="mr-2 h-4 w-4" />
-            <span>ADK Studio</span>
+            <Bot className="mr-2 h-4 w-4" />
+            <span>ADK</span>
           </CommandItem>
           <CommandItem onSelect={() => runCommand(() => router.push("/history"))}>
             <History className="mr-2 h-4 w-4" />

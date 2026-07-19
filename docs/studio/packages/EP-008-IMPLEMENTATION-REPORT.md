@@ -1,13 +1,15 @@
 # EP-008 Implementation Report
 
 **Date:** 2026-07-20  
-**Status:** IMPLEMENTED — pending freeze after verification  
-**ADR:** ADR-013  
-**Approval:** `APPROVE EP-008 FINAL`
+**Status:** IMPLEMENTED · ADK≠Ads correction **shipped**  
+**ADR:** ADR-013 (`ADR-013-editor-ingest-onboarding-adk.md`)  
+**Approval:** `APPROVE EP-008 FINAL` · `APPROVE ADK CORRECTION`
 
 ## Summary
 
-Shipped Editor First-Run Product Surface: backend-authoritative Media Ingest Policy, equal Upload/URL IngestSurface, upload progress/cancel/retry/replace, clipboard paste (best-effort), lazy interactive onboarding tour, Ads Coming Soon nav+page, empty-state copy updates. EP-001 / Kernel / MediaGraph suggestion architecture untouched.
+Shipped Editor First-Run Product Surface: backend-authoritative Media Ingest Policy, equal Upload/URL IngestSurface, upload progress/cancel/retry/replace, clipboard paste (best-effort), lazy interactive onboarding tour, empty-state copy updates. EP-001 / Kernel / MediaGraph suggestion architecture untouched.
+
+**ADK correction (2026-07-20):** Removed invalid Ads nav/page. Sidebar **ADK** → `/adk` Google Agent Development Kit Coming Soon workspace with reserved IA skeleton (Agents…Automation). Legacy ADK Studio wizard archived at `frontend/src/_archive/adk-studio-wizard-page.tsx` (not routed).
 
 ## Files (primary)
 
@@ -24,7 +26,8 @@ Shipped Editor First-Run Product Surface: backend-authoritative Media Ingest Pol
 - `frontend/src/components/editor/IngestSurface.tsx` (new)
 - `frontend/src/components/editor/EditorOnboardingTour.tsx` (new)
 - `frontend/src/components/shared/ComingSoonGate.tsx` (new)
-- `frontend/src/app/(dashboard)/ads/page.tsx` (new)
+- `frontend/src/components/adk/AdkComingSoonWorkspace.tsx` (ADK Coming Soon + IA skeleton)
+- ~~`frontend/src/app/(dashboard)/ads/page.tsx`~~ **removed** (invalid Ads surface)
 - `frontend/src/components/editor/EditorLayout.tsx`
 - `frontend/src/components/editor/AIPanel.tsx`
 - `frontend/src/components/editor/BottomDock.tsx`
@@ -32,7 +35,7 @@ Shipped Editor First-Run Product Surface: backend-authoritative Media Ingest Pol
 - `frontend/src/components/layout/Sidebar.tsx`
 - `frontend/src/components/layout/BottomTabBar.tsx`
 - `frontend/src/app/(dashboard)/settings/page.tsx` — Replay tour
-- `frontend/src/middleware.ts` — protect `/ads`
+- `frontend/src/middleware.ts` — `/ads` removed; `/adk` protected
 - `frontend/src/hooks/useMediaPipeline.ts` — skip duplicate GCS if path set
 - `frontend/src/lib/api.ts` — AbortSignal on GCS PUT
 
@@ -68,11 +71,11 @@ Shipped Editor First-Run Product Surface: backend-authoritative Media Ingest Pol
 - [x] Progress / cancel / retry / replace  
 - [x] Clipboard best-effort  
 - [x] Onboarding lazy + once + Settings replay  
-- [x] Ads Coming Soon (blurred, non-interactive)  
-- [x] Auth middleware includes `/ads`  
-- [x] Tour/Ads lazy-loaded  
-- [ ] Staging smoke: real file upload + tour + Ads nav (founder)  
-- [ ] Confirm Cloud Run has Firestore access for `studio_user_prefs`  
+- [x] **ADK Coming Soon** (Google Agent Development Kit; not Ads) + reserved IA skeleton  
+- [x] Tour lazy-loaded  
+- [x] Invalid `/ads` Ads surface removed  
+- [ ] Staging smoke: real file upload + tour + ADK Coming Soon (founder)  
+- [ ] Confirm Cloud Run has Firestore access for `studio_user_prefs` 
 
 ## Architectural impact
 

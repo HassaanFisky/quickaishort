@@ -16,11 +16,11 @@ Living index. Full ADRs live under `docs/studio/adrs/`.
 | ADR-010 | Orchestrator Plan Jobs | Accepted | EP-004; Plan → Kernel |
 | ADR-011 | Chat-Primary Studio Shell | Accepted | EP-005 |
 | ADR-012 | Bake from Kernel Snapshot | Accepted | EP-006 |
-| ADR-013 | Editor Ingest Parity + Onboarding + Ads CS | **Accepted** | EP-008 implemented |
+| ADR-013 | Editor Ingest Parity + Onboarding + ADK CS | **Accepted** | EP-008 + ADK≠Ads correction implemented |
 
 ## Latest binding change
 
-2026-07-20: EP-008 **implemented** + ADR-013 accepted. Media Ingest Policy API, IngestSurface, onboarding tour, Ads Coming Soon. EP-001/Kernel/MediaGraph suggestion rules untouched.
+2026-07-20: EP-008 **implemented** + ADR-013 accepted. Same day: **`APPROVE ADK CORRECTION`** — Ads nav/page removed; `/adk` is Google Agent Development Kit Coming Soon workspace with reserved IA skeleton. Legacy ADK Studio wizard archived off-route. EP-001/Kernel/MediaGraph untouched.
 
 2026-07-19: Execution cycle close — production-ready gate. TD-EP001-03 FE legacy dialect translator removed (canonical-only client path; BE remains normalizer). Ops Kernel flag enablement is deploy handoff, not architecture change.
 

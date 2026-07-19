@@ -10,7 +10,7 @@
 | Dynamic analysis suggestions | **No-Go** for vision claim | Heuristic-first |
 | Auth on pipeline | **Go** | JWT + fail-closed credits |
 | Docs accuracy | **No-Go** until CLAUDE/ARCHITECTURE drift fixed | Misleads agents |
-| Ads Coming Soon blur | **N/A** | Section absent |
+| ADK Coming Soon blur | **Go** | Google Agent Development Kit Coming Soon + IA skeleton shipped |
 | Billing / credits | **Conditional** | Paddle present; soft-fail risk |
 | Demo / Devpost (challenge) | Per CLAUDE checklist | Separate from Studio |
 

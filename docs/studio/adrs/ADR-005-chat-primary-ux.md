@@ -11,7 +11,7 @@ Vision: conversation primary, timeline secondary. Current `EditorLayout` already
 
 Make **chat column the default primary surface**. Timeline remains always available as contextual dock. Power-user three-panel layout stays behind `advanced=1` (or equivalent toggle).
 
-Ads (when added): **ComingSoonGate** blur — never ship unfinished ads UI live.
+ADK workspace (Google Agent Development Kit): **ComingSoonGate** blur — never ship unfinished agent orchestration as live UI; **not** an Ads page (ADR-013 / EP-008 correction).
 
 ## Consequences
 

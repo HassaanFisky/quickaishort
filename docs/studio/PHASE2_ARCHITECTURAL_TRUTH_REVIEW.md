@@ -303,7 +303,7 @@ These are **Future architecture recommendations** informed by industry patterns 
 | Timeline is a monitor | MultiTrackTimeline + BottomDock are core | Monitor not yet demoted |
 | Suggestions = understanding | Heuristic chips + optional refine | **Fails intended bar** |
 | Panels only when needed | `?advanced=1` helps, but default still editor-shaped | Partial credit |
-| Unfinished features never look live | No Ads nav item; Agency “Coming Soon” only on pricing | Ads requirement **not implemented as a Studio surface** |
+| Unfinished features never look live | ADK = Google Agent Development Kit Coming Soon (not Ads); Agency “Coming Soon” on pricing is unrelated | See `EP-008-ADK-ARCHITECTURE-CORRECTION.md` |
 
 **Decision U1 — Shell law:**
 
@@ -316,15 +316,16 @@ Default `/editor` (Studio) layout priority order:
 
 Shipping chat-primary CSS **without** Media-Graph suggestions is **forbidden as a “Studio launch” claim**.
 
-**Decision U2 — Ads surface (product requirement lock):**
+**Decision U2 — ADK workspace (product requirement lock):**
 
-When Ads is introduced to navigation or studio chrome:
+**ADK** = Google Agent Development Kit (not advertisements). When the ADK workspace is in navigation:
 
-- Render behind `ComingSoonGate` (blur + professional “Coming Soon” copy)
-- No live network calls, no mock dashboards that look real
-- Unfinished monetization UI must not appear production-ready
+- Render behind `ComingSoonGate` (blur + professional “Coming Soon” + short subtitle)
+- Reserved disabled/blurred IA skeleton (Agents, Workflows, Tools, Memory, Knowledge, MCP, Integrations, Automation)
+- No live agent orchestration / network execution that looks finished
+- Never ship as an Ads/marketing page
 
-Until Ads exists in nav, do not fake it. When it lands, U2 is non-negotiable.
+U2 is non-negotiable. See `EP-008-ADK-ARCHITECTURE-CORRECTION.md`.
 
 **Decision U3 — Cognitive load:**
 
@@ -441,7 +442,7 @@ Studio OS is real only when all are true:
 4. Timeline/canvas are projections of ProjectDocument  
 5. Export compiles RenderManifest from authoritative snapshot  
 6. Pre-Flight invocable as skill  
-7. Ads (if present) behind Coming Soon blur  
+7. ADK workspace behind Coming Soon blur (not Ads)  
 8. Default UX is chat-primary; advanced NLE chrome is opt-in  
 
 Until then, marketing language must say **conversational editor transitioning to Studio OS** — not that the OS already exists.

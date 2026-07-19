@@ -40,7 +40,7 @@ QuickAI is a **production-capable YouTube-to-Shorts + Pre-Flight + conversationa
 | Chat is primary interface | AI panel exists; default layout still canvas + dock timeline; advanced left/right panels optional |
 | Fully dynamic suggestions from deep analysis | **MediaGraph grounded suggestions** in editor; multimodal depth still partial (faces/scenes not unified AnalysisAgent) |
 | Auto multimodal analysis on upload (faces, scenes, emotion, objects…) | Partial: Whisper (browser), face tracker hook, scene/beat detection libs — **not** a unified post-upload agent analysis pipeline |
-| Ads section blurred + Coming Soon | **Insufficient evidence** of an Ads section in current nav (`Sidebar.tsx` NAV_ITEMS). Pricing has "Coming Soon" for Agency tier only |
+| ADK (Agent Development Kit) Coming Soon | **Product lock:** ADK ≠ Ads. Spec: `EP-008-ADK-ARCHITECTURE-CORRECTION.md`. Pricing Agency “Coming Soon” is unrelated billing UX |
 
 ---
 
