@@ -16,9 +16,12 @@ Living index. Full ADRs live under `docs/studio/adrs/`.
 | ADR-010 | Orchestrator Plan Jobs | Accepted | EP-004; Plan → Kernel |
 | ADR-011 | Chat-Primary Studio Shell | Accepted | EP-005 |
 | ADR-012 | Bake from Kernel Snapshot | Accepted | EP-006 |
+| ADR-013 | Editor Ingest Parity + Onboarding + Ads CS | **Proposed** | EP-008 — awaiting founder approval |
 
 ## Latest binding change
 
-2026-07-19: Execution cycle close — production-ready gate. TD-EP001-03 FE legacy dialect translator removed (canonical-only client path; BE remains normalizer). No new ADRs. Ops Kernel flag enablement is deploy handoff, not architecture change.
+2026-07-20: EP-008 / ADR-013 **proposed** (Editor First-Run Product Surface). Not accepted until founder approval. Does not reopen EP-001 or EP-002 Kernel.
+
+2026-07-19: Execution cycle close — production-ready gate. TD-EP001-03 FE legacy dialect translator removed (canonical-only client path; BE remains normalizer). Ops Kernel flag enablement is deploy handoff, not architecture change.
 
 Prior same-day: Soak hardening — pipeline JWT (TD-LEGACY-01), heuristic suggestion removal, Kernel chat commit via `structured_steps`, CI registry hash sync.

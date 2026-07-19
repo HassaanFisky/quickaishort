@@ -25,13 +25,16 @@
 - [ ] Set `NEXT_PUBLIC_STUDIO_PROJECT_KERNEL=1` on Vercel staging then prod  
 - [ ] Confirm Cloud Run `STUDIO_PROJECT_KERNEL` not set to `0`  
 
-## Next cycle (optional / gated)
+## Next cycle
 
 | Item | Gate |
 |------|------|
+| **EP-008** Editor First-Run Product Surface (upload parity, onboarding, Ads CS) | **Awaiting founder approval** — package ready |
 | ADR-006 native Gemini tool-loop depth | Optional engineering EP |
 | Multiplayer | **Founder approval** (EP-007) |
 | Legacy `Projects` cutover delete | **Founder consent** (irreversible) |
+
+> Note: Request labeled “EP-002” for this UX work is a **naming conflict** — EP-002 is frozen Project Kernel. Package id = **EP-008**.
 
 ## Deferred UI
 
