@@ -24,9 +24,9 @@
 | `AUTH_DISABLED` | `.env.example` documents it | **Not implemented** in `auth.py` (grep empty) |
 | `firebase_auth.py` | Documented in CLAUDE.md | **File does not exist** |
 
-### Auth gaps
+### Auth notes
 
-- `POST /api/pipeline/run` — no `Depends(get_verified_user_id)` (`routers/pipeline_router.py`).
+- `POST /api/pipeline/run` — JWT via `get_verified_user_id`; body `userId` ignored; `deduct_credits(20)` fail-closed.
 - Some public/stock/health routes intentionally open — verify before expanding.
 
 ---
@@ -74,7 +74,7 @@
 | GET `/api/render/dead`, POST `/api/render/retry/{job_id}` | DLQ |
 | GET `/api/render/dlq/stats` | DLQ stats |
 | GET `/api/download/{job_id}` | Signed download |
-| POST `/api/pipeline/run` | Viral→render one-click (**auth gap**) |
+| POST `/api/pipeline/run` | Viral→render one-click (JWT + credits) |
 
 ---
 

@@ -2,7 +2,14 @@
 import { useAIPanel } from '@/stores/aiPanelStore';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useState, useRef, useEffect } from 'react';
-import { Sparkles, X, Send } from 'lucide-react';
+import Link from 'next/link';
+import { Sparkles, X, Send, ArrowRight } from 'lucide-react';
+
+/**
+ * Dashboard FAQ assistant only.
+ * Timeline edits live exclusively in `components/editor/AIPanel.tsx` (Studio Kernel path).
+ * When a video context is present, route the user to /editor — never fake edit state.
+ */
 
 /** Educational FAQ only — not media-grounded edit advice (EP-003 / A5a). */
 const NO_VIDEO_SUGGESTIONS = [
@@ -11,9 +18,6 @@ const NO_VIDEO_SUGGESTIONS = [
   'How long should a short be?',
   'What hook works best for AI content?',
 ];
-
-/** Non-interactive placeholder until MediaGraph backs this surface. */
-const WITH_VIDEO_PLACEHOLDER = 'Analyzing media… grounded edit suggestions coming soon';
 
 interface AIPanelProps {
   /** When true, renders inline inside a grid cell (no fixed positioning, no AnimatePresence guard). */
@@ -26,7 +30,6 @@ export function AIPanel({ embedded = false }: AIPanelProps) {
   const [loading, setLoading] = useState(false);
   const [retryText, setRetryText] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
-  const suggestions = videoContext ? [WITH_VIDEO_PLACEHOLDER] : NO_VIDEO_SUGGESTIONS;
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -35,6 +38,19 @@ export function AIPanel({ embedded = false }: AIPanelProps) {
   async function send(text: string) {
     const trimmed = text.trim();
     if (!trimmed || loading) return;
+
+    // Edit intents belong in the Studio editor (Kernel + MediaGraph).
+    if (videoContext) {
+      addMessage({ role: 'user', content: trimmed });
+      addMessage({
+        role: 'assistant',
+        content:
+          'Timeline edits run in QuickAI Studio Editor — open the editor for grounded suggestions and Kernel-backed commits.',
+      });
+      setInput('');
+      return;
+    }
+
     setInput('');
     setRetryText(null);
     addMessage({ role: 'user', content: trimmed });
@@ -46,20 +62,18 @@ export function AIPanel({ embedded = false }: AIPanelProps) {
         body: JSON.stringify({
           prompt: trimmed,
           current_state: {
-            videoDuration: videoContext ? 100.0 : 0.0,
+            videoDuration: 0.0,
             currentTime: 0.0,
             elementCount: 0,
             captionCount: 0,
             captionsEnabled: false,
-            aspectRatio: "9:16",
-            visualFilter: "None",
+            aspectRatio: '9:16',
+            visualFilter: 'None',
             audioBoost: 100.0,
             playbackSpeed: 100.0,
           },
-          transcript: videoContext?.transcript
-            ? [{ text: videoContext.transcript, start: 0.0, end: 100.0 }]
-            : [],
-          video_id: videoContext?.id ?? null,
+          transcript: [],
+          video_id: null,
         }),
       });
       const data = await res.json();
@@ -82,7 +96,10 @@ export function AIPanel({ embedded = false }: AIPanelProps) {
 
       addMessage({ role: 'assistant', content });
     } catch {
-      addMessage({ role: 'assistant', content: 'Connection lost — check your internet and try again.' });
+      addMessage({
+        role: 'assistant',
+        content: 'Connection lost — check your internet and try again.',
+      });
       setRetryText(trimmed);
     } finally {
       setLoading(false);
@@ -91,7 +108,6 @@ export function AIPanel({ embedded = false }: AIPanelProps) {
 
   const panelContent = (
     <>
-      {/* Header */}
       <header
         className="flex items-center justify-between px-4 py-3
                    border-b border-[hsl(var(--border-strong))]
@@ -105,7 +121,7 @@ export function AIPanel({ embedded = false }: AIPanelProps) {
             <Sparkles size={12} />
           </span>
           <span className="font-medium text-sm text-[hsl(var(--fg))]">
-            {videoContext ? 'Video Editor AI' : 'QuickAI Assistant'}
+            {videoContext ? 'Open Studio Editor' : 'QuickAI Assistant'}
           </span>
         </div>
         <button
@@ -117,7 +133,6 @@ export function AIPanel({ embedded = false }: AIPanelProps) {
         </button>
       </header>
 
-      {/* Context indicator */}
       <AnimatePresence mode="wait">
         <motion.div
           key={videoContext ? 'video' : 'general'}
@@ -130,12 +145,13 @@ export function AIPanel({ embedded = false }: AIPanelProps) {
         >
           {videoContext ? (
             <>
-              Editing:{' '}
+              Video selected:{' '}
               <strong className="text-[hsl(var(--fg))]">
                 {videoContext.title.length > 50
                   ? videoContext.title.slice(0, 50) + '…'
                   : videoContext.title}
               </strong>
+              {' — '}edit in Studio Editor.
             </>
           ) : (
             'No video loaded — I can help with ideas and strategy.'
@@ -143,37 +159,47 @@ export function AIPanel({ embedded = false }: AIPanelProps) {
         </motion.div>
       </AnimatePresence>
 
-      {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0">
         {messages.length === 0 && (
           <div className="space-y-2">
-            <p className="text-xs uppercase tracking-wider text-[hsl(var(--fg-subtle))] pb-1">
-              Quick Actions
-            </p>
-            {suggestions.map((s) =>
-              videoContext ? (
-                <div
-                  key={s}
-                  className="w-full text-left text-xs px-3 py-2 rounded-lg
-                             border border-[hsl(var(--border))]
-                             text-[hsl(var(--fg-muted))] opacity-70 cursor-default"
-                  aria-disabled="true"
+            {videoContext ? (
+              <>
+                <p className="text-xs uppercase tracking-wider text-[hsl(var(--fg-subtle))] pb-1">
+                  Studio
+                </p>
+                <Link
+                  href="/editor"
+                  className="flex items-center justify-between gap-2 w-full text-left text-xs px-3 py-2.5 rounded-lg
+                             border border-[hsl(var(--accent-indigo)/0.4)]
+                             bg-[hsl(var(--accent-soft))] text-[hsl(var(--fg))]
+                             hover:border-[hsl(var(--accent-indigo))] transition-all duration-150"
                 >
-                  {s}
-                </div>
-              ) : (
-                <button
-                  key={s}
-                  onClick={() => send(s)}
-                  className="w-full text-left text-xs px-3 py-2 rounded-lg
-                             border border-[hsl(var(--border))]
-                             hover:border-[hsl(var(--accent-indigo))] hover:bg-[hsl(var(--accent-soft))]
-                             text-[hsl(var(--fg-muted))] hover:text-[hsl(var(--fg))]
-                             transition-all duration-150"
-                >
-                  {s}
-                </button>
-              ),
+                  <span>Open Editor for grounded edits</span>
+                  <ArrowRight size={14} className="shrink-0 opacity-70" />
+                </Link>
+                <p className="text-[11px] text-[hsl(var(--fg-muted))] leading-relaxed pt-1">
+                  Dashboard chat does not mutate timelines. MediaGraph suggestions and Kernel commits run only in the editor.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-xs uppercase tracking-wider text-[hsl(var(--fg-subtle))] pb-1">
+                  Quick Actions
+                </p>
+                {NO_VIDEO_SUGGESTIONS.map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => send(s)}
+                    className="w-full text-left text-xs px-3 py-2 rounded-lg
+                               border border-[hsl(var(--border))]
+                               hover:border-[hsl(var(--accent-indigo))] hover:bg-[hsl(var(--accent-soft))]
+                               text-[hsl(var(--fg-muted))] hover:text-[hsl(var(--fg))]
+                               transition-all duration-150"
+                  >
+                    {s}
+                  </button>
+                ))}
+              </>
             )}
           </div>
         )}
@@ -227,7 +253,6 @@ export function AIPanel({ embedded = false }: AIPanelProps) {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input */}
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -238,28 +263,42 @@ export function AIPanel({ embedded = false }: AIPanelProps) {
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder={videoContext ? 'Ask about this video…' : 'Ask anything…'}
+          placeholder={
+            videoContext ? 'Open Editor to edit this video…' : 'Ask anything…'
+          }
+          disabled={Boolean(videoContext)}
           className="flex-1 text-xs rounded-lg px-3 py-2
                      bg-[hsl(var(--bg-subtle))] border border-[hsl(var(--border))]
                      text-[hsl(var(--fg))] placeholder:text-[hsl(var(--fg-subtle))]
                      focus:outline-none focus:border-[hsl(var(--accent-indigo))]
                      focus:shadow-[0_0_0_2px_hsl(var(--accent-indigo)/0.15)]
+                     disabled:opacity-50 disabled:cursor-not-allowed
                      transition-all"
         />
-        <button
-          type="submit"
-          disabled={!input.trim() || loading}
-          className="px-2.5 py-2 rounded-lg bg-[hsl(var(--accent-indigo))] text-[hsl(var(--accent-fg))]
-                     disabled:opacity-40 disabled:cursor-not-allowed
-                     hover:bg-[hsl(var(--accent-hover))] transition-colors"
-        >
-          <Send size={14} />
-        </button>
+        {videoContext ? (
+          <Link
+            href="/editor"
+            className="px-2.5 py-2 rounded-lg bg-[hsl(var(--accent-indigo))] text-[hsl(var(--accent-fg))]
+                       hover:bg-[hsl(var(--accent-hover))] transition-colors grid place-items-center"
+            aria-label="Open Studio Editor"
+          >
+            <ArrowRight size={14} />
+          </Link>
+        ) : (
+          <button
+            type="submit"
+            disabled={!input.trim() || loading}
+            className="px-2.5 py-2 rounded-lg bg-[hsl(var(--accent-indigo))] text-[hsl(var(--accent-fg))]
+                       disabled:opacity-40 disabled:cursor-not-allowed
+                       hover:bg-[hsl(var(--accent-hover))] transition-colors"
+          >
+            <Send size={14} />
+          </button>
+        )}
       </form>
     </>
   );
 
-  // Embedded: renders inline in a grid cell — parent AnimatePresence controls visibility.
   if (embedded) {
     return (
       <div className="flex flex-col h-full w-full bg-[hsl(var(--bg-subtle))] overflow-hidden">
@@ -268,7 +307,6 @@ export function AIPanel({ embedded = false }: AIPanelProps) {
     );
   }
 
-  // Default: fixed overlay sliding in from the right, used on mobile / sm screens.
   return (
     <AnimatePresence>
       {isOpen && (

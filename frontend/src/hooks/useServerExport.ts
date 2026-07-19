@@ -285,6 +285,25 @@ export function useServerExport({ userId }: UseServerExportArgs) {
         rotation: el.rotation,
       }));
 
+      // EP-006 — ensure Studio project exists before bake so first export binds
+      let studioProjectId: string | null = null;
+      let studioProjectRevision: number | null = null;
+      if (process.env.NEXT_PUBLIC_STUDIO_PROJECT_KERNEL === "1") {
+        try {
+          const { ensureStudioProject } = await import("@/lib/studio/projectKernel");
+          studioProjectId = await ensureStudioProject({
+            title: "Studio Export",
+            active_run_id: useEditorStore.getState().runId,
+            proposed_manifest: manifest,
+          });
+          studioProjectRevision = useEditorStore.getState().studioAckedRevision;
+        } catch {
+          toast.warning(
+            "Studio project bind failed — exporting without Kernel pin.",
+          );
+        }
+      }
+
       const payload: ExportRequestPayload = {
         videoId,
         start_sec: clip.start,
@@ -313,11 +332,10 @@ export function useServerExport({ userId }: UseServerExportArgs) {
         transition_enabled: useEditorStore.getState().exportSettings.transitionEnabled,
         voiceover_enabled: useEditorStore.getState().exportSettings.voiceoverEnabled,
         render_manifest: manifest,
-        ...(process.env.NEXT_PUBLIC_STUDIO_PROJECT_KERNEL === "1" &&
-        useEditorStore.getState().studioProjectId
+        ...(studioProjectId
           ? {
-              project_id: useEditorStore.getState().studioProjectId,
-              project_revision: useEditorStore.getState().studioAckedRevision,
+              project_id: studioProjectId,
+              project_revision: studioProjectRevision,
             }
           : {}),
       };

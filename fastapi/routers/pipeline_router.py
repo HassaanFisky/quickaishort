@@ -89,6 +89,31 @@ async def run_pipeline(
             status_code=400, detail="transcript is required for analysis"
         )
 
+    # Secondary gate: same credit cost as /api/process-video (enqueues a render).
+    # Fail-closed: stats outage must not free-run expensive viral+render work.
+    try:
+        from services.stats_service import deduct_credits
+
+        ok = await deduct_credits(user_id, 20)
+        if not ok:
+            raise HTTPException(
+                status_code=402,
+                detail="Insufficient credits. Please upgrade your plan to continue.",
+            )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error(
+            "pipeline_credit_deduction_failed user_id=%s err=%s",
+            user_id,
+            exc,
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=503,
+            detail="Credit service unavailable. Try again shortly.",
+        ) from exc
+
     pipeline_id = uuid.uuid4().hex
     run_id = req.runId or uuid.uuid4().hex
     _set_pipeline(

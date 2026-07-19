@@ -1,6 +1,6 @@
 # Canonical Project Memory
 
-**Last rebuilt:** 2026-07-19 (Final Execution Authority soak)  
+**Last rebuilt:** 2026-07-19 (Final Execution Authority — completion pass)  
 **Authority:** Latest accepted EPs / ADRs / founder decisions only
 
 ## Product
@@ -30,22 +30,30 @@ Editor is the product; AI enhances the editor. Chat-primary UX direction (Phase 
 
 ## Part G Sequence
 
-1–7 substrate ✅. Soak hardening ✅ (pipeline JWT, heuristic dead-code removal, Kernel chat commit, CI registry hash).
+1–7 substrate ✅. Soak hardening ✅. Completion pass ✅:
+- Pipeline JWT + fail-closed credits (20) + tests
+- MediaGraph router ownership check (defense-in-depth)
+- AIPanel runId/graph race guards + Kernel honesty receipts
+- Export `ensureStudioProject` before bake bind
+- Orphan `EDITOR_SYSTEM_PROMPT` / `callGeminiEditor` / `useAiCommander` removed
+- Dashboard AIPanel = FAQ + `/editor` CTA (no fake timeline edits)
+- Env examples document Kernel flags
 
 ## Runtime truth (verified)
 
 - Studio Kernel: `/api/studio/v1/projects` + Firestore `studio_projects`  
 - MediaGraph: `/api/studio/v1/media-graphs` + grounded suggestions  
 - Orchestrator: `/api/studio/v1/orchestrator` (structured / structured_steps / free-text)  
-- Pipeline: `POST /api/pipeline/run` requires JWT; body `userId` not trusted  
-- FE Kernel flag: `NEXT_PUBLIC_STUDIO_PROJECT_KERNEL=1`  
+- Pipeline: JWT required; body `userId` ignored; credits fail-closed  
+- FE Kernel flag: `NEXT_PUBLIC_STUDIO_PROJECT_KERNEL=1` (see `frontend/.env.example`)  
+- BE Kernel: `STUDIO_PROJECT_KERNEL` default on (see `fastapi/.env.example`)  
 - CI: `fastapi/scripts/check_registry_sync.py` in linter workflow  
-- pytest EP suite: **23 passed**; `tsc --noEmit` exit 0  
 
 ## Active implementation
 
-Production readiness soak complete for current authority cycle.  
-Next: enable Kernel flag in staging/prod (ops); ADR-006 deep native FC loop (optional); founder approval for multiplayer.
+Studio OS substrate + soak + completion pass shipped on `main`.  
+Ops: enable `NEXT_PUBLIC_STUDIO_PROJECT_KERNEL=1` on Vercel staging/prod if not set.  
+Optional later: ADR-006 native FC depth; multiplayer (founder approval).
 
 ## Non-negotiables
 

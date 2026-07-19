@@ -38,7 +38,7 @@ QuickAI is a **production-capable YouTube-to-Shorts + Pre-Flight + conversationa
 | AI never pretends — operates real editing tools via function calling | Prompt lists tools; Gemini returns JSON via `generate_content`. Native `FunctionDeclaration` / tool loop: **not present** in `ai_editor_engine.py` / `gemini_client.py` |
 | Backend = headless Premiere engine | Export/ffmpeg + action schemas. No server timeline mutation API / authoritative multi-track graph DB |
 | Chat is primary interface | AI panel exists; default layout still canvas + dock timeline; advanced left/right panels optional |
-| Fully dynamic suggestions from deep analysis | Instant suggestions are **heuristic title classifiers** (`INSTANT_SUGGESTIONS` in `gemini-editor.ts`); Gemini refine is secondary |
+| Fully dynamic suggestions from deep analysis | **MediaGraph grounded suggestions** in editor; multimodal depth still partial (faces/scenes not unified AnalysisAgent) |
 | Auto multimodal analysis on upload (faces, scenes, emotion, objects…) | Partial: Whisper (browser), face tracker hook, scene/beat detection libs — **not** a unified post-upload agent analysis pipeline |
 | Ads section blurred + Coming Soon | **Insufficient evidence** of an Ads section in current nav (`Sidebar.tsx` NAV_ITEMS). Pricing has "Coming Soon" for Agency tier only |
 
@@ -70,7 +70,7 @@ Add (blueprint order in `28-implementation-blueprint.md`):
 | Risk | Level | Note |
 |------|-------|------|
 | Architectural drift in docs (`CLAUDE.md` firebase_auth, GridFS-as-primary notes) | High | Misleads agents |
-| Unauthenticated `POST /api/pipeline/run` | High | Security |
+| Ops: FE Kernel flag not set on Vercel | Medium | Kernel path stays client-only until flag on |
 | Action vocabulary ≠ executable coverage | High | AI may emit unsupported tools |
 | Dual RQ + Celery paths | Medium | Maintainability |
 | Cost (Gemini per command + credits) | Medium | Needs caching / local tools |

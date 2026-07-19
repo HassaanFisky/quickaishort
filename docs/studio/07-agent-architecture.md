@@ -40,7 +40,7 @@ Personas (weights referenced in code): genz, millennial, sports, tech, entertain
 
 `run_viral_pipeline` — Sequential segmentation + scoring; Redis cache tool; Gemini fallback `_direct_gemini_pipeline`.
 
-Wired into `POST /api/pipeline/run` (auth gap) and analysis flows.
+Wired into `POST /api/pipeline/run` (JWT + credits) and analysis flows.
 
 ---
 

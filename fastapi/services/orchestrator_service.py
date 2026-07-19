@@ -260,6 +260,7 @@ class OrchestratorService:
         last_mutating = mutating_indices[-1] if mutating_indices else None
 
         for i, step in enumerate(plan.steps):
+            # Transport / chrome — never ProjectEvents (EP-002 E2)
             if step.capability_id in NON_EVENT_CAPABILITIES:
                 step.status = "skipped"
                 step.reject_detail = "non_event_capability_client_local"
@@ -272,12 +273,13 @@ class OrchestratorService:
                 continue
             affects = "mutate_project" in (cap.get("side_effects") or [])
             command_id = uuid4().hex
+            # Non-mutating emit-allowed caps may commit without proposed_manifest.
+            # Mutating caps: only the last one in the batch carries Strategy A snapshot.
             proposed = (
                 body.proposed_manifest
                 if affects and last_mutating is not None and i == last_mutating
                 else None
             )
-            # Multiple mutating steps: only last commits Strategy A manifest.
             if affects and last_mutating is not None and i != last_mutating:
                 step.status = "skipped"
                 step.reject_detail = "batched_into_final_manifest_step"

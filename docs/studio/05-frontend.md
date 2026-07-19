@@ -46,11 +46,10 @@ Evidence: `hooks/useAiCommander.ts`, `stores/editorStore.ts`.
 
 | Layer | Behavior | File |
 |-------|----------|------|
-| Instant | Title keyword → `INSTANT_SUGGESTIONS` map | `lib/gemini-editor.ts` `generateImmediateSuggestions` |
-| Refine | Optional Gemini / `/api/ai/suggestions` fetch | same |
-| Hardcoded alt panel | `WITH_VIDEO_SUGGESTIONS` / `NO_VIDEO_SUGGESTIONS` | `components/ai/AIPanel.tsx` |
+| MediaGraph grounded | Facets → suggestion API → editor rail | `editor/AIPanel.tsx` + MediaGraph |
+| Dashboard FAQ | Educational chips only; video → `/editor` CTA | `components/ai/AIPanel.tsx` |
 
-**Vision gap:** Not fully dynamic from multimodal analysis. Instant layer is intentionally zero-cost (good for cost strategy) but must not remain the only intelligence.
+**Authority:** Product edit suggestions = MediaGraph only. Dashboard must not pretend to mutate timelines.
 
 ---
 

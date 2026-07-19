@@ -58,6 +58,10 @@ async def get_suggestions(
     graph_id: str, user_id: str = Depends(get_verified_user_id)
 ):
     svc = get_media_graph_service()
+    # Defense-in-depth: ownership check at router before deriving suggestions
+    graph = await svc.get(graph_id, user_id)
+    if graph is None:
+        raise HTTPException(status_code=404, detail="graph_not_found")
     rows = await svc.suggestions(graph_id, user_id)
     if rows is None:
         raise HTTPException(status_code=404, detail="graph_not_found")

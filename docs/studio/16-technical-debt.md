@@ -4,9 +4,9 @@ Prioritized. Evidence-based.
 
 | ID | Debt | Impact | Evidence | Priority |
 |----|------|--------|----------|----------|
-| TD-01 | Dual AI prompt dialects (17 tools vs rich actions) | Wrong/no-op edits | `ai_editor_engine.py` vs `gemini-editor.ts` / `ai_editor.py` | P0 |
-| TD-02 | Dual AI panels | UX/code confusion | `components/editor/AIPanel.tsx` + `components/ai/AIPanel.tsx` | P0 |
-| TD-03 | Unauthenticated pipeline | Abuse / cost | `pipeline_router.py` | P0 |
+| TD-01 | Dual AI prompt dialects (17 tools vs rich actions) | Wrong/no-op edits | Server EP-001 path is authority; orphan FE prompt **removed** | Closed |
+| TD-02 | Dual AI panels | UX/code confusion | Dashboard FAQ + `/editor` CTA; editor owns Kernel | Closed |
+| TD-03 | Unauthenticated pipeline | Abuse / cost | JWT + fail-closed credits | Closed |
 | TD-04 | Doc drift (firebase, GridFS primary, Next 14.2.22) | Agent hallucinations | CLAUDE.md, ARCHITECTURE.md, README badges | P0 |
 | TD-05 | `gridfs://` URI on GCS writes | Downstream bugs | youtube/tts paths | P1 |
 | TD-06 | RQ + Celery dual queues | Ops complexity | `queue_service` + `workers/tasks.py` | P1 |

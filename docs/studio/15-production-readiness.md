@@ -8,7 +8,7 @@
 | Conversational apply path exists | **Go** | commander + applyAiEdits |
 | Native tool orchestration | **No-Go** for “AI operates Premiere tools” claim | Prompt-JSON only |
 | Dynamic analysis suggestions | **No-Go** for vision claim | Heuristic-first |
-| Auth on pipeline | **No-Go** until fixed | Unauthenticated run |
+| Auth on pipeline | **Go** | JWT + fail-closed credits |
 | Docs accuracy | **No-Go** until CLAUDE/ARCHITECTURE drift fixed | Misleads agents |
 | Ads Coming Soon blur | **N/A** | Section absent |
 | Billing / credits | **Conditional** | Paddle present; soft-fail risk |

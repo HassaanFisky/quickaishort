@@ -17,9 +17,10 @@ CI enforces BE↔FE SHA-256 match via `fastapi/scripts/check_registry_sync.py`.
 
 ## Soak readiness
 
-- Pipeline endpoints JWT-gated  
+- Pipeline endpoints JWT-gated + fail-closed credits  
 - Editor chat commits to Kernel when FE flag on (structured_steps, no double LLM)  
-- Export Kernel snapshot authority when `project_id` present  
+- Export calls `ensureStudioProject` then binds `project_id` / revision  
+- Flags documented in `frontend/.env.example` + `fastapi/.env.example`  
 
 ## EP-002 cutover criteria (future)
 

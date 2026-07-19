@@ -332,6 +332,7 @@ export function AIPanel() {
       actions: [],
     });
 
+    const effectRunId = runId;
     let cancelled = false;
     (async () => {
       try {
@@ -342,10 +343,21 @@ export function AIPanel() {
             active_run_id: useEditorStore.getState().runId,
           });
         }
+        if (
+          cancelled ||
+          boundRunIdRef.current !== effectRunId
+        ) {
+          return;
+        }
         const graph = await createMediaGraph({
           project_id: projectId,
         });
-        if (cancelled) return;
+        if (
+          cancelled ||
+          boundRunIdRef.current !== effectRunId
+        ) {
+          return;
+        }
         mediaGraphIdRef.current = graph.graph_id;
 
         const moments = clips.map((c) => ({
@@ -362,11 +374,24 @@ export function AIPanel() {
           viralMoments: moments.length > 0 ? moments : null,
         });
         await upsertMediaGraphFacets(graph.graph_id, facets);
-        if (cancelled) return;
+        if (
+          cancelled ||
+          boundRunIdRef.current !== effectRunId ||
+          mediaGraphIdRef.current !== graph.graph_id
+        ) {
+          return;
+        }
         const grounded = await fetchGroundedSuggestions(graph.graph_id);
-        if (!cancelled && grounded.length > 0) setSuggestions(grounded);
+        if (
+          !cancelled &&
+          boundRunIdRef.current === effectRunId &&
+          mediaGraphIdRef.current === graph.graph_id &&
+          grounded.length > 0
+        ) {
+          setSuggestions(grounded);
+        }
       } catch {
-        if (!cancelled) {
+        if (!cancelled && boundRunIdRef.current === effectRunId) {
           setSuggestions([
             {
               suggestion_id: "skel-unavailable",
@@ -395,15 +420,25 @@ export function AIPanel() {
     duration,
     captionsEnabled,
     clips,
+    runId,
   ]);
 
   // Refresh grounded suggestions when transcript/silence/clips arrive after first load
   useEffect(() => {
     const graphId = mediaGraphIdRef.current;
+    const effectRunId = runId;
     if (!graphId || !videoMetadata) return;
     let cancelled = false;
     (async () => {
       try {
+        // Abort if a newer source video superseded this effect's run
+        if (
+          cancelled ||
+          boundRunIdRef.current !== effectRunId ||
+          mediaGraphIdRef.current !== graphId
+        ) {
+          return;
+        }
         const moments = clips.map((c) => ({
           start: c.start,
           end: c.end,
@@ -417,8 +452,22 @@ export function AIPanel() {
           viralMoments: moments.length > 0 ? moments : null,
         });
         await upsertMediaGraphFacets(graphId, facets);
+        if (
+          cancelled ||
+          boundRunIdRef.current !== effectRunId ||
+          mediaGraphIdRef.current !== graphId
+        ) {
+          return;
+        }
         const grounded = await fetchGroundedSuggestions(graphId);
-        if (!cancelled && grounded.length > 0) setSuggestions(grounded);
+        if (
+          !cancelled &&
+          boundRunIdRef.current === effectRunId &&
+          mediaGraphIdRef.current === graphId &&
+          grounded.length > 0
+        ) {
+          setSuggestions(grounded);
+        }
       } catch {
         /* keep prior rail */
       }
@@ -433,6 +482,7 @@ export function AIPanel() {
     clips,
     videoMetadata,
     duration,
+    runId,
   ]);
 
   /** EP-004: grounded chip → structured Plan → local apply (+ optional Kernel). */
@@ -555,71 +605,76 @@ export function AIPanel() {
           );
         }
 
-        // EP-004 — Kernel commit from already-planned actions (no second LLM call)
+        // EP-004 — Kernel commit from already-planned actions (no second LLM call).
+        // NEXT_PUBLIC_* is build-time; capture once so we never half-enter Kernel path.
         let receipt = "";
-        if (isStudioProjectKernelEnabled() && dispatchActions.length > 0) {
+        const kernelEnabled = isStudioProjectKernelEnabled();
+        if (kernelEnabled && dispatchActions.length > 0) {
           try {
-            const { createStudioProject, fetchStudioHead } = await import(
+            const { ensureStudioProject, fetchStudioHead } = await import(
               "@/lib/studio/projectKernel"
             );
-            let projectId = useEditorStore.getState().studioProjectId;
-            if (!projectId) {
-              const created = await createStudioProject({
+            if (!isStudioProjectKernelEnabled()) {
+              // Defensive: never touch Kernel store fields if flag flipped off in tests
+              receipt = " · Preview only (Kernel disabled)";
+            } else {
+              const projectId = await ensureStudioProject({
                 title: videoMetadata?.title ?? "Studio Project",
                 active_run_id: useEditorStore.getState().runId,
               });
-              projectId = created.project_id;
-              useEditorStore.setState({
-                studioProjectId: created.project_id,
-                studioAckedRevision: created.revision,
-                studioSnapshotHash: created.snapshot_hash,
-              });
-            }
-            const structured_steps = dispatchActions.map(
-              (a: { type: string; payload?: Record<string, unknown> }) => ({
-                capability_id: a.type,
-                params: a.payload ?? {},
-              }),
-            );
-            const { data: plan } = await axios.post(
-              `${API_URL}/api/studio/v1/orchestrator/plan`,
-              {
-                source: "chat",
-                intent_text: trimmed,
-                project_id: projectId,
-                structured_steps,
-              },
-            );
-            useEditorStore.getState().rebuildRenderManifest();
-            const st = useEditorStore.getState();
-            if (plan?.plan_id && st.compiledManifest && projectId && plan.steps?.length) {
-              const { data: executed } = await axios.post(
-                `${API_URL}/api/studio/v1/orchestrator/execute`,
+              const structured_steps = dispatchActions.map(
+                (a: { type: string; payload?: Record<string, unknown> }) => ({
+                  capability_id: a.type,
+                  params: a.payload ?? {},
+                }),
+              );
+              const { data: plan } = await axios.post(
+                `${API_URL}/api/studio/v1/orchestrator/plan`,
                 {
-                  plan_id: plan.plan_id,
+                  source: "chat",
+                  intent_text: trimmed,
                   project_id: projectId,
-                  base_revision: st.studioAckedRevision,
-                  base_snapshot_hash: st.studioSnapshotHash,
-                  proposed_manifest: st.compiledManifest,
+                  structured_steps,
                 },
               );
-              const head = await fetchStudioHead(projectId);
-              useEditorStore.setState({
-                studioAckedRevision: head.revision,
-                studioSnapshotHash: head.snapshot_hash,
-              });
-              const accepted = (executed?.steps ?? []).filter(
-                (s: { status?: string }) => s.status === "accepted",
-              ).length;
-              receipt =
-                accepted > 0
-                  ? ` · Kernel r${head.revision} (${accepted} ack)`
-                  : executed?.status === "failed"
-                    ? " · Kernel reject — preview only"
-                    : "";
+              useEditorStore.getState().rebuildRenderManifest();
+              const st = useEditorStore.getState();
+              if (
+                plan?.plan_id &&
+                st.compiledManifest &&
+                projectId &&
+                plan.steps?.length
+              ) {
+                const { data: executed } = await axios.post(
+                  `${API_URL}/api/studio/v1/orchestrator/execute`,
+                  {
+                    plan_id: plan.plan_id,
+                    project_id: projectId,
+                    base_revision: st.studioAckedRevision,
+                    base_snapshot_hash: st.studioSnapshotHash,
+                    proposed_manifest: st.compiledManifest,
+                  },
+                );
+                const head = await fetchStudioHead(projectId);
+                useEditorStore.setState({
+                  studioAckedRevision: head.revision,
+                  studioSnapshotHash: head.snapshot_hash,
+                });
+                const accepted = (executed?.steps ?? []).filter(
+                  (s: { status?: string }) => s.status === "accepted",
+                ).length;
+                receipt =
+                  accepted > 0
+                    ? ` · Kernel r${head.revision} (${accepted} ack)`
+                    : executed?.status === "failed"
+                      ? " · Preview applied; Kernel rejected — re-apply before export"
+                      : " · Preview applied; Kernel steps skipped";
+              }
             }
           } catch {
-            receipt = " · Kernel sync deferred";
+            // Honesty: local preview may have applied; server authority did not ack
+            receipt =
+              " · Preview applied; Kernel sync failed — re-sync before export";
           }
         }
 

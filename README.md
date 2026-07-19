@@ -14,7 +14,7 @@
 
 [![Live](https://img.shields.io/badge/quickaishort.online-live-6366f1?style=flat-square&logo=vercel&logoColor=white)](https://quickaishort.online)
 &nbsp;
-[![Build](https://img.shields.io/github/actions/workflow/status/HassaanFisky/quickaishort/ci.yml?style=flat-square&label=build)](https://github.com/HassaanFisky/quickaishort/actions/workflows/ci.yml)
+[![Build](https://img.shields.io/github/actions/workflow/status/HassaanFisky/quickaishort/linter.yml?style=flat-square&label=build)](https://github.com/HassaanFisky/quickaishort/actions/workflows/linter.yml)
 &nbsp;
 [![Lint](https://img.shields.io/github/actions/workflow/status/HassaanFisky/quickaishort/linter.yml?style=flat-square&label=lint)](https://github.com/HassaanFisky/quickaishort/actions/workflows/linter.yml)
 &nbsp;
