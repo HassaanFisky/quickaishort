@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "engines": {
-    "node": "20.x"
+    "node": "24.x"
   },
   "scripts": {
     "dev": "next dev",
@@ -80,6 +80,11 @@
     "overrides": {
       "protobufjs": "^7.4.0",
       "postcss": ">=8.5.10"
-    }
+    },
+    "onlyBuiltDependencies": [
+      "@sentry/cli",
+      "esbuild",
+      "sharp"
+    ]
   }
 }
