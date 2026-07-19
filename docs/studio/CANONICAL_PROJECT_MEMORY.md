@@ -1,6 +1,6 @@
 # Canonical Project Memory
 
-**Last rebuilt:** 2026-07-19 (Final Execution Authority — completion pass)  
+**Last rebuilt:** 2026-07-19 (Execution cycle close — production-ready gate)  
 **Authority:** Latest accepted EPs / ADRs / founder decisions only
 
 ## Product
@@ -28,32 +28,35 @@ Editor is the product; AI enhances the editor. Chat-primary UX direction (Phase 
 | Phase 2 Architectural Truth Review | Binding OS direction |
 | ADR-001 | Preview latency only; end-state superseded by ADR-008 |
 
-## Part G Sequence
+## Execution cycle status
 
-1–7 substrate ✅. Soak hardening ✅. Completion pass ✅:
-- Pipeline JWT + fail-closed credits (20) + tests
-- MediaGraph router ownership check (defense-in-depth)
-- AIPanel runId/graph race guards + Kernel honesty receipts
-- Export `ensureStudioProject` before bake bind
-- Orphan `EDITOR_SYSTEM_PROMPT` / `callGeminiEditor` / `useAiCommander` removed
-- Dashboard AIPanel = FAQ + `/editor` CTA (no fake timeline edits)
-- Env examples document Kernel flags
+**COMPLETE (code).** Substrate EP-001…007 + soak + completion gate verified.  
+Report: `docs/studio/packages/EP-COMPLETION-CYCLE-IMPLEMENTATION-REPORT.md`
+
+Closed in final gate:
+- TD-EP001-03 — FE legacy `{tool,params}` translator removed (server normalize only)
+- Full gate: pytest 127 · tsc 0 · lint 0 · registry OK · Bugbot clean
+- EP-001 files untouched
 
 ## Runtime truth (verified)
 
 - Studio Kernel: `/api/studio/v1/projects` + Firestore `studio_projects`  
 - MediaGraph: `/api/studio/v1/media-graphs` + grounded suggestions  
-- Orchestrator: `/api/studio/v1/orchestrator` (structured / structured_steps / free-text)  
-- Pipeline: JWT required; body `userId` ignored; credits fail-closed  
-- FE Kernel flag: `NEXT_PUBLIC_STUDIO_PROJECT_KERNEL=1` (see `frontend/.env.example`)  
-- BE Kernel: `STUDIO_PROJECT_KERNEL` default on (see `fastapi/.env.example`)  
-- CI: `fastapi/scripts/check_registry_sync.py` in linter workflow  
+- Orchestrator: `/api/studio/v1/orchestrator`  
+- Pipeline: JWT + fail-closed credits  
+- FE: `NEXT_PUBLIC_STUDIO_PROJECT_KERNEL=1` (`.env.example`)  
+- BE: `STUDIO_PROJECT_KERNEL` default on  
+- CI: `check_registry_sync.py` in linter workflow  
 
-## Active implementation
+## Active / blocked on founder
 
-Studio OS substrate + soak + completion pass shipped on `main`.  
-Ops: enable `NEXT_PUBLIC_STUDIO_PROJECT_KERNEL=1` on Vercel staging/prod if not set.  
-Optional later: ADR-006 native FC depth; multiplayer (founder approval).
+| Item | Owner |
+|------|--------|
+| Enable Kernel FE flag on Vercel staging/prod | Ops / founder |
+| Confirm Cloud Run Kernel not forced off | Ops / founder |
+| ADR-006 native FC depth | Optional later |
+| Multiplayer | Founder approval (EP-007) |
+| Delete legacy `Projects` | Irreversible — founder consent |
 
 ## Non-negotiables
 

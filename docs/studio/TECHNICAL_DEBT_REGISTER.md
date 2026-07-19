@@ -4,7 +4,7 @@
 |----|----------|------|----------|--------|
 | TD-EP001-01 | Medium | Orphan FE `EDITOR_SYSTEM_PROMPT` in gemini-editor.ts | EP-001 follow-up | **Closed** — removed with `callGeminiEditor` |
 | TD-EP001-02 | Medium | No JSON-Schema engine for capabilities | EP-001 follow-up | Open |
-| TD-EP001-03 | Low | Legacy `translateToolActionToLegacy` safety net | EP-001 follow-up | Open |
+| TD-EP001-03 | Low | Legacy `translateToolActionToLegacy` safety net | EP-001 follow-up | **Closed** — FE drops non-canonical; BE normalizes |
 | TD-EP001-04 | Medium | No CI BE↔FE registry hash check | EP-001 follow-up | **Closed** — `check_registry_sync.py` in CI |
 | TD-EP002-01 | High | Dual project collections (`Projects` vs `studio_projects`) during migration | EP-002 | Accepted debt |
 | TD-EP002-02 | Medium | No pure Python Manifest reducer (Strategy B deferred) | EP-002 | Accepted — E1 Strategy A |

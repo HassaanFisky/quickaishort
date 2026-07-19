@@ -19,4 +19,6 @@ Living index. Full ADRs live under `docs/studio/adrs/`.
 
 ## Latest binding change
 
-2026-07-19: Soak hardening — pipeline JWT (TD-LEGACY-01), heuristic suggestion removal, Kernel chat commit via `structured_steps`, CI registry hash sync.
+2026-07-19: Execution cycle close — production-ready gate. TD-EP001-03 FE legacy dialect translator removed (canonical-only client path; BE remains normalizer). No new ADRs. Ops Kernel flag enablement is deploy handoff, not architecture change.
+
+Prior same-day: Soak hardening — pipeline JWT (TD-LEGACY-01), heuristic suggestion removal, Kernel chat commit via `structured_steps`, CI registry hash sync.

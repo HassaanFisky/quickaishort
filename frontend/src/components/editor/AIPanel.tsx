@@ -3,12 +3,11 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Send, Mic, MicOff, Sparkles, Zap } from "lucide-react";
-import { useEditorStore } from "@/stores/editorStore";
+import { useEditorStore, type EditorAction } from "@/stores/editorStore";
 import {
   type EditorStateContext,
   sendEditorCommand,
   type CanonicalEditorAction,
-  type EditorAction as Phase56EditorAction,
 } from "@/lib/gemini-editor";
 import { useSession } from "next-auth/react";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
@@ -81,111 +80,9 @@ function StreamingText({ text }: { text: string }) {
 }
 
 /** Convert canonical registry action → dispatchAIActions envelope ({type, payload}). */
-function canonicalToDispatchEnvelope(action: CanonicalEditorAction): { type: string; payload: Record<string, unknown> } {
+function canonicalToDispatchEnvelope(action: CanonicalEditorAction): EditorAction {
   const { type, ...rest } = action;
-  return { type, payload: rest as Record<string, unknown> };
-}
-
-/** @deprecated EP-001 — kept for accidental legacy {tool,params} payloads */
-function translateToolActionToLegacy(action: Phase56EditorAction): any {
-  const tool = action.tool;
-  const p = action.params || {};
-  const val = p.value as any;
-  switch (tool) {
-    case "selection_tool":
-      return { type: "POINTER_SELECT", payload: { clip_id: p.clip_id } };
-    case "select_forward":
-      return { type: "FORWARD_LANE_SELECT", payload: { clip_id: p.clip_id } };
-    case "select_backward":
-      return { type: "BACKWARD_LANE_SELECT", payload: { clip_id: p.clip_id } };
-    case "ripple_delete":
-      return { type: "RIPPLE_DELETE", payload: { clip_id: p.clip_id } };
-    case "rolling_edit":
-      return {
-        type: "ROLLING_TRIM",
-        payload: {
-          clip_id: p.clip_id,
-          edge: val || "out",
-          delta_sec: p.end_time != null && p.start_time != null ? p.end_time - p.start_time : 0
-        }
-      };
-    case "rate_stretch":
-      return { type: "DURATION_STRETCH", payload: { clip_id: p.clip_id, speed_factor: p.speed_factor || val } };
-    case "razor_tool":
-      return { type: "BLADE_SPLIT", payload: { time_sec: p.start_time != null ? p.start_time : (val != null ? val : 0) } };
-    case "slip_tool":
-      return { type: "SLIP_CLIP", payload: { clip_id: p.clip_id, delta_sec: val || 0 } };
-    case "slide_tool":
-      return { type: "SLIDE_CLIP", payload: { clip_id: p.clip_id, delta_sec: val || 0 } };
-    case "pen_keyframe":
-      return {
-        type: "SET_KEYFRAME",
-        payload: {
-          clip_id: p.clip_id,
-          property: val || "position",
-          time_ms: p.start_time != null ? p.start_time * 1000 : 0,
-          value: val != null ? val : 0
-        }
-      };
-    case "rect_mask":
-      return {
-        type: "ADD_RECT_MASK",
-        payload: {
-          clip_id: p.clip_id,
-          x: val?.x || 0.1,
-          y: val?.y || 0.1,
-          width: val?.width || 0.8,
-          height: val?.height || 0.8
-        }
-      };
-    case "ellipse_mask":
-      return {
-        type: "ADD_ELLIPSE_MASK",
-        payload: {
-          clip_id: p.clip_id,
-          cx: val?.cx || 0.5,
-          cy: val?.cy || 0.5,
-          rx: val?.rx || 0.4,
-          ry: val?.ry || 0.4
-        }
-      };
-    case "hand_tool":
-      return {
-        type: "SCROLL_HAND",
-        payload: {
-          delta_x: val?.x || val || 0,
-          delta_y: val?.y || 0
-        }
-      };
-    case "zoom_tool":
-      return { type: "TIMELINE_ZOOM", payload: { zoom_factor: val || 1.0 } };
-    case "text_horizontal":
-      if (val === "auto_caption") {
-        return { type: "TOGGLE_CAPTIONS", payload: { enabled: true } };
-      }
-      return {
-        type: "ADD_CAPTION",
-        payload: {
-          text: p.text_content || val || "",
-          startTime: p.start_time != null ? p.start_time : 0,
-          endTime: p.end_time != null ? p.end_time : 5
-        }
-      };
-    case "text_vertical":
-      return {
-        type: "ADD_CAPTION",
-        payload: {
-          text: p.text_content || val || "",
-          startTime: p.start_time != null ? p.start_time : 0,
-          endTime: p.end_time != null ? p.end_time : 5,
-          style: { position: "middle", vertical: true }
-        }
-      };
-    case "ai_extender":
-      return { type: "AI_EXTENDER", payload: { clip_id: p.clip_id } };
-    default:
-      return { type: tool.toUpperCase(), payload: p };
-  }
+  return { type, payload: rest } as EditorAction;
 }
 
 /* ─── Main panel ────────────────────────────────────────────────────────────── */
@@ -589,14 +486,17 @@ export function AIPanel() {
           },
         });
 
+        // Server normalizes legacy {tool,params} → canonical {type} (EP-001).
+        // Drop any non-canonical wire shape rather than client-side dialect translation.
         const rawActions = result.actions || [];
-        const dispatchActions = rawActions.map((a) => {
-          // Legacy dialect safety net (should be rare after EP-001)
-          if (a && typeof a === "object" && "tool" in a && !("type" in a)) {
-            return translateToolActionToLegacy(a as unknown as Phase56EditorAction);
-          }
-          return canonicalToDispatchEnvelope(a as CanonicalEditorAction);
-        });
+        const dispatchActions = rawActions
+          .filter(
+            (a): a is CanonicalEditorAction =>
+              Boolean(a) &&
+              typeof a === "object" &&
+              typeof (a as CanonicalEditorAction).type === "string",
+          )
+          .map((a) => canonicalToDispatchEnvelope(a));
 
         if (dispatchActions.length > 0) {
           dispatchAIActions(dispatchActions);

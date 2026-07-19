@@ -1,8 +1,8 @@
 # Studio Roadmap (Execution)
 
-**Last updated:** 2026-07-19 (completion pass)
+**Last updated:** 2026-07-19 (execution cycle close)
 
-## Complete — Part G + soak + completion
+## Complete — current cycle
 
 | Track | Status |
 |-------|--------|
@@ -15,16 +15,23 @@
 | Orphan client prompt / useAiCommander removed | ✅ |
 | Dashboard AI ≠ editor timeline authority | ✅ |
 | Kernel flags in `.env.example` | ✅ |
+| FE legacy `{tool,params}` translator removed (TD-EP001-03) | ✅ |
+| Production-ready verification gate | ✅ |
 
-## Ops (deploy)
+**Report:** `packages/EP-COMPLETION-CYCLE-IMPLEMENTATION-REPORT.md`
 
-- Set `NEXT_PUBLIC_STUDIO_PROJECT_KERNEL=1` on Vercel staging then prod  
-- Confirm Cloud Run `STUDIO_PROJECT_KERNEL` not set to `0`  
+## Ops handoff (founder / deploy) — not code blockers
 
-## Optional next
+- [ ] Set `NEXT_PUBLIC_STUDIO_PROJECT_KERNEL=1` on Vercel staging then prod  
+- [ ] Confirm Cloud Run `STUDIO_PROJECT_KERNEL` not set to `0`  
 
-- ADR-006 native Gemini tool-loop depth  
-- Multiplayer — **requires founder approval** (EP-007)
+## Next cycle (optional / gated)
+
+| Item | Gate |
+|------|------|
+| ADR-006 native Gemini tool-loop depth | Optional engineering EP |
+| Multiplayer | **Founder approval** (EP-007) |
+| Legacy `Projects` cutover delete | **Founder consent** (irreversible) |
 
 ## Deferred UI
 

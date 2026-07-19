@@ -1,6 +1,6 @@
 # Migration Status
 
-**Last updated:** 2026-07-19
+**Last updated:** 2026-07-19 (execution cycle close)
 
 ## Project storage
 
@@ -13,20 +13,23 @@
 ## EP-001
 
 Registry live; FE sync copy at `frontend/src/lib/generated/capabilities.v1.json`. Frozen.  
-CI enforces BE↔FE SHA-256 match via `fastapi/scripts/check_registry_sync.py`.
+CI enforces BE↔FE SHA-256 match via `fastapi/scripts/check_registry_sync.py`.  
+Verified untouched at cycle close.
 
-## Soak readiness
+## Cutover readiness (code)
 
-- Pipeline endpoints JWT-gated + fail-closed credits  
-- Editor chat commits to Kernel when FE flag on (structured_steps, no double LLM)  
-- Export calls `ensureStudioProject` then binds `project_id` / revision  
-- Flags documented in `frontend/.env.example` + `fastapi/.env.example`  
+- Pipeline JWT + fail-closed credits ✅  
+- Editor chat → Kernel (`structured_steps`) when FE flag on ✅  
+- Export `ensureStudioProject` + `project_id` / revision bind ✅  
+- Flags documented in `.env.example` ✅  
+- FE accepts canonical actions only (legacy translator removed) ✅  
 
-## EP-002 cutover criteria (future)
+## Prod cutover still requires
 
-- Kernel CRUD + commands + undo/redo green in **prod** (flag on)  
-- FE projector stable under load  
-- Explicit founder approval before deleting legacy `Projects` path  
+1. Vercel: `NEXT_PUBLIC_STUDIO_PROJECT_KERNEL=1`  
+2. Cloud Run: Kernel not forced off  
+3. Soak under real traffic  
+4. **Founder approval** before deleting legacy `Projects`
 
 ## Irreversible ops
 

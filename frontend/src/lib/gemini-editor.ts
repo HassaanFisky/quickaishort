@@ -111,23 +111,6 @@ export function buildVideoContext(
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
 
-export interface ToolParams {
-  clip_id?: string | null
-  start_time?: number | null
-  end_time?: number | null
-  value?: unknown
-  track_index?: number | null
-  text_content?: string | null
-  speed_factor?: number | null
-}
-
-/** @deprecated EP-001 — server now returns canonical AiEditorAction dicts */
-export interface EditorAction {
-  tool: string
-  params: ToolParams
-  order: number
-}
-
 /** Canonical capability action from Capability Registry (EP-001) */
 export type CanonicalEditorAction = {
   type: string
