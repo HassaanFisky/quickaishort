@@ -1,431 +1,378 @@
 # EP-008 — Editor First-Run Product Surface (Ingest · Onboarding · Ads Gate · UX Honesty)
 
-**Status:** DESIGN COMPLETE — **AWAITING FOUNDER APPROVAL** (no implementation until approved)  
-**Priority:** P0 — product usability / first-session completion  
-**Proposed ADR:** ADR-013 (Editor Ingest Parity + Interactive Onboarding + Ads Coming Soon)  
-**Depends on:** EP-001 (frozen), EP-002 Kernel (frozen), EP-003 MediaGraph (frozen), EP-005 Chat-Primary Shell  
-**Must not modify:** EP-001 registry ABI files; EP-002 Kernel event model; EP-003 suggestion derivation rules (A5a)  
-**ADK:** Compatible — UI emits Intents / Capabilities only; orchestration remains Coordinator + registry tools  
+**Status:** REVISED SPEC — **AWAITING FOUNDER RE-APPROVAL** (no implementation until re-approved)  
+**Priority:** P0 — product experience (not feature spam)  
+**ADR:** ADR-013 (Proposed → revise with this revision)  
+**Package ID:** **EP-008** (confirmed — do **not** rename to EP-002; Kernel history stays clean)  
+**Depends on:** EP-001 frozen · EP-002 Kernel frozen · EP-003 MediaGraph frozen · EP-005 Chat-Primary  
+**Must not modify:** EP-001 Capability Registry ABI files; EP-002 event model; EP-003 A5a derivation  
+**Approval trail:** Founder **95/100** conditional approval → this revision incorporates mandatory additions → **stop again for final APPROVE**
 
 ---
 
-## 0. Naming conflict (mandatory challenge)
+## 0. Principles (mandatory — every UX decision)
 
-| Claim in request | Repository truth |
-|------------------|------------------|
-| “EP-002 Planning Package” for upload/onboarding/ads | **EP-002 already exists** and is **IMPLEMENTED / frozen**: Server-Authoritative Project Document (ADR-008). Evidence: `docs/studio/packages/EP-002-server-authoritative-project-document.md`, Canonical Memory. |
+| Principle | How EP-008 satisfies it |
+|-----------|-------------------------|
+| Discoverable | Upload + URL equal, always visible; Ads visible as Coming Soon |
+| Learnable | Interactive tour teaches by doing, ≤2 minutes |
+| Predictable | Named states: validating → uploading → processing → ready / error |
+| Accessible | Keyboard, SR, touch, desktop; focus trap on tour |
+| Responsive | Mobile / tablet / desktop layouts for IngestSurface |
+| Low cognitive load | One card, two peers; short tour sentences; no redesign |
+| Professional | Hydro-Glass language; Ads never looks broken |
+| Future-proof | Backend-authoritative ingest policy; lazy-loaded surfaces |
+| AI-native OS compatible | No parallel tool dialects; agents can later drive same ingest Intents |
 
-**Decision for this package:** Use **EP-008**. Reusing “EP-002” would corrupt the frozen Project Kernel authority trail.  
-If founder insists on renumbering, that itself requires a separate founder decision (documentation rewrite only — not this package’s code).
-
----
-
-## 1. Objective
-
-Make a **zero-experience user** succeed at:
-
-`Import media → see grounded suggestions → chat an edit → preview → export`
-
-…with ChatGPT-primary feel and Premiere-grade execution path underneath (Kernel + MediaGraph + Orchestrator + bake), **without** inventing suggestions or exposing unfinished Ads.
+**Design principle:** Improve discoverability. Reduce cognitive load. **Do not redesign** the application. Every addition must feel native to QuickAI Studio.
 
 ---
 
-## 2. Verified current state (no re-audit of whole OS)
+## 1. Naming (locked)
 
-Evidence from repository reads (2026-07-20):
+| ID | Meaning | Status |
+|----|---------|--------|
+| EP-001 | Capability Registry ABI | Frozen |
+| EP-002 | Project Kernel | Frozen / implemented |
+| EP-003 | MediaGraph | Implemented |
+| **EP-008** | Editor First-Run + Upload + Onboarding + Ads | **This package** |
 
-| Area | Reality | Gap vs vision |
-|------|---------|----------------|
-| YouTube URL import | First-class in `YouTubeInputStrip` + `EditorLayout` | Strong |
-| Local upload CTA | **Hidden** behind `backendFailed` as “Upload MP4 instead” (`YouTubeInputStrip.tsx` L167–180) | **Critical** — not equal to URL |
-| Drag-and-drop | Shell overlay in `EditorLayout` (“MP4, WebM, or MOV”) | Exists but format copy narrow; no progress UI for GCS |
-| `accept=` | `video/*` only | Incomplete vs required container list |
-| Presigned GCS upload | `POST /api/video/presigned-url` exists | Not wired as primary FE ingest UX with progress |
-| Client file path | `setSourceFile` + blob URL + local pipeline | Works for preview; export may still need GCS bind |
-| MediaGraph suggestions | EP-003 in `AIPanel` — grounded chips | Affirm — keep; no heuristics |
-| Onboarding walkthrough | **No** `OnboardingTour` component in tree (stale CLAUDE note) | **Missing** |
-| Ads nav | `Sidebar` / `BottomTabBar` — Dashboard, Editor, ADK, History, Settings — **no Ads item** | **Missing** Coming Soon gate |
-| Chat-primary | EP-005 implemented | Affirm |
-| Timeline | Visualization / dock | Affirm — teach in onboarding, not primary |
+Do not renumber. History stays clean.
 
 ---
 
-## 3. Product architecture review (first-time user lens)
+## 2. Objective
 
-### 3.1 Cognitive model today (problem)
+A beginner completes in one session:
 
-1. User lands on `/editor` (after auth).  
-2. Sees URL field + **Generate** — upload looks secondary or absent.  
-3. Chat empty-state says “Paste a YouTube URL…” — reinforces URL-only mental model.  
-4. If they somehow upload, format messaging says MP4/WebM/MOV — contradicts “production formats” ask.  
-5. No guided interaction tour after signup.  
-6. Ads never appear — cannot “remain blurred” until nav entry exists.
+`Ingest (upload **or** URL) → grounded suggestions → chat edit → timeline reflects edits → export`
 
-### 3.2 Target first-session story
+Architecture preserved: Capability Registry · MediaGraph · Project Document · Orchestrator · ADK-ready multi-agent path.
+
+---
+
+## 3. Verified gaps (unchanged facts)
+
+| Gap | Evidence |
+|-----|----------|
+| Upload not first-class | `YouTubeInputStrip` shows upload only when `backendFailed` |
+| Narrow format messaging | Drag overlay “MP4, WebM, or MOV”; `accept="video/*"` |
+| No interactive onboarding in tree | No `OnboardingTour` component |
+| No Ads Coming Soon nav | `Sidebar` / `BottomTabBar` lack Ads |
+| Suggestions | MediaGraph path exists — **do not change architecture** |
+
+---
+
+## 4. Architecture decisions (revised)
+
+### D1 — Ingest Surface (product, not a “feature dump”)
+
+Equal first-class peers:
+
+1. **Upload Video** (primary button + drop zone)  
+2. **Paste YouTube URL** (field + analyze/generate)
+
+Interactions:
+
+| Interaction | Required |
+|-------------|----------|
+| Drag & drop | Yes (shell + surface) |
+| Click to upload | Yes |
+| Desktop file picker | Yes |
+| Mobile / tablet file picker | Yes (`capture` not required; standard `input[type=file]`) |
+| Paste from clipboard | Yes **where browser permits** (Clipboard API / paste event with `File` or video blob); if unsupported, no fake affordance — omit or disable with tooltip “Paste file not supported in this browser” |
+| Keyboard | Upload button focusable + Enter/Space; URL field Tab order |
+| Screen reader | Labels, `aria-describedby` for formats/limits, live regions for progress |
+| Replace media | Explicit **Replace** when source already loaded (re-opens ingest; mints new `runId`; clears stale derived state per existing store rules) |
+
+Never hide Upload behind YouTube failure.
+
+### D2 — Backend-authoritative format policy (EP-001 safe)
+
+**Conflict to resolve:** “Define formats through the backend capability layer” vs **EP-001 freeze** (edit-tool ABI).
+
+**Resolution (challenged & accepted for this package):**
+
+- **Do not** put ingest MIME/extension lists into EP-001 `capabilities.v1.json` (that ABI is for *editing tools*, not media codec policy).  
+- Introduce a **Media Ingest Policy** platform config (separate from Capability Registry):
 
 ```text
-Signup success
-  → /editor + Onboarding (once)
-  → Spotlight: Upload Video  (user must pick a file OR skip step via explicit Skip)
-  → Spotlight: Paste URL     (equal alternative)
-  → Media loads → MediaGraph facets → grounded chips
-  → Spotlight: Suggestion chip (optional click) OR Chat
-  → Spotlight: Chat input → user types short command → Execute
-  → Spotlight: Preview
-  → Spotlight: Export
-  → Persist onboarding complete
+GET /api/studio/v1/ingest/policy
+→ {
+  "version": 1,
+  "extensions": [".mp4", ".mov", ...],
+  "mime_types": ["video/mp4", ...],
+  "max_bytes": <int>,
+  "warn_bytes": <int>,
+  "examples_label": "MP4, MOV, MKV, WebM, …"
+}
 ```
 
-Timeline is shown as “your edits appear here” — not a tool hunt.
+- **Backend validates** on `POST /api/video/presigned-url` (and any future ingest accept). Reject unsupported → structured error.  
+- **Frontend** fetches policy at editor idle (cached sessionStorage TTL ≤1h); UI `accept=` + helper text from policy; client pre-check is UX-only.  
+- Minimum extension set the policy **must** include (authoritative server defaults):  
+  `mp4 mov mkv webm avi m4v mpeg mpg ts mts m2ts wmv flv 3gp ogv`
 
----
+This is **future-proof** (ops can tighten/loosen without FE redeploy of hardcoded lists) and **does not reopen EP-001**.
 
-## 4. Architecture decisions (challenged)
+### D3 — Upload / processing honesty
 
-### D1 — Ingest parity (Upload ≡ URL)
+Required user-visible states:
 
-**Decision:** Replace URL-only primacy with a dual **Import Surface**:
-
-```text
-┌─────────────────────────────────────────────┐
-│  [ Upload Video ]     [ Paste YouTube URL ] │  ← equal weight, always visible when no source
-│  drop zone / click    URL field + Generate  │
-└─────────────────────────────────────────────┘
-```
-
-- Collapsed “source loaded” chip keeps **Change** → expands both options.  
-- Drag-drop remains global on editor shell.  
-- Never hide Upload behind backend failure.
-
-**Challenge:** Dual CTAs increase density.  
-**Resolution:** One card, two peers; no third “magic” path. Mobile: stacked full-width buttons above URL field.
-
-### D2 — Upload pipeline strategy (phased)
-
-| Phase | Behavior | Why |
-|-------|----------|-----|
-| **v1 (this EP)** | Browser selects file → validate → **local `setSourceFile`** for instant preview + Whisper/MediaGraph edge facets; **parallel** GCS presigned PUT for server authority / export bind | Matches existing hybrid NLE; zero wait for first frame |
-| **v1.1** | Chunked / resumable upload (GCS compose or tus) for > threshold | Avoids browser memory cliffs |
-| **Out of scope** | Transcoding all exotic codecs in browser | Server FFmpeg / worker remux on bake |
-
-**Challenge:** Some formats play in `<video>` poorly (AVI/WMV/MXF).  
-**Resolution:** Accept for **ingest + upload**; if browser cannot decode, show “Uploaded — preview limited; export will process on server” and still bind GCS object. Never silent black canvas without message.
-
-### D3 — Format validation (allowlist)
-
-**Allowed extensions (v1):**  
-`.mp4 .mov .mkv .webm .avi .m4v .mpeg .mpg .ts .mts .m2ts .wmv .flv .3gp .ogv`  
-(+ MIME `video/*` when extension matches allowlist)
-
-**Also allow** when MIME is trusted video type even if extension odd — but always check size.
-
-**Reject with clear copy:** audio-only, image, exe, unknown.
-
-**Limits (defaults — env-overridable):**
-
-| Limit | Default | Notes |
-|-------|---------|-------|
-| Max file size | **2 GiB** client warn; hard reject **> 5 GiB** | Align with Cloud Run / GCS practicality; document in UI |
-| Max duration (soft) | Warn > 30 min | Edit still allowed; export may chunk |
-| Concurrent uploads | 1 | Avoid race on `runId` |
-
-### D4 — Upload UX states (required)
-
-| State | UI |
-|-------|-----|
-| idle | Dual import surface |
+| State | Feedback |
+|-------|----------|
 | validating | “Checking file…” |
-| uploading | Progress % + cancel |
-| processing_local | “Preparing preview…” |
-| analyzing | Existing stage chips (transcribing / hooks) — non-clickable |
-| ready | Collapsed source chip + chat/suggestions |
-| error | Message + Retry + Switch to URL |
-| cancelled | Return idle |
+| uploading | Determinate % when `xhr.upload` / `fetch` progress available; else indeterminate + bytes sent if known |
+| processing | Local prepare preview + optional server ack; “Preparing preview…” / existing analyze stages |
+| ready | Source chip + Replace |
+| error | Validation / network / expired URL — actionable copy |
+| retry | New presigned + PUT |
+| cancel | AbortController; return idle |
+| replace | Confirm if dirty timeline? **v1:** soft confirm only if `studioAckedRevision` advanced or local edits exist |
 
-Retry = re-issue presigned URL + PUT; never reuse expired URL (>15 min per API).
+**Estimated progress:** Prefer real upload progress. If unknown, pulse + elapsed time — never fake 100%.
 
-### D5 — Onboarding (interactive, once)
+Pipeline (v1):
 
-**Trigger:** First successful signup → next authenticated `/editor` visit.  
-**Storage:** Server preference preferred: Firestore `users/{id}.onboarding.editor_v1 = complete|skipped|in_progress` + step index.  
-**Fallback:** `localStorage` key `qai_onboarding_editor_v1` only if server unavailable — reconcile on next session.
+1. Client validate against cached policy  
+2. Local `setSourceFile` for immediate preview when browser-decodable  
+3. Parallel GCS presigned PUT for server authority / export  
+4. MediaGraph facets as today  
+5. Non-decodable: “Preview limited — export will process on server” + still complete GCS put  
 
-**Never** show again unless Settings → “Replay editor tour”.
+Chunked resumable = **follow-up**, not EP-008 DoD.
 
-**Mechanics:**
+### D4 — Onboarding (modern AI software feel)
 
-- Backdrop blur + dim  
-- Spotlight cutout on `data-tour-id` targets  
-- Animated pointer (CSS/Framer — no Lottie dependency required)  
-- One short sentence ≤ 12 words  
-- Controls: Back · Next · Skip · Finish  
-- Progress `n / N`  
-- **Action gates:** steps that require user action block Next until action OR “Skip this step”
+| Rule | Spec |
+|------|------|
+| When | Only after first successful signup path; never interrupt returning users |
+| Who skips auto-show | Users with `editor_v1.status ∈ {completed, skipped}` OR prior export history |
+| UI | Backdrop blur · spotlight · smooth transition · animated pointer · one short universal sentence |
+| Controls | Next · Back · Skip · Finish |
+| Persist | Server `GET/PUT /api/studio/v1/me/onboarding` + local mirror |
+| Replay | Settings “Replay editor tour” only |
+| Teach | Interaction, not documentation |
+| Budget | Entire flow understandable in **&lt; 2 minutes** |
+| Performance | **Lazy-load** tour module; do not ship tour JS on critical editor path until `shouldShowTour === true` |
 
-**Steps (aligned to both requirement lists; Timeline = visualization):**
+Steps:
 
-| # | Target `data-tour-id` | Sentence | Gate |
-|---|----------------------|----------|------|
-| 1 | `ingest.upload` | “Upload a video from your device.” | file chosen OR skip |
-| 2 | `ingest.url` | “Or paste a YouTube link.” | URL validated OR skip |
-| 3 | `ai.suggestions` | “AI suggests edits from your video.” | chip visible (or skeleton explained) |
-| 4 | `ai.chat` | “Tell the AI what to change.” | focus chat OR type ≥1 char |
-| 5 | `timeline.dock` | “Your edits show up here.” | expand once OR skip |
-| 6 | `preview.canvas` | “Watch the result here.” | play OR skip |
-| 7 | `export.button` | “Export when you’re happy.” | open export dialog OR skip |
+1. Upload Video  
+2. Paste YouTube URL  
+3. AI Suggestions  
+4. Chat  
+5. Timeline  
+6. Export  
 
-**Challenge:** “User performs action before continuing” vs empty media on step 3.  
-**Resolution:** If no media after 1–2, jump spotlight to ingest until one source exists; suggestions step waits for MediaGraph skeleton/ready (non-interactive skeleton allowed per A5a — not fake chips).
+(Preview may be taught inside Export/Timeline copy if density demands — primary list stays the six above.)
 
-### D6 — Suggestions (reaffirm EP-003 / A5a)
+### D5 — AI Suggestions (architecture lock)
 
-- **Only** MediaGraph-derived `SuggestionIntent`  
-- Each chip → structured Intent → Orchestrator Plan (`structured_steps`) → local apply + Kernel when flag on  
-- Forbidden: title keyword maps, static creative lists, fabricated confidence  
-- Allowed non-interactive: “Analyzing media…” skeleton  
+- MediaGraph only (ADR-009 / Phase 2 A5a)  
+- No heuristics, no placeholders as clickable recommendations, no fake suggestions  
+- Non-interactive “Analyzing…” skeleton allowed  
+- Every chip traceable to facets / evidence  
 
-### D7 — Ads Coming Soon
+### D6 — Ads
 
-- Add nav item **Ads** in `Sidebar` + `BottomTabBar` (parity)  
-- Route `/ads` → full-page **Coming Soon** with blur overlay + premium lock treatment (Hydro-Glass tokens)  
-- No APIs, no forms, no fake metrics  
-- CTA: “Notify me” optional later — **v1: no email capture required** (avoid half-feature)
+- Nav item **Ads** (Sidebar + BottomTabBar)  
+- Route `/ads` → blurred premium **Coming Soon** (`ComingSoonGate`)  
+- Theme-consistent; never broken/unfinished/interactive fake  
+- **Lazy-load** Ads page chunk  
 
-### D8 — ADK compatibility
+### D7 — Google ADK / OS compatibility
 
-- Upload / URL / onboarding **do not** invent new tool dialects  
-- All edits continue via EP-001 capability ids  
-- Future Coordinator Agent can drive same ingest Intents (`IMPORT_LOCAL_MEDIA`, `IMPORT_YOUTUBE_URL` — **proposal only**; if not in registry, use existing store actions + document as UI Intent → existing capabilities).  
-- **EP-001 freeze:** Do **not** add registry rows in this EP unless founder explicitly unfreezes for ingest capability ids. v1 maps UI to existing `setSourceFile` / `setSourceUrl` without new ABI.
+UI must not invent a second tool system. Compatible with:
 
-### D9 — i18n readiness (no full i18n ship)
+- Capability Registry (edit tools)  
+- Media Graph  
+- Project Document (Kernel)  
+- Orchestrator  
+- Future autonomous tool execution  
+- Future multi-agent / Coordinator workflows  
 
-- All new copy via string constants module `editorCopy.ts` (English v1)  
-- No hardcoded sentence soup inside tour steps beyond constants  
-- RTL: spotlight uses logical CSS; defer full RTL
+Ingest actions remain UI → store / existing APIs; agents may later call the same ingest policy + project bind without UI.
 
-### D10 — Accessibility
+### D8 — Accessibility (explicit DoD)
 
-- Tour: `role="dialog"`, `aria-modal`, focus trap, Esc = Skip confirm  
-- Upload: keyboard-activable button, `aria-describedby` for formats/limits  
-- Progress: `aria-valuenow`  
-- Reduced motion: disable pointer animation  
+- Keyboard navigation for ingest + tour + Ads gate focus  
+- Screen readers: labels, live regions for progress, dialog roles for tour  
+- Responsive layouts 320→1440  
+- Touch targets ≥44px on primary ingest CTAs  
+- `prefers-reduced-motion` disables pointer animation  
+
+### D9 — Performance (explicit DoD)
+
+| Surface | Load strategy |
+|---------|----------------|
+| Editor shell + URL/upload chrome | Eager (minimal) |
+| Onboarding tour | Dynamic `import()` only when eligible |
+| Ads page | Route-level code split |
+| Ingest policy | Fetch once; cache; fail-open to last-known / embedded defaults if API down (still server-validates on PUT) |
+| Heavy upload helpers | Load on first file interaction |
+
+Must not regress editor TTI meaningfully (measure: tour code absent from initial bundle when tour not shown).
 
 ---
 
-## 5. Required ADR
+## 5. ADR-013 (revised summary)
 
-**ADR-013 — Editor Ingest Parity, Interactive Onboarding, Ads Coming Soon**
+See `docs/studio/adrs/ADR-013-editor-ingest-onboarding-ads.md`.
 
-Summary:
-
-1. Upload and YouTube URL are equal first-class ingest paths.  
-2. Onboarding is interactive, once-per-user, skippable, resumable.  
-3. Suggestions remain MediaGraph-only (ADR-009).  
-4. Ads is visible Coming Soon — never production-fake.  
-5. No EP-001 ABI change in v1.  
-
-Status: **Proposed** until founder approves EP-008.
+Key additions in this revision: clipboard paste (best-effort), **Media Ingest Policy API** (not EP-001), replace media, lazy-load performance budget, re-approval gate.
 
 ---
 
 ## 6. Data models
 
-### 6.1 `UserOnboardingState` (Firestore `users/{uid}` field or subdoc)
+### 6.1 Media Ingest Policy
 
-```json
-{
-  "editor_v1": {
-    "status": "not_started | in_progress | completed | skipped",
-    "step_index": 0,
-    "updated_at": "ISO-8601",
-    "version": 1
-  }
-}
+```ts
+type MediaIngestPolicy = {
+  version: number;
+  extensions: string[];      // ".mp4", …
+  mime_types: string[];
+  max_bytes: number;
+  warn_bytes: number;
+  examples_label: string;    // short UI string
+};
 ```
 
-### 6.2 `IngestJob` (optional v1.1; v1 can be client-only + GCS path)
+### 6.2 User onboarding
 
-```json
-{
-  "ingest_id": "hex",
-  "user_id": "uid",
-  "kind": "local_upload | youtube_url",
-  "status": "validating | uploading | ready | failed | cancelled",
-  "filename": "string?",
-  "content_type": "string?",
-  "byte_size": 0,
-  "gcs_uri": "gs://…?",
-  "run_id": "string",
-  "error_code": "unsupported_format | too_large | network | expired_url | unknown?",
-  "progress_pct": 0,
-  "created_at": "ISO-8601",
-  "updated_at": "ISO-8601"
-}
+```ts
+type EditorOnboardingV1 = {
+  status: "not_started" | "in_progress" | "completed" | "skipped";
+  step_index: number;
+  version: 1;
+  updated_at: string;
+};
 ```
 
-v1 may keep progress client-side only; persist `gcs_uri` on Studio project / export payload as today.
+### 6.3 Client ingest UI state
 
-### 6.3 Format allowlist constant (shared FE)
-
-`SUPPORTED_VIDEO_EXTENSIONS`, `MAX_UPLOAD_BYTES`, `WARN_UPLOAD_BYTES`
+```ts
+type IngestUiStatus =
+  | "idle"
+  | "validating"
+  | "uploading"
+  | "processing"
+  | "ready"
+  | "error"
+  | "cancelled";
+```
 
 ---
 
 ## 7. API contracts
 
-### 7.1 Existing (reuse)
+| Method | Path | Notes |
+|--------|------|-------|
+| GET | `/api/studio/v1/ingest/policy` | Public-to-authed; JWT optional vs required — **v1: JWT required** (same as editor) |
+| POST | `/api/video/presigned-url` | **Harden:** validate filename/ext/MIME against policy; 400 `unsupported_format` / `too_large` |
+| GET | `/api/studio/v1/me/onboarding` | Editor tour state |
+| PUT | `/api/studio/v1/me/onboarding` | Persist status/step |
+| Existing | MediaGraph / Orchestrator / Kernel | Unchanged |
 
-| Method | Path | Role |
-|--------|------|------|
-| POST | `/api/video/presigned-url` | `{ filename, content_type }` → `{ presigned_url, gcs_path, job_id, expires_in_seconds }` JWT |
-| GET | `/api/info` | YouTube metadata (existing) |
-| MediaGraph / Orchestrator / Kernel | unchanged | EP-002…004 |
+Error shape (presigned / policy violations):
 
-### 7.2 New (v1 minimal)
-
-| Method | Path | Body / Response |
-|--------|------|-----------------|
-| GET | `/api/studio/v1/me/onboarding` | → `UserOnboardingState.editor_v1` |
-| PUT | `/api/studio/v1/me/onboarding` | `{ status, step_index }` → ack |
-
-Auth: `get_verified_user_id`. No admin secret.
-
-### 7.3 Future (explicitly not in DoD)
-
-- Resumable chunked upload session API  
-- Server-side media probe (`ffprobe`) endpoint  
+```json
+{ "detail": { "code": "unsupported_format", "message": "…" } }
+```
 
 ---
 
 ## 8. Frontend contracts
 
-### 8.1 Components (proposed)
+| Piece | Role |
+|-------|------|
+| `IngestSurface` | Dual peer UI; replace; tour ids |
+| `useIngestPolicy` | Fetch + cache policy |
+| `UploadProgress` | Progress / cancel / retry |
+| `EditorOnboardingTour` | Lazy spotlight controller |
+| `ComingSoonGate` | Ads + reusable |
+| `/ads` page | Lazy route |
+| Empty-state copy | Upload **or** URL |
 
-| Component | Responsibility |
-|-----------|----------------|
-| `IngestSurface` | Dual Upload + URL; owns `data-tour-id`s |
-| `UploadProgress` | % / cancel / error |
-| `EditorOnboardingTour` | Spotlight controller |
-| `ComingSoonGate` | Reusable blur + “Coming Soon” |
-| `AdsPage` | `/ads` using ComingSoonGate |
-| Refactor | `YouTubeInputStrip` → compose into `IngestSurface` (no duplicate URL logic) |
-
-### 8.2 Store fields
-
-- `ingestStatus`, `ingestProgress`, `ingestError` on `editorStore` or small `ingestStore`  
-- Tour reads/writes onboarding API; local cache mirror  
-
-### 8.3 Tour target attributes
-
-Stable selectors: `data-tour-id="ingest.upload" | ingest.url | ai.suggestions | ai.chat | timeline.dock | preview.canvas | export.button"`
+`data-tour-id`: `ingest.upload` · `ingest.url` · `ai.suggestions` · `ai.chat` · `timeline.dock` · `export.button`
 
 ---
 
-## 9. Backend contracts
+## 9. Migration strategy
 
-- Onboarding GET/PUT as above (Firestore)  
-- Presigned URL: optionally validate extension allowlist server-side (reject bad suffix) — **recommended hardening**  
-- No change to Kernel / MediaGraph schemas  
-
----
-
-## 10. Migration strategy
-
-1. Ship FE `IngestSurface` + tour behind no flag (UX) — Kernel flag already independent.  
-2. Onboarding API: default `not_started` for existing users → **do not auto-force tour** for accounts older than cutoff; only `created_at >= EP-008 ship` OR explicit `editor_v1.status` missing **and** `export_count == 0` heuristic.  
-   **Safer rule:** Show tour only if `status === not_started` **and** user has never completed an export (stats) **and** never skipped. Existing power users: set `completed` via one-time migration script optional.  
-3. Ads nav: additive; no DB migration.  
-4. Dual-run: ADK Studio `/adk` untouched.
+1. Ship policy endpoint with server defaults (list above).  
+2. FE switches from hardcoded allowlists to policy.  
+3. Onboarding: new users `not_started`; returning users with exports → auto `completed` (no interrupt).  
+4. Ads nav additive.  
+5. No Kernel / MediaGraph / EP-001 migrations.
 
 ---
 
-## 11. Risk assessment
+## 10. Risk assessment
 
-| Risk | Level | Mitigation |
-|------|-------|------------|
-| Large local files OOM browser | High | Size gate; GCS-first for >512MB; progress honesty |
-| Codec not decodable in browser | Med | Explicit “preview limited” state |
-| Tour blocks returning users | High | Strict once + skip + Settings replay only |
-| Naming EP-002 collision if ignored | High | Package id **EP-008** only |
-| Fake suggestions regression | High | No new suggestion sources; reuse MediaGraph only |
-| Ads looks unfinished | Med | ComingSoonGate design tokens + no interactive controls |
-| Presigned 15m expiry mid-upload | Med | Restart upload UX; v1.1 resumable |
-| i18n later breaks tour copy | Low | Centralize strings |
+| Risk | Mitigation |
+|------|------------|
+| Hardcoded FE list drifts | Policy API authoritative |
+| Clipboard paste unsupported | Feature-detect; no fake button |
+| Tour hurts TTI | Lazy-load |
+| Large file OOM | warn/max bytes from policy |
+| EP-001 confusion | Ingest policy ≠ capability registry |
+| Returning users annoyed | Export-history / status gates |
 
 ---
 
-## 12. Definition of Done
+## 11. Definition of Done
 
-- [ ] Upload CTA always visible beside/above URL (desktop + mobile stacked)  
-- [ ] Drag-drop + click-to-upload both work  
-- [ ] Allowlist validation + clear errors for unsupported types  
-- [ ] Upload progress + cancel + retry  
-- [ ] YouTube path unchanged in success cases  
-- [ ] Onboarding once after first signup path; skip/resume/finish persisted  
-- [ ] Spotlight + blur + short copy + progress  
-- [ ] Suggestions still MediaGraph-only (no heuristics)  
-- [ ] Ads nav + blurred Coming Soon page  
-- [ ] Keyboard + screen-reader pass on new surfaces  
-- [ ] `tsc` / lint / critical FE smoke  
-- [ ] EP-001 files untouched  
-- [ ] ADR-013 accepted + package frozen  
-- [ ] Implementation report filed  
+- [ ] IngestSurface: Upload ≡ URL; D&D; click; mobile/desktop pickers; keyboard/SR  
+- [ ] Clipboard paste when permitted  
+- [ ] Backend ingest policy + presigned validation  
+- [ ] FE uses policy (examples in UI only)  
+- [ ] Progress / processing / errors / retry / cancel / replace  
+- [ ] Onboarding once, skippable, persisted, lazy-loaded, &lt;2 min learnability target  
+- [ ] Suggestions MediaGraph-only (no architecture change)  
+- [ ] Ads visible Coming Soon, blurred, theme-native, lazy route  
+- [ ] ADK/OS contracts unbroken; EP-001 untouched  
+- [ ] A11y + responsive matrix  
+- [ ] Performance: tour/ads not on critical path when unused  
+- [ ] Tests + tsc/lint + implementation report  
+- [ ] Package freeze after ship  
 
-**Out of DoD:** Chunked resumable protocol, full i18n, multiplayer, EP-001 new capabilities, ADK wizard redesign.
-
----
-
-## 13. Implementation sequence (post-approval only)
-
-1. Shared format/limit constants + server suffix check on presigned  
-2. `IngestSurface` + wire `EditorLayout` / retire hidden upload  
-3. Upload progress + GCS parallel put + error/retry  
-4. `ComingSoonGate` + `/ads` + nav parity  
-5. Onboarding API + `EditorOnboardingTour` + `data-tour-id` hooks  
-6. Empty-state copy alignment (chat/canvas → mention Upload **or** URL)  
-7. A11y + responsive QA matrix (320 / 768 / 1024 / 1440)  
-8. Verification gate + freeze EP-008  
+**Out of DoD:** Chunked resumable upload, full i18n, Ads functionality, EP-001 new edit capabilities, ADK wizard redesign, visual rebrand.
 
 ---
 
-## 14. UI review findings → recommendations (usability only)
+## 12. Implementation sequence (only after **final** APPROVE)
 
-| Finding | Recommendation |
-|---------|----------------|
-| Upload discoverability fail | D1 IngestSurface |
-| “Generate” jargon | Keep for URL analyze; Upload button label **Upload Video** (not Generate) |
-| Format copy inconsistent | Single allowlist string in UI |
-| No progress for file put | UploadProgress |
-| Chat empty ignores upload | Update empty copy |
-| No Ads Coming Soon | D7 |
-| No tour | D5 |
-| Advanced panels still optional | Keep `?advanced=1` — tour never requires them |
-| Mobile URL bar crowding | Stack Upload full-width; URL row below |
-| Brand “Shorts” in sidebar | Out of scope cosmetic — optional follow-up |
+1. Ingest policy service + GET + harden presigned  
+2. `useIngestPolicy` + `IngestSurface` + replace/progress  
+3. Clipboard paste path (feature-detect)  
+4. ComingSoonGate + `/ads` + nav (lazy)  
+5. Onboarding API + lazy tour  
+6. Empty-state copy + a11y pass  
+7. Verification + report + freeze  
 
 ---
 
-## 15. Explicit non-goals
+## 13. Re-approval gate
 
-- Visual rebrand / new design system  
-- Regenerating Phase 2 audit docs  
-- Implementing before approval  
-- Reopening EP-001 / EP-002 Kernel  
-- Shipping Ads functionality  
+Founder previously: **95/100** with mandatory additions.  
+This document incorporates those additions.
+
+**Do not implement until founder replies:**
+
+`APPROVE EP-008 FINAL`
+
+or
+
+`REJECT EP-008` + deltas.
+
+Optional confirms:
+
+1. Media Ingest Policy API (separate from EP-001) accepted?  
+2. Clipboard paste best-effort OK?  
+3. Returning users never auto-toured OK?  
 
 ---
 
-## 16. Approval gate questions for founder
-
-Reply **APPROVE EP-008** (optionally with edits) or **REJECT** with deltas.
-
-1. Confirm package id **EP-008** (not EP-002).  
-2. Confirm max upload defaults (2 GiB warn / 5 GiB hard) OK for cost.  
-3. Confirm Ads nav label exactly **“Ads”**.  
-4. Confirm tour for **new users only** (existing users not forced).  
-5. Confirm v1 **no** new EP-001 capability rows for ingest.
-
----
-
-**STOP — awaiting approval. No implementation code in this step.**
+**STOP — specification updated. Awaiting FINAL approval. No implementation code in this step.**
