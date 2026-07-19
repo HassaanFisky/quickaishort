@@ -392,6 +392,18 @@ from routers.email_router import router as email_router
 
 app.include_router(email_router)
 
+from routers.studio_projects_router import router as studio_projects_router
+
+app.include_router(studio_projects_router)
+
+from routers.media_graph_router import router as media_graph_router
+
+app.include_router(media_graph_router)
+
+from routers.orchestrator_router import router as orchestrator_router
+
+app.include_router(orchestrator_router)
+
 
 def get_real_ip(request: Request) -> str:
     """
@@ -753,15 +765,48 @@ async def export_video(
 ):
     user_id = verified_user_id or request.user_id
 
-    # Phase 65: feature flag gate
-    if RENDER_MANIFEST_REQUIRED and not request.render_manifest:
+    # EP-006 / ADR-012 — Kernel snapshot is bake authority when project_id set
+    bake_manifest = request.render_manifest
+    bake_project_revision = request.project_revision
+    if request.project_id:
+        from models.render_manifest import RenderManifest as _RM
+        from services.project_kernel import get_project_kernel
+
+        kernel = get_project_kernel()
+        head = await kernel.get_project(request.project_id, user_id)
+        if head is None:
+            raise HTTPException(status_code=404, detail="studio_project_not_found")
+        rev = (
+            request.project_revision
+            if request.project_revision is not None
+            else head.revision
+        )
+        snap = None
+        if rev == head.revision and head.snapshot_manifest is not None:
+            snap = head.snapshot_manifest
+        else:
+            stored = head.revision_snapshots.get(str(rev))
+            if stored and stored.get("manifest"):
+                snap = _RM.model_validate(stored["manifest"])
+            elif head.snapshot_manifest is not None:
+                snap = head.snapshot_manifest
+        if snap is None:
+            raise HTTPException(
+                status_code=422,
+                detail="project_snapshot_unavailable",
+            )
+        bake_manifest = snap
+        bake_project_revision = rev
+
+    # Phase 65: feature flag gate (Kernel snapshot satisfies requirement)
+    if RENDER_MANIFEST_REQUIRED and not bake_manifest:
         raise HTTPException(
             status_code=422,
             detail="render_manifest is required – please update your client. Set RENDER_MANIFEST_REQUIRED=false to allow legacy exports temporarily.",
         )
-    if not RENDER_MANIFEST_ENABLED and request.render_manifest:
-        # Strip manifest if feature is disabled – legacy mode
-        request.render_manifest = None
+    if not RENDER_MANIFEST_ENABLED and bake_manifest and not request.project_id:
+        # Strip client manifest if feature is disabled – legacy mode
+        bake_manifest = None
 
     # Pillar 1: Overload Guardrail
     if is_overloaded():
@@ -828,11 +873,12 @@ async def export_video(
         "emotional_peaks": emotional_peaks,
         "cinematic_style": cinematic_style,
         "canvas_overlays": [ov.model_dump() for ov in request.canvas_overlays],
-        # Phase 59: persist validated manifest alongside job options.
-        # render_worker.py does not yet read this field.
+        # Phase 59 / EP-006: bake IR — Kernel snapshot when project_id present
         "render_manifest": (
-            request.render_manifest.model_dump() if request.render_manifest else None
+            bake_manifest.model_dump() if bake_manifest else None
         ),
+        "project_id": request.project_id,
+        "project_revision": bake_project_revision,
     }
 
     try:
@@ -862,7 +908,9 @@ async def export_video(
         "status": "queued",
         "job_id": job_id,
         "subscribe_channel": f"export-{job_id}",
-        "manifest_accepted": bool(request.render_manifest),
+        "manifest_accepted": bool(bake_manifest),
+        "project_id": request.project_id,
+        "project_revision": bake_project_revision,
     }
 
 

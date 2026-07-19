@@ -38,6 +38,9 @@ jobs:
             --statistics \
             --exclude=venv
 
+      - name: EP-001 Capability Registry BE↔FE hash sync
+        run: python fastapi/scripts/check_registry_sync.py
+
   frontend-lint:
     name: Frontend ESLint (Next.js 14)
     runs-on: ubuntu-latest

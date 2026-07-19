@@ -924,6 +924,13 @@ class AIEditorResponse(BaseModel):
 
 
 class ToolName(str, Enum):
+    """DEPRECATED (EP-001 / ADR-007).
+
+    Do not add new members. Canonical capability ids are AiEditorAction.type
+    strings in fastapi/capabilities/registry.v1.json. This enum exists only
+    for one-release alias compatibility via capabilities/aliases.v1.json.
+    """
+
     SELECTION = "selection_tool"
     SELECT_FORWARD = "select_forward"
     SELECT_BACKWARD = "select_backward"
@@ -967,9 +974,20 @@ class EditorCommandRequest(BaseModel):
 
 
 class EditorCommandResponse(BaseModel):
+    """Command path response (EP-001).
+
+    `actions` are canonical AiEditorAction-shaped dicts (`type` discriminator).
+    Legacy ToolName dialect is normalised server-side before return.
+    """
+
     intent: str
     confidence: float = Field(ge=0.0, le=1.0)
-    actions: List[EditorAction]
+    actions: List[dict[str, Any]] = Field(default_factory=list)
     feedback: str
     fallback: str
     model_used: str
+    clamped: List[str] = Field(default_factory=list)
+    dropped: List[str] = Field(default_factory=list)
+    message: Optional[str] = None
+    suggestions: List[str] = Field(default_factory=list)
+    status: Optional[str] = None

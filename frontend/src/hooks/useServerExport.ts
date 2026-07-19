@@ -313,6 +313,13 @@ export function useServerExport({ userId }: UseServerExportArgs) {
         transition_enabled: useEditorStore.getState().exportSettings.transitionEnabled,
         voiceover_enabled: useEditorStore.getState().exportSettings.voiceoverEnabled,
         render_manifest: manifest,
+        ...(process.env.NEXT_PUBLIC_STUDIO_PROJECT_KERNEL === "1" &&
+        useEditorStore.getState().studioProjectId
+          ? {
+              project_id: useEditorStore.getState().studioProjectId,
+              project_revision: useEditorStore.getState().studioAckedRevision,
+            }
+          : {}),
       };
 
       setIsExporting(true);

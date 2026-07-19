@@ -34,7 +34,18 @@ from models.ai_editor import (
     SuggestStylePresetAction,
     ExplainLastEditAction,
 )
-from services.ai_editor_sanitiser import sanitise, mock_response
+from services.ai_editor_sanitiser import sanitise as _sanitise_impl, mock_response
+
+
+def sanitise(actions, state):
+    """Clamp/passthrough unit-test wrapper.
+
+    EP-001 emit policy is enforced in production (default) and covered by
+    tests/test_tool_registry.py. These legacy tests exercise numeric clamps
+    for schema-only capabilities before they are emit-enabled.
+    """
+    return _sanitise_impl(actions, state, enforce_emit_policy=False)
+
 
 # ─── Fixtures ─────────────────────────────────────────────────────────────────
 

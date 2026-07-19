@@ -29,6 +29,7 @@ from services.ai_editor_engine import (
     process_editor_command,
     stream_editor_command,
 )
+from services.tool_registry import list_capabilities_public
 
 logger = logging.getLogger(__name__)
 
@@ -183,3 +184,13 @@ async def health_check_ai():
         "primary_model": os.getenv("GEMINI_PRIMARY_MODEL", "gemini-2.5-flash"),
         "free_model": os.getenv("GEMINI_FREE_MODEL", "gemini-2.5-flash-lite"),
     }
+
+
+@router.get("/api/capabilities")
+async def get_capabilities(
+    lite: bool = False,
+    user_id: str = Depends(get_verified_user_id),
+):
+    """EP-001: Capability Registry bootstrap for FE / tooling."""
+    _ = user_id
+    return list_capabilities_public(lite=lite)

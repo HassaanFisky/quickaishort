@@ -1,10 +1,14 @@
 /**
- * Single source of truth for all AI Editor tools.
- * execMode="direct" → 0 credits, dispatches through store.
- * execMode="gemini" → 1 credit, routes through useAiCommander.
+ * AI Editor UI tool catalogue.
+ * Capability ABI source of truth: frontend/src/lib/generated/capabilities.v1.json
+ * (synced from fastapi/capabilities/registry.v1.json — EP-001).
+ *
+ * execMode="direct" → 0 credits, dispatches through store (allowed even if emit=false).
+ * execMode="gemini" → 1 credit; disabled when orchestrator_emit=false.
  */
 
 import type { AiEditorAction } from "@/types/ai-editor";
+import capabilitiesDoc from "@/lib/generated/capabilities.v1.json";
 
 export type ToolCategory =
   | "AI Intelligence"
@@ -37,8 +41,37 @@ export interface ToolExecutionContext {
   selectedElementScale: number;
 }
 
+export interface CapabilityMeta {
+  id: string;
+  title: string;
+  description: string;
+  tags: string[];
+  exec_locus: string;
+  cost_class: string;
+  runtime_status: string;
+  orchestrator_emit: boolean;
+}
+
+export const CAPABILITY_BY_ID: Record<string, CapabilityMeta> = Object.fromEntries(
+  (capabilitiesDoc.capabilities as CapabilityMeta[]).map((c) => [c.id, c]),
+);
+
+/** Known UI tool id → capability id for gemini-only entries without buildActions. */
+const GEMINI_TOOL_CAPABILITY: Record<string, string> = {
+  "ai-find-viral-moments": "DETECT_VIRAL_MOMENTS",
+  "ai-generate-hook": "GENERATE_HOOK_CAPTION",
+  "ai-suggest-style": "SUGGEST_STYLE_PRESET",
+  "ai-explain-last-edit": "EXPLAIN_LAST_EDIT",
+};
+
+export function isOrchestratorEmitAllowed(capabilityId: string): boolean {
+  return CAPABILITY_BY_ID[capabilityId]?.orchestrator_emit === true;
+}
+
 export interface AiTool {
   id: string;
+  /** Canonical AiEditorAction.type / registry id when known */
+  capabilityId?: string;
   name: string;
   description: string;
   category: ToolCategory;
@@ -54,10 +87,44 @@ export interface AiTool {
   isEnabled?: (state: ToolExecutionContext) => boolean;
 }
 
+const _EMPTY_CTX: ToolExecutionContext = {
+  currentTime: 0,
+  duration: 1,
+  selectedClipId: null,
+  selectedElementId: null,
+  captionCount: 0,
+  elementCount: 0,
+  captionsEnabled: false,
+  audioBoost: 100,
+  playbackSpeed: 100,
+  visualFilter: "None",
+  isPlaying: false,
+  lastCaptionId: null,
+  selectedElementScale: 1,
+};
+
+export function resolveToolCapabilityId(
+  tool: AiTool,
+  state: ToolExecutionContext = _EMPTY_CTX,
+): string | null {
+  if (tool.capabilityId) return tool.capabilityId;
+  if (GEMINI_TOOL_CAPABILITY[tool.id]) return GEMINI_TOOL_CAPABILITY[tool.id];
+  if (tool.buildActions) {
+    try {
+      const actions = tool.buildActions(state);
+      return actions[0]?.type ?? null;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
 export const AI_TOOL_CATALOG: AiTool[] = [
   // ── AI Intelligence ──────────────────────────────────────────────────────────
   {
     id: "ai-find-viral-moments",
+    capabilityId: "DETECT_VIRAL_MOMENTS",
     name: "AI · Find viral moments",
     description: "Gemini surfaces the 3 strongest hook moments from the transcript.",
     category: "AI Intelligence",
@@ -70,6 +137,7 @@ export const AI_TOOL_CATALOG: AiTool[] = [
   },
   {
     id: "ai-generate-hook",
+    capabilityId: "GENERATE_HOOK_CAPTION",
     name: "AI · Write hook caption",
     description: "Gemini drafts 3 punchy first-3-second hooks tuned for retention.",
     category: "AI Intelligence",
@@ -82,6 +150,7 @@ export const AI_TOOL_CATALOG: AiTool[] = [
   },
   {
     id: "ai-suggest-style",
+    capabilityId: "SUGGEST_STYLE_PRESET",
     name: "AI · Suggest style preset",
     description: "Gemini picks Urban / Retro / Cinematic based on the content mood.",
     category: "AI Intelligence",
@@ -94,6 +163,7 @@ export const AI_TOOL_CATALOG: AiTool[] = [
   },
   {
     id: "ai-explain-last-edit",
+    capabilityId: "EXPLAIN_LAST_EDIT",
     name: "AI · Explain last edit",
     description: "Gemini summarises what your most recent edits changed.",
     category: "AI Intelligence",
@@ -1140,10 +1210,18 @@ export const AI_TOOL_CATALOG: AiTool[] = [
   },
 ];
 
+function isCatalogToolEnabled(tool: AiTool, state: ToolExecutionContext): boolean {
+  if (tool.isEnabled && !tool.isEnabled(state)) return false;
+  // EP-001: gemini-routed tools require orchestrator_emit=true
+  if (tool.execMode === "gemini") {
+    const capId = resolveToolCapabilityId(tool, state);
+    if (capId && !isOrchestratorEmitAllowed(capId)) return false;
+  }
+  return true;
+}
+
 export function searchTools(query: string, state: ToolExecutionContext): AiTool[] {
-  const enabled = AI_TOOL_CATALOG.filter(
-    (t) => !t.isEnabled || t.isEnabled(state),
-  );
+  const enabled = AI_TOOL_CATALOG.filter((t) => isCatalogToolEnabled(t, state));
   const q = query.trim().toLowerCase();
   if (!q) return enabled;
   const tokens = q.split(/\s+/);

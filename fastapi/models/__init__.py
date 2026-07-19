@@ -14,6 +14,13 @@ from models.export_request import (
     CanvasOverlayPayload,
     ExportRequest,
 )
+from models.studio_project import (
+    StudioProjectHead,
+    ProjectCommand,
+    ProjectEvent,
+    CommandAck,
+    CommandReject,
+)
 
 __all__ = [
     "RenderTimeline",
@@ -28,4 +35,9 @@ __all__ = [
     "CaptionsPayload",
     "CanvasOverlayPayload",
     "ExportRequest",
+    "StudioProjectHead",
+    "ProjectCommand",
+    "ProjectEvent",
+    "CommandAck",
+    "CommandReject",
 ]

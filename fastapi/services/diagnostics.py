@@ -49,6 +49,16 @@ async def run_startup_checks():
                 # We raise in prod to prevent zombie service starts
                 raise RuntimeError(f"STARTUP_HALTED: Missing secret {secret}")
 
+    # 4. Capability Registry ABI (EP-001) — fail closed on drift
+    try:
+        from services.tool_registry import assert_registry_valid
+
+        assert_registry_valid()
+        logger.info("capability_registry_startup_ok")
+    except Exception as e:
+        logger.error(f"CAPABILITY_REGISTRY_INVALID: {e}")
+        raise RuntimeError(f"STARTUP_HALTED: Capability registry invalid — {e}") from e
+
     # 5. Cleanup Stale Jobs
     try:
         from services.job_persistence import cleanup_stale_jobs

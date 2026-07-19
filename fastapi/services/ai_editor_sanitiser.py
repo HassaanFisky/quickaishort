@@ -17,6 +17,8 @@ import logging
 import os
 from typing import Any
 
+from services.tool_registry import get_capability, is_emit_allowed
+
 from models.ai_editor import (  # noqa: F401
     AIEditorCurrentState,
     AiEditorAction,
@@ -92,8 +94,15 @@ def _clamp_y(y: float) -> float:
 def sanitise(
     actions: list[AiEditorAction],
     state: AIEditorCurrentState,
+    *,
+    enforce_emit_policy: bool = True,
 ) -> tuple[list[AiEditorAction], list[str], list[str]]:
     """Clamp or drop actions that are out of range.
+
+    Args:
+        enforce_emit_policy: When True (production default), drop unknown ids and
+            capabilities with orchestrator_emit=false (EP-001). Set False only in
+            unit tests that exercise clamp logic for schema-only tools.
 
     Returns:
         (safe_actions, clamped_descriptions, dropped_descriptions)
@@ -105,6 +114,18 @@ def sanitise(
 
     for action in actions:
         t = action.type
+
+        # ── EP-001 Capability Registry emit gate (fail closed) ───────────────
+        if enforce_emit_policy:
+            cap = get_capability(t)
+            if cap is None:
+                logger.warning("sanitiser_unknown_capability id=%s", t)
+                dropped.append(f"unknown_capability:{t}")
+                continue
+            if not is_emit_allowed(t):
+                logger.info("sanitiser_emit_blocked id=%s", t)
+                dropped.append(f"emit_blocked:{t}")
+                continue
 
         # ── Caption timestamps ────────────────────────────────────────────────
         if t == "ADD_CAPTION":

@@ -497,6 +497,11 @@ interface EditorState {
   // so stale clips/analysis from a previous video never bleed into a new run.
   runId: string;
 
+  // EP-002 Studio Project Kernel projector fields (used when flag enabled)
+  studioProjectId: string | null;
+  studioAckedRevision: number;
+  studioSnapshotHash: string | null;
+
   // Processing State
   isProcessing: boolean;
   currentStage: "idle" | "loading" | "transcribing" | "analyzing" | "ready";
@@ -716,6 +721,9 @@ export const useEditorStore = create<EditorState>()(
       duration: 0,
       resolution: null,
       runId: genRunId(),
+      studioProjectId: null,
+      studioAckedRevision: 0,
+      studioSnapshotHash: null,
       isProcessing: false,
       currentStage: "idle",
       progress: 0,
@@ -820,6 +828,9 @@ export const useEditorStore = create<EditorState>()(
           currentStage: "loading",
           // O6: isolate the new video — drop derived data from any prior run.
           runId: genRunId(),
+          studioProjectId: null,
+          studioAckedRevision: 0,
+          studioSnapshotHash: null,
           suggestions: [],
           captions: [],
           transcript: null,
@@ -846,6 +857,9 @@ export const useEditorStore = create<EditorState>()(
           currentStage: "loading",
           // O6: isolate the new video — drop derived data from any prior run.
           runId: genRunId(),
+          studioProjectId: null,
+          studioAckedRevision: 0,
+          studioSnapshotHash: null,
           suggestions: [],
           captions: [],
           transcript: null,
@@ -1910,6 +1924,9 @@ export const useEditorStore = create<EditorState>()(
       resetForNewVideo: () =>
         set({
           runId: genRunId(),
+          studioProjectId: null,
+          studioAckedRevision: 0,
+          studioSnapshotHash: null,
           suggestions: [],
           captions: [],
           transcript: null,
@@ -1946,6 +1963,9 @@ export const useEditorStore = create<EditorState>()(
           thumbnailUrl: null,
           sourceGcsPath: null,
           runId: genRunId(),
+          studioProjectId: null,
+          studioAckedRevision: 0,
+          studioSnapshotHash: null,
           duration: 0,
           resolution: null,
           isProcessing: false,

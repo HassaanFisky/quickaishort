@@ -25,65 +25,10 @@ export interface EditorStateContext {
   recentActions: string[];
 }
 
-// ─── Instant suggestions — zero API cost, generated from metadata alone ────────
+// Suggestion chips: MediaGraph only (EP-003 / Phase 2 A5a). Title heuristics removed.
 
-type ContentKey =
-  | "tutorial" | "interview" | "gaming" | "vlog"
-  | "news" | "music" | "sports" | "documentary" | "general";
-
-const INSTANT_SUGGESTIONS: Record<ContentKey, string[]> = {
-  tutorial: ["Add step-by-step captions", "Speed up explanation sections to 1.25x", "Trim intro — start at first key step"],
-  interview: ["Add speaker captions from transcript", "Cut long pauses between questions", "Trim to the 3 strongest answers"],
-  gaming: ["Apply Urban filter for gaming energy", "Boost audio to 160%", "Trim to the best highlight moment"],
-  vlog: ["Apply Retro filter for lifestyle warmth", "Add location captions at scene changes", "Trim intro to first interesting moment"],
-  news: ["Add factual captions from transcript", "Trim to the core 60-second story", "Boost audio to 130% for clear speech"],
-  music: ["Apply Cinematic filter for visual depth", "Sync captions to lyrics", "Trim to the chorus section"],
-  sports: ["Trim to the key play moment", "Apply Urban filter for energy", "Boost audio to 170%"],
-  documentary: ["Add informational captions", "Apply Cinematic filter", "Trim to the most compelling 90 seconds"],
-  general: ["Add captions from transcript", "Trim to strongest 60 seconds", "Apply Cinematic color grade"],
-};
-
-function detectContentKey(title: string): ContentKey {
-  const s = title.toLowerCase();
-  if (/tutorial|how.?to|guide|learn|course/.test(s)) return "tutorial";
-  if (/interview|podcast|q&a|talk/.test(s)) return "interview";
-  if (/gaming|gameplay|stream|playthrough|valorant|minecraft|fortnite/.test(s)) return "gaming";
-  if (/vlog|day.in|my.life|travel|behind/.test(s)) return "vlog";
-  if (/news|breaking|update|report/.test(s)) return "news";
-  if (/music|song|cover|lyrics|rap|official.video/.test(s)) return "music";
-  if (/sport|match|goal|highlights|nba|nfl|cricket|football/.test(s)) return "sports";
-  if (/documentary|history|science|nature|explained/.test(s)) return "documentary";
-  return "general";
-}
-
-export function generateImmediateSuggestions(
-  title: string,
-  duration: number,
-  ctx?: Pick<EditorStateContext, "markIn" | "markOut" | "clipCount" | "selectedClipDuration">,
-): string[] {
-  const key = detectContentKey(title);
-  const base = INSTANT_SUGGESTIONS[key].slice(0, 5);
-  const overrides: string[] = [];
-
-  if (ctx?.markIn !== null && ctx?.markOut !== null && ctx?.markIn !== undefined && ctx?.markOut !== undefined) {
-    const rangeLen = Math.round(ctx.markOut - ctx.markIn);
-    overrides.push(`Export your ${rangeLen}s marked range`);
-  }
-  if (ctx?.selectedClipDuration && ctx.selectedClipDuration < 60) {
-    overrides.push(`This ${Math.round(ctx.selectedClipDuration)}s clip is short-form ready — export now`);
-  }
-  if (ctx?.clipCount && ctx.clipCount > 1) {
-    overrides.push(`You have ${ctx.clipCount} clips — select the highest-scoring one`);
-  }
-
-  if (overrides.length > 0) return [...overrides, ...base].slice(0, 5);
-  if (duration > 3600) return ["Extract top 3 viral moments from this long video", ...base].slice(0, 5);
-  if (duration > 600) return ["Trim to the strongest 90-second segment", ...base].slice(0, 5);
-  return base;
-}
-
-// Re-export the system prompt so any consumer can read the contract without
-// duplicating it (no SDK import needed here for the client-side functions).
+// Orphan client prompt retained for legacy Next routes that still import it (TD-EP001-01).
+// Server orchestrator prompts come from EP-001 tool_registry — do not treat this as ABI.
 export const EDITOR_SYSTEM_PROMPT = `You are a video editing state compiler for QuickAI Short — the QuickAI Editor.
 
 ROLE: Convert user editing instructions into JSON action arrays. Execute commands directly. You are not a chatbot — you do not explain, you act.
@@ -227,43 +172,6 @@ export async function callGeminiEditor(
   }
 }
 
-export async function getInitialSuggestions(
-  videoMetadata: VideoMetadata,
-  videoAnalysis: VideoAnalysis | null,
-): Promise<string[]> {
-  const DEFAULT = [
-    "Add captions from transcript",
-    "Trim to highlight best moments",
-    "Apply cinematic color grade",
-    "Boost brightness +20%",
-    "Remove intro silence",
-  ];
-
-  try {
-    const res = await fetch("/api/ai/suggestions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ videoMetadata, videoAnalysis }),
-    });
-
-    if (!res.ok) {
-      if (process.env.NODE_ENV !== "production") console.error("[Gemini Editor] /api/ai/suggestions returned", res.status);
-      return DEFAULT;
-    }
-
-    const data = await res.json();
-    return Array.isArray(data.suggestions) && data.suggestions.length > 0
-      ? data.suggestions
-      : DEFAULT;
-  } catch (err: unknown) {
-    if (process.env.NODE_ENV !== "production") console.error(
-      "[Gemini Editor] getInitialSuggestions fetch failed:",
-      err instanceof Error ? err.message : String(err),
-    );
-    return DEFAULT;
-  }
-}
-
 // ─── Server-side helper (called only from Next.js API routes) ─────────────────
 // analyzeVideoWithGemini is imported by /api/analyze-video/route.ts which runs
 // server-side, so it can read GEMINI_API_KEY directly.
@@ -357,19 +265,32 @@ export interface ToolParams {
   speed_factor?: number | null
 }
 
+/** @deprecated EP-001 — server now returns canonical AiEditorAction dicts */
 export interface EditorAction {
   tool: string
   params: ToolParams
   order: number
 }
 
+/** Canonical capability action from Capability Registry (EP-001) */
+export type CanonicalEditorAction = {
+  type: string
+  [key: string]: unknown
+}
+
 export interface EditorCommandResponse {
   intent: string
   confidence: number
-  actions: EditorAction[]
+  /** Canonical AiEditorAction-shaped objects (`type` discriminator) */
+  actions: CanonicalEditorAction[]
   feedback: string
   fallback: string
   model_used: string
+  clamped?: string[]
+  dropped?: string[]
+  message?: string
+  suggestions?: string[]
+  status?: string
 }
 
 export interface EditorCommandRequest {

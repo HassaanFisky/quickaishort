@@ -30,7 +30,7 @@
 
 <br />
 
-**[Live Demo](https://quickaishort.online)** · **[Docs](docs/DEPLOYMENT_README.md)** · **[Security](SECURITY.md)** · **[Vision](VISION.md)**
+**[Live Demo](https://quickaishort.online)** · **[Studio Architecture Docs](docs/studio/README.md)** · **[Deploy Docs](docs/DEPLOYMENT_README.md)** · **[Security](SECURITY.md)** · **[Vision](VISION.md)** · **[Studio Vision](docs/studio/01-product-vision.md)**
 
 <br />
 

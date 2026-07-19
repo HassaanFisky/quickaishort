@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "deprecated_dialect": "ToolName",
+  "map": {
+    "selection_tool": "POINTER_SELECT",
+    "select_forward": "FORWARD_LANE_SELECT",
+    "select_backward": "BACKWARD_LANE_SELECT",
+    "ripple_delete": "RIPPLE_DELETE",
+    "rolling_edit": "ROLLING_TRIM",
+    "rate_stretch": "DURATION_STRETCH",
+    "razor_tool": "BLADE_SPLIT",
+    "slip_tool": "SLIP_CLIP",
+    "slide_tool": "SLIDE_CLIP",
+    "pen_keyframe": "SET_KEYFRAME",
+    "rect_mask": "ADD_RECT_MASK",
+    "ellipse_mask": "ADD_ELLIPSE_MASK",
+    "hand_tool": "SCROLL_HAND",
+    "zoom_tool": "TIMELINE_ZOOM",
+    "text_horizontal": "ADD_ELEMENT",
+    "text_vertical": "ADD_ELEMENT",
+    "ai_extender": null
+  },
+  "notes": {
+    "ai_extender": "No AiEditorAction equivalent. Command path must clarification/no_op.",
+    "text_horizontal": "Normalize to ADD_ELEMENT with TEXT element; params.text_content → element.text",
+    "text_vertical": "Normalize to ADD_ELEMENT with TEXT element; params.text_content → element.text"
+  }
+}

@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useState, useRef, useEffect } from 'react';
 import { Sparkles, X, Send } from 'lucide-react';
 
+/** Educational FAQ only — not media-grounded edit advice (EP-003 / A5a). */
 const NO_VIDEO_SUGGESTIONS = [
   'What makes a video go viral?',
   'Best aspect ratio for TikTok?',
@@ -11,12 +12,8 @@ const NO_VIDEO_SUGGESTIONS = [
   'What hook works best for AI content?',
 ];
 
-const WITH_VIDEO_SUGGESTIONS = [
-  'Find the 3 best moments to clip',
-  'Write captions for this video',
-  'Suggest a viral hook from the transcript',
-  'What would you cut from this?',
-];
+/** Non-interactive placeholder until MediaGraph backs this surface. */
+const WITH_VIDEO_PLACEHOLDER = 'Analyzing media… grounded edit suggestions coming soon';
 
 interface AIPanelProps {
   /** When true, renders inline inside a grid cell (no fixed positioning, no AnimatePresence guard). */
@@ -29,7 +26,7 @@ export function AIPanel({ embedded = false }: AIPanelProps) {
   const [loading, setLoading] = useState(false);
   const [retryText, setRetryText] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
-  const suggestions = videoContext ? WITH_VIDEO_SUGGESTIONS : NO_VIDEO_SUGGESTIONS;
+  const suggestions = videoContext ? [WITH_VIDEO_PLACEHOLDER] : NO_VIDEO_SUGGESTIONS;
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -153,19 +150,31 @@ export function AIPanel({ embedded = false }: AIPanelProps) {
             <p className="text-xs uppercase tracking-wider text-[hsl(var(--fg-subtle))] pb-1">
               Quick Actions
             </p>
-            {suggestions.map((s) => (
-              <button
-                key={s}
-                onClick={() => send(s)}
-                className="w-full text-left text-xs px-3 py-2 rounded-lg
-                           border border-[hsl(var(--border))]
-                           hover:border-[hsl(var(--accent-indigo))] hover:bg-[hsl(var(--accent-soft))]
-                           text-[hsl(var(--fg-muted))] hover:text-[hsl(var(--fg))]
-                           transition-all duration-150"
-              >
-                {s}
-              </button>
-            ))}
+            {suggestions.map((s) =>
+              videoContext ? (
+                <div
+                  key={s}
+                  className="w-full text-left text-xs px-3 py-2 rounded-lg
+                             border border-[hsl(var(--border))]
+                             text-[hsl(var(--fg-muted))] opacity-70 cursor-default"
+                  aria-disabled="true"
+                >
+                  {s}
+                </div>
+              ) : (
+                <button
+                  key={s}
+                  onClick={() => send(s)}
+                  className="w-full text-left text-xs px-3 py-2 rounded-lg
+                             border border-[hsl(var(--border))]
+                             hover:border-[hsl(var(--accent-indigo))] hover:bg-[hsl(var(--accent-soft))]
+                             text-[hsl(var(--fg-muted))] hover:text-[hsl(var(--fg))]
+                             transition-all duration-150"
+                >
+                  {s}
+                </button>
+              ),
+            )}
           </div>
         )}
 

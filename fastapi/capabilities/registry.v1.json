@@ -1,0 +1,2016 @@
+{
+  "version": 1,
+  "capabilities": [
+    {
+      "id": "ADD_CAPTION",
+      "version": 1,
+      "title": "Add Caption",
+      "description": "Studio capability ADD_CAPTION.",
+      "tags": [
+        "captions"
+      ],
+      "side_effects": [
+        "preview",
+        "mutate_project"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": true,
+      "runtime_status": "wired",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "REMOVE_CAPTION",
+      "version": 1,
+      "title": "Remove Caption",
+      "description": "Studio capability REMOVE_CAPTION.",
+      "tags": [
+        "captions"
+      ],
+      "side_effects": [
+        "preview",
+        "mutate_project"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": true,
+      "runtime_status": "wired",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "UPDATE_CAPTION",
+      "version": 1,
+      "title": "Update Caption",
+      "description": "Studio capability UPDATE_CAPTION.",
+      "tags": [
+        "captions"
+      ],
+      "side_effects": [
+        "preview",
+        "mutate_project"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": true,
+      "runtime_status": "wired",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "TRIM",
+      "version": 1,
+      "title": "Trim",
+      "description": "Studio capability TRIM.",
+      "tags": [
+        "clip",
+        "timeline"
+      ],
+      "side_effects": [
+        "preview",
+        "mutate_project"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": true,
+      "runtime_status": "wired",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "SPLIT_CLIP",
+      "version": 1,
+      "title": "Split Clip",
+      "description": "Studio capability SPLIT_CLIP.",
+      "tags": [
+        "clip",
+        "timeline"
+      ],
+      "side_effects": [
+        "preview",
+        "mutate_project"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": true,
+      "runtime_status": "wired",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "DELETE_CLIP",
+      "version": 1,
+      "title": "Delete Clip",
+      "description": "Studio capability DELETE_CLIP.",
+      "tags": [
+        "clip",
+        "timeline"
+      ],
+      "side_effects": [
+        "preview",
+        "mutate_project"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": true,
+      "runtime_status": "wired",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "SELECT_CLIP",
+      "version": 1,
+      "title": "Select Clip",
+      "description": "Studio capability SELECT_CLIP.",
+      "tags": [
+        "clip",
+        "timeline"
+      ],
+      "side_effects": [
+        "preview",
+        "mutate_project"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": true,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": true,
+      "runtime_status": "wired",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "ADD_FILTER",
+      "version": 1,
+      "title": "Add Filter",
+      "description": "Studio capability ADD_FILTER.",
+      "tags": [
+        "visual"
+      ],
+      "side_effects": [
+        "preview",
+        "mutate_project"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": true,
+      "runtime_status": "wired",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "RESET_FILTER",
+      "version": 1,
+      "title": "Reset Filter",
+      "description": "Studio capability RESET_FILTER.",
+      "tags": [
+        "visual"
+      ],
+      "side_effects": [
+        "preview",
+        "mutate_project"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": true,
+      "runtime_status": "wired",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "SET_VISUAL_FILTER",
+      "version": 1,
+      "title": "Set Visual Filter",
+      "description": "Studio capability SET_VISUAL_FILTER.",
+      "tags": [
+        "visual"
+      ],
+      "side_effects": [
+        "preview",
+        "mutate_project"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": true,
+      "runtime_status": "wired",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "SET_AUDIO_BOOST",
+      "version": 1,
+      "title": "Set Audio Boost",
+      "description": "Studio capability SET_AUDIO_BOOST.",
+      "tags": [
+        "audio"
+      ],
+      "side_effects": [
+        "preview",
+        "mutate_project"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": true,
+      "runtime_status": "wired",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "SET_NOISE_REDUCTION",
+      "version": 1,
+      "title": "Set Noise Reduction",
+      "description": "Studio capability SET_NOISE_REDUCTION.",
+      "tags": [
+        "audio"
+      ],
+      "side_effects": [
+        "preview",
+        "mutate_project"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": true,
+      "runtime_status": "wired",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "SET_PLAYBACK_SPEED",
+      "version": 1,
+      "title": "Set Playback Speed",
+      "description": "Studio capability SET_PLAYBACK_SPEED.",
+      "tags": [
+        "playback"
+      ],
+      "side_effects": [
+        "preview",
+        "mutate_project"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": true,
+      "runtime_status": "wired",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "TOGGLE_CAPTIONS",
+      "version": 1,
+      "title": "Toggle Captions",
+      "description": "Studio capability TOGGLE_CAPTIONS.",
+      "tags": [
+        "captions"
+      ],
+      "side_effects": [
+        "preview",
+        "mutate_project"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": true,
+      "runtime_status": "wired",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "TOGGLE_TRANSITIONS",
+      "version": 1,
+      "title": "Toggle Transitions",
+      "description": "Studio capability TOGGLE_TRANSITIONS.",
+      "tags": [
+        "visual"
+      ],
+      "side_effects": [
+        "preview",
+        "mutate_project"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": true,
+      "runtime_status": "wired",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "TOGGLE_VOICEOVER",
+      "version": 1,
+      "title": "Toggle Voiceover",
+      "description": "Studio capability TOGGLE_VOICEOVER.",
+      "tags": [
+        "audio"
+      ],
+      "side_effects": [
+        "preview",
+        "mutate_project"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": true,
+      "runtime_status": "wired",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "SEEK",
+      "version": 1,
+      "title": "Seek",
+      "description": "Studio capability SEEK.",
+      "tags": [
+        "playback"
+      ],
+      "side_effects": [
+        "preview",
+        "mutate_project"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": true,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": true,
+      "runtime_status": "wired",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "PLAY",
+      "version": 1,
+      "title": "Play",
+      "description": "Studio capability PLAY.",
+      "tags": [
+        "playback"
+      ],
+      "side_effects": [
+        "preview",
+        "mutate_project"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": true,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": true,
+      "runtime_status": "wired",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "PAUSE",
+      "version": 1,
+      "title": "Pause",
+      "description": "Studio capability PAUSE.",
+      "tags": [
+        "playback"
+      ],
+      "side_effects": [
+        "preview",
+        "mutate_project"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": true,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": true,
+      "runtime_status": "wired",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "EXPORT_CLIP",
+      "version": 1,
+      "title": "Export Clip",
+      "description": "Studio capability EXPORT_CLIP.",
+      "tags": [
+        "bake",
+        "clip",
+        "export",
+        "timeline"
+      ],
+      "side_effects": [
+        "preview",
+        "mutate_project"
+      ],
+      "exec_locus": "client",
+      "cost_class": "bake",
+      "latency_class": "async_job",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": true,
+      "runtime_status": "wired",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "ADD_ELEMENT",
+      "version": 1,
+      "title": "Add Element",
+      "description": "Studio capability ADD_ELEMENT.",
+      "tags": [
+        "elements"
+      ],
+      "side_effects": [
+        "preview",
+        "mutate_project"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": true,
+      "runtime_status": "wired",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "UPDATE_ELEMENT",
+      "version": 1,
+      "title": "Update Element",
+      "description": "Studio capability UPDATE_ELEMENT.",
+      "tags": [
+        "elements"
+      ],
+      "side_effects": [
+        "preview",
+        "mutate_project"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": true,
+      "runtime_status": "wired",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "REMOVE_ELEMENT",
+      "version": 1,
+      "title": "Remove Element",
+      "description": "Studio capability REMOVE_ELEMENT.",
+      "tags": [
+        "elements"
+      ],
+      "side_effects": [
+        "preview",
+        "mutate_project"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": true,
+      "runtime_status": "wired",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "DETECT_VIRAL_MOMENTS",
+      "version": 1,
+      "title": "Detect Viral Moments",
+      "description": "Studio capability DETECT_VIRAL_MOMENTS.",
+      "tags": [
+        "ai"
+      ],
+      "side_effects": [
+        "preview",
+        "mutate_project"
+      ],
+      "exec_locus": "client",
+      "cost_class": "llm",
+      "latency_class": "fast",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": true,
+      "runtime_status": "wired",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "GENERATE_HOOK_CAPTION",
+      "version": 1,
+      "title": "Generate Hook Caption",
+      "description": "Studio capability GENERATE_HOOK_CAPTION.",
+      "tags": [
+        "ai",
+        "captions"
+      ],
+      "side_effects": [
+        "preview",
+        "mutate_project"
+      ],
+      "exec_locus": "client",
+      "cost_class": "llm",
+      "latency_class": "fast",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": true,
+      "runtime_status": "wired",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "SUGGEST_STYLE_PRESET",
+      "version": 1,
+      "title": "Suggest Style Preset",
+      "description": "Studio capability SUGGEST_STYLE_PRESET.",
+      "tags": [
+        "ai",
+        "visual"
+      ],
+      "side_effects": [
+        "preview",
+        "mutate_project"
+      ],
+      "exec_locus": "client",
+      "cost_class": "llm",
+      "latency_class": "fast",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": true,
+      "runtime_status": "wired",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "EXPLAIN_LAST_EDIT",
+      "version": 1,
+      "title": "Explain Last Edit",
+      "description": "Studio capability EXPLAIN_LAST_EDIT.",
+      "tags": [
+        "ai",
+        "ui_only"
+      ],
+      "side_effects": [
+        "preview"
+      ],
+      "exec_locus": "client",
+      "cost_class": "llm",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": false,
+      "runtime_status": "partial",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "ADD_BROLL",
+      "version": 1,
+      "title": "Add Broll",
+      "description": "Studio capability ADD_BROLL.",
+      "tags": [
+        "broll",
+        "overlay"
+      ],
+      "side_effects": [
+        "preview",
+        "mutate_project"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": true,
+      "runtime_status": "wired",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "ADD_VIDEO_OVERLAY",
+      "version": 1,
+      "title": "Add Video Overlay",
+      "description": "Studio capability ADD_VIDEO_OVERLAY.",
+      "tags": [
+        "overlay"
+      ],
+      "side_effects": [
+        "preview",
+        "mutate_project"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": true,
+      "runtime_status": "wired",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "REMOVE_OVERLAY",
+      "version": 1,
+      "title": "Remove Overlay",
+      "description": "Studio capability REMOVE_OVERLAY.",
+      "tags": [
+        "overlay"
+      ],
+      "side_effects": [
+        "preview",
+        "mutate_project"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": true,
+      "runtime_status": "wired",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "REMOVE_SILENCES",
+      "version": 1,
+      "title": "Remove Silences",
+      "description": "Studio capability REMOVE_SILENCES.",
+      "tags": [
+        "audio",
+        "timeline"
+      ],
+      "side_effects": [
+        "preview",
+        "mutate_project"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": true,
+      "runtime_status": "wired",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "POINTER_SELECT",
+      "version": 1,
+      "title": "Pointer Select",
+      "description": "Studio capability POINTER_SELECT.",
+      "tags": [
+        "general"
+      ],
+      "side_effects": [
+        "preview"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": false,
+      "runtime_status": "partial",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "BLADE_SPLIT",
+      "version": 1,
+      "title": "Blade Split",
+      "description": "Studio capability BLADE_SPLIT.",
+      "tags": [
+        "clip",
+        "timeline"
+      ],
+      "side_effects": [
+        "preview",
+        "mutate_project"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": true,
+      "runtime_status": "wired",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "RIPPLE_TRIM",
+      "version": 1,
+      "title": "Ripple Trim",
+      "description": "Studio capability RIPPLE_TRIM.",
+      "tags": [
+        "clip",
+        "timeline"
+      ],
+      "side_effects": [
+        "preview"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": false,
+      "runtime_status": "partial",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "ROLLING_TRIM",
+      "version": 1,
+      "title": "Rolling Trim",
+      "description": "Studio capability ROLLING_TRIM.",
+      "tags": [
+        "clip",
+        "timeline"
+      ],
+      "side_effects": [
+        "preview"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": false,
+      "runtime_status": "partial",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "SLIP_CLIP",
+      "version": 1,
+      "title": "Slip Clip",
+      "description": "Studio capability SLIP_CLIP.",
+      "tags": [
+        "clip",
+        "timeline"
+      ],
+      "side_effects": [
+        "preview"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": false,
+      "runtime_status": "partial",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "SLIDE_CLIP",
+      "version": 1,
+      "title": "Slide Clip",
+      "description": "Studio capability SLIDE_CLIP.",
+      "tags": [
+        "clip",
+        "timeline"
+      ],
+      "side_effects": [
+        "preview"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": false,
+      "runtime_status": "partial",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "RIPPLE_DELETE",
+      "version": 1,
+      "title": "Ripple Delete",
+      "description": "Studio capability RIPPLE_DELETE.",
+      "tags": [
+        "timeline"
+      ],
+      "side_effects": [
+        "preview",
+        "mutate_project"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": true,
+      "runtime_status": "wired",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "DURATION_STRETCH",
+      "version": 1,
+      "title": "Duration Stretch",
+      "description": "Studio capability DURATION_STRETCH.",
+      "tags": [
+        "general"
+      ],
+      "side_effects": [
+        "preview"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": false,
+      "runtime_status": "partial",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "FORWARD_LANE_SELECT",
+      "version": 1,
+      "title": "Forward Lane Select",
+      "description": "Studio capability FORWARD_LANE_SELECT.",
+      "tags": [
+        "general"
+      ],
+      "side_effects": [
+        "preview"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": false,
+      "runtime_status": "partial",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "BACKWARD_LANE_SELECT",
+      "version": 1,
+      "title": "Backward Lane Select",
+      "description": "Studio capability BACKWARD_LANE_SELECT.",
+      "tags": [
+        "general"
+      ],
+      "side_effects": [
+        "preview"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": false,
+      "runtime_status": "partial",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "MARK_IN",
+      "version": 1,
+      "title": "Mark In",
+      "description": "Studio capability MARK_IN.",
+      "tags": [
+        "timeline"
+      ],
+      "side_effects": [
+        "preview",
+        "mutate_project"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": true,
+      "runtime_status": "wired",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "MARK_OUT",
+      "version": 1,
+      "title": "Mark Out",
+      "description": "Studio capability MARK_OUT.",
+      "tags": [
+        "timeline"
+      ],
+      "side_effects": [
+        "preview",
+        "mutate_project"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": true,
+      "runtime_status": "wired",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "CLIP_RANGE_MARK",
+      "version": 1,
+      "title": "Clip Range Mark",
+      "description": "Studio capability CLIP_RANGE_MARK.",
+      "tags": [
+        "clip",
+        "timeline"
+      ],
+      "side_effects": [
+        "preview"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": false,
+      "runtime_status": "partial",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "RANGE_MARK",
+      "version": 1,
+      "title": "Range Mark",
+      "description": "Studio capability RANGE_MARK.",
+      "tags": [
+        "timeline"
+      ],
+      "side_effects": [
+        "preview",
+        "mutate_project"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": true,
+      "runtime_status": "wired",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "EXTRACT",
+      "version": 1,
+      "title": "Extract",
+      "description": "Studio capability EXTRACT.",
+      "tags": [
+        "general"
+      ],
+      "side_effects": [
+        "preview"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": false,
+      "runtime_status": "partial",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "LIFT",
+      "version": 1,
+      "title": "Lift",
+      "description": "Studio capability LIFT.",
+      "tags": [
+        "general"
+      ],
+      "side_effects": [
+        "preview"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": false,
+      "runtime_status": "partial",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "INSERT_EDIT",
+      "version": 1,
+      "title": "Insert Edit",
+      "description": "Studio capability INSERT_EDIT.",
+      "tags": [
+        "general"
+      ],
+      "side_effects": [
+        "preview"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": false,
+      "runtime_status": "partial",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "OVERWRITE_EDIT",
+      "version": 1,
+      "title": "Overwrite Edit",
+      "description": "Studio capability OVERWRITE_EDIT.",
+      "tags": [
+        "general"
+      ],
+      "side_effects": [
+        "preview"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": false,
+      "runtime_status": "partial",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "SWAP_CLIP",
+      "version": 1,
+      "title": "Swap Clip",
+      "description": "Studio capability SWAP_CLIP.",
+      "tags": [
+        "clip",
+        "timeline"
+      ],
+      "side_effects": [
+        "preview"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": false,
+      "runtime_status": "partial",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "SCROLL_HAND",
+      "version": 1,
+      "title": "Scroll Hand",
+      "description": "Studio capability SCROLL_HAND.",
+      "tags": [
+        "ui_only"
+      ],
+      "side_effects": [
+        "preview"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": false,
+      "runtime_status": "partial",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "TIMELINE_ZOOM",
+      "version": 1,
+      "title": "Timeline Zoom",
+      "description": "Studio capability TIMELINE_ZOOM.",
+      "tags": [
+        "timeline",
+        "ui_only"
+      ],
+      "side_effects": [
+        "preview"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": false,
+      "runtime_status": "partial",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "MAGNETIC_SNAP_TOGGLE",
+      "version": 1,
+      "title": "Magnetic Snap Toggle",
+      "description": "Studio capability MAGNETIC_SNAP_TOGGLE.",
+      "tags": [
+        "general"
+      ],
+      "side_effects": [
+        "preview"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": false,
+      "runtime_status": "partial",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "COLOR_WHEELS",
+      "version": 1,
+      "title": "Color Wheels",
+      "description": "Studio capability COLOR_WHEELS.",
+      "tags": [
+        "color"
+      ],
+      "side_effects": [
+        "preview"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": false,
+      "runtime_status": "partial",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "COLOR_CURVES",
+      "version": 1,
+      "title": "Color Curves",
+      "description": "Studio capability COLOR_CURVES.",
+      "tags": [
+        "color"
+      ],
+      "side_effects": [
+        "preview"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": false,
+      "runtime_status": "partial",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "HSL_SECONDARIES",
+      "version": 1,
+      "title": "Hsl Secondaries",
+      "description": "Studio capability HSL_SECONDARIES.",
+      "tags": [
+        "general"
+      ],
+      "side_effects": [
+        "preview"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": false,
+      "runtime_status": "partial",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "APPLY_LUT",
+      "version": 1,
+      "title": "Apply Lut",
+      "description": "Studio capability APPLY_LUT.",
+      "tags": [
+        "color"
+      ],
+      "side_effects": [
+        "preview"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": false,
+      "runtime_status": "partial",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "RESET_COLOR",
+      "version": 1,
+      "title": "Reset Color",
+      "description": "Studio capability RESET_COLOR.",
+      "tags": [
+        "color"
+      ],
+      "side_effects": [
+        "preview"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": false,
+      "runtime_status": "partial",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "SET_CLIP_GAIN",
+      "version": 1,
+      "title": "Set Clip Gain",
+      "description": "Studio capability SET_CLIP_GAIN.",
+      "tags": [
+        "clip",
+        "timeline"
+      ],
+      "side_effects": [
+        "preview"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": false,
+      "runtime_status": "partial",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "SET_MASTER_GAIN",
+      "version": 1,
+      "title": "Set Master Gain",
+      "description": "Studio capability SET_MASTER_GAIN.",
+      "tags": [
+        "general"
+      ],
+      "side_effects": [
+        "preview"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": false,
+      "runtime_status": "partial",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "ENABLE_DENOISE",
+      "version": 1,
+      "title": "Enable Denoise",
+      "description": "Studio capability ENABLE_DENOISE.",
+      "tags": [
+        "audio"
+      ],
+      "side_effects": [
+        "preview"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": false,
+      "runtime_status": "partial",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "ENABLE_LIMITER",
+      "version": 1,
+      "title": "Enable Limiter",
+      "description": "Studio capability ENABLE_LIMITER.",
+      "tags": [
+        "general"
+      ],
+      "side_effects": [
+        "preview"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": false,
+      "runtime_status": "partial",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "ADD_FADE_IN",
+      "version": 1,
+      "title": "Add Fade In",
+      "description": "Studio capability ADD_FADE_IN.",
+      "tags": [
+        "general"
+      ],
+      "side_effects": [
+        "preview"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": false,
+      "runtime_status": "partial",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "ADD_FADE_OUT",
+      "version": 1,
+      "title": "Add Fade Out",
+      "description": "Studio capability ADD_FADE_OUT.",
+      "tags": [
+        "general"
+      ],
+      "side_effects": [
+        "preview"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": false,
+      "runtime_status": "partial",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "ADD_RECT_MASK",
+      "version": 1,
+      "title": "Add Rect Mask",
+      "description": "Studio capability ADD_RECT_MASK.",
+      "tags": [
+        "mask",
+        "visual"
+      ],
+      "side_effects": [
+        "preview"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": false,
+      "runtime_status": "partial",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "ADD_ELLIPSE_MASK",
+      "version": 1,
+      "title": "Add Ellipse Mask",
+      "description": "Studio capability ADD_ELLIPSE_MASK.",
+      "tags": [
+        "mask",
+        "visual"
+      ],
+      "side_effects": [
+        "preview"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": false,
+      "runtime_status": "partial",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "ADD_BEZIER_MASK",
+      "version": 1,
+      "title": "Add Bezier Mask",
+      "description": "Studio capability ADD_BEZIER_MASK.",
+      "tags": [
+        "mask",
+        "visual"
+      ],
+      "side_effects": [
+        "preview"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": false,
+      "runtime_status": "partial",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "ADD_AI_PERSON_MASK",
+      "version": 1,
+      "title": "Add Ai Person Mask",
+      "description": "Studio capability ADD_AI_PERSON_MASK.",
+      "tags": [
+        "mask",
+        "visual"
+      ],
+      "side_effects": [
+        "preview"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": false,
+      "runtime_status": "partial",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "CLEAR_MASKS",
+      "version": 1,
+      "title": "Clear Masks",
+      "description": "Studio capability CLEAR_MASKS.",
+      "tags": [
+        "mask",
+        "visual"
+      ],
+      "side_effects": [
+        "preview"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": false,
+      "runtime_status": "partial",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "SET_KEYFRAME",
+      "version": 1,
+      "title": "Set Keyframe",
+      "description": "Studio capability SET_KEYFRAME.",
+      "tags": [
+        "motion"
+      ],
+      "side_effects": [
+        "preview"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": false,
+      "runtime_status": "partial",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "DELETE_KEYFRAME",
+      "version": 1,
+      "title": "Delete Keyframe",
+      "description": "Studio capability DELETE_KEYFRAME.",
+      "tags": [
+        "motion"
+      ],
+      "side_effects": [
+        "preview"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": false,
+      "runtime_status": "partial",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "CLEAR_KEYFRAMES",
+      "version": 1,
+      "title": "Clear Keyframes",
+      "description": "Studio capability CLEAR_KEYFRAMES.",
+      "tags": [
+        "motion"
+      ],
+      "side_effects": [
+        "preview"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": false,
+      "runtime_status": "partial",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "SAVE_PROJECT",
+      "version": 1,
+      "title": "Save Project",
+      "description": "Studio capability SAVE_PROJECT.",
+      "tags": [
+        "project"
+      ],
+      "side_effects": [
+        "preview"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": false,
+      "runtime_status": "partial",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "LOAD_PROJECT",
+      "version": 1,
+      "title": "Load Project",
+      "description": "Studio capability LOAD_PROJECT.",
+      "tags": [
+        "project"
+      ],
+      "side_effects": [
+        "preview"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": false,
+      "runtime_status": "partial",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "AUTO_REFRAME",
+      "version": 1,
+      "title": "Auto Reframe",
+      "description": "Studio capability AUTO_REFRAME.",
+      "tags": [
+        "visual"
+      ],
+      "side_effects": [
+        "preview"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": false,
+      "runtime_status": "partial",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "ADD_VOICEOVER",
+      "version": 1,
+      "title": "Add Voiceover",
+      "description": "Studio capability ADD_VOICEOVER.",
+      "tags": [
+        "audio"
+      ],
+      "side_effects": [
+        "preview"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": false,
+      "runtime_status": "partial",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "ADD_SFX",
+      "version": 1,
+      "title": "Add Sfx",
+      "description": "Studio capability ADD_SFX.",
+      "tags": [
+        "audio"
+      ],
+      "side_effects": [
+        "preview"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": false,
+      "runtime_status": "partial",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "id": "SET_TRANSITION",
+      "version": 1,
+      "title": "Set Transition",
+      "description": "Studio capability SET_TRANSITION.",
+      "tags": [
+        "visual"
+      ],
+      "side_effects": [
+        "preview"
+      ],
+      "exec_locus": "client",
+      "cost_class": "free",
+      "latency_class": "instant",
+      "idempotent": false,
+      "parallel_safe": false,
+      "requires_facets": [],
+      "orchestrator_emit": false,
+      "runtime_status": "partial",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object"
+      }
+    }
+  ]
+}

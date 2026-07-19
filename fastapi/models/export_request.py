@@ -60,3 +60,12 @@ class ExportRequest(BaseModel):
             "Validated and persisted with the job; not yet consumed by the render worker."
         ),
     )
+    # EP-002 / ADR-008 — optional Studio Kernel pin (legacy path omits these)
+    project_id: Optional[str] = Field(
+        default=None,
+        description="Studio project id when baking from Project Kernel snapshot",
+    )
+    project_revision: Optional[int] = Field(
+        default=None,
+        description="Pinned Kernel revision for bake; defaults to head when omitted with project_id",
+    )

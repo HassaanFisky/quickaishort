@@ -43,6 +43,9 @@ export interface ExportRequestPayload {
   transition_enabled?: boolean;
   voiceover_enabled?: boolean;
   render_manifest?: RenderManifest | null;
+  /** EP-002 — optional Studio Kernel pin (legacy omits) */
+  project_id?: string | null;
+  project_revision?: number | null;
 }
 
 export interface ExportEnqueueResponse {

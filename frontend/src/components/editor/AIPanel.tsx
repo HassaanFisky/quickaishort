@@ -5,16 +5,27 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X, Send, Mic, MicOff, Sparkles, Zap } from "lucide-react";
 import { useEditorStore } from "@/stores/editorStore";
 import {
-  getInitialSuggestions,
-  generateImmediateSuggestions,
   type EditorStateContext,
   sendEditorCommand,
-  type EditorCommandResponse,
+  type CanonicalEditorAction,
   type EditorAction as Phase56EditorAction,
 } from "@/lib/gemini-editor";
 import { useSession } from "next-auth/react";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
 import { cn } from "@/lib/utils";
+import {
+  buildEdgeFacets,
+  createMediaGraph,
+  fetchGroundedSuggestions,
+  upsertMediaGraphFacets,
+  type SuggestionIntent,
+} from "@/lib/studio/mediaGraph";
+import axios from "axios";
+import { API_URL } from "@/lib/api";
+import {
+  ensureStudioProject,
+  isStudioProjectKernelEnabled,
+} from "@/lib/studio/projectKernel";
 
 /* ─── Sub-components ───────────────────────────────────────────────────────── */
 
@@ -69,6 +80,13 @@ function StreamingText({ text }: { text: string }) {
   );
 }
 
+/** Convert canonical registry action → dispatchAIActions envelope ({type, payload}). */
+function canonicalToDispatchEnvelope(action: CanonicalEditorAction): { type: string; payload: Record<string, unknown> } {
+  const { type, ...rest } = action;
+  return { type, payload: rest as Record<string, unknown> };
+}
+
+/** @deprecated EP-001 — kept for accidental legacy {tool,params} payloads */
 function translateToolActionToLegacy(action: Phase56EditorAction): any {
   const tool = action.tool;
   const p = action.params || {};
@@ -193,12 +211,27 @@ export function AIPanel() {
     markIn,
     markOut,
     timelineMarkers,
+    transcript,
+    silenceSegments,
+    duration,
+    runId,
   } = useEditorStore();
 
   const [inputText, setInputText] = useState("");
   const [interimText, setInterimText] = useState("");
-  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [suggestions, setSuggestions] = useState<SuggestionIntent[]>([]);
   const [suggestionsLoaded, setSuggestionsLoaded] = useState(false);
+  const mediaGraphIdRef = useRef<string | null>(null);
+  const boundRunIdRef = useRef<string | null>(null);
+
+  // New source video → reset suggestion rail + graph bind
+  useEffect(() => {
+    if (boundRunIdRef.current === runId) return;
+    boundRunIdRef.current = runId;
+    mediaGraphIdRef.current = null;
+    setSuggestionsLoaded(false);
+    setSuggestions([]);
+  }, [runId]);
   const [recentActions, setRecentActions] = useState<string[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -267,21 +300,25 @@ export function AIPanel() {
     }
   }, [aiPanelOpen]);
 
-  // Load suggestions when video is ready
-  // Step 1: instant (client-side, zero API cost) → shows immediately
-  // Step 2: Gemini-refined → replaces after API response
+  // EP-003: grounded suggestions from MediaGraph only (Phase 2 A5a).
+  // Heuristic title chips are forbidden as product truth.
   useEffect(() => {
     if (!videoMetadata || suggestionsLoaded) return;
     setSuggestionsLoaded(true);
 
-    // Instant suggestions — no API call, appear in <1ms
-    const instant = generateImmediateSuggestions(
-      videoMetadata.title ?? "",
-      videoMetadata.duration,
-    );
-    setSuggestions(instant);
+    setSuggestions([
+      {
+        suggestion_id: "skel-analyzing",
+        label: "Analyzing media…",
+        capability_id: null,
+        intent_kind: "informational",
+        params: {},
+        evidence: { facet_keys: [], summary: "Waiting for edge facets" },
+        confidence: 0,
+        interactive: false,
+      },
+    ]);
 
-    // Welcome message
     const durationLabel =
       videoMetadata.duration > 3600
         ? `${Math.round(videoMetadata.duration / 3600)}h ${Math.round((videoMetadata.duration % 3600) / 60)}m`
@@ -291,19 +328,181 @@ export function AIPanel() {
 
     addAIMessage({
       role: "assistant",
-      content: `**${videoMetadata.title || "Video"}** loaded (${durationLabel}).\n\nI can edit this video — trim, captions, filters, audio, split clips, and more. Tell me what to do or use a suggestion.`,
+      content: `**${videoMetadata.title || "Video"}** loaded (${durationLabel}).\n\nI can edit this video — trim, captions, filters, audio, split clips, and more. Suggestions appear from media understanding — not guesses.`,
       actions: [],
     });
 
-    // Then refine with Gemini in background (replaces instant suggestions if better)
-    getInitialSuggestions(videoMetadata, videoAnalysis)
-      .then((refined) => {
-        if (refined.length > 0) setSuggestions(refined);
-      })
-      .catch(() => {
-        // instant suggestions already showing — no action needed
-      });
-  }, [videoMetadata, videoAnalysis, suggestionsLoaded, addAIMessage]);
+    let cancelled = false;
+    (async () => {
+      try {
+        let projectId = useEditorStore.getState().studioProjectId;
+        if (isStudioProjectKernelEnabled() && !projectId) {
+          projectId = await ensureStudioProject({
+            title: videoMetadata.title ?? "Studio Project",
+            active_run_id: useEditorStore.getState().runId,
+          });
+        }
+        const graph = await createMediaGraph({
+          project_id: projectId,
+        });
+        if (cancelled) return;
+        mediaGraphIdRef.current = graph.graph_id;
+
+        const moments = clips.map((c) => ({
+          start: c.start,
+          end: c.end,
+          score: c.score ?? 0,
+        }));
+
+        const facets = buildEdgeFacets({
+          duration: videoMetadata.duration || duration || 0,
+          transcriptChunks: transcript?.chunks ?? null,
+          silenceSegments: silenceSegments ?? null,
+          captionsEnabled,
+          viralMoments: moments.length > 0 ? moments : null,
+        });
+        await upsertMediaGraphFacets(graph.graph_id, facets);
+        if (cancelled) return;
+        const grounded = await fetchGroundedSuggestions(graph.graph_id);
+        if (!cancelled && grounded.length > 0) setSuggestions(grounded);
+      } catch {
+        if (!cancelled) {
+          setSuggestions([
+            {
+              suggestion_id: "skel-unavailable",
+              label: "Media understanding unavailable — type an edit command",
+              capability_id: null,
+              intent_kind: "informational",
+              params: {},
+              evidence: { facet_keys: [], summary: "MediaGraph API error" },
+              confidence: 0,
+              interactive: false,
+            },
+          ]);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    videoMetadata,
+    suggestionsLoaded,
+    addAIMessage,
+    transcript,
+    silenceSegments,
+    duration,
+    captionsEnabled,
+    clips,
+  ]);
+
+  // Refresh grounded suggestions when transcript/silence/clips arrive after first load
+  useEffect(() => {
+    const graphId = mediaGraphIdRef.current;
+    if (!graphId || !videoMetadata) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const moments = clips.map((c) => ({
+          start: c.start,
+          end: c.end,
+          score: c.score ?? 0,
+        }));
+        const facets = buildEdgeFacets({
+          duration: videoMetadata.duration || duration || 0,
+          transcriptChunks: transcript?.chunks ?? null,
+          silenceSegments: silenceSegments ?? null,
+          captionsEnabled,
+          viralMoments: moments.length > 0 ? moments : null,
+        });
+        await upsertMediaGraphFacets(graphId, facets);
+        const grounded = await fetchGroundedSuggestions(graphId);
+        if (!cancelled && grounded.length > 0) setSuggestions(grounded);
+      } catch {
+        /* keep prior rail */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    transcript,
+    silenceSegments,
+    captionsEnabled,
+    clips,
+    videoMetadata,
+    duration,
+  ]);
+
+  /** EP-004: grounded chip → structured Plan → local apply (+ optional Kernel). */
+  const applyGroundedSuggestion = useCallback(
+    async (s: SuggestionIntent) => {
+      if (!s.interactive || !s.capability_id || isAIThinking) return;
+      addAIMessage({ role: "user", content: s.label });
+      setAIThinking(true);
+      try {
+        const { data: plan } = await axios.post(
+          `${API_URL}/api/studio/v1/orchestrator/plan`,
+          {
+            source: "suggestion",
+            project_id: useEditorStore.getState().studioProjectId,
+            structured: {
+              capability_id: s.capability_id,
+              params: s.params ?? {},
+              label: s.label,
+              suggestion_id: s.suggestion_id,
+            },
+          },
+        );
+        const step = plan?.steps?.[0];
+        if (step?.capability_id) {
+          dispatchAIActions([
+            {
+              type: step.capability_id,
+              payload: step.params ?? {},
+            },
+          ]);
+        }
+
+        if (
+          isStudioProjectKernelEnabled() &&
+          useEditorStore.getState().studioProjectId &&
+          plan?.plan_id
+        ) {
+          useEditorStore.getState().rebuildRenderManifest();
+          const st = useEditorStore.getState();
+          if (st.compiledManifest) {
+            await axios.post(`${API_URL}/api/studio/v1/orchestrator/execute`, {
+              plan_id: plan.plan_id,
+              project_id: st.studioProjectId,
+              base_revision: st.studioAckedRevision,
+              base_snapshot_hash: st.studioSnapshotHash,
+              proposed_manifest: st.compiledManifest,
+            });
+            // Refresh ack revision from head is best-effort via execute response
+          }
+        }
+
+        addAIMessage({
+          role: "assistant",
+          content: plan?.message || `Planned: ${s.capability_id}`,
+          actions: step
+            ? [{ type: step.capability_id, payload: step.params ?? {} }]
+            : [],
+        });
+      } catch (err: unknown) {
+        const msg =
+          axios.isAxiosError(err) && err.response?.data?.detail
+            ? String(err.response.data.detail)
+            : "Could not apply grounded suggestion — try typing the edit.";
+        addAIMessage({ role: "assistant", content: msg, actions: [] });
+      } finally {
+        setAIThinking(false);
+      }
+    },
+    [isAIThinking, addAIMessage, dispatchAIActions],
+  );
 
   const sendMessage = useCallback(
     async (text: string) => {
@@ -340,22 +539,94 @@ export function AIPanel() {
           },
         });
 
-        const legacyActions = (result.actions || [])
-          .sort((a, b) => a.order - b.order)
-          .map(translateToolActionToLegacy);
+        const rawActions = result.actions || [];
+        const dispatchActions = rawActions.map((a) => {
+          // Legacy dialect safety net (should be rare after EP-001)
+          if (a && typeof a === "object" && "tool" in a && !("type" in a)) {
+            return translateToolActionToLegacy(a as unknown as Phase56EditorAction);
+          }
+          return canonicalToDispatchEnvelope(a as CanonicalEditorAction);
+        });
 
-        if (legacyActions.length > 0) {
-          dispatchAIActions(legacyActions);
-          // Track recent actions for future context (keep last 8)
+        if (dispatchActions.length > 0) {
+          dispatchAIActions(dispatchActions);
           setRecentActions((prev) =>
-            [...prev, ...legacyActions.map((a: any) => a.type)].slice(-8),
+            [...prev, ...dispatchActions.map((x: { type: string }) => x.type)].slice(-8),
           );
+        }
+
+        // EP-004 — Kernel commit from already-planned actions (no second LLM call)
+        let receipt = "";
+        if (isStudioProjectKernelEnabled() && dispatchActions.length > 0) {
+          try {
+            const { createStudioProject, fetchStudioHead } = await import(
+              "@/lib/studio/projectKernel"
+            );
+            let projectId = useEditorStore.getState().studioProjectId;
+            if (!projectId) {
+              const created = await createStudioProject({
+                title: videoMetadata?.title ?? "Studio Project",
+                active_run_id: useEditorStore.getState().runId,
+              });
+              projectId = created.project_id;
+              useEditorStore.setState({
+                studioProjectId: created.project_id,
+                studioAckedRevision: created.revision,
+                studioSnapshotHash: created.snapshot_hash,
+              });
+            }
+            const structured_steps = dispatchActions.map(
+              (a: { type: string; payload?: Record<string, unknown> }) => ({
+                capability_id: a.type,
+                params: a.payload ?? {},
+              }),
+            );
+            const { data: plan } = await axios.post(
+              `${API_URL}/api/studio/v1/orchestrator/plan`,
+              {
+                source: "chat",
+                intent_text: trimmed,
+                project_id: projectId,
+                structured_steps,
+              },
+            );
+            useEditorStore.getState().rebuildRenderManifest();
+            const st = useEditorStore.getState();
+            if (plan?.plan_id && st.compiledManifest && projectId && plan.steps?.length) {
+              const { data: executed } = await axios.post(
+                `${API_URL}/api/studio/v1/orchestrator/execute`,
+                {
+                  plan_id: plan.plan_id,
+                  project_id: projectId,
+                  base_revision: st.studioAckedRevision,
+                  base_snapshot_hash: st.studioSnapshotHash,
+                  proposed_manifest: st.compiledManifest,
+                },
+              );
+              const head = await fetchStudioHead(projectId);
+              useEditorStore.setState({
+                studioAckedRevision: head.revision,
+                studioSnapshotHash: head.snapshot_hash,
+              });
+              const accepted = (executed?.steps ?? []).filter(
+                (s: { status?: string }) => s.status === "accepted",
+              ).length;
+              receipt =
+                accepted > 0
+                  ? ` · Kernel r${head.revision} (${accepted} ack)`
+                  : executed?.status === "failed"
+                    ? " · Kernel reject — preview only"
+                    : "";
+            }
+          } catch {
+            receipt = " · Kernel sync deferred";
+          }
         }
 
         addAIMessage({
           role: "assistant",
-          content: result.feedback || "Done.",
-          actions: legacyActions,
+          content: `${result.feedback || result.message || "Done."}${receipt}`,
+          actions: dispatchActions,
         });
       } catch (err: unknown) {
         const errMsg = err instanceof Error ? err.message : String(err);
@@ -570,19 +841,31 @@ export function AIPanel() {
             <div ref={messagesEndRef} />
           </div>
 
-          {/* ── Suggestion chips ─────────────────────────────────── */}
+          {/* ── Suggestion chips (EP-003 grounded only) ─────────── */}
           {suggestions.length > 0 && (
             <div className="suggestions-rail">
-              {suggestions.map((s, i) => (
-                <button
-                  key={i}
-                  className="suggestion-chip"
-                  onClick={() => sendMessage(s)}
-                  disabled={isAIThinking}
-                >
-                  {s}
-                </button>
-              ))}
+              {suggestions.map((s) =>
+                s.interactive ? (
+                  <button
+                    key={s.suggestion_id}
+                    className="suggestion-chip"
+                    title={s.evidence.summary}
+                    onClick={() => void applyGroundedSuggestion(s)}
+                    disabled={isAIThinking}
+                  >
+                    {s.label}
+                  </button>
+                ) : (
+                  <span
+                    key={s.suggestion_id}
+                    className="suggestion-chip opacity-60 cursor-default pointer-events-none"
+                    title={s.evidence.summary}
+                    aria-disabled="true"
+                  >
+                    {s.label}
+                  </span>
+                ),
+              )}
             </div>
           )}
 

@@ -172,6 +172,33 @@ export default function EditorLayout() {
     }
   }, [sourceUrl]);
 
+  // EP-005 / U1 — chat is the control plane once media is loaded
+  useEffect(() => {
+    if (storeVideoMetadata) {
+      setAIPanelOpen(true);
+    }
+  }, [storeVideoMetadata, setAIPanelOpen]);
+
+  const [timelineExpanded, setTimelineExpanded] = useState(false);
+  useEffect(() => {
+    try {
+      setTimelineExpanded(sessionStorage.getItem("qai_timeline_expanded") === "1");
+    } catch {
+      /* ignore */
+    }
+  }, []);
+  const toggleTimelineExpanded = useCallback(() => {
+    setTimelineExpanded((prev) => {
+      const next = !prev;
+      try {
+        sessionStorage.setItem("qai_timeline_expanded", next ? "1" : "0");
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }, []);
+
   // Keep a ref so the retry listener never needs to re-register when runPipeline
   // recreates (it captures transcription via closure, so it changes every render).
   // A re-registration window between removeEventListener and addEventListener
@@ -976,22 +1003,46 @@ export default function EditorLayout() {
         )}
       </main>
 
-      {/* Timeline */}
-      <footer className="h-44 shrink-0 bg-card border border-border rounded-2xl flex flex-col overflow-hidden relative">
-        <BottomDock />
-        {/* RNNoise attribution — required by Mozilla BSD 3-clause */}
-        <p className="absolute bottom-1 right-2 text-[9px] text-muted/40 select-none pointer-events-none">
-          Noise suppression powered by{" "}
-          <a
-            href="https://github.com/mozilla/rnnoise"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline pointer-events-auto hover:text-muted/70 transition-colors"
+      {/* Timeline — EP-005: collapsed monitor by default; expand on demand */}
+      <footer
+        className={cn(
+          "shrink-0 bg-card border border-border rounded-2xl flex flex-col overflow-hidden relative transition-[height] duration-300",
+          timelineExpanded || isAdvancedMode ? "h-44" : "h-14",
+        )}
+      >
+        <div className="flex items-center justify-between px-3 h-14 shrink-0 border-b border-border/60">
+          <span className="text-[10px] font-black uppercase tracking-[0.18em] text-fg-muted">
+            Timeline
+          </span>
+          <button
+            type="button"
+            onClick={toggleTimelineExpanded}
+            className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded-lg hover:bg-foreground/5"
+            aria-expanded={timelineExpanded || isAdvancedMode}
           >
-            RNNoise
-          </a>{" "}
-          © Mozilla (BSD&nbsp;3-clause)
-        </p>
+            {timelineExpanded || isAdvancedMode ? "Collapse" : "Expand"}
+          </button>
+        </div>
+        {(timelineExpanded || isAdvancedMode) && (
+          <>
+            <div className="flex-1 min-h-0 overflow-hidden">
+              <BottomDock />
+            </div>
+            {/* RNNoise attribution — required by Mozilla BSD 3-clause */}
+            <p className="absolute bottom-1 right-2 text-[9px] text-muted/40 select-none pointer-events-none">
+              Noise suppression powered by{" "}
+              <a
+                href="https://github.com/mozilla/rnnoise"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline pointer-events-auto hover:text-muted/70 transition-colors"
+              >
+                RNNoise
+              </a>{" "}
+              © Mozilla (BSD&nbsp;3-clause)
+            </p>
+          </>
+        )}
       </footer>
 
       {/* Mobile/tablet — Left panel slide-over drawer (advanced mode only) */}

@@ -19,9 +19,10 @@ import time
 import uuid
 from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from services.auth import get_verified_user_id
 from services.queue_service import (
     redis_conn,
     render_queue,
@@ -72,8 +73,13 @@ def _get_pipeline(pipeline_id: str) -> Optional[dict]:
 
 
 @router.post("/api/pipeline/run")
-async def run_pipeline(req: PipelineRunRequest):
+async def run_pipeline(
+    req: PipelineRunRequest,
+    verified_user_id: str = Depends(get_verified_user_id),
+):
     """Analyze -> pick top clip -> enqueue render. Returns once the render is queued."""
+    # AuthZ: JWT user is sole tenant id — never trust body userId (TD-LEGACY-01)
+    user_id = verified_user_id
     if is_overloaded():
         raise HTTPException(
             status_code=503, detail="System overloaded. Try again later."
@@ -91,7 +97,7 @@ async def run_pipeline(req: PipelineRunRequest):
             "pipeline_id": pipeline_id,
             "status": "analyzing",
             "video_id": req.videoId,
-            "user_id": req.userId,
+            "user_id": user_id,
             "run_id": run_id,
             "created_at": time.time(),
         },
@@ -103,7 +109,7 @@ async def run_pipeline(req: PipelineRunRequest):
 
         transcript_text = " ".join(c.text for c in req.transcript)
         suggestions = await run_viral_pipeline(
-            transcript_text, req.duration, video_id=req.videoId, user_id=req.userId
+            transcript_text, req.duration, video_id=req.videoId, user_id=user_id
         )
     except Exception as exc:
         logger.exception("pipeline_analysis_failed pipeline_id=%s", pipeline_id)
@@ -153,7 +159,7 @@ async def run_pipeline(req: PipelineRunRequest):
             req.videoId,
             float(top.start),
             float(top.end),
-            req.userId,
+            user_id,
             options,
             run_id,
             job_id=job_id,
@@ -181,7 +187,7 @@ async def run_pipeline(req: PipelineRunRequest):
             "pipeline_id": pipeline_id,
             "status": "rendering",
             "video_id": req.videoId,
-            "user_id": req.userId,
+            "user_id": user_id,
             "run_id": run_id,
             "render_job_id": job_id,
             "top_clip": {
@@ -207,10 +213,15 @@ async def run_pipeline(req: PipelineRunRequest):
 
 
 @router.get("/api/pipeline/{pipeline_id}/status")
-async def get_pipeline_status(pipeline_id: str):
+async def get_pipeline_status(
+    pipeline_id: str,
+    verified_user_id: str = Depends(get_verified_user_id),
+):
     """Compose the pipeline record with the live render status hash."""
     data = _get_pipeline(pipeline_id)
     if not data:
+        raise HTTPException(status_code=404, detail="Pipeline not found or expired")
+    if data.get("user_id") and data.get("user_id") != verified_user_id:
         raise HTTPException(status_code=404, detail="Pipeline not found or expired")
 
     render_job_id = data.get("render_job_id")
