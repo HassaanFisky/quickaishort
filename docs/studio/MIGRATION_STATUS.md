@@ -23,6 +23,13 @@ Verified untouched at cycle close.
 - Export `ensureStudioProject` + `project_id` / revision bind ✅  
 - Flags documented in `.env.example` ✅  
 - FE accepts canonical actions only (legacy translator removed) ✅  
+- EP-008 ingest policy + onboarding prefs (`studio_user_prefs`) ✅  
+
+## EP-008 migration notes
+
+- No destructive migration.  
+- Firestore collection `studio_user_prefs` created on first onboarding write.  
+- Users with prior exports skip tour automatically.  
 
 ## Prod cutover still requires
 

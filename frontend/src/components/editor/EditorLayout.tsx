@@ -6,17 +6,15 @@ import { useMediaPipeline } from "@/hooks/useMediaPipeline";
 import { useAIPanel } from "@/stores/aiPanelStore";
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import type { DragEvent, ChangeEvent } from "react";
+import dynamic from "next/dynamic";
 import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
 import Image from "next/image";
 import { GlowButton } from "@/components/ui/GlowButton";
 import QSLogo from "@/components/shared/QSLogo";
 import {
-  Link2,
-  Loader2,
   Zap,
   Sparkles,
-  CheckCircle2,
   X,
   AlertCircle,
   Upload,
@@ -26,15 +24,31 @@ import {
   Download,
   SlidersHorizontal,
   GripHorizontal,
+  CheckCircle2,
+  Link2,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { getVideoInfo } from "@/lib/api";
+import {
+  getVideoInfo,
+  requestPresignedUploadUrl,
+  uploadFileToGcs,
+} from "@/lib/api";
 import { parseYouTubeId } from "@/lib/youtube-utils";
 import { PROJECT_TEMPLATES } from "@/lib/project/templates";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useSwipeGesture } from "@/hooks/useTouchGestures";
 import { trackEvent } from "@/lib/analytics";
+import {
+  fetchIngestPolicy,
+  FALLBACK_INGEST_POLICY,
+  validateFileAgainstPolicy,
+} from "@/lib/studio/ingestPolicy";
+import {
+  consumeTourReplay,
+  fetchOnboarding,
+} from "@/lib/studio/onboarding";
 
 import LeftPanel from "./LeftPanel";
 import RightPanel from "./RightPanel";
@@ -45,18 +59,25 @@ import Sidebar from "@/components/layout/Sidebar";
 import { TimelineLoader } from "@/components/ui/TimelineLoader";
 import { LiquidThemeToggle } from "@/components/shared/LiquidThemeToggle";
 import { AIPanel } from "@/components/editor/AIPanel";
-import YouTubeInputStrip from "./YouTubeInputStrip";
+import IngestSurface, { type IngestUiStatus } from "./IngestSurface";
 import VideoWorkspace from "./VideoWorkspace";
 import ExportDialog from "./ExportDialog";
+
+const EditorOnboardingTour = dynamic(
+  () => import("./EditorOnboardingTour"),
+  { ssr: false },
+);
 
 export default function EditorLayout() {
   const {
     setSourceFile,
     setSourceUrl,
+    setSourceGcsPath,
     setProcessing,
     isProcessing,
     currentStage,
     sourceUrl,
+    sourceFile,
     setThumbnailUrl: storeThumbnail,
     setVideoMetadata,
     aiPanelOpen,
@@ -95,8 +116,8 @@ export default function EditorLayout() {
     if (!sessionStorage.getItem("titan_welcome_shown")) {
       sessionStorage.setItem("titan_welcome_shown", "1");
       setTimeout(() => {
-        toast("Welcome to QuickAI Editor", {
-          description: "Paste a YouTube URL or upload a video to start editing.",
+        toast("Welcome to QuickAI Studio", {
+          description: "Upload a video or paste a YouTube URL to start editing.",
           duration: 5000,
         });
       }, 1000);
@@ -112,7 +133,13 @@ export default function EditorLayout() {
   const [panelCollapsed, setPanelCollapsed] = useState(false);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [ingestStatus, setIngestStatus] = useState<IngestUiStatus>("idle");
+  const [ingestProgress, setIngestProgress] = useState<number | null>(null);
+  const [ingestError, setIngestError] = useState<string | null>(null);
+  const [showTour, setShowTour] = useState(false);
+  const [tourStep, setTourStep] = useState(0);
+  const uploadAbortRef = useRef<AbortController | null>(null);
+  const lastFileRef = useRef<File | null>(null);
   const hasAutoImportedRef = useRef(false);
 
   // Mobile inspector bottom-sheet — lightweight (non-advanced-mode) replacement
@@ -247,6 +274,32 @@ export default function EditorLayout() {
     }
   }, []);
 
+  // EP-008 — lazy interactive tour (once / replay)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        if (consumeTourReplay()) {
+          if (!cancelled) {
+            setTourStep(0);
+            setShowTour(true);
+          }
+          return;
+        }
+        const data = await fetchOnboarding();
+        if (!cancelled && data.auto_show) {
+          setTourStep(data.editor_v1.step_index || 0);
+          setShowTour(true);
+        }
+      } catch {
+        /* non-blocking */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const isDirectVideoUrl = (url: string) =>
     /\.(mp4|webm|mov)([\?#].*)?$/i.test(url.trim());
 
@@ -373,44 +426,74 @@ export default function EditorLayout() {
     toast.info("Processing cancelled.");
   };
 
-  const handleFileUpload = useCallback(
-    (e: ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      if (!file.type.startsWith("video/")) {
-        toast.error("Please select a video file.");
+  const ingestLocalFile = useCallback(
+    async (file: File) => {
+      lastFileRef.current = file;
+      setIngestError(null);
+      setIngestStatus("validating");
+      const policy = await fetchIngestPolicy().catch(() => FALLBACK_INGEST_POLICY);
+      const v = validateFileAgainstPolicy(file, policy);
+      if (!v.ok) {
+        setIngestStatus("error");
+        setIngestError(v.message);
+        toast.error(v.message);
         return;
       }
-      if (file.size > 500 * 1024 * 1024) {
-        toast.warning("File is larger than 500 MB — analysis may be slow or time out on first run.", { duration: 6000 });
+      if (file.size > policy.warn_bytes) {
+        toast.warning("Large file — upload may take a while.", { duration: 5000 });
       }
-      const url = URL.createObjectURL(file);
-      setSourceFile(file, url);
+
+      uploadAbortRef.current?.abort();
+      const ac = new AbortController();
+      uploadAbortRef.current = ac;
+
+      setIngestStatus("uploading");
+      setIngestProgress(0);
+      const blobUrl = URL.createObjectURL(file);
+      setSourceFile(file, blobUrl);
       setBackendFailed(false);
       setYoutubePreviewId(null);
       trackEvent({ name: "video_loaded", props: { source: "upload", durationSec: 0 } });
+
+      try {
+        const { presigned_url, gcs_path } = await requestPresignedUploadUrl(
+          file.name,
+          file.type || "video/mp4",
+        );
+        await uploadFileToGcs(
+          presigned_url,
+          file,
+          file.type || "video/mp4",
+          (pct) => setIngestProgress(pct),
+          ac.signal,
+        );
+        setSourceGcsPath(gcs_path);
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") {
+          setIngestStatus("cancelled");
+          setIngestProgress(null);
+          return;
+        }
+        const msg = err instanceof Error ? err.message : "Upload failed";
+        setIngestError(`${msg} — preview may still work locally.`);
+        toast.warning("Cloud upload failed — continuing with local preview.");
+      }
+
+      setIngestStatus("processing");
+      setIngestProgress(null);
+      setPanelCollapsed(true);
       runPipeline();
+      setIngestStatus("ready");
     },
-    [setSourceFile, runPipeline]
+    [setSourceFile, setSourceGcsPath, runPipeline],
   );
 
   const handleDrop = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDraggingOver(false);
-    if (e.dataTransfer.files?.[0]) {
-      const file = e.dataTransfer.files[0];
-      if (file.type.startsWith("video/")) {
-        if (file.size > 500 * 1024 * 1024) {
-          toast.warning("File is larger than 500 MB — analysis may be slow or time out on first run.", { duration: 6000 });
-        }
-        const url = URL.createObjectURL(file);
-        setSourceFile(file, url);
-        runPipeline();
-      } else {
-        toast.error("Please upload a video file");
-      }
-    }
+    const file = e.dataTransfer.files?.[0];
+    if (file) void ingestLocalFile(file);
   };
 
   const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
@@ -450,20 +533,14 @@ export default function EditorLayout() {
             <div className="relative flex flex-col items-center gap-3 text-center">
               <Upload className="w-12 h-12 text-primary" />
               <p className="text-base font-bold text-foreground">Drop your video here</p>
-              <p className="text-xs text-fg-muted">MP4, WebM, or MOV</p>
+              <p className="text-xs text-fg-muted">
+                {FALLBACK_INGEST_POLICY.examples_label}
+              </p>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
       <Sidebar />
-
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="video/*"
-        className="hidden"
-        onChange={handleFileUpload}
-      />
 
       {/* Header */}
       <header className="flex items-center justify-between shrink-0">
@@ -581,6 +658,7 @@ export default function EditorLayout() {
           )}
 
           <button
+            data-tour-id="export.button"
             onClick={() => setExportOpen(true)}
             disabled={!sourceUrl || isProcessing}
             title="Export — Shift+Alt+E"
@@ -662,23 +740,37 @@ export default function EditorLayout() {
 
         {/* Center — Stage */}
         <section className="relative flex flex-col items-center justify-center gap-4 min-h-0">
-          {/* URL import bar */}
-          <YouTubeInputStrip
+          <IngestSurface
             urlInput={urlInput}
             urlValid={urlValid}
             youtubePreviewId={youtubePreviewId}
             isAnalysing={isAnalysing}
-            backendFailed={backendFailed}
             panelCollapsed={panelCollapsed}
             currentStage={currentStage}
             videoTitle={storeVideoMetadata?.title}
+            hasSource={Boolean(sourceUrl || sourceFile)}
+            ingestStatus={ingestStatus}
+            ingestProgress={ingestProgress}
+            ingestError={ingestError}
             onUrlChange={handleUrlChange}
             onAnalyze={() => void handleAnalyze()}
-            onCancel={handleCancel}
-            onFileUpload={() => fileInputRef.current?.click()}
+            onCancelAnalyze={handleCancel}
             onExpandPanel={() => setPanelCollapsed(false)}
+            onFileChosen={(f) => void ingestLocalFile(f)}
+            onCancelUpload={() => {
+              uploadAbortRef.current?.abort();
+              setIngestStatus("cancelled");
+              setIngestProgress(null);
+            }}
+            onRetryUpload={() => {
+              if (lastFileRef.current) void ingestLocalFile(lastFileRef.current);
+            }}
+            onReplace={() => {
+              setPanelCollapsed(false);
+              setIngestStatus("idle");
+              setIngestError(null);
+            }}
           />
-          {/* ▲ URL bar rendered via YouTubeInputStrip — legacy inline removed */}
           {false && (
             <div className="absolute top-0 left-1/2 -translate-x-1/2 z-40 w-full max-w-xl px-4">
             <AnimatePresence mode="wait">
@@ -834,7 +926,7 @@ export default function EditorLayout() {
                         className="px-4 pb-2"
                       >
                         <button
-                          onClick={() => fileInputRef.current?.click()}
+                          onClick={() => setPanelCollapsed(false)}
                           className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-amber-400 hover:text-amber-300 transition-colors"
                         >
                           <Upload className="w-3 h-3" />
@@ -1005,6 +1097,7 @@ export default function EditorLayout() {
 
       {/* Timeline — EP-005: collapsed monitor by default; expand on demand */}
       <footer
+        data-tour-id="timeline.dock"
         className={cn(
           "shrink-0 bg-card border border-border rounded-2xl flex flex-col overflow-hidden relative transition-[height] duration-300",
           timelineExpanded || isAdvancedMode ? "h-44" : "h-14",
@@ -1211,6 +1304,13 @@ export default function EditorLayout() {
 
       {/* Export dialog — opened via Export button in header */}
       <ExportDialog open={exportOpen} onClose={() => setExportOpen(false)} />
+
+      {showTour && (
+        <EditorOnboardingTour
+          initialStep={tourStep}
+          onFinished={() => setShowTour(false)}
+        />
+      )}
     </div>
   );
 }

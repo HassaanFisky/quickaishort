@@ -404,6 +404,10 @@ from routers.orchestrator_router import router as orchestrator_router
 
 app.include_router(orchestrator_router)
 
+from routers.studio_ingest_router import router as studio_ingest_router
+
+app.include_router(studio_ingest_router)
+
 
 def get_real_ip(request: Request) -> str:
     """
@@ -2544,7 +2548,18 @@ async def get_presigned_upload_url(
     The browser PUTs the video file directly; the backend never receives the
     raw stream.  On completion the client passes `gcs_path` as the videoId
     in the export request so the render worker reads directly from GCS.
+
+    EP-008: filename/MIME validated against Media Ingest Policy (not EP-001).
     """
+    from services.media_ingest_policy import validate_ingest_file
+
+    err = validate_ingest_file(
+        filename=body.filename,
+        content_type=body.content_type or "application/octet-stream",
+    )
+    if err:
+        raise HTTPException(status_code=400, detail=err)
+
     job_id = uuid.uuid4().hex
     ext = Path(body.filename).suffix.lower() or ".mp4"
     remote_path = f"uploads/{verified_user_id}/{job_id}{ext}"

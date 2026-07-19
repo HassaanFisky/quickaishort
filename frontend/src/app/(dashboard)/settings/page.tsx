@@ -457,6 +457,31 @@ export default function SettingsPage() {
                         onCheckedChange={setAutoPlayOnSelect}
                         border
                       />
+                      <div className="pt-2 border-t border-foreground/5">
+                        <p className="text-sm font-bold mb-1">Editor tour</p>
+                        <p className="text-xs text-muted-foreground mb-3">
+                          Replay the first-run walkthrough on your next visit to the Editor.
+                        </p>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="rounded-xl"
+                          onClick={async () => {
+                            const { requestTourReplay, saveOnboarding } = await import(
+                              "@/lib/studio/onboarding"
+                            );
+                            requestTourReplay();
+                            try {
+                              await saveOnboarding("not_started", 0);
+                            } catch {
+                              /* local replay flag still works */
+                            }
+                            toast.success("Tour will start when you open the Editor.");
+                          }}
+                        >
+                          Replay editor tour
+                        </Button>
+                      </div>
                     </CardContent>
                   </Card>
                   <SaveRow

@@ -16,11 +16,11 @@ Living index. Full ADRs live under `docs/studio/adrs/`.
 | ADR-010 | Orchestrator Plan Jobs | Accepted | EP-004; Plan → Kernel |
 | ADR-011 | Chat-Primary Studio Shell | Accepted | EP-005 |
 | ADR-012 | Bake from Kernel Snapshot | Accepted | EP-006 |
-| ADR-013 | Editor Ingest Parity + Onboarding + Ads CS | **Proposed (revised)** | EP-008 — awaiting FINAL founder approval |
+| ADR-013 | Editor Ingest Parity + Onboarding + Ads CS | **Accepted** | EP-008 implemented |
 
 ## Latest binding change
 
-2026-07-20: EP-008 / ADR-013 **revised** after 95/100 conditional approval — Media Ingest Policy API (not EP-001), clipboard paste, replace media, lazy-load performance, a11y/perf DoD. **No implementation until FINAL approve.** Does not reopen EP-001 or EP-002 Kernel.
+2026-07-20: EP-008 **implemented** + ADR-013 accepted. Media Ingest Policy API, IngestSurface, onboarding tour, Ads Coming Soon. EP-001/Kernel/MediaGraph suggestion rules untouched.
 
 2026-07-19: Execution cycle close — production-ready gate. TD-EP001-03 FE legacy dialect translator removed (canonical-only client path; BE remains normalizer). Ops Kernel flag enablement is deploy handoff, not architecture change.
 

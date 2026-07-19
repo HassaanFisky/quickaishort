@@ -200,6 +200,7 @@ export async function uploadFileToGcs(
   file: File,
   contentType: string = "video/mp4",
   onProgress?: (pct: number) => void,
+  signal?: AbortSignal,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
@@ -210,11 +211,26 @@ export async function uploadFileToGcs(
         if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
       };
     }
+    const onAbort = () => {
+      xhr.abort();
+      reject(new DOMException("Upload cancelled", "AbortError"));
+    };
+    if (signal) {
+      if (signal.aborted) {
+        onAbort();
+        return;
+      }
+      signal.addEventListener("abort", onAbort, { once: true });
+    }
     xhr.onload = () => {
+      if (signal) signal.removeEventListener("abort", onAbort);
       if (xhr.status >= 200 && xhr.status < 300) resolve();
       else reject(new Error(`GCS upload failed with status ${xhr.status}`));
     };
-    xhr.onerror = () => reject(new Error("GCS upload network error"));
+    xhr.onerror = () => {
+      if (signal) signal.removeEventListener("abort", onAbort);
+      reject(new Error("GCS upload network error"));
+    };
     xhr.send(file);
   });
 }

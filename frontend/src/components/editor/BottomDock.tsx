@@ -608,7 +608,10 @@ export default function BottomDock() {
   ];
 
   return (
-    <div className="w-full h-full flex flex-col gap-4 animate-in slide-in-from-bottom-4 duration-500">
+    <div
+      data-tour-id="timeline.dock"
+      className="w-full h-full flex flex-col gap-4 animate-in slide-in-from-bottom-4 duration-500"
+    >
       <div className="flex items-center justify-between px-2 flex-wrap gap-y-2">
         <div className="flex items-center gap-3">
           <Button

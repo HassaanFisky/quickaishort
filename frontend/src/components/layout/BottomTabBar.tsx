@@ -8,6 +8,7 @@ import {
   LayoutGrid,
   Scissors,
   Clapperboard,
+  Megaphone,
   History as HistoryIcon,
   Settings as SettingsIcon,
   type LucideIcon,
@@ -21,11 +22,12 @@ interface TabItem {
 }
 
 // Mirrors Sidebar.tsx NAV_ITEMS for desktop/mobile navigation parity.
-// Labels are shortened to fit a 5-tab layout at 320px viewport width.
+// Six tabs — labels shortened for narrow viewports.
 const TABS: TabItem[] = [
   { href: "/dashboard", label: "Home", icon: LayoutGrid },
   { href: "/editor", label: "Editor", icon: Scissors },
   { href: "/adk", label: "Studio", icon: Clapperboard },
+  { href: "/ads", label: "Ads", icon: Megaphone },
   { href: "/history", label: "Library", icon: HistoryIcon },
   { href: "/settings", label: "Profile", icon: SettingsIcon },
 ];

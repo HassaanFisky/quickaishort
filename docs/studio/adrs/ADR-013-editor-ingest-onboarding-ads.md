@@ -1,8 +1,8 @@
 # ADR-013 — Editor Ingest Parity, Interactive Onboarding, Ads Coming Soon
 
-**Status:** Proposed (revised) — blocked on **EP-008 FINAL** founder approval  
+**Status:** Accepted  
 **Date:** 2026-07-20  
-**Package:** EP-008  
+**Package:** EP-008 (implemented)  
 
 ## Context
 

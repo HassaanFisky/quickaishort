@@ -748,7 +748,7 @@ export function AIPanel() {
                 <p className="text-[10px] text-white/15 max-w-[200px]">
                   {isVideoLoaded
                     ? "I'll apply your edits directly to the timeline"
-                    : "Paste a YouTube URL in the top bar to get started"}
+                    : "Upload a video or paste a YouTube URL to get started"}
                 </p>
               </div>
             )}
@@ -798,7 +798,7 @@ export function AIPanel() {
 
           {/* ── Suggestion chips (EP-003 grounded only) ─────────── */}
           {suggestions.length > 0 && (
-            <div className="suggestions-rail">
+            <div className="suggestions-rail" data-tour-id="ai.suggestions">
               {suggestions.map((s) =>
                 s.interactive ? (
                   <button
@@ -833,6 +833,7 @@ export function AIPanel() {
             <div className="input-row">
               <textarea
                 ref={textareaRef}
+                data-tour-id="ai.chat"
                 className="ai-textarea"
                 placeholder={
                   !isVideoLoaded

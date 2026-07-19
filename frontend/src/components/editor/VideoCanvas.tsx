@@ -560,7 +560,7 @@ export default function VideoCanvas() {
             </div>
             <div className="text-center">
               <p className="text-sm font-black text-fg-muted uppercase tracking-widest mb-1">
-                Paste a YouTube URL to get started
+                Upload a video or paste a YouTube URL
               </p>
               <p className="text-xs text-muted-foreground max-w-[220px]">
                 We&apos;ll analyze the video and suggest the best viral clips automatically

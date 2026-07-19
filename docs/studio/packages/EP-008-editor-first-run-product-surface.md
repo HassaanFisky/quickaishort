@@ -1,6 +1,6 @@
 # EP-008 — Editor First-Run Product Surface (Ingest · Onboarding · Ads Gate · UX Honesty)
 
-**Status:** REVISED SPEC — **AWAITING FOUNDER RE-APPROVAL** (no implementation until re-approved)  
+**Status:** **IMPLEMENTED / FROZEN** — see `EP-008-IMPLEMENTATION-REPORT.md`  
 **Priority:** P0 — product experience (not feature spam)  
 **ADR:** ADR-013 (Proposed → revise with this revision)  
 **Package ID:** **EP-008** (confirmed — do **not** rename to EP-002; Kernel history stays clean)  

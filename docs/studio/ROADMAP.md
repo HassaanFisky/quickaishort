@@ -29,7 +29,7 @@
 
 | Item | Gate |
 |------|------|
-| **EP-008** Editor First-Run Product Surface (upload parity, onboarding, Ads CS) | **Spec revised — awaiting FINAL approval** (`APPROVE EP-008 FINAL`) |
+| **EP-008** Editor First-Run Product Surface (upload parity, onboarding, Ads CS) | ✅ Implemented — see `EP-008-IMPLEMENTATION-REPORT.md` |
 | ADR-006 native Gemini tool-loop depth | Optional engineering EP |
 | Multiplayer | **Founder approval** (EP-007) |
 | Legacy `Projects` cutover delete | **Founder consent** (irreversible) |

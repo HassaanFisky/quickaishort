@@ -183,8 +183,10 @@ export function useMediaPipeline() {
     // Sets sourceGcsPath so the server render worker can read directly from GCS
     // instead of downloading via yt-dlp.  Failure is silent — MediaRecorder
     // fallback remains the safety net.
-    const fileSource = useEditorStore.getState().sourceFile;
-    if (fileSource instanceof File) {
+    // EP-008: skip if IngestSurface already completed GCS put
+    const st = useEditorStore.getState();
+    const fileSource = st.sourceFile;
+    if (fileSource instanceof File && !st.sourceGcsPath) {
       void requestPresignedUploadUrl(fileSource.name, fileSource.type || "video/mp4")
         .then(({ presigned_url, gcs_path }) =>
           uploadFileToGcs(presigned_url, fileSource, fileSource.type || "video/mp4").then(
