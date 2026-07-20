@@ -97,41 +97,87 @@ def check_memory_pressure():
 
 
 # --- Health Check Server for Cloud Run ---
-class HealthCheckHandler(http.server.SimpleHTTPRequestHandler):
-    def do_GET(self):
-        if self.path in ("/", "/health", "/health/live"):
-            self.send_response(200)
-            self.end_headers()
-            self.wfile.write(b'{"status": "alive"}')
-        elif self.path == "/health/ready":
-            # Basic readiness check: can we talk to Redis?
+# BaseHTTPRequestHandler only — never SimpleHTTPRequestHandler (that can
+# accidentally serve filesystem paths under Cloud Run probes).
+class HealthCheckHandler(http.server.BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+
+    def log_message(self, format: str, *args) -> None:  # noqa: A003
+        # Keep Cloud Logging clean — probe spam is noise, not signal.
+        return
+
+    def _path_only(self) -> str:
+        return (self.path or "/").split("?", 1)[0]
+
+    def _json(self, code: int, payload: dict) -> None:
+        body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_GET(self) -> None:
+        path = self._path_only()
+        if path in ("/", "/health", "/health/live"):
+            self._json(200, {"status": "alive", "service": "quickai-worker"})
+            return
+        if path == "/health/ready":
             try:
                 redis_conn.ping()
-                self.send_response(200)
-                self.end_headers()
-                self.wfile.write(b'{"status": "ready"}')
+                self._json(
+                    200,
+                    {
+                        "status": "ready",
+                        "service": "quickai-worker",
+                        "redis": True,
+                        "queue": render_queue.name,
+                    },
+                )
+            except Exception as exc:
+                self._json(
+                    503,
+                    {
+                        "status": "not_ready",
+                        "service": "quickai-worker",
+                        "redis": False,
+                        "error": type(exc).__name__,
+                    },
+                )
+            return
+        self._json(404, {"status": "not_found", "service": "quickai-worker"})
+
+    def do_POST(self) -> None:
+        # Absorb POST probes from GCP metadata / lifecycle checks.
+        self._json(200, {"status": "ok", "service": "quickai-worker"})
+
+    def do_HEAD(self) -> None:
+        # Cloud Run / load balancers may use HEAD for probes.
+        path = self._path_only()
+        if path in ("/", "/health", "/health/live"):
+            code = 200
+        elif path == "/health/ready":
+            try:
+                redis_conn.ping()
+                code = 200
             except Exception:
-                self.send_response(503)
-                self.end_headers()
-                self.wfile.write(b'{"status": "not_ready"}')
+                code = 503
         else:
-            self.send_response(404)
-            self.end_headers()
-
-    def do_POST(self):
-        # Absorb POST probes from GCP metadata server (169.254.169.126) and
-        # any other internal lifecycle checks — always 200 so Cloud Run does
-        # not flag the container as unhealthy.
-        self.send_response(200)
+            code = 404
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", "0")
+        self.send_header("Cache-Control", "no-store")
         self.end_headers()
-        self.wfile.write(b'{"status": "ok"}')
 
 
-class HealthCheckServer(socketserver.TCPServer):
+class HealthCheckServer(socketserver.ThreadingTCPServer):
     allow_reuse_address = True
+    daemon_threads = True
 
 
-def run_health_server():
+def run_health_server() -> None:
     port = int(os.environ.get("PORT", 8080))
     logger.info("starting_health_server", port=port)
     with HealthCheckServer(("", port), HealthCheckHandler) as httpd:
