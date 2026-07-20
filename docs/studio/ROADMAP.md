@@ -25,6 +25,7 @@
 - [x] Set `NEXT_PUBLIC_STUDIO_PROJECT_KERNEL=1` on Vercel production (2026-07-20)  
 - [x] Confirm Cloud Run `STUDIO_PROJECT_KERNEL=1` on `quickai-api` (+ worker)  
 - [x] Redis migrated to Upstash (`rediss://` TLS); Cloud Run + Vercel + local envs updated; `/health` → `redis:true`  
+- [x] `quickai-worker` `--min-instances=1` + `--no-cpu-throttling` so RQ stays registered on Upstash (verified `Worker.all() >= 1`)  
 
 ## Next cycle
 

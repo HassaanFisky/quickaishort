@@ -35,8 +35,9 @@ Verified untouched at cycle close.
 
 1. ~~Vercel: `NEXT_PUBLIC_STUDIO_PROJECT_KERNEL=1`~~ ✅ (2026-07-20)  
 2. ~~Cloud Run: Kernel not forced off~~ ✅ `STUDIO_PROJECT_KERNEL=1`  
-3. Soak under real traffic (Redis = Upstash; RedisLabs host retired)  
-4. **Founder approval** before deleting legacy `Projects`
+3. ~~Worker always-on for RQ~~ ✅ `quickai-worker` min-instances=1, no CPU throttling (2026-07-20 soak)  
+4. Soak under real traffic (Redis = Upstash; RedisLabs host retired)  
+5. **Founder approval** before deleting legacy `Projects`
 
 ## Irreversible ops
 
