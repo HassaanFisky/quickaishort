@@ -1,6 +1,6 @@
 # Studio Roadmap (Execution)
 
-**Last updated:** 2026-07-19 (execution cycle close)
+**Last updated:** 2026-07-20 (ops: Upstash Redis + Kernel flags live)
 
 ## Complete — current cycle
 
@@ -22,8 +22,9 @@
 
 ## Ops handoff (founder / deploy) — not code blockers
 
-- [ ] Set `NEXT_PUBLIC_STUDIO_PROJECT_KERNEL=1` on Vercel staging then prod  
-- [ ] Confirm Cloud Run `STUDIO_PROJECT_KERNEL` not set to `0`  
+- [x] Set `NEXT_PUBLIC_STUDIO_PROJECT_KERNEL=1` on Vercel production (2026-07-20)  
+- [x] Confirm Cloud Run `STUDIO_PROJECT_KERNEL=1` on `quickai-api` (+ worker)  
+- [x] Redis migrated to Upstash (`rediss://` TLS); Cloud Run + Vercel + local envs updated; `/health` → `redis:true`  
 
 ## Next cycle
 

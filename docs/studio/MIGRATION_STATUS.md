@@ -1,6 +1,6 @@
 # Migration Status
 
-**Last updated:** 2026-07-19 (execution cycle close)
+**Last updated:** 2026-07-20 (Upstash Redis + Kernel prod flags)
 
 ## Project storage
 
@@ -33,9 +33,9 @@ Verified untouched at cycle close.
 
 ## Prod cutover still requires
 
-1. Vercel: `NEXT_PUBLIC_STUDIO_PROJECT_KERNEL=1`  
-2. Cloud Run: Kernel not forced off  
-3. Soak under real traffic  
+1. ~~Vercel: `NEXT_PUBLIC_STUDIO_PROJECT_KERNEL=1`~~ ✅ (2026-07-20)  
+2. ~~Cloud Run: Kernel not forced off~~ ✅ `STUDIO_PROJECT_KERNEL=1`  
+3. Soak under real traffic (Redis = Upstash; RedisLabs host retired)  
 4. **Founder approval** before deleting legacy `Projects`
 
 ## Irreversible ops

@@ -298,7 +298,7 @@
   }
 
   .interactive-hover {
-    @apply transition-[transform, box-shadow, opacity] hover:scale-[1.02] active:scale-[0.97] hover:brightness-110;
+    @apply transition-[transform,box-shadow,opacity] hover:scale-[1.02] active:scale-[0.97] hover:brightness-110;
     transition-duration: 160ms;
     transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
   }
