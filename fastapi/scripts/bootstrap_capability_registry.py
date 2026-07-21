@@ -1,4 +1,5 @@
 """One-shot helper: emit bootstrap registry ids from ai_editor.py Action classes."""
+
 from __future__ import annotations
 
 import json
@@ -127,24 +128,18 @@ def main() -> None:
                 "description": f"Studio capability {cid}.",
                 "tags": tags_for(cid),
                 "side_effects": (
-                    ["preview", "mutate_project"]
-                    if emit
-                    else ["preview"]
+                    ["preview", "mutate_project"] if emit else ["preview"]
                 ),
                 "exec_locus": "client",
                 "cost_class": (
                     "llm"
                     if cid.startswith(("DETECT_", "GENERATE_", "SUGGEST_", "EXPLAIN_"))
-                    else "bake"
-                    if cid == "EXPORT_CLIP"
-                    else "free"
+                    else "bake" if cid == "EXPORT_CLIP" else "free"
                 ),
                 "latency_class": (
                     "fast"
                     if cid.startswith(("DETECT_", "GENERATE_", "SUGGEST_"))
-                    else "async_job"
-                    if cid == "EXPORT_CLIP"
-                    else "instant"
+                    else "async_job" if cid == "EXPORT_CLIP" else "instant"
                 ),
                 "idempotent": cid in {"PLAY", "PAUSE", "SEEK", "SELECT_CLIP"},
                 "parallel_safe": False,

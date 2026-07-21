@@ -35,7 +35,10 @@ async def test_transcript_suggests_captions(svc):
         "u1",
         UpsertFacetsRequest(
             facets={
-                "transcript": {"chunks": [{"text": "hi", "start": 0, "end": 1}], "chunk_count": 1},
+                "transcript": {
+                    "chunks": [{"text": "hi", "start": 0, "end": 1}],
+                    "chunk_count": 1,
+                },
                 "captions_present": {"enabled": False},
             }
         ),

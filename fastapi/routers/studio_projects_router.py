@@ -86,9 +86,7 @@ async def list_projects(user_id: str = Depends(get_verified_user_id)):
 
 
 @router.get("/{project_id}")
-async def get_project(
-    project_id: str, user_id: str = Depends(get_verified_user_id)
-):
+async def get_project(project_id: str, user_id: str = Depends(get_verified_user_id)):
     _require_kernel()
     kernel = get_project_kernel()
     head = await kernel.get_project(project_id, user_id)
@@ -192,9 +190,7 @@ async def redo(
 
 
 @router.delete("/{project_id}")
-async def delete_project(
-    project_id: str, user_id: str = Depends(get_verified_user_id)
-):
+async def delete_project(project_id: str, user_id: str = Depends(get_verified_user_id)):
     _require_kernel()
     kernel = get_project_kernel()
     ok = await kernel.soft_delete(project_id, user_id)

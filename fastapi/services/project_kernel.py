@@ -500,7 +500,9 @@ class ProjectKernel:
                 head_revision=head.revision,
             )
 
-        def mutate(h: StudioProjectHead) -> tuple[StudioProjectHead, list[ProjectEvent]]:
+        def mutate(
+            h: StudioProjectHead,
+        ) -> tuple[StudioProjectHead, list[ProjectEvent]]:
             return self._apply_mutating(h, user_id, command)
 
         ok, new_head, events, err = await asyncio.to_thread(
@@ -563,14 +565,10 @@ class ProjectKernel:
         if not cid:
             return CommandReject(reason="validation", detail="capability_id_required")
         if cid in NON_EVENT_CAPABILITIES:
-            return CommandReject(
-                reason="validation", detail="non_event_capability"
-            )
+            return CommandReject(reason="validation", detail="non_event_capability")
         cap = get_capability(cid)
         if cap is None:
-            return CommandReject(
-                reason="unknown_capability", detail=f"unknown:{cid}"
-            )
+            return CommandReject(reason="unknown_capability", detail=f"unknown:{cid}")
         if command.source in {"chat", "orchestrator", "automation"}:
             if not is_emit_allowed(cid):
                 return CommandReject(
@@ -592,7 +590,12 @@ class ProjectKernel:
             return CommandReject(reason="validation", detail="system_op_required")
         if op in {"undo", "redo", "revert_to_revision"}:
             return None
-        if op in {"import_assets", "import_adk_segments", "set_title", "attach_primary_asset"}:
+        if op in {
+            "import_assets",
+            "import_adk_segments",
+            "set_title",
+            "attach_primary_asset",
+        }:
             # import may attach assets without manifest; if composition changes, require manifest
             if command.proposed_manifest is None and op.startswith("import"):
                 # allow metadata-only import without manifest
@@ -722,7 +725,12 @@ class ProjectKernel:
             head.undo_stack = head.undo_stack[:-1]
             head.redo_stack = [*head.redo_stack, parent]
             self._restore_revision(head, target, new_rev)
-            return "revert_to_revision", {"target_revision": target}, True, head.snapshot_hash
+            return (
+                "revert_to_revision",
+                {"target_revision": target},
+                True,
+                head.snapshot_hash,
+            )
 
         if op == "redo":
             if not head.redo_stack:
@@ -731,7 +739,12 @@ class ProjectKernel:
             head.redo_stack = head.redo_stack[:-1]
             head.undo_stack = [*head.undo_stack, parent]
             self._restore_revision(head, target, new_rev)
-            return "revert_to_revision", {"target_revision": target, "redo": True}, True, head.snapshot_hash
+            return (
+                "revert_to_revision",
+                {"target_revision": target, "redo": True},
+                True,
+                head.snapshot_hash,
+            )
 
         if op == "revert_to_revision":
             target = int(params.get("revision", -1))
@@ -740,7 +753,12 @@ class ProjectKernel:
             head.undo_stack = [*head.undo_stack, parent][-MAX_REVISION_SNAPSHOTS:]
             head.redo_stack = []
             self._restore_revision(head, target, new_rev)
-            return "revert_to_revision", {"target_revision": target}, True, head.snapshot_hash
+            return (
+                "revert_to_revision",
+                {"target_revision": target},
+                True,
+                head.snapshot_hash,
+            )
 
         raise ValueError(f"unknown_system_op:{op}")
 
@@ -786,7 +804,9 @@ def get_project_kernel() -> ProjectKernel:
     return _kernel
 
 
-def reset_project_kernel_for_tests(store: Optional[ProjectStore] = None) -> ProjectKernel:
+def reset_project_kernel_for_tests(
+    store: Optional[ProjectStore] = None,
+) -> ProjectKernel:
     global _kernel
     _kernel = ProjectKernel(store=store or InMemoryProjectStore())
     return _kernel

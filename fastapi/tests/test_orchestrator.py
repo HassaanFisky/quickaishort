@@ -107,8 +107,12 @@ async def test_structured_steps_batch_no_llm(orch):
             source="chat",
             intent_text="batch",
             structured_steps=[
-                StructuredIntent(capability_id="TOGGLE_CAPTIONS", params={"enabled": True}),
-                StructuredIntent(capability_id="SET_AUDIO_BOOST", params={"value": 150}),
+                StructuredIntent(
+                    capability_id="TOGGLE_CAPTIONS", params={"enabled": True}
+                ),
+                StructuredIntent(
+                    capability_id="SET_AUDIO_BOOST", params={"value": 150}
+                ),
             ],
         ),
     )

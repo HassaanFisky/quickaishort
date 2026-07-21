@@ -63,7 +63,10 @@ class FirestoreOnboardingStore:
 
     def put_editor_v1(self, user_id: str, state: EditorOnboardingV1) -> None:
         self._doc(user_id).set(
-            {"editor_v1": state.model_dump(mode="json"), "updated_at": state.updated_at},
+            {
+                "editor_v1": state.model_dump(mode="json"),
+                "updated_at": state.updated_at,
+            },
             merge=True,
         )
 
@@ -90,7 +93,9 @@ def get_onboarding_store() -> OnboardingStore:
         return _store
 
 
-def reset_onboarding_store_for_tests(store: Optional[OnboardingStore] = None) -> OnboardingStore:
+def reset_onboarding_store_for_tests(
+    store: Optional[OnboardingStore] = None,
+) -> OnboardingStore:
     global _store
     with _lock:
         _store = store or InMemoryOnboardingStore()

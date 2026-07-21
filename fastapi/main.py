@@ -878,9 +878,7 @@ async def export_video(
         "cinematic_style": cinematic_style,
         "canvas_overlays": [ov.model_dump() for ov in request.canvas_overlays],
         # Phase 59 / EP-006: bake IR — Kernel snapshot when project_id present
-        "render_manifest": (
-            bake_manifest.model_dump() if bake_manifest else None
-        ),
+        "render_manifest": (bake_manifest.model_dump() if bake_manifest else None),
         "project_id": request.project_id,
         "project_revision": bake_project_revision,
     }

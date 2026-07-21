@@ -21,9 +21,7 @@ from services.project_kernel import (
 def _manifest(duration: float = 10.0) -> RenderManifest:
     return RenderManifest(
         generatedAt=1_718_000_000_000,
-        timeline=RenderTimeline(
-            fps=30.0, width=1080, height=1920, duration=duration
-        ),
+        timeline=RenderTimeline(fps=30.0, width=1080, height=1920, duration=duration),
     )
 
 
@@ -50,9 +48,7 @@ async def test_create_and_head(kernel):
 
 @pytest.mark.asyncio
 async def test_capability_requires_proposed_manifest(kernel):
-    head = await kernel.create_project(
-        "user-a", CreateStudioProjectRequest(title="T")
-    )
+    head = await kernel.create_project("user-a", CreateStudioProjectRequest(title="T"))
     result = await kernel.accept_command(
         "user-a",
         ProjectCommand(
@@ -155,7 +151,9 @@ async def test_idempotent_command_id(kernel):
     r1 = await kernel.accept_command("user-a", cmd)
     assert isinstance(r1, CommandAck)
     # Second submit with same command_id but would-be conflict base — still idempotent ack
-    cmd2 = cmd.model_copy(update={"base_revision": 0, "proposed_manifest": _manifest(50.0)})
+    cmd2 = cmd.model_copy(
+        update={"base_revision": 0, "proposed_manifest": _manifest(50.0)}
+    )
     r2 = await kernel.accept_command("user-a", cmd2)
     assert isinstance(r2, CommandAck)
     assert r2.new_revision == 1
@@ -168,9 +166,7 @@ async def test_idempotent_command_id(kernel):
 
 @pytest.mark.asyncio
 async def test_non_event_capability_rejected(kernel):
-    head = await kernel.create_project(
-        "user-a", CreateStudioProjectRequest(title="T")
-    )
+    head = await kernel.create_project("user-a", CreateStudioProjectRequest(title="T"))
     result = await kernel.accept_command(
         "user-a",
         ProjectCommand(
@@ -188,9 +184,7 @@ async def test_non_event_capability_rejected(kernel):
 
 @pytest.mark.asyncio
 async def test_emit_blocked_for_chat(kernel):
-    head = await kernel.create_project(
-        "user-a", CreateStudioProjectRequest(title="T")
-    )
+    head = await kernel.create_project("user-a", CreateStudioProjectRequest(title="T"))
     result = await kernel.accept_command(
         "user-a",
         ProjectCommand(
@@ -311,9 +305,7 @@ async def test_events_after(kernel):
 
 @pytest.mark.asyncio
 async def test_import_adk_segments_alias(kernel):
-    head = await kernel.create_project(
-        "user-a", CreateStudioProjectRequest(title="T")
-    )
+    head = await kernel.create_project("user-a", CreateStudioProjectRequest(title="T"))
     result = await kernel.accept_command(
         "user-a",
         ProjectCommand(

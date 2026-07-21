@@ -52,11 +52,20 @@ _ID_RE = re.compile(r"^[A-Z][A-Z0-9_]+$")
 # Cheap keyword → tag retrieval (planner only — NOT user-facing suggestions)
 _TAG_KEYWORDS: list[tuple[re.Pattern[str], list[str]]] = [
     (re.compile(r"caption|subtitle|text|title|hook", re.I), ["captions", "ai"]),
-    (re.compile(r"trim|cut|split|blade|razor|silence|pause|filler", re.I), ["timeline", "clip", "audio"]),
+    (
+        re.compile(r"trim|cut|split|blade|razor|silence|pause|filler", re.I),
+        ["timeline", "clip", "audio"],
+    ),
     (re.compile(r"audio|volume|boost|noise|duck|fade|sfx|voice", re.I), ["audio"]),
-    (re.compile(r"filter|cinematic|urban|retro|color|lut|grade", re.I), ["visual", "color"]),
+    (
+        re.compile(r"filter|cinematic|urban|retro|color|lut|grade", re.I),
+        ["visual", "color"],
+    ),
     (re.compile(r"export|render|download", re.I), ["export", "bake"]),
-    (re.compile(r"b-?roll|overlay|sticker|element", re.I), ["broll", "overlay", "elements"]),
+    (
+        re.compile(r"b-?roll|overlay|sticker|element", re.I),
+        ["broll", "overlay", "elements"],
+    ),
     (re.compile(r"zoom|pan|scroll|timeline", re.I), ["timeline", "ui_only"]),
     (re.compile(r"mask|keyframe|motion", re.I), ["mask", "motion"]),
     (re.compile(r"viral|moment|style|suggest", re.I), ["ai"]),
@@ -223,7 +232,7 @@ def build_planner_prompt_section(capabilities: list[dict[str, Any]]) -> str:
     """Deterministic tool catalogue for Gemini — registry only."""
     lines = [
         "AVAILABLE CAPABILITIES (canonical AiEditorAction.type ids — emit only these):",
-        "Return actions as objects with a top-level \"type\" field matching an id below.",
+        'Return actions as objects with a top-level "type" field matching an id below.',
         "",
     ]
     for cap in capabilities:
@@ -406,7 +415,9 @@ def _map_legacy_params(
     if capability_id == "SET_KEYFRAME":
         if not clip_id:
             raise _UnmappedParams("clip_id required")
-        time_ms = int(float(start_time) * 1000) if isinstance(start_time, (int, float)) else 0
+        time_ms = (
+            int(float(start_time) * 1000) if isinstance(start_time, (int, float)) else 0
+        )
         return {
             "type": "SET_KEYFRAME",
             "clip_id": clip_id,
@@ -451,8 +462,10 @@ def _map_legacy_params(
         return {"type": "TIMELINE_ZOOM", "zoom_factor": zf}
 
     if capability_id == "ADD_ELEMENT":
-        text = text_content if isinstance(text_content, str) else (
-            str(value) if value is not None else ""
+        text = (
+            text_content
+            if isinstance(text_content, str)
+            else (str(value) if value is not None else "")
         )
         if not text.strip():
             raise _UnmappedParams("text_content required for ADD_ELEMENT")
@@ -463,14 +476,20 @@ def _map_legacy_params(
                 "text": text,
                 "x": 540.0,
                 "y": 960.0,
-                "startTime": float(start_time) if isinstance(start_time, (int, float)) else 0.0,
-                "endTime": float(end_time) if isinstance(end_time, (int, float)) else 5.0,
+                "startTime": (
+                    float(start_time) if isinstance(start_time, (int, float)) else 0.0
+                ),
+                "endTime": (
+                    float(end_time) if isinstance(end_time, (int, float)) else 5.0
+                ),
             },
         }
 
     # Generic fallbacks for emit-allowed types with simple time fields
     if capability_id == "TRIM":
-        if not isinstance(start_time, (int, float)) or not isinstance(end_time, (int, float)):
+        if not isinstance(start_time, (int, float)) or not isinstance(
+            end_time, (int, float)
+        ):
             raise _UnmappedParams("start_time and end_time required")
         return {"type": "TRIM", "start": float(start_time), "end": float(end_time)}
 
@@ -513,9 +532,7 @@ def assert_registry_valid() -> None:
         if target is None:
             continue
         if target not in registry_ids:
-            raise RegistryError(
-                f"Alias {tool_name} → {target} not present in registry"
-            )
+            raise RegistryError(f"Alias {tool_name} → {target} not present in registry")
 
     logger.info(
         "capability_registry_valid model_ids=%d registry_ids=%d",

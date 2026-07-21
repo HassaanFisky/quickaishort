@@ -97,11 +97,7 @@ class FirestoreMediaGraphStore:
 
 
 def _recompute_status(graph: MediaGraph) -> None:
-    ready = [
-        f
-        for f in graph.facets.values()
-        if f.status == "ready"
-    ]
+    ready = [f for f in graph.facets.values() if f.status == "ready"]
     if not graph.facets:
         graph.status = "pending"
     elif ready and len(ready) == len(graph.facets):
@@ -186,7 +182,10 @@ def derive_suggestions(graph: MediaGraph) -> list[SuggestionIntent]:
                     label=f"Remove {len(long_ones)} silence gap(s)",
                     capability_id="REMOVE_SILENCES",
                     intent_kind="capability",
-                    params={"min_silence_sec": SILENCE_SUGGEST_MIN_SEC, "padding_sec": 0.05},
+                    params={
+                        "min_silence_sec": SILENCE_SUGGEST_MIN_SEC,
+                        "padding_sec": 0.05,
+                    },
                     evidence=SuggestionEvidence(
                         facet_keys=["silence"],
                         summary=f"{len(long_ones)} silence segments ≥ {SILENCE_SUGGEST_MIN_SEC}s",
@@ -199,9 +198,7 @@ def derive_suggestions(graph: MediaGraph) -> list[SuggestionIntent]:
     if viral and viral.status == "ready":
         moments = viral.data.get("moments") or []
         strong = [
-            m
-            for m in moments
-            if float(m.get("score", 0)) >= VIRAL_SCORE_THRESHOLD
+            m for m in moments if float(m.get("score", 0)) >= VIRAL_SCORE_THRESHOLD
         ]
         if strong:
             top = max(strong, key=lambda m: float(m.get("score", 0)))
@@ -223,7 +220,9 @@ def derive_suggestions(graph: MediaGraph) -> list[SuggestionIntent]:
 
     if duration_f and duration_f.status == "ready":
         dur = float(duration_f.data.get("seconds") or 0)
-        if dur > 600 and not (viral and viral.status == "ready" and (viral.data.get("moments") or [])):
+        if dur > 600 and not (
+            viral and viral.status == "ready" and (viral.data.get("moments") or [])
+        ):
             out.append(
                 SuggestionIntent(
                     suggestion_id="sug-detect-viral",

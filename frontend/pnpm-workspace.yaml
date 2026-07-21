@@ -1,4 +1,15 @@
+# pnpm v10+ reads settings from this file (not package.json "pnpm" field).
+# Keep overrides here so `pnpm install --frozen-lockfile` matches pnpm-lock.yaml in CI/Vercel.
+
+overrides:
+  protobufjs: "^7.4.0"
+  postcss: ">=8.5.10"
+
+onlyBuiltDependencies:
+  - "@sentry/cli"
+  - esbuild
+  - sharp
+
 ignoredBuiltDependencies:
   - protobufjs
-  - sharp
   - unrs-resolver

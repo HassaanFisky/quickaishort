@@ -26,15 +26,15 @@ def test_policy_includes_required_extensions():
 
 
 def test_validate_rejects_unknown_format():
-    err = validate_ingest_file(filename="hack.exe", content_type="application/octet-stream")
+    err = validate_ingest_file(
+        filename="hack.exe", content_type="application/octet-stream"
+    )
     assert err is not None
     assert err["code"] == "unsupported_format"
 
 
 def test_validate_accepts_mp4():
-    assert (
-        validate_ingest_file(filename="clip.mp4", content_type="video/mp4") is None
-    )
+    assert validate_ingest_file(filename="clip.mp4", content_type="video/mp4") is None
 
 
 def test_validate_too_large():
