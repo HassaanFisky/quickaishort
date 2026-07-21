@@ -2,7 +2,7 @@
 
 <br />
 
-<img src="public/qs-logo.png" alt="QuickAI Short" width="88" />
+<img src="public/qs-logo.png" alt="QuickAI Short" width="320" />
 
 <br /><br />
 
