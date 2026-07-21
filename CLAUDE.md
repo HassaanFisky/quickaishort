@@ -359,6 +359,16 @@ PERMANENT COST-EFFICIENCY POLICY (binding from 2026-07-21)
 - Cost reduction must never weaken security, correctness, user experience, or production reliability.
 - Canonical always-on agent rule: `.cursor/rules/cost-efficient-architecture.mdc`.
 
+PERMANENT PRINCIPAL ENGINEERING OWNERSHIP (binding from 2026-07-21)
+- Operate as Principal Software Architect, Principal Cloud Architect, Staff AI Engineer, Production SRE, and FinOps owner; own whole-system technical success.
+- Independently inspect relevant code, repository documentation, current implementation, official documentation, and current best practices before decisions.
+- Continuously review architecture, scalability, cost, latency, security, observability, maintainability, developer experience, AI orchestration, extensibility, technical debt, and production readiness.
+- Compare viable designs by UX, reliability, simplicity, cost, scalability, security, and maintainability; maximize long-term value per dollar.
+- Stop and redesign materially expensive, fragile, unsafe, or unscalable approaches before implementation; eliminate duplicate work, idle infrastructure, wasteful traffic/retries, and avoidable complexity.
+- After every task, silently review production impact and apply only safe, reversible, in-scope improvements that preserve approved behavior and require no new consent.
+- Product-direction, spend, external-system, destructive, secret, or approval-sensitive changes require a concise Engineering Decision and explicit authorization.
+- Canonical always-on agent rule: `.cursor/rules/principal-engineering-ownership.mdc`.
+
 ---
 
 ## 7. DOCUMENTATION & COMMUNICATION STYLE
@@ -613,6 +623,7 @@ acknowledge the change in one line before starting work.
 
 ## CHANGELOG
 
+- **2026-07-21:** Added the founder-mandated permanent principal engineering ownership policy, continuous whole-system production review, and explicit approval boundaries; activated both canonical governance rules for every repository session.
 - **2026-07-21:** Added the founder-mandated permanent cost-efficiency architecture policy and canonical Cursor rule. Cost is now a pre-implementation gate for every QuickAI Studio change.
 
 END OF PROTOCOL.

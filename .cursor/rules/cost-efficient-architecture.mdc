@@ -1,6 +1,6 @@
 ---
 description: Binding cost-efficiency policy for all QuickAI Studio engineering
-alwaysApply: false
+alwaysApply: true
 ---
 # Cost-Efficient Architecture Policy
 
