@@ -45,7 +45,10 @@ Verified untouched at cycle close.
 
 - AI Editor credit gate fail-closed (pipeline parity) on `/api/ai-edit`, `/api/ai-editor/command`, `/api/ai-editor/command/stream`. Opt-in `CREDITS_SOFT_FAIL=true` for non-prod only.  
 - Onboarding tour opens AI panel before `ai.*` spotlight steps.  
-- `analyzeVideoWithGemini` no longer returns canned fake topics/edits on failure — errors propagate as HTTP 500.
+- `analyzeVideoWithGemini` no longer returns canned fake topics/edits on failure — errors propagate as HTTP 500.  
+- **Deployed:** `quickai-api` revision **00094-nqg** (image `backend:20260721-183025`) — min-instances=0 + cpu-throttling preserved.  
+- Deploy scripts locked to cost-policy settings (no more min=1 / wrong bucket footgun).  
+- Frontend FE tour + honest Gemini + orphan strip cleanup committed — **needs Vercel deploy / git push** for production frontend.
 
 ## Irreversible ops
 
