@@ -2,35 +2,29 @@
 
 <br />
 
-<img src="public/qs-logo.png" alt="QuickAI Shorts" width="88" />
+<img src="public/qs-logo.png" alt="QuickAI Short" width="88" />
 
 <br /><br />
 
-# QuickAI Shorts
+# QuickAI Short
 
-### From YouTube URL to publish-ready short — validated before you post.
+### Conversational AI video editing — from long-form to finished short.
 
 <br />
 
-[![Live](https://img.shields.io/badge/quickaishort.online-live-6366f1?style=flat-square&logo=vercel&logoColor=white)](https://quickaishort.online)
+[![Live](https://img.shields.io/badge/quickaishort.online-live-6366f1?style=flat-square&logo=vercel&logoColor=white)](https://www.quickaishort.online)
 &nbsp;
 [![Build](https://img.shields.io/github/actions/workflow/status/HassaanFisky/quickaishort/linter.yml?style=flat-square&label=build)](https://github.com/HassaanFisky/quickaishort/actions/workflows/linter.yml)
 &nbsp;
-[![Lint](https://img.shields.io/github/actions/workflow/status/HassaanFisky/quickaishort/linter.yml?style=flat-square&label=lint)](https://github.com/HassaanFisky/quickaishort/actions/workflows/linter.yml)
-&nbsp;
-[![ADK](https://img.shields.io/badge/Google%20ADK-1.0-4285F4?style=flat-square&logo=google&logoColor=white)](https://google.github.io/adk-docs/)
-&nbsp;
 [![Gemini](https://img.shields.io/badge/Gemini%202.5%20Flash-8B5CF6?style=flat-square&logo=google&logoColor=white)](https://ai.google.dev/)
+&nbsp;
+[![Google%20ADK](https://img.shields.io/badge/Google%20ADK-roadmap-4285F4?style=flat-square&logo=google&logoColor=white)](https://google.github.io/adk-docs/)
 &nbsp;
 [![MIT](https://img.shields.io/badge/license-MIT-22c55e?style=flat-square)](LICENSE)
 
 <br />
 
-> *"OpusClip shows you which clip. Pre-Flight shows you if it will actually work."*
-
-<br />
-
-**[Live Demo](https://quickaishort.online)** · **[Studio Architecture Docs](docs/studio/README.md)** · **[Deploy Docs](docs/DEPLOYMENT_README.md)** · **[Security](SECURITY.md)** · **[Vision](VISION.md)** · **[Studio Vision](docs/studio/01-product-vision.md)**
+**[Live product](https://www.quickaishort.online)** · **[Studio docs](docs/studio/README.md)** · **[Architecture](ARCHITECTURE.md)** · **[Vision](VISION.md)** · **[Contributing](CONTRIBUTING.md)**
 
 <br />
 
@@ -38,220 +32,175 @@
 
 ---
 
-## The problem it solves
+## What it is
 
-Every short-form tool on the market exports blind. You paste a URL, cut a clip, and publish hoping the algorithm picks it up.
+**QuickAI Short** turns long-form video into short-form content using conversational AI.
 
-QuickAI Shorts adds a layer that didn't exist before: **audience simulation before the post**. A multi-agent pipeline runs your clip through six demographically-distinct AI personas, stress-tests the hook timing, grounds the analysis in real Google Trends data, and produces a weighted viral consensus score — all before a single render job is queued.
+You paste a YouTube URL or upload a local file. You chat with the AI editor. You get intelligent edit suggestions, refine them in natural language, preview the result, and export.
 
-Three integrated pipelines. One studio.
+The AI performs the editing. You direct the creativity. The conversation is the workflow.
 
----
-
-## Pipelines
-
-### 1 · Viral Clip Discovery
-
-Paste any YouTube URL. The system proxies the audio stream, runs in-browser Whisper transcription (via a dedicated Web Worker), detects silence segments, and scores each clip candidate on audio energy and speech density. Ranked clips with viral scores, hook text, and reasoning land in the editor in under 60 seconds — no upload required.
-
-### 2 · Pre-Flight — Audience Validation
-
-The core differentiator. Every clip candidate passes through a Google ADK multi-agent topology before it reaches a render queue:
-
-```
-                      ┌─────────────────────────────────────────┐
-                      │    Clip Candidates + YouTube URL        │
-                      └──────────────────┬──────────────────────┘
-                                         │
-                                         ▼
-          ┌──────────────────────────────────────────────────────────┐
-          │             PreFlight Orchestrator [SequentialAgent]     │
-          └────────┬──────────────────┬──────────────────────┬───────┘
-                   │                  │                       │
-        ┌──────────▼───────┐ ┌────────▼────────┐ ┌───────────▼──────┐
-        │ ClipCandidate    │ │ TrendGrounding  │ │ Analytics        │
-        │ Validator        │ │ (SerpAPI)       │ │ (YouTube v2)     │
-        └──────────────────┘ └─────────────────┘ └──────────────────┘
-                                         │
-                                         ▼
-          ┌──────────────────────────────────────────────────────────┐
-          │         AudiencePanelLoop [LoopAgent]                    │
-          │         — iterates until consensus score ≥ 65 —         │
-          └────────┬────────────────────────────────────────┬────────┘
-                   │                                        │
-        ┌──────────▼──────────────────────────────┐  ┌──────▼───────────┐
-        │  PersonaPanel [ParallelAgent × 6]        │  │ VoteAggregator   │
-        │                                          │  │                  │
-        │  Gen Z Creator          weight  0.25     │  │ weighted score   │
-        │  Millennial Professional weight  0.25    ├─►│ → session state  │
-        │  Sports Fan             weight  0.15     │  │                  │
-        │  Tech Enthusiast        weight  0.15     │  └────────┬─────────┘
-        │  Entertainment Critic   weight  0.10     │           │
-        │  News Analyst           weight  0.10     │           ▼
-        └──────────────────────────────────────────┘  ┌────────▼─────────┐
-                                                       │ QualityGate      │
-                                                       │ pass / loop exit │
-                                                       └────────┬─────────┘
-                                                                │
-                                                       ┌────────▼─────────┐
-                                                       │ ClipRefinement   │
-                                                       │ AI-driven recut  │
-                                                       └──────────────────┘
-```
-
-Each persona carries a distinct behavioral profile, attention-span model, and scroll threshold. The aggregator applies weighted voting, writes consensus state back to Firestore, and either exits the loop or triggers a refinement pass. Creators see per-persona breakdowns, not just a final score.
-
-**ADK primitives used:** `SequentialAgent` · `ParallelAgent` · `LoopAgent` · `FunctionTool` · `MCPToolset`
-
-### 3 · ADK Studio — Non-Linear Creator Workspace
-
-A script-to-video generator that runs entirely server-side. Three freely-accessible panels (Script, Media, Voice) can be assembled in any order. A sticky Generate bar activates the moment a script is present.
-
-Under the hood: script → Google TTS voiceover synthesis → segment stitching → FFmpeg transcode (libx264 + aac, 9:16 / 1:1) → GCS upload → signed download URL. Progress is pushed via Pusher Channels with a WebSocket fallback. Pexels stock footage is auto-fetched when no B-roll is uploaded.
+This is not “just another AI clipper.” It is a production editor where language drives real edit operations — trim, captions, pacing, reframing, audio, and more — applied to a live timeline and exported through a server render pipeline.
 
 ---
 
-## Editor — What runs in the browser
+## Who it helps
 
-The editor is a full non-linear suite. Heavy work runs off the main thread in four dedicated Web Workers:
-
-| Worker | What it does |
-| :--- | :--- |
-| `whisper.worker.ts` | In-browser transcription via Whisper.wasm (`@xenova/transformers`) — no server round-trip |
-| `face.worker.ts` | MediaPipe face detection for auto-reframing and smart crop |
-| `analysis.worker.ts` | Silence detection, audio energy scoring, clip candidate generation |
-| `ffmpegExport.worker.ts` | Client-side preview export via MediaRecorder API |
-
-The `VideoCanvas` component wires a **Web Audio API chain** — `MediaElementSource → BiquadFilter (highpass 80 Hz) → GainNode → destination` — giving live noise suppression and audio boost directly in the preview. A Gemini-backed AI Copilot panel accepts natural language instructions and dispatches them as typed editor actions.
-
-The final export path runs server-side: `POST /api/process-video` → RQ render worker → FFmpeg → GCS.
+Creators, podcasters, educators, and teams who need to move from long source media to publish-ready shorts without spending hours in a traditional NLE.
 
 ---
 
-## Chrome Extension
+## Product identity
 
-A Manifest v3 extension ships alongside the web app. It injects into `youtube.com/watch` pages, reads the active video metadata, and provides a one-click path to open the clip in QuickAI Studio without copy-pasting URLs.
+| Name | Role |
+|------|------|
+| **QuickAI Short** | Production product today — conversational editor, ingest, preview, export |
+| **QuickAI Studio** | Evolution of QuickAI Short into an AI-native video editing operating system |
 
-```
-extension/
-├── manifest.json       # MV3, activeTab + scripting permissions
-├── content.js          # Injected on youtube.com/watch*
-├── background.js       # Service worker
-└── assets/             # Icons 16 · 48 · 128
-```
+They are one product lineage — not separate products. Studio Kernel work (Capability Registry, Project Document, MediaGraph, Orchestrator, chat-primary shell) already ships under feature flags; deeper ADK-powered orchestration remains the roadmap.
 
----
-
-## Tech Stack
-
-| Layer | Technology | Detail |
-| :--- | :--- | :--- |
-| **Frontend** | Next.js 14.2 · App Router · TypeScript | Server components by default; client only where needed |
-| **Styling** | Tailwind CSS v4 · Framer Motion 12 | Hydro-Glass design system; all tokens locked in `CLAUDE.md` |
-| **State** | Zustand 5 | Single `editorStore` as source of truth for timeline, clips, captions, export |
-| **Backend** | Python 3.12 · FastAPI · Pydantic v2 | Async throughout; typed request/response on every endpoint |
-| **AI Agents** | Google ADK 1.0 · Gemini 2.5 Flash | Pre-Flight pipeline + Director Agent + Script Agent |
-| **Render Queue** | Redis Cloud · RQ · ffmpeg-python | Background jobs; DLQ via Redis Streams; admin retry endpoints |
-| **Storage** | GCS (`quickaishort-agent-494304-media`) | Uploads, exports, TTS cache — single bucket, signed download URLs |
-| **Database** | MongoDB Atlas | Credits, job history, user stats |
-| **Realtime** | Pusher Channels · WebSocket | Job progress + dashboard stats; polling fallback when Pusher is absent |
-| **Auth** | NextAuth 4 · HS256 JWT ↔ FastAPI | `NEXTAUTH_SECRET` shared; all protected endpoints use `Depends(get_verified_user_id)` |
-| **Deploy** | Vercel (frontend) · Cloud Run (API + Worker) | `quickai-api` + `quickai-worker`; startup probe tuned for 13 s ADK import |
+Canonical product and architecture truth: [`docs/studio/`](docs/studio/README.md) · [`PHASE2_ARCHITECTURAL_TRUTH_REVIEW.md`](docs/studio/PHASE2_ARCHITECTURAL_TRUTH_REVIEW.md) · [`CANONICAL_PROJECT_MEMORY.md`](docs/studio/CANONICAL_PROJECT_MEMORY.md)
 
 ---
 
-## Quick Start
+## How it works
 
-### Backend
-
-```bash
-cd fastapi
-
-python -m venv venv
-source venv/bin/activate          # Windows: venv\Scripts\activate
-
-pip install -r requirements.txt
-
-cp .env.example .env              # fill in credentials (see table below)
-
-uvicorn main:app --reload --port 8000
-
-# Render worker — separate terminal, needs Redis
-python render_worker.py
+```text
+YouTube URL or local upload
+        ↓
+Ingest + transcription (browser Whisper) + optional analysis
+        ↓
+Conversational AI editor (Gemini) → structured edit actions
+        ↓
+Client NLE preview (Zustand timeline) + MediaGraph suggestions
+        ↓
+Export → Redis/RQ worker → ffmpeg → GCS signed download
 ```
 
-### Frontend
+**Optional capability — Pre-Flight:** Google ADK multi-agent audience simulation (six personas, trend/analytics grounding, consensus score). Available as a validation skill — not the product’s sole identity.
 
-```bash
-cd frontend
-
-pnpm install
-
-cp .env.example .env.local        # fill in credentials (see table below)
-
-pnpm dev                           # → http://localhost:3000
-```
-
-### Required environment variables
-
-| Variable | File | Notes |
-| :--- | :--- | :--- |
-| `GEMINI_API_KEY` | `fastapi/.env` | ADK agents, AI editor, script enhancement |
-| `GOOGLE_CLOUD_PROJECT` | `fastapi/.env` | `quickaishort-agent-494304` |
-| `GCS_BUCKET_NAME` | `fastapi/.env` | `quickaishort-agent-494304-media` |
-| `REDIS_URL` | `fastapi/.env` | Render job queue |
-| `MONGODB_URI` | `fastapi/.env` | Credits, job history, user stats |
-| `EXPORT_SIGNING_SECRET` | `fastapi/.env` | HMAC-signed download URLs (`openssl rand -hex 32`) |
-| `NEXTAUTH_SECRET` | both | Must match exactly on frontend and backend |
-| `NEXT_PUBLIC_API_URL` | `frontend/.env.local` | FastAPI base URL |
-
-All optional vars — Pexels stock footage, Google TTS voiceover, Pusher realtime, SerpAPI trends — are documented with fallback behavior in `fastapi/.env.example`.
+**ADK workspace UI (`/adk`):** Coming Soon — intentionally blurred and not available until release. Do not treat it as a live creator wizard.
 
 ---
 
-## CI
+## Current capabilities (production)
 
-Two gates run on every pull request:
-
-- **Lint** — `black` + `flake8` (Python), `eslint` (TypeScript)
-- **Build** — `tsc --noEmit` then `next build` — zero TS errors required to merge
+- Paste YouTube URL or upload local video
+- In-browser Whisper transcription (Web Worker)
+- Conversational AI editor with natural-language commands
+- MediaGraph-grounded suggestion chips (not hardcoded heuristic lists)
+- Live preview with Web Audio chain (noise reduction + boost)
+- Multi-track timeline visualization
+- Server-side export via RQ + ffmpeg-python → GCS
+- Cancel, runId isolation, render DLQ, and status observability
+- Studio Kernel APIs (project document, orchestrator, media graphs) behind flags
+- NextAuth JWT auth on protected backend routes
 
 ---
 
-## Project layout
+## Future direction (QuickAI Studio)
 
-```
+QuickAI Studio evolves QuickAI Short into an AI-native editing OS:
+
+- The AI understands media
+- The AI plans edits
+- The AI orchestrates tools (Capability Registry ABI — EP-001, frozen)
+- The AI performs editing through real tools
+- The user guides intent
+- The timeline becomes visualization — not the primary control surface
+
+Deeper Google ADK orchestration, native Gemini tool-loop depth, and the ADK workspace UI are roadmap — not claimed as fully shipped product surfaces.
+
+---
+
+## Architecture (summary)
+
+| Layer | Choice |
+|-------|--------|
+| Frontend | Next.js 14.2.35 · App Router · TypeScript · Zustand · Tailwind v4 |
+| Backend | Python 3.12 · FastAPI · Pydantic v2 |
+| AI | Gemini 2.5 Flash · Google ADK for Pre-Flight agents · Studio Kernel orchestration |
+| Queue | Redis · RQ (`render_worker.py`) |
+| Media storage | **GCS** primary (`quickaishort-agent-494304-media`); MongoDB GridFS = legacy `/api/v1/video/*` only |
+| Data | MongoDB (history/credits paths) · Firestore (agent sessions / some stats) |
+| Auth | NextAuth HS256 JWT ↔ FastAPI `auth.py` |
+| Deploy | Vercel (frontend) · Cloud Run (`quickai-api` + `quickai-worker`) |
+
+Frozen contracts: EP-001 Capability Registry ABI · ADR-002 GCS · ADR-007 Registry · ADR-008 Project Document · ADR-009 MediaGraph suggestions · ADR-013 ADK Coming Soon.
+
+---
+
+## Cost-efficient engineering
+
+Operational cost is a first-class acceptance criterion. Prefer event-driven / scale-to-zero where safe; deduplicate AI calls, uploads, and renders; avoid polling when streams/webhooks work; bound every expensive operation with timeout, attribution, and cancellation.
+
+Policy: [`.cursor/rules/cost-efficient-architecture.mdc`](.cursor/rules/cost-efficient-architecture.mdc) · [`docs/studio/29-cost-and-oss-policy.md`](docs/studio/29-cost-and-oss-policy.md)
+
+---
+
+## Repository structure
+
+```text
 quickaishort/
-├── fastapi/                  # Python API + agents + render worker
-│   ├── agent/                # ADK agents: preflight, viral, director, script
-│   ├── services/             # Storage, TTS, render, realtime, auth, billing
-│   ├── routers/              # billing, youtube, video sub-routers
-│   ├── main.py               # FastAPI app — 40+ endpoints
-│   └── render_worker.py      # RQ worker process
-├── frontend/                 # Next.js 14 application
-│   ├── src/app/              # App Router pages
-│   │   ├── editor/           # Video editor (full NLE)
-│   │   ├── (dashboard)/adk/  # ADK Studio creator workspace
-│   │   └── (dashboard)/      # Dashboard, history, settings
-│   ├── src/components/       # Editor panels, VideoCanvas, AICopilot
-│   ├── src/hooks/            # useTranscription, useFaceTracker, usePreflight …
-│   ├── src/workers/          # Whisper, MediaPipe, FFmpeg, analysis workers
-│   └── src/stores/           # editorStore, adkStore (Zustand)
-└── extension/                # Chrome MV3 extension for YouTube
+├── frontend/                 # Next.js app — editor, dashboard, AI panel
+├── fastapi/                  # API, agents, Studio Kernel, render worker
+│   ├── agent/                # Pre-Flight / viral / director (ADK)
+│   ├── capabilities/         # EP-001 registry ABI (frozen)
+│   └── render_worker.py
+├── docs/studio/              # Canonical architecture + ADRs + EPs
+├── extension/                # Chrome MV3 — YouTube → editor
+├── ARCHITECTURE.md           # System overview
+├── VISION.md                 # Product + Studio evolution
+└── CLAUDE.md                 # Agent protocol + live working memory
 ```
+
+---
+
+## Development
+
+Frontend (`frontend/`):
+
+```bash
+pnpm install
+pnpm dev          # http://localhost:3000
+pnpm build        # must pass with zero TS errors
+```
+
+Backend (`fastapi/`):
+
+```bash
+python -m venv venv && source venv/bin/activate   # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+uvicorn main:app --reload --port 8000
+python render_worker.py                           # requires Redis
+```
+
+Env templates: `frontend/.env.example`, `fastapi/.env.example`.  
+Contributor guide: [`CONTRIBUTING.md`](CONTRIBUTING.md).  
+Detailed quickstart: [`QUICKSTART.md`](QUICKSTART.md).
+
+---
+
+## Roadmap (high level)
+
+| Horizon | Focus |
+|---------|--------|
+| **Now** | Production QuickAI Short — conversational editor, Kernel dual-run, reliable export |
+| **Next** | Deeper native tool-loop (ADR-006), richer MediaGraph analysis, ADK workspace release when ready |
+| **Later** | Multiplayer (founder-gated), legacy path cutover, broader social syndication |
+
+Executable roadmap: [`docs/studio/ROADMAP.md`](docs/studio/ROADMAP.md)
 
 ---
 
 ## License
 
-[MIT](LICENSE) — see [SECURITY.md](SECURITY.md) for responsible disclosure.
+[MIT](LICENSE) — responsible disclosure in [`SECURITY.md`](SECURITY.md).
 
 ---
 
 <div align="center">
 <sub>
-Built for the <a href="https://ai.google.dev/">Google for Startups AI Agents Challenge 2026</a>
-&nbsp;·&nbsp;
-<a href="https://quickaishort.online">quickaishort.online</a>
+Built with Gemini · Designed to deepen with Google ADK · <a href="https://www.quickaishort.online">quickaishort.online</a>
 </sub>
 </div>

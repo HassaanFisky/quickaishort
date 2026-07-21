@@ -1,99 +1,84 @@
-# 🚀 QuickAIShort.online — Vision & Product Roadmap
+# Vision — QuickAI Short → QuickAI Studio
 
-## 1. Executive Mission
-Our mission is to democratize professional, short-form video creation by decoupling high-fidelity video processing from manual editing grinds. By leveraging agentic AI orchestration and state-of-the-art browser video previews, we enable creators to seamlessly repurpose long-form assets (podcasts, streams, webinars) into viral vertical shorts while preserving absolute creative agency.
-
----
-
-## 2. Core Architectural Belief
-Creators are the new enterprise media companies. However, they are currently constrained by highly repetitive, time-intensive post-production tasks. The highest-fidelity insights and storytelling are often locked behind multi-hour live streams and deep-dive technical podcasts that never get repurposed. 
-
-We build infrastructure that automates the post-production assembly line so that creators can dedicate their cognitive focus entirely to creative content and strategic storytelling.
+**Last updated:** 2026-07-21  
+**Authority:** Aligns with [`docs/studio/01-product-vision.md`](docs/studio/01-product-vision.md) and [`docs/studio/PHASE2_ARCHITECTURAL_TRUTH_REVIEW.md`](docs/studio/PHASE2_ARCHITECTURAL_TRUTH_REVIEW.md).
 
 ---
 
-## 3. Product Principles
+## Mission
 
-### Ⅰ. Automation Combined with Creative Agency
-AI should handle the heavy technical lifting (speaker tracking, face detection, silent period truncation, dynamic transcript generation), but the human creator must retain final creative authority. Our tools act as collaborative copilots—suggesting highlights, caption timings, and compositions while providing direct, precise editing controls.
+Give creators a way to turn long-form video into finished short-form content by **directing edits in natural language** — without pretending the product is a one-click clip factory.
 
-### Ⅱ. Time-To-Output (TTO) Optimization
-We measure the success of every feature by the minutes it saves a creator. If a feature introduces cognitive complexity without directly compressing the post-production cycle, it is eliminated.
-
-### Ⅲ. Studio-Quality Outputs
-Automated output must equal or exceed professional, studio-level hand-edited files. We enforce strict typography scales, pixel-perfect aspect ratio scaling, professional audio compression, and sidechain ducking by default.
-
-### Ⅳ. Community & Open Accessibility
-The baseline editor and highlight generator remain highly accessible. We monetize complex, resource-heavy operations (e.g., automated multi-language voice cloning, bulk high-resolution rendering, and team workspace management), rather than restricting core post-production capabilities.
+The AI performs editing operations. The user owns creative intent.
 
 ---
 
-## 4. Strategic Product Roadmap
+## Product lineage
 
-```mermaid
-timeline
-    title QuickAIShort.online Product Roadmap
-    v1.0 (Core Engine) : YouTube Ingestion : Whisper Transcription : Crop & Face Centering : Single-Click Render
-    v1.5 (UX Polish) : Multi-Language Auto-Captioning : Live Inline Caption Editor : Custom Brand Asset Support : Workspace Collaboration
-    v2.0 (Deep Intelligence) : Active Speaker Cameracut : Semantic Search Querying : Emotion & Peak Moment Analytics : AI B-Roll Integration
-    v3.0 (Scale & Enterprise) : Multilingual Voice Cloning : Direct Social API Scheduling : Predictive Virality Scoring : Developer API Access
-```
+| Name | Status | Meaning |
+|------|--------|---------|
+| **QuickAI Short** | Production | Conversational AI video editor live at [quickaishort.online](https://www.quickaishort.online) |
+| **QuickAI Studio** | Evolution | AI-native video editing operating system built on the same codebase |
 
-### Phase 1: Core Engine Optimization (v1.0 — Current)
-* **Status:** **Completed & Deployed**
-* **Milestones:**
-  * High-performance YouTube stream extraction (4-tier extraction architecture).
-  * Whisper-powered transcription models with high word-level precision.
-  * 9:16 aspect ratio cropping with dynamic focal centering.
-  * Three highly optimized, customizable typography caption themes.
-  * Automated server-side transcode rendering via decoupled `render_worker.py` instances.
-
-### Phase 2: User Polish & Interactive Control (v1.5 — Near Term)
-* **Milestones:**
-  * **Multilingual Caption Pipelines:** Auto-detect and transcribe content in over 15 world languages.
-  * **WYSWYG Caption Editor:** Inline transcript text editing with real-time browser preview synchronization.
-  * **Custom Brand Library:** Support custom font and logo asset uploads.
-  * **Workspace Management:** Collaborate on video projects with multi-tenant workspace environments.
-
-### Phase 3: Agentic Intelligence (v2.0 — Mid Term)
-* **Milestones:**
-  * **Active Speaker Tracking:** Multi-face tracking with automated video cuts for interview and panel formats.
-  * **Semantic Highlight Extraction:** Query video collections using natural language (e.g., *"extract segments discussing financial models"*).
-  * **Emotional Auditory Analytics:** Intelligent detection of laughter, volume spikes, and applause thresholds to isolate premium candidate moments.
-  * **Automated Contextual B-Roll:** Inject relevant secondary stock footage context based on transcript semantics.
-
-### Phase 4: Enterprise Scale (v3.0 — Long Term)
-* **Milestones:**
-  * **Synthetic Dubbing & Voice Cloning:** Instantly translate and dub voice tracks while preserving the original speaker's vocal characteristics.
-  * **Automated Channel Syndication:** One-click publishing and scheduling across TikTok, YouTube Shorts, and Instagram Reels APIs.
-  * **Predictive Performance Analytics:** Pre-evaluate highlight virality scores before publishing using audience persona loop agents.
-  * **Platform SDK & API Access:** Expose core video cropping and transcription models for developer automation.
+Studio is not a second product. It is the operating-system direction of QuickAI Short: capability registry, server-authoritative project documents, MediaGraph-grounded suggestions, orchestrator plan jobs, and chat-primary UX.
 
 ---
 
-## 5. Market Opportunity & Strategic Advantage
+## What we believe
 
-The creator economy is projected to exceed **$250 Billion USD by 2027**. Short-form video platforms (TikTok, YouTube Shorts, Reels) represent the fastest-growing channels for audience acquisition, yet manual video repurposing remains highly unoptimized.
-
-```
-┌──────────────────┐       ┌────────────────────┐       ┌─────────────────┐
-│  AI Highlights   │  ───► │  Visual Control    │  ───► │ High-Speed      │
-│  (Focal Tracking)│       │  (WYSIWYG Editor)  │       │ Server Render   │
-└──────────────────┘       └────────────────────┘       └─────────────────┘
-```
-
-QuickAIShort.online sits at the high-value intersection of **automated AI highlights, fine-grained creator editing control, and enterprise-grade rendering speed**.
+1. **Conversation is the control plane.** Creators should state intent; the system selects and runs tools.
+2. **The AI must actually edit.** Structured actions applied to a real timeline — not marketing copy that claims “AI editing.”
+3. **Timeline is visualization.** It shows decisions; it is not required as the primary UI for every task.
+4. **Pre-Flight is a skill.** Audience simulation via Google ADK agents is a powerful capability — not the homepage identity.
+5. **Gemini-first.** Core AI logic uses Gemini. Google ADK deepens orchestration over time; unfinished ADK UI must stay Coming Soon.
+6. **Cost is an acceptance criterion.** Prefer bounded, deduplicated, scale-to-zero-friendly designs without sacrificing reliability.
 
 ---
 
-## 6. Competitive Analysis Matrix
+## Today (production)
 
-| Competitor | Strength | System Limitation | The QuickAIShort.online Advantage |
-| :--- | :--- | :--- | :--- |
-| **Opus Clip** | Automated highlights | Rigid editor controls, no manual reframing options. | **Dual Editing Control:** Seamlessly toggle between fully automated agent crops and custom timeline reframing. |
-| **Descript** | Text-based editing | Complex desktop-centric UI, steep pricing tiers. | **Lightweight Web App:** High-speed cloud-based transcode engines with frictionless, zero-setup onboarding. |
-| **CapCut** | High visual effects | Fully manual, non-automated highlight extraction. | **Autonomous Highlight Extraction:** Native agent teams auto-curate and prepare your premium vertical moments. |
+- YouTube URL or local upload
+- Browser Whisper transcription
+- Conversational AI editor → edit actions → live preview
+- MediaGraph-grounded suggestions
+- Server export (RQ + ffmpeg → GCS)
+- Studio Kernel APIs dual-running under flags
+- Pre-Flight multi-agent validation available as a pipeline capability
 
 ---
 
-**— The QuickAIShort.online Leadership Team**
+## Tomorrow (Studio OS)
+
+- Deeper media understanding and plan-based tool orchestration
+- Native Gemini tool-loop depth (ADR-006 path)
+- ADK workspace UI released when ready (today: Coming Soon / blurred)
+- Timeline remains secondary to chat for most edit sessions
+- Optional multiplayer only with explicit founder approval
+
+---
+
+## Non-goals
+
+- Pure text-to-fake-video generator as the core product
+- Replacing Gemini with OpenAI/Anthropic for challenge-critical AI paths
+- Marketing unfinished surfaces as live
+- Big-bang rewrite of FastAPI / Next.js
+
+---
+
+## Success criteria
+
+1. A creator can complete a meaningful edit session through conversation.
+2. Every accepted command maps to executed tools with undo where applicable.
+3. Suggestions stay grounded in MediaGraph — not static heuristic lists.
+4. Export remains reliable, cancellable, and cost-bounded.
+5. Documentation always separates **shipped** from **roadmap**.
+
+---
+
+## Related docs
+
+- [`docs/studio/01-product-vision.md`](docs/studio/01-product-vision.md) — Studio target detail  
+- [`docs/studio/ROADMAP.md`](docs/studio/ROADMAP.md) — execution status  
+- [`ARCHITECTURE.md`](ARCHITECTURE.md) — system map  
+- [`README.md`](README.md) — public product overview  

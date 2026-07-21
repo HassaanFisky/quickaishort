@@ -1,24 +1,23 @@
-# 💻 QuickAIShort.online — Developer Quickstart Guide
+# QuickAI Short — Developer Quickstart
 
-Follow this guide to spin up a fully optimized, production-equivalent local development environment for the QuickAIShort.online platform in under 5 minutes.
+Spin up a local environment for **QuickAI Short** (production product). Studio Kernel APIs live in the same backend under feature flags.
 
----
-
-## 1. Prerequisites & Requirements
-
-Ensure your local workstation has the following runtimes and services installed:
-
-* **Node.js:** version `20.x` or later (Active LTS recommended).
-* **Package Manager:** `pnpm` (strongly preferred for workspace integrity) or `npm`/`yarn`.
-* **Python:** version `3.10` or later (required for backend AI agent orchestrators).
-* **Redis Instance:** (Required for processing task queues and rate limiting caches).
-* **MongoDB Instance:** (Either a local community server instance or a free tier MongoDB Atlas URI).
+For architecture truth: [`docs/studio/README.md`](docs/studio/README.md).
 
 ---
 
-## 2. Repository Clonal & Workspace Setup
+## Prerequisites
 
-Clone the repository and initialize the project:
+- Node.js 20.x (LTS) + **pnpm**
+- Python 3.12 (project standard)
+- Redis (RQ render queue)
+- MongoDB (Atlas or local)
+- GCS credentials / ADC for media paths (production uses bucket `quickaishort-agent-494304-media`)
+- `GEMINI_API_KEY` for AI editor and agents
+
+---
+
+## Clone
 
 ```bash
 git clone https://github.com/HassaanFisky/quickaishort.git
@@ -27,135 +26,106 @@ cd quickaishort
 
 ---
 
-## 3. Environment Variable Provisioning
+## Environment
 
-Establish a private environment configuration by creating a `.env.local` file inside the `frontend/` directory and a `.env` file inside the `fastapi/` directory.
+Copy examples and fill secrets (never commit them):
 
-### Frontend Environment Configuration (`frontend/.env.local`):
-```env
-# Production and Local Gateway Mapping
-NEXT_PUBLIC_API_URL=http://localhost:8000
-NEXT_PUBLIC_APP_URL=http://localhost:3000
+- `frontend/.env.local` ← from `frontend/.env.example`
+- `fastapi/.env` ← from `fastapi/.env.example`
 
-# NextAuth Authentication Config
-NEXTAUTH_SECRET=a_high_entropy_cryptographic_secret_string
-NEXTAUTH_URL=http://localhost:3000
-```
+Minimum useful set:
 
-### Backend Environment Configuration (`fastapi/.env`):
-```env
-# FastAPI Gateway Core
-PORT=8000
-ENV=development
+| Variable | Where | Purpose |
+|----------|-------|---------|
+| `NEXT_PUBLIC_API_URL` | frontend | FastAPI base URL |
+| `NEXTAUTH_SECRET` | both (must match) | JWT auth |
+| `GEMINI_API_KEY` | fastapi | AI editor + agents |
+| `REDIS_URL` | fastapi | RQ |
+| `MONGODB_URI` / `MONGO_URI` | fastapi | DB (use names from `.env.example`) |
+| `GOOGLE_CLOUD_PROJECT` | fastapi | `quickaishort-agent-494304` |
+| `GCS_BUCKET_NAME` | fastapi | `quickaishort-agent-494304-media` |
 
-# Database Cluster & Cache Connections
-MONGO_URI=mongodb://localhost:27017/quickaishort_dev
-REDIS_URL=redis://localhost:6379/0
-
-# Agent intelligence Configuration keys
-GEMINI_API_KEY=your_gemini_api_key_here
-PADDLE_API_KEY=your_paddle_api_key_here
-PADDLE_WEBHOOK_SECRET=your_paddle_webhook_secret_here
-```
+Optional Studio Kernel: `STUDIO_PROJECT_KERNEL=1`, `NEXT_PUBLIC_STUDIO_PROJECT_KERNEL=1`.
 
 ---
 
-## 4. Install Dependencies & Spin Up Servers
+## Run
 
-We recommend executing frontend and backend runtimes in isolated terminal sessions.
+### Backend
 
-### Step 3.1: Initialize the Python Backend:
 ```bash
 cd fastapi
-
-# Create and activate a clean virtual environment
 python -m venv venv
-source venv/bin/activate  # On Windows: .\venv\Scripts\activate
-
-# Install exact python dependencies
+# Windows: .\venv\Scripts\activate
+source venv/bin/activate
 pip install -r requirements.txt
-
-# Boot the FastAPI hot-reloading development server
 uvicorn main:app --reload --port 8000
 ```
 
-### Step 3.2: Initialize the Next.js Frontend:
-```bash
-# From the project root workspace directory
-pnpm install
+Worker (separate terminal):
 
-# Spin up the next hot-reloading development client
+```bash
+python render_worker.py
+```
+
+### Frontend
+
+```bash
+cd frontend
+pnpm install
 pnpm dev
 ```
 
-* **Client Gateway:** Access the visual dashboard locally at `http://localhost:3000`.
-* **API Gateway Documentation:** Access interactive Swagger specifications at `http://localhost:8000/docs`.
+- App: http://localhost:3000  
+- API docs: http://localhost:8000/docs  
+- Health: http://localhost:8000/health  
 
 ---
 
-## 5. Local Docker Infrastructure (Optional Fallbacks)
+## Optional local infra
 
-To test Redis or local databases without manual system installs, leverage standard Docker containers:
-
-### Spin Up Redis Container:
 ```bash
 docker run --name quickai-redis -d -p 6379:6379 redis:alpine
-```
-
-### Spin Up Local MongoDB Container:
-```bash
 docker run --name quickai-mongo -d -p 27017:27017 mongo:latest
 ```
 
 ---
 
-## 6. Functional Pipeline Smoke Test
-
-Validate that your local API Gateway resolves agent workflows correctly by running a POST simulation against the preflight suite:
+## Smoke checks
 
 ```bash
-curl -X POST http://localhost:8000/api/preflight \
-  -H "Content-Type: application/json" \
-  -d '{"url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"}'
+curl -s http://localhost:8000/health
+cd frontend && npx tsc --noEmit
 ```
 
-A successful environment setup will return a structured JSON response containing the simulated audience persona consensus scores, transcription nodes, and focal-point crops.
+Protected AI / Pre-Flight routes require a valid NextAuth session JWT — do not expect unauthenticated full pipeline success.
 
 ---
 
-## 7. Directory Architecture Overview
-
-The repository enforces a clean, modular separation of concerns between client and server layers:
+## Layout
 
 ```text
 quickaishort/
-├── fastapi/                    # Python Backend Microservices
-│   ├── agent/                  # ADK 1.0 Agent Workforce Suite
-│   ├── db/                     # MongoDB Operations & GridFS Buckets
-│   ├── router/                 # REST Controller Endpoints
-│   ├── main.py                 # FastAPI Application Entrypoint
-│   └── requirements.txt        # Python Packages Directory
-├── frontend/                   # Next.js 14 Web Application
-│   ├── src/
-│   │   ├── app/                # React App Router Layouts & Pages
-│   │   ├── components/         # Premium, Glassmorphic UI Primitives
-│   │   └── lib/                # Pusher Sync & API REST Connectors
-│   ├── package.json            # Node Package Configuration
-│   └── next.config.mjs         # Next.js Build Configurations
-├── .github/                    # CI/CD Workflows & Issue Templates
-└── README.md                   # Enterprise Repository Landing Page
+├── frontend/          # Next.js 14.2.35 editor + dashboard
+├── fastapi/           # API, agents, Studio Kernel, render_worker
+├── docs/studio/       # Canonical architecture + ADRs + EPs
+├── extension/         # Chrome MV3 YouTube helper
+└── ARCHITECTURE.md
 ```
 
----
+**Storage:** GCS is primary for `/adk` + `/editor` media. MongoDB GridFS is legacy `/api/v1/video/*` only.
 
-## 8. Common Troubleshooting
-
-| Error Code / Symptom | Potential Root Cause | Verified Remediation Strategy |
-| :--- | :--- | :--- |
-| **`ECONNREFUSED` on port 6379** | Redis service is stopped. | Verify Redis status by running `redis-cli ping` or booting the docker alpine container. |
-| **`Authentication Failed`** | Invalid/Missing Gemini API key. | Ensure `GEMINI_API_KEY` is fully declared inside `fastapi/.env` and possesses valid request quotas. |
-| **`GridFS Storage Exception`** | Unreachable MongoDB collection. | Validate that your `MONGO_URI` is correct and does not contain unescaped characters in the password. |
+**ADK UI (`/adk`):** Coming Soon in product — not a local “live wizard” surface.
 
 ---
 
-For architectural deeper dives or production security requirements, refer to [ARCHITECTURE.md](file:///E:/QuickAI%20Short%20orignal/ARCHITECTURE.md) and [SECURITY.md](file:///E:/QuickAI%20Short%20orignal/SECURITY.md).
+## Troubleshooting
+
+| Symptom | Fix |
+|---------|-----|
+| Redis connection errors | Start Redis / fix `REDIS_URL` |
+| Gemini 401/429 | Valid key + prepaid credits |
+| GCS 403 | ADC / billing / bucket IAM |
+| Auth failures | Matching `NEXTAUTH_SECRET` on FE + BE |
+
+More: [`docs/studio/25-troubleshooting.md`](docs/studio/25-troubleshooting.md) · [`SECURITY.md`](SECURITY.md)

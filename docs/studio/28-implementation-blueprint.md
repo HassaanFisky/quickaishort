@@ -1,6 +1,6 @@
 # 28 — Implementation Blueprint (AntiGravity Task Pack)
 
-**Goal:** Evolve QuickAI Shorts → QuickAI Studio with minimal rewrites.  
+**Goal:** Evolve QuickAI Short → QuickAI Studio with minimal rewrites.  
 **Rule:** Each task independently shippable. Verify before next.  
 **Do not** invent files — paths below exist unless marked CREATE.
 

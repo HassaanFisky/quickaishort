@@ -18,7 +18,7 @@
 |-------|----------|----------|-----|
 | `POST /api/pipeline/run` unauthenticated | **High** | `pipeline_router.py` | Add `Depends(get_verified_user_id)` + credit checks |
 | `AUTH_DISABLED` documented but not coded | Medium | `.env.example` vs `auth.py` | Implement or remove from docs |
-| CLAUDE.md references `firebase_auth.py` | Medium (doc) | File absent | Correct docs |
+| Historical `firebase_auth.py` claim | Resolved in docs (2026-07-21) | Auth = `services/auth.py` | Keep grep-clean |
 | Storage URI spoof (`gridfs://` for GCS) | Medium | youtube/tts paths | Emit `gs://` only |
 | Credit deduction soft-fail proceeds | Medium | ai_editor_router try/except | Fail closed in production |
 

@@ -1,6 +1,6 @@
 # EP-002 — Server-Authoritative Project Document
 
-**Status:** APPROVED FOR IMPLEMENTATION — Binding Errata E1–E5 locked  
+**Status:** **IMPLEMENTED** (see Canonical Project Memory + EP-002 implementation reports)  
 **Priority:** P0 — Phase 2 Part G step 2  
 **Depends on:** EP-001 frozen (Capability Registry ABI)  
 **Must not modify:** EP-001 artifacts  
@@ -8,6 +8,7 @@
 **Affirms:** Phase 2 Decision A10 (dual-layer), A11 (platform objects), A5e (honesty)  
 **Related later:** EP-003 MediaGraph, EP-004 Orchestrator Plan Jobs, ADR-004 RenderManifest, ADR-006 native FC  
 **Execution authority:** Founder operating command 2026-07-19  
+**Historical note:** “APPROVED FOR IMPLEMENTATION” was pre-merge status; code is live under Kernel flags. 
 
 ---
 
@@ -620,7 +621,7 @@ EP-002 **must not** change registry files; only consume them.
 
 ### Phase M0 — Dual existence (no breakage)
 
-- Keep `Projects` + `/api/projects` for ADK Studio wizard  
+- Keep `Projects` + `/api/projects` for legacy ADK media helper / project records (UI wizard = Coming Soon)  
 - Add `studio_projects` + `/api/studio/v1/projects`  
 
 ### Phase M1 — Editor bind (EP-002 impl)

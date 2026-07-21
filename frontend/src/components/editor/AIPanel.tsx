@@ -252,10 +252,16 @@ export function AIPanel() {
         ) {
           return;
         }
-        // Prefer ensure-by-project (idempotent) to avoid orphan Firestore graphs.
-        const graph = projectId
-          ? await ensureMediaGraphForProject(projectId)
-          : await createMediaGraph({ project_id: null });
+        // Prefer ensure-by-project (idempotent). When Kernel is on, never create
+        // orphan graphs with project_id=null (FinOps / ADR-009).
+        let graph = null;
+        if (projectId) {
+          graph = await ensureMediaGraphForProject(projectId);
+        } else if (!isStudioProjectKernelEnabled()) {
+          graph = await createMediaGraph({ project_id: null });
+        } else {
+          return;
+        }
         if (
           cancelled ||
           boundRunIdRef.current !== effectRunId
@@ -744,7 +750,7 @@ export function AIPanel() {
                   ? videoMetadata!.title.length > 48
                     ? videoMetadata!.title.slice(0, 48) + "…"
                     : videoMetadata!.title
-                  : "No video loaded — paste a YouTube URL to start"}
+                  : "No video loaded — upload a file or paste a YouTube URL"}
               </span>
             </div>
 

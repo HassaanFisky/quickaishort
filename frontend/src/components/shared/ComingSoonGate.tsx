@@ -35,11 +35,11 @@ export function ComingSoonGate({
         aria-hidden
       >
         {children ?? (
-          <div className="h-full w-full bg-gradient-to-br from-primary/20 via-transparent to-[#ec4899]/15" />
+          <div className="h-full w-full bg-gradient-to-br from-white/[0.06] via-transparent to-white/[0.03]" />
         )}
       </div>
       <div className="relative z-10 flex h-full min-h-[inherit] flex-col items-center justify-center gap-3 px-6 py-16 text-center sm:gap-4 sm:py-20">
-        <span className="grid h-12 w-12 place-items-center rounded-2xl border border-white/[0.08] bg-black/40 text-primary shadow-[0_0_40px_-12px_hsl(var(--primary))]">
+        <span className="grid h-12 w-12 place-items-center rounded-2xl border border-white/[0.1] bg-black/50 text-muted-foreground">
           <Lock className="h-5 w-5" aria-hidden />
         </span>
         {title.trim().toLowerCase() === "coming soon" ? (

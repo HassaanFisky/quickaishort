@@ -45,13 +45,15 @@ sequenceDiagram
 Clip candidate → POST /api/preflight → ADK graph → consensus score + recommendation → FE RightPanel / store
 ```
 
-## Flow D — ADK Studio generate
+## Flow D — ADK media helpers (backend; UI Coming Soon)
 
 ```text
-Upload GCS → enhance script → generate plan → enqueue multi-clip render → project record Firestore
+Optional: upload GCS → enhance script → generate plan → enqueue render
+Note: Product `/adk` route is Coming Soon (blurred). Do not document as live wizard UX.
+Legacy wizard archived off-route under frontend/src/_archive/.
 ```
 
-## Flow E — Target Studio (future)
+## Flow E — Target Studio OS (roadmap)
 
 ```text
 Upload → AnalysisAgent (async) → SuggestionRail

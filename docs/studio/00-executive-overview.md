@@ -1,46 +1,42 @@
 # 00 — Executive Overview
 
-**Date:** 2026-07-18  
-**Product rename target:** QuickAI Shorts → **QuickAI Studio**  
-**Audit method:** Repository file reads + greps. No invented APIs.
+**Date:** 2026-07-21 (documentation sync)  
+**Product today:** QuickAI Short  
+**Evolution:** QuickAI Studio (AI-native editing OS on the same codebase)
 
 ---
 
 ## One-sentence verdict
 
-QuickAI is a **production-capable YouTube-to-Shorts + Pre-Flight + conversational AI editor** whose AI layer already returns structured edit actions and applies them in the browser store — but it is **not yet** a headless Premiere-class orchestration engine with server-authoritative timeline tools, native function calling, or fully dynamic multimodal analysis.
+QuickAI Short is a **production conversational AI video editor** (ingest → chat-driven edits → preview → GCS export) with a **Studio Kernel substrate already dual-running** — and it is **not yet** a fully headless Premiere-class OS with native Gemini tool-loop depth or a released ADK workspace UI.
 
 ---
 
-## What exists (verified)
+## What exists (verified production)
 
 | Capability | Evidence |
 |------------|----------|
-| Next.js 14.2.35 App Router editor | `frontend/package.json`, `frontend/src/app/editor/page.tsx` |
-| Conversational AI panel + suggestion chips | `frontend/src/components/editor/AIPanel.tsx`, `frontend/src/lib/gemini-editor.ts` |
-| AI → JSON actions → Zustand apply | `fastapi/routers/ai_editor_router.py`, `frontend/src/hooks/useAiCommander.ts`, `editorStore.applyAiEdits` |
-| Large action vocabulary (trim, split, captions, filters, ripple enums, etc.) | `fastapi/models/ai_editor.py`, `frontend/src/lib/aiToolCatalog.ts` |
-| ADK Pre-Flight / Viral / Director agents | `fastapi/agent/preflight_agent.py`, `viral_agent.py`, `director_agent.py` |
-| RQ render worker + DLQ + cancel + runId | `fastapi/render_worker.py`, `services/render_queue.py` |
-| GCS primary media | `fastapi/services/db.py`, ADK upload + export paths in `main.py` |
+| Next.js 14.2.35 editor | `frontend/package.json`, `frontend/src/app/editor/` |
+| Conversational AI panel + MediaGraph suggestions | `AIPanel.tsx`, Studio media-graph APIs |
+| AI → structured actions → timeline apply | `ai_editor_router.py`, Capability Registry, `editorStore` |
+| Studio Kernel (projects, orchestrator, bake) | EP-002…006; flags `STUDIO_PROJECT_KERNEL` / `NEXT_PUBLIC_STUDIO_PROJECT_KERNEL` |
+| ADK Pre-Flight / Viral / Director agents (backend) | `fastapi/agent/*.py` |
+| RQ render + DLQ + cancel + runId | `render_worker.py`, render status APIs |
+| GCS primary media | ADR-002; `services/db.py` |
 | NextAuth JWT backend auth | `fastapi/services/auth.py` |
-| RenderManifest schema (FE + BE) | `frontend/src/lib/render/renderManifest.ts`, `fastapi/models/render_manifest.py` |
-| Partial manifest → ffmpeg compile | `fastapi/services/manifest_renderer.py` used in `render_worker.py` |
-| Multi-track timeline UI | `frontend/src/components/editor/MultiTrackTimeline.tsx`, `BottomDock.tsx` |
-| Advanced panels gated by `?advanced=1` | `EditorLayout.tsx` (`isAdvancedMode`) |
+| Editor first-run ingest + onboarding | EP-008 / ADR-013 |
+| ADK UI Coming Soon gate | `/adk` blurred — not live wizard |
 
 ---
 
-## What does not exist (verified gaps vs Studio vision)
+## What does not exist yet (roadmap — do not market as shipped)
 
-| Vision requirement | Reality |
-|--------------------|---------|
-| AI never pretends — operates real editing tools via function calling | Prompt lists tools; Gemini returns JSON via `generate_content`. Native `FunctionDeclaration` / tool loop: **not present** in `ai_editor_engine.py` / `gemini_client.py` |
-| Backend = headless Premiere engine | Export/ffmpeg + action schemas. No server timeline mutation API / authoritative multi-track graph DB |
-| Chat is primary interface | AI panel exists; default layout still canvas + dock timeline; advanced left/right panels optional |
-| Fully dynamic suggestions from deep analysis | **MediaGraph grounded suggestions** in editor; multimodal depth still partial (faces/scenes not unified AnalysisAgent) |
-| Auto multimodal analysis on upload (faces, scenes, emotion, objects…) | Partial: Whisper (browser), face tracker hook, scene/beat detection libs — **not** a unified post-upload agent analysis pipeline |
-| ADK (Agent Development Kit) Coming Soon | **Product lock:** ADK ≠ Ads. Spec: `EP-008-ADK-ARCHITECTURE-CORRECTION.md`. Pricing Agency “Coming Soon” is unrelated billing UX |
+| Vision item | Reality |
+|-------------|---------|
+| Full native Gemini function-calling tool loop | Prompt/JSON + registry path today; ADR-006 depth optional |
+| Released ADK creator workspace UI | **Coming Soon** only |
+| Multiplayer collaboration | EP-007 design-locked — founder approval required |
+| Unified multimodal Analysis Agent (all facets) | Partial facets via MediaGraph / workers — not one mega-agent |
 
 ---
 
@@ -48,39 +44,27 @@ QuickAI is a **production-capable YouTube-to-Shorts + Pre-Flight + conversationa
 
 **Evolve, do not rewrite.**
 
-Preserve:
-- Zustand as interactive NLE truth for preview
-- `applyAiEdits` / undo stacks
-- RQ + GCS export path
-- ADK Pre-Flight as differentiation
-- RenderManifest as the long-term bake contract
+Preserve: conversational editor, Capability Registry (EP-001 frozen), Project Document, MediaGraph suggestions, RQ + GCS export, Pre-Flight as skill.
 
-Add (blueprint order in `28-implementation-blueprint.md`):
-1. Unify tool catalogue (FE catalog ↔ BE models ↔ Gemini tools)
-2. Native Gemini function calling + planner/executor loop
-3. Server Tool Runtime for long-running ops (silence removal bake, export, B-roll fetch)
-4. Chat-primary default UX (timeline contextual)
-5. Analysis Agent → dynamic suggestion rail
-6. Deprecate dual AI endpoints / dual storage naming drift
+Add carefully: native tool-loop depth, richer analysis, ADK workspace when product-ready.
 
 ---
 
 ## Risk summary
 
-| Risk | Level | Note |
-|------|-------|------|
-| Architectural drift in docs (`CLAUDE.md` firebase_auth, GridFS-as-primary notes) | High | Misleads agents |
-| Ops: FE Kernel flag not set on Vercel | Medium | Kernel path stays client-only until flag on |
-| Action vocabulary ≠ executable coverage | High | AI may emit unsupported tools |
-| Dual RQ + Celery paths | Medium | Maintainability |
-| Cost (Gemini per command + credits) | Medium | Needs caching / local tools |
+| Risk | Note |
+|------|------|
+| Doc drift (historical GridFS-primary / live ADK Studio claims) | Root docs realigned 2026-07-21; keep this tree authoritative |
+| Gemini quota / prepayment | Ops blocker — not an architecture defect |
+| Action vocabulary vs executable coverage | Registry + sanitiser gates; never bypass EP-001 |
 
 ---
 
-## Reading order for AntiGravity
+## Reading order
 
 1. This page  
-2. `01-product-vision.md`  
-3. `27-validation-report.md`  
-4. `06-ai-architecture.md` + `07-agent-architecture.md`  
-5. `28-implementation-blueprint.md` (execute tasks from here)
+2. [`01-product-vision.md`](./01-product-vision.md)  
+3. [`PHASE2_ARCHITECTURAL_TRUTH_REVIEW.md`](./PHASE2_ARCHITECTURAL_TRUTH_REVIEW.md)  
+4. [`CANONICAL_PROJECT_MEMORY.md`](./CANONICAL_PROJECT_MEMORY.md)  
+5. [`ROADMAP.md`](./ROADMAP.md)  
+6. Subsystem docs as needed  

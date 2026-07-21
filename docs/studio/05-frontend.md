@@ -23,7 +23,9 @@
 - Default: canvas + bottom dock + AI panel (`<AIPanel />` always mounted).
 - FAB opens AI when closed (`setAIPanelOpen(true)`).
 
-**Gap vs Studio vision:** Chat exists and is prominent, but product still *feels* like a traditional editor with AI attached — not ChatGPT-first with timeline as optional context. Closing that gap is primarily layout/IA work, not a new app.
+**Gap vs Studio vision:** Chat exists and is prominent; chat-primary shell (EP-005) improves primacy. Product still combines canvas + dock + AI — timeline remains important visualization. Closing full ChatGPT-first IA is ongoing, not unfinished invent.
+
+**ADK route:** `/adk` is Coming Soon (blurred). Do not document as live ADK Studio wizard.
 
 ---
 

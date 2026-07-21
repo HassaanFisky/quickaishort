@@ -1,6 +1,8 @@
 # QuickAI Short — Production Readiness Checklist
 
-This checklist must be reviewed and fully checked off by Hassaan before re-enabling GCP billing and launching the product to production.
+> Prefer live gates in [`docs/studio/15-production-readiness.md`](studio/15-production-readiness.md) and [`docs/studio/ROADMAP.md`](studio/ROADMAP.md). This checklist is an older ops gate — verify claims against current code before treating unchecked boxes as blockers.
+
+This checklist should be reviewed before major production cuts (billing, irreversible migrations, public launch changes).
 
 ---
 

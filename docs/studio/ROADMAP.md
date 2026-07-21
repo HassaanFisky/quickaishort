@@ -48,11 +48,13 @@
 
 | Item | Gate |
 |------|------|
-| **Ship FE to production** (`git push origin main` + Vercel) | **Founder deploy approval** — 5+ local commits ahead of origin |
-| **EP-008** Editor First-Run Product Surface (upload parity, onboarding, ADK CS) | ✅ Implemented — ADK≠Ads correction shipped (`APPROVE ADK CORRECTION`) |
+| **Ship FE + BE FinOps bind** (`a8da56c`) | ✅ Done — Vercel READY + `quickai-api-00097-n9g` |
+| **EP-008** Editor First-Run Product Surface (upload parity, onboarding, ADK CS) | ✅ Implemented — ADK≠Ads correction + full-workspace CS polish |
 | ADR-006 native Gemini tool-loop depth | Optional engineering EP |
 | Multiplayer | **Founder approval** (EP-007) |
 | Legacy `Projects` cutover delete | **Founder consent** (irreversible) |
+| Gemini `generateContent` live | **Founder top-up** — 429 prepayment credits |
+| Demo / Devpost / Google form | **Founder** (challenge checklist) |
 
 > Note: Request labeled “EP-002” for this UX work is a **naming conflict** — EP-002 is frozen Project Kernel. Package id = **EP-008**.
 

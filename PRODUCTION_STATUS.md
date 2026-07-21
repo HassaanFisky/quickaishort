@@ -1,3 +1,11 @@
+# PRODUCTION_STATUS — Historical Snapshot
+
+> **Note (2026-07-21):** This file is a **point-in-time deploy log** from 2026-05-24.  
+> For current product identity and architecture, use [`README.md`](README.md), [`ARCHITECTURE.md`](ARCHITECTURE.md), and [`docs/studio/CANONICAL_PROJECT_MEMORY.md`](docs/studio/CANONICAL_PROJECT_MEMORY.md).  
+> Media truth: **GCS primary**; GridFS = legacy `/api/v1/video/*` only. Auth: NextAuth JWT (`services/auth.py`).
+
+---
+
 # PRODUCTION STATUS — 2026-05-24
 
 ## Deployment Summary
@@ -49,50 +57,29 @@ Previous failed builds (now superseded):
 ## Issues Encountered and Fixes
 
 ### 1. motor/pymongo removed prematurely
-- **Root cause:** Antigravity removed `motor==3.5.0` and `pymongo==4.8.0` from requirements.txt, but `services/storage.py` still imports `motor.motor_asyncio` for GridFS media storage.
+- **Root cause:** Dependencies removed while `services/storage.py` still imports `motor` for **legacy** GridFS (`/api/v1/video/*`).
 - **Fix:** Restored `motor==3.5.0` and `pymongo==4.8.0` in `requirements.txt`.
 - **Commit:** `b1a8fbe`
 
 ### 2. celery removed prematurely
-- **Root cause:** Antigravity removed `celery==5.4.0` but `workers/__init__.py` re-exports `celery_app` from `workers/tasks.py` which imports `from celery import Celery, Task` at module level. Import chain: `main.py → routers/video.py → workers/tasks.py → celery`.
+- **Root cause:** `workers/__init__.py` re-exports Celery app used by legacy video router.
 - **Fix:** Restored `celery==5.4.0` in `requirements.txt`.
 - **Commit:** `209f8ab`
 
 ### 3. BigQueryAgentAnalyticsPlugin missing dependency
-- **Root cause:** `google-adk[bigquery]` extra does not pull in `google-cloud-bigquery` directly (namespace package issue).
+- **Root cause:** `google-adk[bigquery]` extra does not pull `google-cloud-bigquery` directly.
 - **Fix:** Added `google-cloud-bigquery>=3.25.0` explicitly to requirements.txt.
-- **Status:** BQ plugin now loads (installed: 3.41.0). BigQuery dataset `adk_analytics` still empty until first pipeline run.
+- **Status:** BQ plugin loads; dataset may remain empty until pipeline traffic.
 
-### 4. Firestore database created (new)
+### 4. Firestore database created
 - **Action:** Created `(default)` Firestore Native database in `us-central1` for project `quickaishort-agent-494304`.
-- **Command:** `gcloud firestore databases create --location=us-central1 --type=firestore-native`
-- **Note:** `pipeline_runs` collection will populate on first Pre-Flight/Viral pipeline run.
 
 ### 5. Firestore IAM propagation delay
-- **Symptom:** Firestore query endpoints returned `403 Missing or insufficient permissions` for ~3 minutes post-deploy.
-- **Root cause:** IAM propagation delay after granting `roles/datastore.user` to compute service account. Role was already bound; delay was from Cloud Run token cache.
-- **Resolution:** Self-resolved after ~3 minutes. All endpoints now PASS.
+- **Symptom:** Transient `403` after IAM grant.
+- **Resolution:** Self-resolved after ~3 minutes.
 
 ---
 
 ## Known Issues (Non-Critical)
 
-| Issue | Impact | Workaround |
-|-------|--------|-----------|
-| BigQuery `adk_analytics` dataset empty | No BQ-based analytics yet | MongoDB/Firestore fallback active |
-| MCP `SamplingCapability` import fail | MCP grounding agent disabled | Logged as WARNING, graceful fallback |
-| Sentry Celery integration | Warning log on startup | Non-functional but non-blocking |
-
----
-
-## System Status
-
-```
-Backend API:    https://quickai-api-99900313102.us-central1.run.app  LIVE
-Render Worker:  https://quickai-worker-99900313102.us-central1.run.app  LIVE
-Frontend:       https://www.quickaishort.online  LIVE
-google-adk:     2.1.0 ✓
-Firestore:      connected (us-central1, native mode) ✓
-Redis:          ready ✓
-MongoDB:        connected (Atlas) ✓
-```
+See live WORKING MEMORY in [`CLAUDE.md`](CLAUDE.md) for current blockers (e.g. Gemini prepayment credits). Historical rows below are frozen as of 2026-05-24.

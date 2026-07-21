@@ -4,9 +4,9 @@
 
 ```mermaid
 C4Context
-title QuickAI Shorts — Current System Context
-Person(creator, "Creator", "Edits shorts via web")
-System(qai, "QuickAI Shorts", "Next.js + FastAPI + RQ")
+title QuickAI Short — Current System Context
+Person(creator, "Creator", "Conversational AI video editing")
+System(qai, "QuickAI Short", "Next.js + FastAPI + RQ → Studio OS")
 System_Ext(yt, "YouTube", "Source video/audio")
 System_Ext(gemini, "Google Gemini", "LLM / ADK")
 System_Ext(gcs, "GCS", "Media objects")

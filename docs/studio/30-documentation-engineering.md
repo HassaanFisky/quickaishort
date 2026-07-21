@@ -2,7 +2,9 @@
 
 ## Purpose of this platform
 
-`docs/studio/` is the **Docs-as-Code product** for QuickAI Studio architecture. It is optimized for AntiGravity: self-contained, evidence-cited, low re-prompt.
+`docs/studio/` is the **Docs-as-Code product** for **QuickAI Short → QuickAI Studio** architecture. Optimized for agents and humans: evidence-cited, low re-prompt, always separates **production** from **roadmap**.
+
+**Identity lock (2026-07-21):** QuickAI Short = working product; QuickAI Studio = OS evolution on the same codebase. Root `README.md` / `VISION.md` / `ARCHITECTURE.md` must stay aligned with this tree.
 
 ---
 

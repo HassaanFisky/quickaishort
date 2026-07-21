@@ -341,7 +341,7 @@ export default function IngestSurface({
               className="flex-1"
             >
               <Zap size={13} />
-              Generate from URL
+              Generate
             </GlowButton>
           )}
           {hasSource && (

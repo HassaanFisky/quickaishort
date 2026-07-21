@@ -1,6 +1,6 @@
-# QuickAI Shorts — Chrome Extension Guide
+# QuickAI Short — Chrome Extension Guide
 
-This extension adds a **✦ QuickAI Short** action button directly into the YouTube player metadata area. Clicking the button instantly opens the QuickAI Shorts Editor at `quickaishort.online/editor` with the current video pre-loaded and ready for viral analysis using Google Gemini AI.
+This extension adds a **✦ QuickAI Short** action button directly into the YouTube player metadata area. Clicking the button opens the **QuickAI Short** editor at `https://www.quickaishort.online/editor` with the current video pre-loaded for conversational AI editing (Gemini).
 
 ---
 
@@ -65,7 +65,7 @@ Here is the pre-composed, high-converting copy optimized for search (SEO) and us
 
 *   **Item Title (Max 45 chars):**
     ```text
-    QuickAI Shorts — Video to Shorts Generator
+    QuickAI Short — Conversational AI Video Editor
     ```
 
 *   **Summary / Short Description (Max 150 chars):**
@@ -77,7 +77,7 @@ Here is the pre-composed, high-converting copy optimized for search (SEO) and us
     ```text
     Turn any YouTube video into high-engagement, viral vertical shorts in a single click.
 
-    The QuickAI Shorts Chrome Extension integrates directly into YouTube, placing a quick-access "✦ QuickAI Short" button right next to the video actions bar.
+    The QuickAI Short Chrome Extension integrates directly into YouTube, placing a quick-access "✦ QuickAI Short" button right next to the video actions bar.
 
     FEATURES:
     ✦ One-Click Launch: Bypass manual URL copying. Click the button to instantly send the video to the QuickAI Editor.
@@ -111,7 +111,7 @@ Because the extension requests `host_permissions` on `*://*.youtube.com/*`, Goog
 - **Icons:** You can upload your high-resolution logo, or use `assets/icon128.png` included in this folder.
 - **Screenshots:** Take 1-2 screenshots of:
   1. The purple button appearing on a YouTube video.
-  2. The QuickAI Shorts editor loaded with the video.
+  2. The QuickAI Short editor loaded with the video.
   - *Dimensions:* 1280x800 or 640x400 pixels (PNG or JPEG).
 
 ### 6. Publish

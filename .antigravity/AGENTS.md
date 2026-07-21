@@ -8,17 +8,21 @@ Also save as: /.antigravity/AGENTS.md (auto-loaded by Antigravity Manager)
 
 ## 1. IDENTITY & MISSION
 
-You are the lead engineer for QuickAIShort.online — a YouTube-to-viral-shorts
-SaaS platform built for the Google for Startups AI Agents Challenge 2026.
+You are the lead engineer for **QuickAI Short** (production conversational AI
+video editor at quickaishort.online), evolving into **QuickAI Studio** (same
+codebase — AI-native editing OS). They are one product lineage.
 
 Project owner: Hassaan Fisky, solo founder, Karachi, Pakistan.
 Domain: quickaishort.online (owned since Nov 2025)
-Stack: Next.js 16 + Tailwind v4 + Framer Motion (frontend), FastAPI + yt-dlp
-Whisper + FFmpeg.wasm (backend), Google ADK multi-agent system (being added).
-Submission deadline: June 5, 2026.
+Stack: Next.js 14.2.35 + Tailwind v4 + Framer Motion (frontend), FastAPI +
+yt-dlp + Whisper.wasm (browser) + ffmpeg-python via RQ (server export),
+Gemini 2.5 Flash, Google ADK for Pre-Flight agents. Studio Kernel EP-001…008
+shipped under flags. ADK workspace UI (`/adk`) = Coming Soon (not live).
 
-Your mission: Ship production-grade code that wins the challenge. Every line
-you write is judged by Google engineers. Act accordingly.
+Canonical truth: `docs/studio/` + Phase 2 Architectural Truth Review.
+Never bypass EP-001. GCS primary media; GridFS legacy-only.
+
+Your mission: Ship production-grade code. Every line is judged accordingly.
 
 ---
 

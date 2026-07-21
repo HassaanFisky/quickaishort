@@ -8,17 +8,17 @@
 
 | Path | Role |
 |------|------|
-| `frontend/` | Next.js 14.2.35 UI, editor, auth, dashboard, ADK wizard |
-| `fastapi/` | FastAPI API, ADK agents, RQ worker, services |
+| `frontend/` | Next.js 14.2.35 UI, editor, auth, dashboard; `/adk` Coming Soon |
+| `fastapi/` | FastAPI API, ADK agents, Studio Kernel, RQ worker, services |
 | `docs/` | Operational docs (deployment, video API, sentry) |
-| `docs/studio/` | **This** architecture + Studio blueprint platform |
+| `docs/studio/` | **Canonical** architecture + Studio OS docs |
 | `extension/` | Chrome extension → opens `/editor?v=` |
 | `tests/` | Legacy video API tests |
 | `.github/workflows/` | `linter.yml`, `deploy-video-pipeline.yml` |
-| `ARCHITECTURE.md` | Challenge-era Pre-Flight diagram (partially stale) |
-| `VISION.md` | Shorts roadmap (superseded for Studio by `01-product-vision.md`) |
-| `CLAUDE.md` | Agent protocol + working memory (contains outdated claims — see validation report) |
-| `PRODUCTION_STATUS.md` | Snapshot 2026-05-24 |
+| `ARCHITECTURE.md` | System overview (synced 2026-07-21) |
+| `VISION.md` | QuickAI Short → Studio evolution (synced 2026-07-21) |
+| `CLAUDE.md` | Agent protocol + live working memory |
+| `PRODUCTION_STATUS.md` | Historical deploy snapshot 2026-05-24 |
 | `deploy_production.ps1` / `.sh` | Production deploy scripts |
 | `cloudbuild.yaml` | Cloud Build |
 
@@ -31,7 +31,7 @@
 | Marketing | `frontend/src/app/page.tsx` |
 | Editor | `frontend/src/app/editor/page.tsx` → `EditorLayout.tsx` |
 | Dashboard | `frontend/src/app/(dashboard)/dashboard/page.tsx` |
-| ADK Studio wizard | `frontend/src/app/(dashboard)/adk/page.tsx` |
+| ADK Coming Soon workspace | `frontend/src/app/(dashboard)/adk/page.tsx` (blurred; wizard archived) |
 | Auth | `frontend/src/app/(auth)/signin|signup|...` |
 | State | `frontend/src/stores/editorStore.ts`, `aiPanelStore.ts`, `uiStore.ts` |
 | AI client | `frontend/src/lib/gemini-editor.ts`, `lib/aiEditorClient.ts`, `hooks/useAiCommander.ts` |
@@ -79,8 +79,8 @@
 
 | Brand in UI | Evidence |
 |-------------|----------|
-| “QuickAI Shorts” | `Sidebar.tsx` logo text |
-| “QuickAI Editor” / “Quick AI Studio” | prompts in `gemini-editor.ts`, `ai_editor_engine.py` |
-| Package name `quickai-shorts` | `frontend/package.json` |
+| “QuickAI Short” / Studio copy | Sidebar, marketing, editor chrome — verify in UI before claiming |
+| “QuickAI Editor” / Studio Kernel prompts | `gemini-editor.ts`, `ai_editor_engine.py` |
+| Package name `quickai-shorts` | `frontend/package.json` (legacy npm name; product = QuickAI Short) |
 
-**Migration note:** Brand rename is a coordinated FE copy + docs + extension string change — not a rewrite.
+**Product naming:** QuickAI Short = production; QuickAI Studio = evolution. Docs synced 2026-07-21; UI string audit may still find legacy “Shorts” plurals.

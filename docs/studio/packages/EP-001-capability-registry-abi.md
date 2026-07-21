@@ -1,10 +1,11 @@
 # EP-001 — Capability Registry ABI
 
-**Status:** IMPLEMENTED — awaiting founder acceptance (see `EP-001-IMPLEMENTATION-REPORT.md`)  
-**Priority:** P0 — Phase 2 Part G step 1 (blocks Orchestrator, Suggestions, honest chat UX)  
+**Status:** **FROZEN** (see `EP-001-FINAL-VERIFICATION-GATE.md` + Canonical Project Memory)  
+**Priority:** P0 — Phase 2 Part G step 1 (foundation for Orchestrator, Suggestions, honest chat UX)  
 **Supersedes conflicting guidance:** Prompt-listed dual dialects as permanent design  
 **Affirms:** Phase 2 Decisions A3, A4 (prompt-stuffed lists), A9, A12; ADR-006 direction  
-**Does not implement yet:** ProjectDocument events, MediaGraph, chat shell (later EPs)
+**Historical note:** Header previously said “awaiting founder acceptance” — gate passed; do not reopen without verified defect.  
+**Does not implement:** ProjectDocument events, MediaGraph, chat shell (later EPs — now implemented separately)
 
 ---
 

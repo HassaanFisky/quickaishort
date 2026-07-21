@@ -6,7 +6,7 @@
 
 | Layer | Collection / API | Role | Status |
 |-------|------------------|------|--------|
-| Legacy ADK | Firestore `Projects` / `/api/projects` | ADK wizard projects | Live — do not break |
+| Legacy ADK helpers | Firestore `Projects` / `/api/projects` | Historical ADK project records | Live — do not break; UI wizard = Coming Soon |
 | Studio Kernel | Firestore `studio_projects` / `/api/studio/v1` | Authoritative edit log | **Live (code)** — dual-run |
 | Dual-run | Both | BE `STUDIO_PROJECT_KERNEL` + FE `NEXT_PUBLIC_STUDIO_PROJECT_KERNEL` | Required until cutover |
 
@@ -46,27 +46,36 @@ Verified untouched at cycle close.
 - AI Editor credit gate fail-closed (pipeline parity) on `/api/ai-edit`, `/api/ai-editor/command`, `/api/ai-editor/command/stream`. Opt-in `CREDITS_SOFT_FAIL=true` for non-prod only.  
 - Onboarding tour opens AI panel before `ai.*` spotlight steps.  
 - `analyzeVideoWithGemini` no longer returns canned fake topics/edits on failure — errors propagate as HTTP 500.  
-- **Deployed:** `quickai-api` revision **00094-nqg** (image `backend:20260721-183025`) — min-instances=0 + cpu-throttling preserved.  
+- **Deployed:** `quickai-api` revision **00097-n9g** (image `a8da56c` — bind + facet no-op); prior credit fail-closed on **00094-nqg**.  
 - Deploy scripts locked to cost-policy settings (no more min=1 / wrong bucket footgun).  
-- Frontend FE tour + honest Gemini + orphan strip cleanup — **pushed to `origin/main`** (`89b6685`+); Vercel production deploy triggered.  
+- Frontend FE tour + honest Gemini + FinOps + invent landmine fixes — **pushed to `origin/main`** (`a8da56c`); Vercel production READY.  
 - CI unblock: move pnpm overrides → `pnpm-workspace.yaml` (pnpm 10+), pin CI `pnpm@10.28.2`, black-format Studio Python files.
 
-## FinOps MediaGraph cycle (2026-07-21 ownership — in progress / local)
+## FinOps MediaGraph cycle (2026-07-21 ownership — complete)
 
 - AIPanel uses `POST .../media-graphs/by-project/{id}/ensure` when Studio project exists (idempotent; stops orphan graph creates).  
+- Kernel-on path never creates `project_id: null` orphan graphs.  
 - Facet refresh debounced 400ms (cuts Firestore write churn on transcript/silence/clips).  
 - Suggestions router: single ownership+derive read (no duplicate Firestore get).  
 - Orphan `POST /api/ai/suggestions` retired → **410** (ADR-009 landmine closed).  
 - `15-production-readiness.md` Go/No-Go synced: editor suggestion rail = Go; deep vision = Conditional; Gemini credits = No-Go until top-up.  
 - AIPanel error copy: honest 402/503/429 quota (not fake “rate limit only”).
 
-## Hardening cycle 2 (2026-07-21) — durable bind + write amplification
+## Hardening cycle 2 (2026-07-21) — durable bind + write amplification — complete
 
 - `StudioProjectHead.media_graph_id` bound on ensure (metadata patch; no ProjectEvent / no revision bump).  
 - Ensure prefers O(1) head pointer before `find_by_project` query.  
 - `upsert_facets` no-op when payload+status+provenance unchanged (no Firestore rewrite / no revision bump).  
 - AIPanel skips suggestions GET when upsert revision unchanged.  
-- `/api/analyze-video` Path B never invents `suggestedEdits` (topics only; empty edits array).
+- `/api/analyze-video` Path B never invents `suggestedEdits` (topics only; empty edits array).  
+- **BE live:** `quickai-api` revision **00097-n9g** (image tag `a8da56c`) — Cloud Build auto-deploy after push.  
+- **FE live:** Vercel production READY on `a8da56c` (`dpl_m7aozkFzvmU7opf8s1Z6zRDJzPvB`).
+
+## Hardening cycle 3 (2026-07-21) — leftover polish
+
+- Ingest CTA copy parity: Generate button neutral; AIPanel strip = upload **or** URL.  
+- ADK Coming Soon: full-workspace blur (IA under gate); Hydro-Glass skeleton (no purple/pink cards).  
+- ComingSoonGate lock: muted, no accent glow.
 
 ## Irreversible ops
 

@@ -20,8 +20,8 @@ Phased evolution. Each phase ships independently.
 
 - Default layout: chat column primary, timeline contextual  
 - Dynamic suggestion rail from Analysis aggregate API  
-- Preserve ADK Coming Soon pattern (Google Agent Development Kit; not Ads) 
-- Brand rename Shorts → Studio (copy + extension)
+- Preserve ADK Coming Soon pattern (Google Agent Development Kit; not Ads)  
+- Brand consistency: QuickAI Short (production) → QuickAI Studio (evolution) — copy + extension
 
 ## Phase S3 — Analysis Depth (3–5 weeks)
 

@@ -22,7 +22,7 @@
 | Admin | `X-Admin-Secret` vs `ADMIN_SECRET` | DLQ, cookies, analytics, email |
 | Download signing | `services/signing.py` | `/api/download/{job_id}` |
 | `AUTH_DISABLED` | `.env.example` documents it | **Not implemented** in `auth.py` (grep empty) |
-| `firebase_auth.py` | Documented in CLAUDE.md | **File does not exist** |
+| `firebase_auth.py` | Historical false claim | **File does not exist** — auth is `services/auth.py` |
 
 ### Auth notes
 
@@ -57,8 +57,8 @@
 | POST `/api/v1/preflight/predict` | Alternate preflight router |
 | POST `/api/analyze` | Analysis |
 | POST `/api/direct` | Director |
-| POST `/api/adk/upload\|enhance\|generate` | ADK Studio |
-| GET `/api/adk/stock` | Pexels stock |
+| POST `/api/adk/upload\|enhance\|generate` | Backend ADK media helpers (UI workspace = Coming Soon) |
+| GET `/api/adk/stock` | Pexels stock (optional key) |
 | GET `/api/agent-runtime/health` | Agent readiness |
 | GET `/api/agent-trace/{session_id}` | Trace |
 

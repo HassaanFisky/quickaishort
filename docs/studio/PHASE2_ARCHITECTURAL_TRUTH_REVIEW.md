@@ -1,7 +1,7 @@
 # PHASE 2 — Architectural Truth Review
 
 **Document type:** Definitive engineering decision record  
-**Product:** QuickAI Studio (evolution of QuickAI Shorts)  
+**Product:** QuickAI Studio (evolution of QuickAI Short)  
 **Date:** 2026-07-18  
 **Audience:** Founder, AntiGravity agents, future staff engineers  
 **Prerequisite knowledge:** Entire `docs/studio/` tree (Phase 1 audit platform)  

@@ -1,32 +1,42 @@
 # 01 — Product Vision (Source of Truth)
 
-**Product name:** QuickAI Studio  
-**Former name:** QuickAI Shorts  
-**Positioning:** AI-native professional video editing platform — **not** another AI video generator.
+**Working product name:** QuickAI Short  
+**Platform evolution:** QuickAI Studio  
+**Positioning:** Conversational AI video editing — not another one-click clipper.
+
+---
+
+## Relationship
+
+**QuickAI Short** is what ships in production today.
+
+**QuickAI Studio** is the intentional evolution of QuickAI Short into an AI-native video editing operating system — same repository, same lineage, deeper orchestration.
+
+Never present them as unrelated products.
 
 ---
 
 ## Definition
 
-QuickAI Studio is where:
+QuickAI Short / Studio is where:
 
-- The **user is the director** (conversation).
-- The **AI is the editor** (tool orchestration).
+- The **user is the director** (conversation and intent).
+- The **AI is the editor** (tool selection and execution).
 - The **backend/frontend tools are the craft** (real edits).
-- The **timeline is secondary context**, not the primary UI.
+- The **timeline is secondary context**, not the only control surface.
 
-The AI never pretends to edit. It performs editing operations through tools.
+The AI does not pretend to edit. It performs editing operations through tools registered in the Capability Registry (EP-001).
 
 ---
 
 ## Core philosophy
 
-Every action should be reachable through conversation.
+Every meaningful action should be reachable through conversation.
 
-Instead of hunting hundreds of buttons, the user states intent. The AI:
+The user states intent. The system:
 
 1. Understands intent  
-2. Selects tools  
+2. Selects capabilities  
 3. Orders execution  
 4. Sets parameters  
 5. Chooses assets / pipeline / render strategy  
@@ -35,101 +45,88 @@ Instead of hunting hundreds of buttons, the user states intent. The AI:
 
 ---
 
-## Canonical user flow
+## Canonical user flow (target + partial production)
 
 ```text
 Upload / paste YouTube URL
         ↓
-AI Analysis Agent (video, audio, faces, scenes, pacing, silence,
-                   captions, objects, emotion, quality, composition, metadata)
+Ingest + transcription (+ MediaGraph facets as available)
         ↓
-Dynamic contextual suggestions above chat input
+Contextual suggestions above chat (MediaGraph-grounded)
         ↓
 User clicks suggestion OR types natural language
         ↓
-Orchestrator plans tool sequence
+Orchestrator / AI editor plans tool sequence
         ↓
-Tool Runtime executes (client NLE + server bake as needed)
+Tool runtime executes (client NLE preview + server bake as needed)
         ↓
 Timeline / preview update
         ↓
-Optional export via RenderManifest → ffmpeg worker
+Export via RenderManifest / Kernel snapshot → ffmpeg worker → GCS
 ```
 
-### Example suggestions (illustrative — must be dynamic)
+### Suggestions
 
-Remove pauses · Make faster · Improve storytelling · Cinematic captions · Convert to Shorts · Remove filler · Add zooms · Better hook · Fix silence · Viral pacing · Transitions · Enhance audio · Reframe speaker · Highlight best moments
+Examples (illustrative): Remove pauses · Faster pacing · Cinematic captions · Convert to Shorts · Fix silence · Reframe speaker · Better hook
 
-**Rule:** Not hardcoded static lists as the sole source. Heuristics may seed; analysis must refine.
+**Rule:** Suggestions are **MediaGraph-grounded** (ADR-009). Static heuristic lists are not the sole source. Phase 2 overturned “heuristics may seed alone.”
 
 ---
 
 ## AI architecture intent
 
-The AI is an **orchestration engine**, not a chatbot.
+The AI is an **orchestration engine**, not a novelty chatbot.
 
-It must understand:
+It must understand available tools, cost/latency, project context, user intent, and recovery. Behavior bar: senior professional editor.
 
-- available tools + dependencies + order  
-- cost + latency  
-- context + previous edits + timeline state  
-- user intent + editing history  
-- recovery + verification  
-
-Behavior bar: **senior professional editor**.
-
----
-
-## Backend philosophy
-
-Headless professional NLE capabilities exposed as **tools**:
-
-timeline edit · split · trim · ripple · overlays · subtitles · transitions · keyframes · audio cleanup · ducking · reframe · effects · export · render · proxies · metadata · FFmpeg pipelines · media indexing · asset management
-
-User does not call these APIs. The agent does.
+**Gemini-first.** Google ADK deepens multi-agent orchestration (Pre-Flight today; broader OS orchestration on the roadmap). Do not claim unfinished ADK product surfaces as live.
 
 ---
 
 ## Frontend philosophy
 
-Closer to ChatGPT than Premiere UI density.
+Closer to a focused conversational workspace than Premiere density by default.
 
-- Conversation always primary  
+- Conversation primary  
 - Timeline contextual  
 - Panels appear when needed  
-- Clean, premium, low noise  
-- **ADK** (Google Agent Development Kit workspace): remain blurred with clear **Coming Soon** + reserved IA skeleton — do not expose unfinished agent orchestration; **not** an advertisements/marketing page (see `EP-008-ADK-ARCHITECTURE-CORRECTION.md`) 
+- **ADK** (Google Agent Development Kit) workspace: **Coming Soon** — blurred — intentionally hidden until release — **not** advertisements (see `EP-008-ADK-ARCHITECTURE-CORRECTION.md`)
 
 ---
 
-## Relationship to existing VISION.md
+## Pre-Flight
 
-Root `VISION.md` describes **QuickAIShort.online** as YouTube→viral shorts with Pre-Flight differentiation and a 2026 challenge roadmap.
+Pre-Flight multi-agent audience simulation remains a differentiated **capability / skill** (`skill.preflight` direction in Phase 2). It is not the entire product identity.
 
-| Topic | Root VISION.md | Studio vision (this doc) |
-|-------|----------------|--------------------------|
-| Primary product metaphor | Shorts repurposing + Pre-Flight | Conversational professional editor |
-| UI primacy | Dual control (auto + manual) | Chat primary, timeline secondary |
-| AI role | Copilot + audience simulation | Orchestration engine operating tools |
-| Roadmap framing | v1–v3 shorts features | Studio NLE + agent runtime |
+---
 
-**Decision:** This document supersedes root `VISION.md` for product direction. Keep Pre-Flight as a **Studio capability**, not the sole identity.
+## Relationship to root VISION.md
+
+Root [`VISION.md`](../../VISION.md) mirrors this document for public/product framing. For frozen architecture decisions, Phase 2 + ADRs win.
+
+| Topic | Production (QuickAI Short) | Evolution (QuickAI Studio) |
+|-------|----------------------------|----------------------------|
+| Metaphor | Conversational long→short editor | AI-native editing OS |
+| UI primacy | Chat + preview + timeline | Chat primary, timeline visualization |
+| AI role | Structured edit actions + Pre-Flight skill | Full tool orchestration + deeper ADK |
+| Storage | GCS primary | Unchanged contract (ADR-002) |
 
 ---
 
 ## Non-goals
 
-- Pure generative “text→fake video” product  
-- Replacing Gemini with OpenAI/Anthropic for core logic (challenge eligibility / stack lock)  
+- Pure generative “text→fake video” as the core product  
+- Replacing Gemini with OpenAI/Anthropic for core challenge-critical logic  
 - GPL dependencies that force proprietary disclosure  
 - Big-bang rewrite of FastAPI/Next.js  
+- Documenting Coming Soon surfaces as shipped  
 
 ---
 
-## Success criteria (Studio MVP)
+## Success criteria
 
-1. User can complete a meaningful edit session **without opening Advanced panels**.  
-2. Every chat command maps to **executed** tools with undo.  
-3. Suggestions update after analysis and after each edit.  
-4. Export uses a validated `RenderManifest` when multi-clip/effects require bake.  
-5. Docs in `docs/studio/` match code (CI doc-lint optional later).
+1. Meaningful edit session without requiring Advanced panels.  
+2. Chat commands map to executed tools with undo where applicable.  
+3. Suggestions update from MediaGraph after analysis/edits.  
+4. Export uses validated RenderManifest / Kernel bake when required.  
+5. Docs match code: shipped vs roadmap always explicit.  

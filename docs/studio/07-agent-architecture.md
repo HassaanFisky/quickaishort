@@ -47,7 +47,7 @@ Wired into `POST /api/pipeline/run` (JWT + credits) and analysis flows.
 ## Director / Script
 
 - Director: ADK storyboard JSON (`DirectorResult`).  
-- Script: non-ADK helper for ADK Studio enhance / stock / TTS.  
+- Script: non-ADK helper for script enhance / stock / TTS paths (ADK UI Coming Soon).  
 - `action_models.py` contains `QepPatch` / `DirectorOutput` catalogue — **approval-gated schema**; not the live editor apply path.
 
 ---

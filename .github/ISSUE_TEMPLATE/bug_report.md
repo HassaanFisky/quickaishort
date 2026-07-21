@@ -28,7 +28,7 @@ Paste the exact traceback, FastAPI container stdout logs, browser console prints
 ### 💻 Environment & Deployment Context
 - **OS/Deployment Target:** (e.g., Google Cloud Run, Vercel Production, Local Windows 11)
 - **Node.js / Python Version:** (e.g., Node 20.12.0, Python 3.12.3)
-- **FastAPI / Next.js Context:** (e.g., FastAPI v0.110, Next.js v14.2.22)
+- **FastAPI / Next.js Context:** (e.g., FastAPI, Next.js 14.2.35)
 - **Affected Pipeline Segment:** (e.g., YouTube extraction, Whisper transcription, FFmpeg render queue)
 
 ---

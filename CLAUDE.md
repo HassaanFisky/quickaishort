@@ -528,16 +528,17 @@ NEXT ACTIONS:
 1. Founder: top up Gemini credits → verify generateContent 200
 2. Record 3-minute demo (live pipeline, not mock)
 3. Submit Devpost + Google for Startups form (Pre-seed)
-4. Optional: PEXELS_API_KEY + GOOGLE_TTS_API_KEY on Cloud Run for full ADK Studio features when ADK section ships
+4. Optional: PEXELS_API_KEY + GOOGLE_TTS_API_KEY on Cloud Run when ADK workspace UI ships (today: Coming Soon)
 
 CURRENT FRAMING:
-Product is "Pre-Flight" — pre-publication clip validation via multi-agent audience simulation.
-Tagline: "OpusClip shows you which clip. Pre-Flight shows you if it will work."
-Architecture: Asynchronous DAG(ClipCandidate, TrendGrounding, AnalyticsGrounding)
-             → LoopAgent(Parallel(6 personas) → Aggregator → QualityGate → Refinement)
-Stats Engine: Real-time MongoDB Aggregation (GridFS backed) + Pusher Fan-out
-Rendering: Cloud-based async rendering via RQ + targeted stream-clipping (yt-dlp)
-ADK Studio: 4-step wizard (Script → Media → Voice → Render) via POST /api/adk/generate
+Product today: **QuickAI Short** — conversational AI video editing (ingest → chat → preview → export).
+Evolution: **QuickAI Studio** — AI-native editing OS on the same codebase (Kernel EP-001…008 dual-run).
+Pre-Flight: ADK multi-agent audience simulation = **skill/capability**, not sole identity.
+Tagline direction: conversation is the editing workflow; AI performs edits; user directs creativity.
+Stats / realtime: Pusher fan-out + Mongo/Firestore paths as implemented — **GCS primary media** (GridFS = legacy `/api/v1/video/*` only).
+Rendering: Cloud RQ + ffmpeg-python → GCS.
+ADK UI (`/adk`): **Coming Soon** (blurred). Backend `/api/adk/*` helpers may exist; do not market a live ADK Studio wizard.
+Studio Kernel: project document, MediaGraph suggestions, orchestrator, chat-primary shell under flags.
 
 LIVE SERVICES:
 
@@ -548,12 +549,12 @@ LIVE SERVICES:
 
 COMPLETED:
 
-- Next.js 14.2.22 frontend with Hydro-Glass UI
+- Next.js 14.2.35 frontend with Hydro-Glass UI (COMPLETED list historically said 14.2.22 — corrected)
 - FastAPI backend with yt-dlp ingestion + proxy
 - Browser-based Whisper transcription (Web Worker)
 - Viral analysis heuristics (audio energy + speech density)
 - Browser local export via MediaRecorder API (`clientExport.ts`); server export via ffmpeg-python RQ worker
-- GCP project created: quickaishort-agent (ID: 946316698978)
+- GCP project created: quickaishort-agent (ID: 946316698978) — **superseded project id for media:** `quickaishort-agent-494304`
 - ADK multi-agent system (/fastapi/agent/viral_agent.py) with Gemini 2.5 Flash
 - Frontend/Backend type synchronization for viral analysis
 - API integration for AI-driven clip suggestion
@@ -566,13 +567,12 @@ COMPLETED:
 - Unified branding with QSLogo "Hydro-Glass" design system
 - Verified zero-error production build (Next.js 14+)
 - Auth middleware: NextAuth JWT verification wired to all protected endpoints
-- ADK Studio platform: POST /api/adk/upload, /api/adk/stock, /api/adk/generate
-  plus frontend 4-step wizard at /adk plus Zustand adkStore
+- ADK backend helpers: POST `/api/adk/upload`, `/api/adk/stock`, `/api/adk/generate` (exist). **DEPRECATED product claim (2026-07-21):** live 4-step wizard at `/adk` — UI is Coming Soon; wizard archived off-route.
 - deploy.sh fixed: python3→python, npm ci→pnpm install, vercel cd path bug
 - Production deployment complete: Cloud Run (API + Worker) + Vercel
 - Production hardening pass 1 (2026-05-06): HTTP 402 gates removed, COEP scoped to /editor, datetime.utcnow fixed, /api/audio FFmpeg MP3 conversion, mongo_session.py deleted, ARCHITECTURE.md aligned
 - Production hardening pass 2 (2026-05-06): /api/audio Cobalt v10 fallback; JWT verified_user_id enforced in all 5 protected endpoints; frontend shows real backend error messages; client-side YouTube URL validation in AcquirePanel; requirements.txt cleaned (removed firebase-admin, google-cloud-speech, moviepy; yt-dlp pin updated to >=2025.4.0); Dockerfile adds libgl1 + libglib2.0-0
-- Production stability pass (2026-05-09): Fully migrated to MongoDB GridFS for all media; removed GCS dependencies; implemented lazy runner initialization for all agents; fixed startup 503 timeout by making DB ping non-blocking; optimized WEB_CONCURRENCY for stability.
+- Production stability pass (2026-05-09): **SUPERSEDED media claim** — temporary GridFS-primary note was inaccurate; **verified GCS primary** for `/adk` + `/editor` (see storage correction 2026-05-29 + ADR-002). Lazy runner init + non-blocking DB ping remain valid.
 - FINAL PRODUCTION LOCKDOWN v1.0 (2026-05-21): Zero TS errors, zero lint errors, zero Python syntax errors. Conversational AI Editor verified. Pre-Flight multi-agent pipeline verified. Full deployment: Vercel (frontend) + Cloud Run quickai-api rev 00030 + quickai-worker rev 00007. Fixed /ready startup probe: deferred run_startup_checks() to background task; added startup probe failureThreshold=20/timeoutSeconds=5 in deploy_production.ps1 to accommodate 13s+ cold-start import time of heavy dependencies (google-adk, google-genai, celery).
 - EDITOR BUG FIX PASS (2026-05-23): Fixed 10 browser-verified bugs (commit 68a56bd). (1) Inspector scroll — min-h-0 on grid children; (2) Playback speed audio — re-apply rate in onLoadedMetadata; (3) Audio Boost — Web Audio GainNode + volume fallback on CORS; (4) Noise Reduction — BiquadFilter highpass in Web Audio chain; (5) Arrow key navigation — keyboard handler placed after skip/togglePlay declarations to avoid TDZ; (6) "No audio data" — setAudioData now called in useMediaPipeline after extraction; (7) Gemini AI Editor — trim leading model turns from chatHistory before startChat; (8) FFmpeg.wasm hang — 15s timeout surfaces CDN block error; (9) Import panel stays open — panelCollapsed state + AnimatePresence collapse with 1.5s delay after load; (10) Clip retry — retry-analysis custom event + error UI in LeftPanel. Zero TS errors, zero lint errors, clean build verified.
 - PRODUCTION STABILIZATION (2026-05-24): 6 production fixes shipped (commit 2002605). (1) Render DLQ: Redis Streams status layer + dead-letter stream render:dead + 4 admin endpoints (/api/render/status|dead|retry|dlq/stats) — push_result() called on every job success/failure; (2) Cookie rotation: cookie_rotator.py with yt-dlp canary validation, 1h in-process cache, CRITICAL log on expiry, admin endpoints + Cloud Scheduler job every 6h; (3) Agent analytics: analytics_queries.py (MongoDB-backed), BigQuery adk_analytics dataset created, 3 admin endpoints; (4) Tiered video acquisition: video_acquisition.py with 15s timeouts per tier (cookies→PoToken-only→error), Redis 1h cache, wired into render_service._download_segment(); (5) Infrastructure: quickai-worker scaled min=1 max=5 concurrency=1, ADMIN_SECRET set; (6) Pipeline resilience: tenacity retry (3 attempts, exponential 2–16s, TimeoutError/ConnectionError only) wrapping runner.run_async in both agents + pipeline_monitor.py writing to MongoDB pipeline_runs + /api/admin/pipeline/health endpoint.
@@ -613,7 +613,7 @@ BLOCKED:
 - **Gemini prepayment credits depleted (429)** — see WORKING MEMORY header (2026-07-21).
 - Demo video + Devpost + Google for Startups form.
 
-OPTIONAL ENV VARS (add to fastapi/.env for full ADK Studio features):
+OPTIONAL ENV VARS (add to fastapi/.env for fuller ADK media helpers when UI ships):
 
 - `PEXELS_API_KEY` — free at pexels.com/api, enables stock video search
 - `GOOGLE_TTS_API_KEY` — GCP API key with Cloud TTS API enabled, enables AI voiceover
@@ -621,10 +621,10 @@ OPTIONAL ENV VARS (add to fastapi/.env for full ADK Studio features):
 NEXT ACTIONS:
 
 1. Founder: top up Gemini credits → verify generateContent 200
-2. Record 3-minute demo video showing live pipeline (not mock) at quickaishort.online
-3. Submit Devpost entry (all required fields)
+2. Record 3-minute demo video showing live conversational editor (not mock) at quickaishort.online
+3. Submit Devpost entry (all required fields) — see DEVPOST_SUBMISSION.md
 4. Submit Google for Startups AI Agents Challenge form (Pre-seed stage)
-5. Optional: add PEXELS_API_KEY + GOOGLE_TTS_API_KEY to Cloud Run env vars for full ADK Studio
+5. Optional: add PEXELS_API_KEY + GOOGLE_TTS_API_KEY to Cloud Run when ADK workspace is released
 
 ---
 
@@ -634,18 +634,17 @@ When in doubt, choose the option that:
 1. Preserves existing working code
 2. Can be verified in under 60 seconds
 3. Is reversible with one command
-4. Moves the challenge submission forward
+4. Moves the product (QuickAI Short → Studio) forward honestly — shipped vs roadmap
 
-If a task doesn't move us closer to winning the June 5 submission, 
-deprioritize it. Every hour counts.
+If a task doesn't move us closer to a reliable product and honest docs, deprioritize it.
 
-Read this file at the start of every session. When this file is updated, 
-acknowledge the change in one line before starting work.
+Read this file at the start of every session. When this file is updated, acknowledge the change in one line before starting work.
 
 ---
 
 ## CHANGELOG
 
+- **2026-07-21:** Documentation synchronization pass — root README/VISION/ARCHITECTURE + studio index realigned to QuickAI Short (production) → QuickAI Studio (evolution); ADK UI Coming Soon; GCS primary; EP package status corrected; DEVPOST/DEMO scripts de-hyped.
 - **2026-07-21:** Ownership cycle — AI Editor credits fail-closed + stream gate; honest Gemini analyze failures; onboarding tour opens AI panel for `ai.*` steps; orphan `YouTubeInputStrip` removed (IngestSurface is sole ingest UI); CLAUDE.md auth/version/Gemini blocker drift corrected.
 - **2026-07-21:** Added the founder-mandated permanent principal engineering ownership policy, continuous whole-system production review, and explicit approval boundaries; activated both canonical governance rules for every repository session.
 - **2026-07-21:** Added the founder-mandated permanent cost-efficiency architecture policy and canonical Cursor rule. Cost is now a pre-implementation gate for every QuickAI Studio change.
