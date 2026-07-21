@@ -11,7 +11,7 @@
 | Auth on pipeline | **Go** | JWT + fail-closed credits |
 | Docs accuracy | **No-Go** until CLAUDE/ARCHITECTURE drift fixed | Misleads agents |
 | ADK Coming Soon blur | **Go** | Google Agent Development Kit Coming Soon + IA skeleton shipped |
-| Billing / credits | **Conditional** | Paddle present; soft-fail risk |
+| Billing / credits | **Conditional** | Paddle present; AI Editor credit gate now **fail-closed** (503 on stats outage; stream gated). Soft-fail only via `CREDITS_SOFT_FAIL=true` (non-prod). |
 | Demo / Devpost (challenge) | Per CLAUDE checklist | Separate from Studio |
 
 ---

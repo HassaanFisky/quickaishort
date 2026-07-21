@@ -36,6 +36,50 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["AI Editor"])
 
 
+def _credits_soft_fail_allowed() -> bool:
+    """Opt-in soft-fail for local/dev only. Production must stay fail-closed."""
+    return os.getenv("CREDITS_SOFT_FAIL", "").strip().lower() in ("1", "true", "yes")
+
+
+async def _require_ai_editor_credit(user_id: str, *, route: str) -> None:
+    """Deduct 1 credit before any Gemini spend.
+
+    Matches pipeline_router fail-closed policy: stats outage → 503, not free AI.
+    Set CREDITS_SOFT_FAIL=true only for non-prod debugging.
+    """
+    try:
+        from services.stats_service import deduct_credits
+
+        ok = await deduct_credits(user_id, 1)
+        if not ok:
+            raise HTTPException(
+                status_code=402,
+                detail="Insufficient credits. Upgrade to Pro to continue.",
+            )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        if _credits_soft_fail_allowed():
+            logger.warning(
+                "%s: credit deduction failed for %s: %s (CREDITS_SOFT_FAIL=true)",
+                route,
+                user_id,
+                exc,
+            )
+            return
+        logger.error(
+            "%s: credit deduction failed for %s: %s",
+            route,
+            user_id,
+            exc,
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=503,
+            detail="Credit service unavailable. Try again shortly.",
+        ) from exc
+
+
 # ─── Legacy Endpoint ───────────────────────────────────────────────────────────
 
 
@@ -68,22 +112,7 @@ async def ai_edit(
             dropped=[],
         )
 
-    # Credit deduction
-    try:
-        from services.stats_service import deduct_credits
-
-        ok = await deduct_credits(user_id, 1)
-        if not ok:
-            raise HTTPException(
-                status_code=402,
-                detail="Insufficient credits. Upgrade to Pro to continue.",
-            )
-    except HTTPException:
-        raise
-    except Exception as exc:
-        logger.warning(
-            "ai_edit: credit deduction failed for %s: %s (proceeding)", user_id, exc
-        )
+    await _require_ai_editor_credit(user_id, route="ai_edit")
 
     # Gemini call
     try:
@@ -134,21 +163,7 @@ async def handle_editor_command(
     if not request.command.strip():
         raise HTTPException(status_code=400, detail="Command cannot be empty")
 
-    try:
-        from services.stats_service import deduct_credits
-
-        ok = await deduct_credits(user_id, 1)
-        if not ok:
-            raise HTTPException(
-                status_code=402,
-                detail="Insufficient credits. Upgrade to Pro to continue.",
-            )
-    except HTTPException:
-        raise
-    except Exception as exc:
-        logger.warning(
-            "handle_editor_command: credit deduction failed for %s: %s (proceeding)", user_id, exc
-        )
+    await _require_ai_editor_credit(user_id, route="handle_editor_command")
 
     ensure_agent_ready("ai_editor_agent", strict=False)
     result = await process_editor_command(
@@ -168,6 +183,11 @@ async def handle_editor_command_stream(
     Streaming version — for real-time AI typing effect in AIPanel
     Called from: frontend/src/components/editor/AIPanel.tsx
     """
+    if not request.command.strip():
+        raise HTTPException(status_code=400, detail="Command cannot be empty")
+
+    await _require_ai_editor_credit(user_id, route="handle_editor_command_stream")
+
     ensure_agent_ready("ai_editor_agent", strict=False)
     return StreamingResponse(
         stream_editor_command(command=request.command, user_tier=request.user_tier),

@@ -39,7 +39,13 @@ Verified untouched at cycle close.
 4. ~~API scale-to-zero~~ ✅ `quickai-api` **min-instances=0** + **cpu-throttling=true** (request-billed; cold-start probes already tolerate heavy imports)  
 5. Soak under real traffic (Redis = Upstash; RedisLabs host retired) — health OK 2026-07-21  
 6. **Founder approval** before deleting legacy `Projects`  
-7. **Gemini blocker:** new AI Studio key authenticates but returns **429 prepayment credits depleted** on project `99900313102` — do not deploy until `generateContent` returns 200
+7. **Gemini blocker:** new AI Studio key authenticates but returns **429 prepayment credits depleted** on project `99900313102` — do not deploy until `generateContent` returns 200  
+
+## Code hardening (2026-07-21 ownership cycle)
+
+- AI Editor credit gate fail-closed (pipeline parity) on `/api/ai-edit`, `/api/ai-editor/command`, `/api/ai-editor/command/stream`. Opt-in `CREDITS_SOFT_FAIL=true` for non-prod only.  
+- Onboarding tour opens AI panel before `ai.*` spotlight steps.  
+- `analyzeVideoWithGemini` no longer returns canned fake topics/edits on failure — errors propagate as HTTP 500.
 
 ## Irreversible ops
 

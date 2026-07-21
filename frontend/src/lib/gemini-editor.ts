@@ -39,8 +39,7 @@ export async function analyzeVideoWithGemini(
   const { GoogleGenerativeAI } = await import("@google/generative-ai");
   const apiKey = process.env.GEMINI_API_KEY ?? process.env.NEXT_PUBLIC_GEMINI_API_KEY;
   if (!apiKey) {
-    if (process.env.NODE_ENV !== "production") console.error("[Gemini Editor] analyzeVideoWithGemini: no API key");
-    return { topics: ["video", "content"], suggestedEdits: [] };
+    throw new Error("Gemini API key not configured");
   }
 
   const genAI = new GoogleGenerativeAI(apiKey);
@@ -63,27 +62,10 @@ Return ONLY this JSON:
 topics: 3-5 content topics inferred from the title
 suggestedEdits: 5 specific, actionable editing suggestions based on likely content`;
 
-  try {
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
-    const cleaned = text.replace(/^```json\n?|\n?```$/g, "").trim();
-    return JSON.parse(cleaned);
-  } catch (err: unknown) {
-    if (process.env.NODE_ENV !== "production") console.error(
-      "[Gemini Editor] analyzeVideoWithGemini failed:",
-      err instanceof Error ? err.message : String(err),
-    );
-    return {
-      topics: ["video", "content"],
-      suggestedEdits: [
-        "Add captions for accessibility",
-        "Apply cinematic color grade",
-        "Trim intro to first 5 seconds",
-        "Boost audio levels",
-        "Add end card overlay",
-      ],
-    };
-  }
+  const result = await model.generateContent(prompt);
+  const text = result.response.text();
+  const cleaned = text.replace(/^```json\n?|\n?```$/g, "").trim();
+  return JSON.parse(cleaned) as Pick<VideoAnalysis, "topics" | "suggestedEdits">;
 }
 
 // ─── Shared utility ───────────────────────────────────────────────────────────

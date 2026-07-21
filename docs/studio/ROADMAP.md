@@ -35,6 +35,12 @@
 
 - New AI Studio key: AUTH OK, **429 prepayment credits depleted** — founder must top up credits at https://ai.studio/projects before any Cloud Run/Vercel key rotate.
 
+### Code hardening (2026-07-21) — not waiting on founder
+
+- AI Editor credits fail-closed + stream gated (`CREDITS_SOFT_FAIL` opt-in only)
+- Onboarding tour opens AI panel for `ai.*` steps
+- No canned fake Gemini analysis on failure
+
 ## Next cycle
 
 | Item | Gate |

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, useReducedMotion } from "framer-motion";
 import { saveOnboarding } from "@/lib/studio/onboarding";
+import { useEditorStore } from "@/stores/editorStore";
 
 const STEPS: { id: string; sentence: string }[] = [
   { id: "ingest.upload", sentence: "Upload a video from your device." },
@@ -29,6 +30,7 @@ export default function EditorOnboardingTour({
   const reduceMotion = useReducedMotion();
   const [step, setStep] = useState(initialStep);
   const [rect, setRect] = useState<DOMRect | null>(null);
+  const setAIPanelOpen = useEditorStore((s) => s.setAIPanelOpen);
 
   const measure = useCallback(() => {
     const id = STEPS[step]?.id;
@@ -37,6 +39,19 @@ export default function EditorOnboardingTour({
     if (el) setRect(el.getBoundingClientRect());
     else setRect(null);
   }, [step]);
+
+  // AI tour anchors live inside the panel — open it before measuring.
+  useEffect(() => {
+    const id = STEPS[step]?.id;
+    if (!id?.startsWith("ai.")) return;
+    setAIPanelOpen(true);
+    const t1 = window.setTimeout(measure, 50);
+    const t2 = window.setTimeout(measure, 220);
+    return () => {
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+    };
+  }, [step, setAIPanelOpen, measure]);
 
   useLayoutEffect(() => {
     measure();
