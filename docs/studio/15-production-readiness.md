@@ -9,7 +9,7 @@
 | Native tool orchestration | **No-Go** for “AI operates Premiere tools” claim | Prompt-JSON only |
 | Dynamic analysis suggestions | **No-Go** for vision claim | Heuristic-first |
 | Auth on pipeline | **Go** | JWT + fail-closed credits |
-| Docs accuracy | **No-Go** until CLAUDE/ARCHITECTURE drift fixed | Misleads agents |
+| Docs accuracy | **Go** (2026-07-21) | CLAUDE auth/version/Gemini blocker + validation report refreshed; historical archive notes marked superseded |
 | ADK Coming Soon blur | **Go** | Google Agent Development Kit Coming Soon + IA skeleton shipped |
 | Billing / credits | **Conditional** | Paddle present; AI Editor credit gate now **fail-closed** (503 on stats outage; stream gated). Soft-fail only via `CREDITS_SOFT_FAIL=true` (non-prod). |
 | Demo / Devpost (challenge) | Per CLAUDE checklist | Separate from Studio |

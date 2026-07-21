@@ -135,7 +135,7 @@ The `next.config.mjs` sets `Cross-Origin-Opener-Policy: same-origin` + `Cross-Or
 
 ### Auth
 
-NextAuth (`next-auth`) handles sessions on the frontend. `fastapi/app/auth/firebase_auth.py` validates Firebase ID tokens on protected backend endpoints. Middleware in `frontend/src/middleware.ts` protects dashboard routes.
+NextAuth (`next-auth`) handles sessions on the frontend. `fastapi/services/auth.py` validates NextAuth HS256 JWTs on protected backend endpoints. Middleware in `frontend/src/middleware.ts` protects dashboard routes.
 
 ### Data stores
 
@@ -150,6 +150,8 @@ NextAuth (`next-auth`) handles sessions on the frontend. `fastapi/app/auth/fireb
 > **Storage correction (2026-05-29):** The 2026-05-09 "migrated to GridFS / removed GCS" note was inaccurate. **Verified source of truth = GCS** for all `/adk` + `/editor` media: `services/db.py` initializes the bucket, and `/api/adk/upload`, `render_worker.py`, and `/api/download` all read/write GCS. MongoDB GridFS (`services/storage.py`) survives only for the legacy `/api/v1/video/*` path. Fixed `adk_service.py` to emit correct `gs://` URIs (it previously emitted `gridfs://…mp4` with a hardcoded extension → non-mp4 uploads rendered as black frames).
 >
 > **Verified config + live blockers (2026-05-29 local bring-up):** Real project = `quickaishort-agent-494304`, bucket = `quickaishort-agent-494304-media` (code defaults in `db.py` + local `.env` corrected; the old `quickaishort-agent` / `qai-exports-quickaishort-agent` values were wrong and 404/'project not found'). Two account-level blockers found via live cURL, both requiring user action: (1) **GCP billing is DELINQUENT** on the project → GCS object writes return 403 `accountDisabled` (blocks the upload→render→download round-trip); (2) **GEMINI_API_KEY is INVALID** → `400 API_KEY_INVALID` from generativelanguage API, so all AI agents fall back to canned/echo output. Verified WORKING: YouTube Data API key (`/api/info` 200), Pexels (`/api/adk/stock`), Redis (managed Redis Cloud), NextAuth HS256 JWT auth on protected endpoints, GCS ADC auth (bucket exists). `GOOGLE_TTS_API_KEY` absent → voiceover silent.
+>
+> **SUPERSEDED (2026-07-21 live probe):** `/health` → `gcs:true`, `mongo:true`, `redis:true`, `adk:true`. Worker `/health/ready` → `redis:true`. Current AI blocker is **Gemini 429 prepayment credits depleted** (key authenticates; founder must top up at ai.studio) — not `API_KEY_INVALID`. Auth path = `fastapi/services/auth.py` (NextAuth JWT), not `firebase_auth.py`.
 
 ---
 
@@ -166,7 +168,7 @@ SaaS platform built for the Google for Startups AI Agents Challenge 2026.
 
 Project owner: Hassaan Fisky, solo founder, Karachi, Pakistan.
 Domain: quickaishort.online (owned since Nov 2025)
-Stack: Next.js 14.2.22 + Tailwind v4 + Framer Motion (frontend), FastAPI + yt-dlp + Whisper + ffmpeg-python (backend), Google ADK multi-agent system (active). Browser preview uses MediaRecorder; final export uses server-side ffmpeg-python via RQ worker.
+Stack: Next.js 14.2.35 + Tailwind v4 + Framer Motion (frontend), FastAPI + yt-dlp + Whisper + ffmpeg-python (backend), Google ADK multi-agent system (active). Browser preview uses MediaRecorder; final export uses server-side ffmpeg-python via RQ worker.
 Submission deadline: June 5, 2026.
 
 Your mission: Ship production-grade code that wins the challenge. Every line 
@@ -290,9 +292,9 @@ AGENT MANAGER (Antigravity native)
 ## 5. PROJECT-SPECIFIC CONSTRAINTS (QuickAIShort)
 
 TECH STACK LOCKED — DO NOT SWAP
-- Frontend: Next.js 14.2.22 App Router, Tailwind v4, Framer Motion, Zustand
+- Frontend: Next.js 14.2.35 App Router, Tailwind v4, Framer Motion, Zustand
 - Backend: Python 3.12, FastAPI, yt-dlp, FFmpeg (Server-side via Google Cloud Run)
-- Agent: Google ADK v1.0, gemini-2.5-flash (DEFAULT_MODEL in gemini_client.py)
+- Agent: Google ADK ≥2.1.0 (`google-adk[bigquery]`), gemini-2.5-flash (DEFAULT_MODEL in gemini_client.py)
 - Task Queue: Redis + RQ for background rendering and stats sync
 - Deploy: Vercel (frontend) + Google Cloud Run (backend)
 - Storage: GCS (primary media: uploads/exports/TTS, bucket quickaishort-agent-494304-media, project quickaishort-agent-494304) + MongoDB Atlas (stats/credits + legacy /api/v1/video GridFS)
@@ -490,10 +492,10 @@ WHEN THE AGENT GETS STUCK IN A LOOP
 The agent must treat these as acceptance tests before any "shipping" claim:
 
 - [x] Uses Google Gemini model (not OpenAI/Claude) for core AI logic — gemini-2.5-flash via gemini_client.py
-- [x] Uses Google ADK v1.0+ for agent orchestration — confirmed by /health: "adk":true
+- [x] Uses Google ADK for agent orchestration — `google-adk[bigquery]>=2.1.0`; confirmed by /health: "adk":true
 - [x] Has deployed, publicly accessible URL at quickaishort.online — live 2026-05-06
 - [x] Has public GitHub repo with MIT LICENSE file — github.com/HassaanFisky/quickaishort
-- [ ] Has 2:50–3:00 demo video showing live pipeline (not mock) — NEEDS RECORDING
+- [ ] Has 2:50–3:00 demo video showing live pipeline (not mock) — NEEDS RECORDING (blocked until Gemini credits top-up)
 - [ ] Devpost submission complete with all fields filled — NEEDS SUBMISSION
 - [ ] Google for Startups form submitted with correct startup stage (Pre-seed) — NEEDS SUBMISSION
 
@@ -505,9 +507,28 @@ Do not claim a task is "done" until it passes every relevant item above.
 
 Keep this section updated as the project evolves.
 
-Last updated: 2026-05-23
+Last updated: 2026-07-21
 
-CURRENT PHASE: PRODUCTION LIVE — Submission Sprint
+CURRENT PHASE: PRODUCTION LIVE — Submission Sprint + Studio Kernel dual-run
+
+BLOCKED:
+
+- **Gemini prepayment credits depleted (429)** on project `99900313102` — founder must top up at https://ai.studio/projects before live demo / key rotate. Auth OK; generateContent fails.
+- Demo video + Devpost + Google for Startups form (challenge checklist).
+
+NOT BLOCKED (verified 2026-07-21):
+
+- API `/health` green (mongo/redis/adk/gcs)
+- Worker `/health/ready` green (RQ listener up)
+- Studio Kernel flags on Vercel + Cloud Run
+- EP-001…008 code shipped; AI Editor credits fail-closed; ADK sidebar = Coming Soon blur only
+
+NEXT ACTIONS:
+
+1. Founder: top up Gemini credits → verify generateContent 200
+2. Record 3-minute demo (live pipeline, not mock)
+3. Submit Devpost + Google for Startups form (Pre-seed)
+4. Optional: PEXELS_API_KEY + GOOGLE_TTS_API_KEY on Cloud Run for full ADK Studio features when ADK section ships
 
 CURRENT FRAMING:
 Product is "Pre-Flight" — pre-publication clip validation via multi-agent audience simulation.
@@ -589,7 +610,8 @@ IN PROGRESS:
 
 BLOCKED:
 
-- None.
+- **Gemini prepayment credits depleted (429)** — see WORKING MEMORY header (2026-07-21).
+- Demo video + Devpost + Google for Startups form.
 
 OPTIONAL ENV VARS (add to fastapi/.env for full ADK Studio features):
 
@@ -598,10 +620,11 @@ OPTIONAL ENV VARS (add to fastapi/.env for full ADK Studio features):
 
 NEXT ACTIONS:
 
-1. Record 3-minute demo video showing Pre-Flight + ADK Studio live at quickaishort.online
-2. Submit Devpost entry (all required fields)
-3. Submit Google for Startups AI Agents Challenge form (Pre-seed stage)
-4. Optional: add PEXELS_API_KEY + GOOGLE_TTS_API_KEY to Cloud Run env vars for full ADK Studio
+1. Founder: top up Gemini credits → verify generateContent 200
+2. Record 3-minute demo video showing live pipeline (not mock) at quickaishort.online
+3. Submit Devpost entry (all required fields)
+4. Submit Google for Startups AI Agents Challenge form (Pre-seed stage)
+5. Optional: add PEXELS_API_KEY + GOOGLE_TTS_API_KEY to Cloud Run env vars for full ADK Studio
 
 ---
 
@@ -623,6 +646,7 @@ acknowledge the change in one line before starting work.
 
 ## CHANGELOG
 
+- **2026-07-21:** Ownership cycle — AI Editor credits fail-closed + stream gate; honest Gemini analyze failures; onboarding tour opens AI panel for `ai.*` steps; orphan `YouTubeInputStrip` removed (IngestSurface is sole ingest UI); CLAUDE.md auth/version/Gemini blocker drift corrected.
 - **2026-07-21:** Added the founder-mandated permanent principal engineering ownership policy, continuous whole-system production review, and explicit approval boundaries; activated both canonical governance rules for every repository session.
 - **2026-07-21:** Added the founder-mandated permanent cost-efficiency architecture policy and canonical Cursor rule. Cost is now a pre-implementation gate for every QuickAI Studio change.
 

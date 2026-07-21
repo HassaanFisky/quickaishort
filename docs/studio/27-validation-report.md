@@ -1,7 +1,8 @@
 # 27 — Validation Report (Docs vs Code)
 
-**Audit date:** 2026-07-18  
-**Method:** File reads + greps. Live production probes: **not run** this session → any uptime/billing claim = Insufficient evidence.
+**Audit date:** 2026-07-21 (refresh)  
+**Prior audit:** 2026-07-18  
+**Method:** File reads + greps + live `/health` probes.
 
 ---
 
@@ -16,82 +17,45 @@
 
 ---
 
-## Root / CLAUDE claims
+## Root / CLAUDE claims (2026-07-21)
 
 | Claim | Verdict | Evidence |
 |-------|---------|----------|
-| Next.js 14.2.22 | ❌ | `frontend/package.json` = **14.2.35** |
-| `firebase_auth.py` validates tokens | ❌ | File absent; `services/auth.py` NextAuth JWT |
-| GCS primary for /adk + /editor | ✅ | `db.py`, upload/export paths |
+| Next.js 14.2.35 | ✅ | `frontend/package.json`; CLAUDE corrected |
+| NextAuth JWT via `services/auth.py` | ✅ | `fastapi/services/auth.py`; CLAUDE corrected (was wrongly `firebase_auth.py`) |
+| GCS primary for /adk + /editor | ✅ | `db.py`, upload/export paths; `/health` → `gcs:true` |
 | GridFS only legacy `/api/v1/video/*` | ✅ | `routers/video.py` |
 | ADK Pre-Flight loop exists | ✅ | `preflight_agent.py` |
-| Render DLQ + admin endpoints | ✅ | `render_queue.py`, main routes |
-| `AUTH_DISABLED` skips JWT | ❌ (as implemented) | Documented in `.env.example`, not in `auth.py` |
-| pipeline frontend unwired | ❓ | Router exists; FE caller not exhaustively proven absent |
-| Billing delinquent / Gemini invalid | ❓ | Historical CLAUDE note — re-verify live |
-| google-adk 1.0 | ❌ in deps | `requirements` has `google-adk[bigquery]>=2.1.0` |
+| Pipeline JWT + fail-closed credits | ✅ | `pipeline_router.py` |
+| AI Editor fail-closed credits + stream gate | ✅ | `ai_editor_router.py` (2026-07-21) |
+| Ingest = `IngestSurface` (upload + URL) | ✅ | EP-008; orphan `YouTubeInputStrip` removed |
+| ADK sidebar Coming Soon blur | ✅ | `ComingSoonGate` / `AdkComingSoonWorkspace` |
+| Gemini live AI | ❌ blocker | **429 prepayment credits depleted** — founder top-up required |
+| google-adk ≥2.1.0 | ✅ | `requirements.txt` `google-adk[bigquery]>=2.1.0` |
 
 ---
 
-## ARCHITECTURE.md
+## Live probes (2026-07-21)
 
-| Claim | Verdict |
-|-------|---------|
-| Pre-Flight Sequential/Loop/Parallel topology | ⚠️ — topology exists; FunctionTool details may be simplified/stale |
-| Stack Next 14.2.22 / ADK 1.0 | ❌ version pins |
-| SerpAPI + YouTube Analytics FunctionTools | ❓ re-read `preflight_agent.py` tool wiring before marketing |
-
----
-
-## VISION.md
-
-| Claim | Verdict |
-|-------|---------|
-| Shorts + Pre-Flight mission | ✅ historical product |
-| Studio chat-primary NLE | ❌ not this document’s intent — superseded by `01-product-vision.md` |
+| Endpoint | Result |
+|----------|--------|
+| `quickai-api …/health` | 200 — mongo/redis/adk/gcs true |
+| `quickai-worker …/health/ready` | 200 — redis true, queue `render_queue` |
+| Frontend `quickaishort.online` | Live |
 
 ---
 
-## README.md
+## Historical notes (do not treat as current)
 
-| Claim | Verdict |
-|-------|---------|
-| Live product description Pre-Flight | ⚠️ still core but incomplete vs Studio |
-| CI badge `ci.yml` | ❓/❌ workflow may be missing — only `linter.yml` + `deploy-video-pipeline.yml` found |
-| ADK 1.0 badge | ⚠️ deps ≥2.1.0 |
+- 2026-05-29 “billing delinquent / API_KEY_INVALID” — **superseded**; GCS healthy; Gemini issue is **429 credits**.
+- `PRODUCTION_STATUS.md` (2026-05-24) — archive only.
+- `VISION.md` Studio claims — superseded by `docs/studio/01-product-vision.md`.
 
 ---
 
-## docs/VIDEO_API.md
+## Still open (non-code)
 
-| Claim | Verdict |
-|-------|---------|
-| GridFS upload flows | ⚠️ true for v1; misleading if read as primary Studio path |
-
----
-
-## PRODUCTION_STATUS.md (2026-05-24)
-
-Historical snapshot — treat as **archive**, not current. Endpoint PASS table = ❓ today.
-
----
-
-## Code facts confirmed this audit
-
-1. AI editor returns JSON; FE `applyAiEdits` executes.  
-2. Native Gemini function calling absent on AI editor path.  
-3. Instant suggestions = title heuristic map.  
-4. Advanced panels gated by `?advanced=1`.  
-5. ADK = Google Agent Development Kit Coming Soon (not Ads); Agency pricing “Coming Soon” is unrelated. See EP-008 ADK correction. 
-6. RenderManifest partially consumed by worker.  
-7. Pipeline run endpoint lacks JWT dependency.
-
----
-
-## Documentation platform status
-
-| Item | Status |
-|------|--------|
-| Prior dedicated Studio docs platform | ❌ did not exist; created `docs/studio/` |
-| Duplicate/misleading legacy docs | ⚠️ retained; classified here |
-| This validation report | ✅ baseline for AntiGravity |
+1. Gemini credit top-up → live demo  
+2. Demo video 2:50–3:00  
+3. Devpost + Google for Startups form  
+4. Founder consent before deleting legacy Firestore `Projects`

@@ -356,15 +356,18 @@ assert(has(editorPage, 'WebGpuPreviewLayer'), 'WebGpuPreviewLayer mounted in edi
 // ── [14] Phase 4a-USER-FLOW — engaging surface refactor ───────────────────────
 console.log("\n[14] Phase 4a-USER-FLOW");
 
-const ytInputStrip = read("components/editor/YouTubeInputStrip.tsx");
-assert(ytInputStrip !== null, 'components/editor/YouTubeInputStrip.tsx exists');
+const ingestSurface = read("components/editor/IngestSurface.tsx");
+assert(ingestSurface !== null, 'components/editor/IngestSurface.tsx exists');
 
 const editorLayout = read("components/editor/EditorLayout.tsx");
-assert(has(editorLayout, 'YouTubeInputStrip'), 'EditorLayout imports/uses YouTubeInputStrip');
+assert(has(editorLayout, 'IngestSurface'), 'EditorLayout imports/uses IngestSurface (EP-008)');
 assert(has(editorLayout, 'advanced'), 'EditorLayout gates panels behind ?advanced=1');
 
 const onboardingTourFile = read("components/editor/OnboardingTour.tsx");
 assert(onboardingTourFile === null, 'OnboardingTour.tsx deleted');
+const editorOnboardingTour = read("components/editor/EditorOnboardingTour.tsx");
+assert(editorOnboardingTour !== null, 'EditorOnboardingTour.tsx exists (EP-008)');
+assert(has(editorLayout, 'EditorOnboardingTour'), 'EditorLayout mounts EditorOnboardingTour');
 
 // launcher already declared in [11]
 assert(has(launcher, '-translate-x-1/2'), 'FloatingChatLauncher is center-aligned');
