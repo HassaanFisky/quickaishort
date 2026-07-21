@@ -286,14 +286,54 @@ class MediaGraphService:
     async def ensure_for_project(
         self, owner_user_id: str, project_id: str
     ) -> MediaGraph:
+        # O(1) via Kernel head pointer when already bound (FinOps).
+        try:
+            from services.project_kernel import get_project_kernel
+
+            head = await get_project_kernel().get_project(project_id, owner_user_id)
+            if head and head.media_graph_id:
+                bound = await self.get(head.media_graph_id, owner_user_id)
+                if bound is not None:
+                    return bound
+        except Exception as exc:
+            logger.warning(
+                "media_graph_head_lookup_failed project_id=%s: %s", project_id, exc
+            )
+
         existing = await asyncio.to_thread(
             self.store.find_by_project, owner_user_id, project_id
         )
         if existing:
+            await self._best_effort_bind_head(
+                owner_user_id, project_id, existing.graph_id
+            )
             return existing
-        return await self.create(
+        created = await self.create(
             owner_user_id, CreateMediaGraphRequest(project_id=project_id)
         )
+        await self._best_effort_bind_head(owner_user_id, project_id, created.graph_id)
+        return created
+
+    async def _best_effort_bind_head(
+        self, owner_user_id: str, project_id: str, graph_id: str
+    ) -> None:
+        try:
+            from services.project_kernel import get_project_kernel
+
+            ok = await get_project_kernel().bind_media_graph_id(
+                project_id, owner_user_id, graph_id
+            )
+            if ok:
+                logger.info(
+                    "media_graph_bound project_id=%s graph_id=%s", project_id, graph_id
+                )
+        except Exception as exc:
+            logger.warning(
+                "media_graph_bind_failed project_id=%s graph_id=%s: %s",
+                project_id,
+                graph_id,
+                exc,
+            )
 
     async def get(self, graph_id: str, user_id: str) -> Optional[MediaGraph]:
         g = await asyncio.to_thread(self.store.get, graph_id)
@@ -308,19 +348,32 @@ class MediaGraphService:
         if g is None:
             return None
         now = _now()
+        changed = False
         for key, data in body.facets.items():
             status = data.get("status", "ready")
             if status not in {"missing", "pending", "ready", "error"}:
                 status = "ready"
             payload = {k: v for k, v in data.items() if k != "status"}
+            prev = g.facets.get(key)
+            if (
+                prev is not None
+                and prev.status == status
+                and prev.data == payload
+                and prev.provenance == body.provenance
+            ):
+                continue
+            changed = True
             g.facets[key] = FacetBlob(
                 status=status,  # type: ignore[arg-type]
-                version=(g.facets.get(key).version + 1) if key in g.facets else 1,
+                version=(prev.version + 1) if prev is not None else 1,
                 updated_at=now,
                 provenance=body.provenance,
                 data=payload,
                 error=data.get("error"),
             )
+        if not changed:
+            # FinOps: identical edge upsert must not rewrite Firestore.
+            return g
         g.revision += 1
         g.updated_at = now
         _recompute_status(g)

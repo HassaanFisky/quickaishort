@@ -48,24 +48,28 @@ export async function analyzeVideoWithGemini(
     generationConfig: { temperature: 0.2, responseMimeType: "application/json" },
   });
 
-  const prompt = `You are a video analysis assistant. Based on this video URL and title, provide editing suggestions.
+  // Topics only — never invent editing chips (ADR-009 / Phase 2 A5a).
+  // Interactive suggestions must come from MediaGraph evidence.
+  const prompt = `You are a video metadata assistant. Infer content topics from this title only.
 
 Video URL: ${videoUrl}
 Video Title: ${videoTitle}
 
 Return ONLY this JSON:
 {
-  "topics": ["topic1", "topic2", "topic3"],
-  "suggestedEdits": ["edit1", "edit2", "edit3", "edit4", "edit5"]
+  "topics": ["topic1", "topic2", "topic3"]
 }
 
-topics: 3-5 content topics inferred from the title
-suggestedEdits: 5 specific, actionable editing suggestions based on likely content`;
+topics: 3-5 content topics inferred from the title. Do not invent editing actions.`;
 
   const result = await model.generateContent(prompt);
   const text = result.response.text();
   const cleaned = text.replace(/^```json\n?|\n?```$/g, "").trim();
-  return JSON.parse(cleaned) as Pick<VideoAnalysis, "topics" | "suggestedEdits">;
+  const parsed = JSON.parse(cleaned) as { topics?: string[] };
+  return {
+    topics: Array.isArray(parsed.topics) ? parsed.topics : [],
+    suggestedEdits: [],
+  };
 }
 
 // ─── Shared utility ───────────────────────────────────────────────────────────

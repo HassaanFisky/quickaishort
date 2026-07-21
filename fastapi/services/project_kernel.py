@@ -112,6 +112,12 @@ class ProjectStore(Protocol):
 
     def soft_delete(self, project_id: str, owner_user_id: str) -> bool: ...
 
+    def bind_media_graph(
+        self, project_id: str, owner_user_id: str, media_graph_id: str
+    ) -> bool:
+        """Metadata-only bind (EP-003). No ProjectEvent; no revision bump."""
+        ...
+
     def put_asset(self, asset: MediaAsset) -> None: ...
 
     def get_asset(self, asset_id: str) -> Optional[MediaAsset]: ...
@@ -205,6 +211,19 @@ class InMemoryProjectStore:
             h.status = "deleted"
             h.deleted_at = _now()
             h.updated_at = h.deleted_at
+            return True
+
+    def bind_media_graph(
+        self, project_id: str, owner_user_id: str, media_graph_id: str
+    ) -> bool:
+        with self._lock:
+            h = self.projects.get(project_id)
+            if not h or h.owner_user_id != owner_user_id or h.status == "deleted":
+                return False
+            if h.media_graph_id == media_graph_id:
+                return True
+            h.media_graph_id = media_graph_id
+            h.updated_at = _now()
             return True
 
     def put_asset(self, asset: MediaAsset) -> None:
@@ -334,6 +353,29 @@ class FirestoreProjectStore:
         )
         return True
 
+    def bind_media_graph(
+        self, project_id: str, owner_user_id: str, media_graph_id: str
+    ) -> bool:
+        ref = self._col().document(project_id)
+        snap = ref.get()
+        if not snap.exists:
+            return False
+        data = snap.to_dict() or {}
+        if data.get("owner_user_id") != owner_user_id:
+            return False
+        if data.get("status") == "deleted":
+            return False
+        if data.get("media_graph_id") == media_graph_id:
+            return True
+        now = _now()
+        ref.update(
+            {
+                "media_graph_id": media_graph_id,
+                "updated_at": now.isoformat(),
+            }
+        )
+        return True
+
     def put_asset(self, asset: MediaAsset) -> None:
         self._asset_col().document(asset.asset_id).set(asset.model_dump(mode="json"))
 
@@ -411,6 +453,14 @@ class ProjectKernel:
 
     async def soft_delete(self, project_id: str, user_id: str) -> bool:
         return await asyncio.to_thread(self.store.soft_delete, project_id, user_id)
+
+    async def bind_media_graph_id(
+        self, project_id: str, user_id: str, media_graph_id: str
+    ) -> bool:
+        """EP-003 best-effort head pointer — not a composition event."""
+        return await asyncio.to_thread(
+            self.store.bind_media_graph, project_id, user_id, media_graph_id
+        )
 
     async def register_asset(
         self,

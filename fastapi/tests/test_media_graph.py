@@ -89,6 +89,40 @@ async def test_ensure_for_project_idempotent(svc):
     assert a.graph_id == b.graph_id
 
 
+@pytest.mark.asyncio
+async def test_upsert_facets_noop_skips_revision_bump(svc):
+    g = await svc.create("u1", CreateMediaGraphRequest())
+    body = UpsertFacetsRequest(
+        facets={"duration": {"seconds": 12.0}, "captions_present": {"enabled": False}}
+    )
+    first = await svc.upsert_facets(g.graph_id, "u1", body)
+    assert first is not None
+    rev = first.revision
+    second = await svc.upsert_facets(g.graph_id, "u1", body)
+    assert second is not None
+    assert second.revision == rev
+
+
+@pytest.mark.asyncio
+async def test_ensure_binds_media_graph_id_on_project_head():
+    from models.studio_project import CreateStudioProjectRequest
+    from services.project_kernel import (
+        InMemoryProjectStore,
+        reset_project_kernel_for_tests,
+    )
+
+    kernel = reset_project_kernel_for_tests(InMemoryProjectStore())
+    head = await kernel.create_project("u1", CreateStudioProjectRequest(title="t"))
+    graph_svc = reset_media_graph_service_for_tests(InMemoryMediaGraphStore())
+    g = await graph_svc.ensure_for_project("u1", head.project_id)
+    bound = await kernel.get_project(head.project_id, "u1")
+    assert bound is not None
+    assert bound.media_graph_id == g.graph_id
+    # Second ensure uses head pointer (same graph)
+    g2 = await graph_svc.ensure_for_project("u1", head.project_id)
+    assert g2.graph_id == g.graph_id
+
+
 def test_derive_pure_no_heuristics_title():
     """Guard: derivation never takes a title string."""
     import inspect

@@ -123,6 +123,7 @@ export function AIPanel() {
   const [suggestions, setSuggestions] = useState<SuggestionIntent[]>([]);
   const [suggestionsLoaded, setSuggestionsLoaded] = useState(false);
   const mediaGraphIdRef = useRef<string | null>(null);
+  const mediaGraphRevisionRef = useRef<number>(-1);
   const boundRunIdRef = useRef<string | null>(null);
 
   // New source video → reset suggestion rail + graph bind
@@ -130,6 +131,7 @@ export function AIPanel() {
     if (boundRunIdRef.current === runId) return;
     boundRunIdRef.current = runId;
     mediaGraphIdRef.current = null;
+    mediaGraphRevisionRef.current = -1;
     setSuggestionsLoaded(false);
     setSuggestions([]);
   }, [runId]);
@@ -261,6 +263,7 @@ export function AIPanel() {
           return;
         }
         mediaGraphIdRef.current = graph.graph_id;
+        mediaGraphRevisionRef.current = graph.revision;
 
         const moments = clips.map((c) => ({
           start: c.start,
@@ -275,7 +278,7 @@ export function AIPanel() {
           captionsEnabled,
           viralMoments: moments.length > 0 ? moments : null,
         });
-        await upsertMediaGraphFacets(graph.graph_id, facets);
+        const upserted = await upsertMediaGraphFacets(graph.graph_id, facets);
         if (
           cancelled ||
           boundRunIdRef.current !== effectRunId ||
@@ -283,6 +286,7 @@ export function AIPanel() {
         ) {
           return;
         }
+        mediaGraphRevisionRef.current = upserted.revision;
         const grounded = await fetchGroundedSuggestions(graph.graph_id);
         if (
           !cancelled &&
@@ -354,7 +358,7 @@ export function AIPanel() {
             captionsEnabled,
             viralMoments: moments.length > 0 ? moments : null,
           });
-          await upsertMediaGraphFacets(graphId, facets);
+          const upserted = await upsertMediaGraphFacets(graphId, facets);
           if (
             cancelled ||
             boundRunIdRef.current !== effectRunId ||
@@ -362,6 +366,11 @@ export function AIPanel() {
           ) {
             return;
           }
+          // FinOps: identical facets → same revision → skip suggestions re-GET.
+          if (upserted.revision === mediaGraphRevisionRef.current) {
+            return;
+          }
+          mediaGraphRevisionRef.current = upserted.revision;
           const grounded = await fetchGroundedSuggestions(graphId);
           if (
             !cancelled &&

@@ -14,6 +14,8 @@
 | TD-EP003-01 | Low | Deprecated `INSTANT_SUGGESTIONS` | EP-003 | **Closed** — removed |
 | TD-EP003-02 | Medium | Suggestion chip click free-text not structured Intent | EP-004 | **Closed** — Plan path |
 | TD-EP003-03 | Medium | Orphan Next route `/api/ai/suggestions` invent landmine | EP-003 follow-up | **Closed** — returns 410 |
+| TD-EP003-04 | High | `StudioProjectHead.media_graph_id` never written | EP-003 | **Closed** — bind on ensure |
+| TD-EP003-05 | High | Facet upsert always rewrites Firestore | EP-003 FinOps | **Closed** — skip-if-unchanged |
 | TD-EP002-03 | Medium | AI edits not auto-committed to Kernel | EP-004 | **Closed** when flag on (structured_steps) |
 
 Update this file whenever debt is introduced or retired.

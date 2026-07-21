@@ -85,7 +85,8 @@ export async function POST(req: NextRequest) {
         scenes: [],
         transcript: [],
         topics: result.topics,
-        suggestedEdits: result.suggestedEdits,
+        // Never invent edits from title — MediaGraph owns interactive suggestions.
+        suggestedEdits: [],
       });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Unknown error";

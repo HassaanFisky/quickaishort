@@ -60,6 +60,14 @@ Verified untouched at cycle close.
 - `15-production-readiness.md` Go/No-Go synced: editor suggestion rail = Go; deep vision = Conditional; Gemini credits = No-Go until top-up.  
 - AIPanel error copy: honest 402/503/429 quota (not fake “rate limit only”).
 
+## Hardening cycle 2 (2026-07-21) — durable bind + write amplification
+
+- `StudioProjectHead.media_graph_id` bound on ensure (metadata patch; no ProjectEvent / no revision bump).  
+- Ensure prefers O(1) head pointer before `find_by_project` query.  
+- `upsert_facets` no-op when payload+status+provenance unchanged (no Firestore rewrite / no revision bump).  
+- AIPanel skips suggestions GET when upsert revision unchanged.  
+- `/api/analyze-video` Path B never invents `suggestedEdits` (topics only; empty edits array).
+
 ## Irreversible ops
 
 No production Firestore/GCS deletes without explicit founder consent.
