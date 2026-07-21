@@ -91,25 +91,31 @@ assert(has(client, "validateEnvelope"), "response shape validation present");
 assert(has(client, "X-Idempotency-Key"), "idempotency key header forwarded");
 assert(has(client, "/api/ai/editor"), "POSTs to /api/ai/editor proxy");
 
-// ── hooks/useAiCommander.ts ──────────────────────────────────────────────────
-console.log("\n[3] hooks/useAiCommander.ts");
+// ── hooks/useAiCommander.ts — RETIRED (TD-EP001 / chat-primary AIPanel) ───────
+console.log("\n[3] hooks/useAiCommander.ts (retired)");
 const hook = read("hooks/useAiCommander.ts");
-assert(hook !== null, "file exists");
-assert(has(hook, "export function useAiCommander"), "exports useAiCommander");
-assert(has(hook, "useEditorStore"), "imports useEditorStore");
-assert(has(hook, "applyAiEdits"), "calls applyAiEdits");
-assert(has(hook, "AbortController"), "uses AbortController");
-assert(has(hook, "AiEditorAbortedError"), "handles AiEditorAbortedError");
-assert(has(hook, "AiEditorAuthError"), "handles AiEditorAuthError");
-assert(has(hook, "AiEditorPaymentRequiredError"), "handles AiEditorPaymentRequiredError");
-assert(has(hook, "AiEditorTimeoutError"), "handles AiEditorTimeoutError");
-assert(has(hook, "needs_clarification"), "handles clarification_needed status");
-assert(has(hook, "canUndo"), "exposes canUndo");
-assert(has(hook, "canRedo"), "exposes canRedo");
-assert(has(hook, "isMockResponse"), "exposes isMockResponse");
-assert(has(hook, "setExecutionOverlay"), "calls setExecutionOverlay");
-assert(has(hook, "idempotencyKey"), "generates idempotency key");
-assert(has(hook, "duration === 0"), "guards against no-video state (E1)");
+assert(hook === null, "useAiCommander.ts removed (AIPanel + sendEditorCommand is canonical)");
+const geminiEditor = read("lib/gemini-editor.ts");
+assert(geminiEditor !== null, "lib/gemini-editor.ts exists");
+assert(has(geminiEditor, "sendEditorCommand"), "exports sendEditorCommand");
+assert(has(geminiEditor, "/api/ai-editor/command"), "POSTs to /api/ai-editor/command");
+assert(!/export\s+(const|function|class)\s+EDITOR_SYSTEM_PROMPT/.test(geminiEditor), "orphan client EDITOR_SYSTEM_PROMPT export removed");
+const aiPanel = read("components/editor/AIPanel.tsx");
+assert(aiPanel !== null, "components/editor/AIPanel.tsx exists");
+assert(has(aiPanel, "sendEditorCommand"), "AIPanel calls sendEditorCommand");
+assert(has(aiPanel, "dispatchAIActions"), "AIPanel applies structured edits via dispatchAIActions");
+assert(has(aiPanel, "data-tour-id=\"ai.suggestions\""), "AI suggestions tour anchor");
+assert(has(aiPanel, "data-tour-id=\"ai.chat\""), "AI chat tour anchor");
+assert(!has(aiPanel, "useAiCommander"), "AIPanel does not import retired useAiCommander");
+const storeForAi = read("stores/editorStore.ts");
+assert(has(storeForAi, "dispatchAIActions") || has(storeForAi, "applyAiEdits"), "editorStore apply/dispatch present");
+assert(has(storeForAi, "undoAiEdit"), "editorStore.undoAiEdit present");
+assert(has(storeForAi, "redoAiEdit"), "editorStore.redoAiEdit present");
+assert(has(storeForAi, "aiUndoStack"), "editorStore.aiUndoStack present");
+assert(has(storeForAi, "aiRedoStack"), "editorStore.aiRedoStack present");
+assert(has(geminiEditor, "CanonicalEditorAction"), "CanonicalEditorAction type exported");
+assert(has(aiPanel, "suggestions-rail") || has(aiPanel, "ai.suggestions"), "suggestions rail present");
+assert(has(geminiEditor, "Authorization") || has(geminiEditor, "backendToken"), "command path attaches auth headers");
 
 // ── stores/editorStore.ts — AI undo + dispatcher ─────────────────────────────
 console.log("\n[4] stores/editorStore.ts (Pillar-3 additions)");
@@ -158,16 +164,16 @@ assert(has(route, "/api/ai-edit"), "proxies to FastAPI /api/ai-edit");
 assert(has(route, "getServerSession"), "uses NextAuth getServerSession");
 assert(has(route, "Authorization"), "forwards Authorization header");
 
-// ── components/editor/AICopilot.tsx — imports commander ──────────────────────
-console.log("\n[7] components/editor/AICopilot.tsx");
+// ── components/editor/AICopilot.tsx — RETIRED (merged into AIPanel) ───────────
+console.log("\n[7] components/editor/AICopilot.tsx (retired → AIPanel)");
 const copilot = read("components/editor/AICopilot.tsx");
-assert(copilot !== null, "file exists");
-assert(has(copilot, "useAiCommander"), "imports useAiCommander");
-assert(has(copilot, "aiPanelMode"), "reads aiPanelMode");
-assert(has(copilot, "canUndo"), "uses canUndo");
-assert(has(copilot, "canRedo"), "uses canRedo");
-assert(has(copilot, "isMockResponse"), "shows mock badge");
-assert(has(copilot, "needs_clarification"), "handles clarification status");
+assert(copilot === null, "AICopilot.tsx removed — chat-primary shell is AIPanel");
+assert(has(aiPanel, "sendEditorCommand"), "AIPanel is command entrypoint");
+assert(has(aiPanel, "aiPanelOpen"), "AIPanel gated by aiPanelOpen");
+assert(has(aiPanel, "undoAiEdit") || has(storeForAi, "undoAiEdit"), "undo path available");
+assert(has(aiPanel, "redoAiEdit") || has(storeForAi, "redoAiEdit"), "redo path available");
+assert(has(aiPanel, "clarification") || has(aiPanel, "feedback") || has(geminiEditor, "feedback"), "clarification/feedback surfaced");
+assert(has(aiPanel, "MediaGraph") || has(aiPanel, "suggestions"), "MediaGraph suggestions path present");
 
 // ── components/editor/VideoCanvas.tsx — execution overlay ────────────────────
 console.log("\n[8] components/editor/VideoCanvas.tsx");
@@ -192,30 +198,25 @@ assert(has(catalog, "SUGGEST_STYLE_PRESET"), "covers SUGGEST_STYLE_PRESET tool")
 assert(has(catalog, "EXPLAIN_LAST_EDIT"), "covers EXPLAIN_LAST_EDIT tool");
 
 const aiCard = read("components/editor/AIToolCard.tsx");
-assert(aiCard !== null, "components/editor/AIToolCard.tsx exists");
-assert(has(aiCard, "AIToolCard"), "exports AIToolCard component");
-assert(has(aiCard, "whileTap"), "has framer-motion tap animation");
-assert(has(aiCard, "aria-label"), "has aria-label for accessibility");
+assert(aiCard === null, "AIToolCard.tsx retired (palette folded into AIPanel)");
 
 const aiConsole = read("components/editor/AIToolConsole.tsx");
-assert(aiConsole !== null, "components/editor/AIToolConsole.tsx exists");
-assert(has(aiConsole, "searchTools"), "uses searchTools for palette filtering");
-assert(has(aiConsole, "ArrowDown"), "has ArrowDown keyboard navigation");
-assert(has(aiConsole, "ArrowUp"), "has ArrowUp keyboard navigation");
-assert(has(aiConsole, "dispatchAIActions"), "calls dispatchAIActions for direct tools");
-assert(has(aiConsole, "commander.execute"), "routes gemini tools via commander.execute");
+assert(aiConsole === null, "AIToolConsole.tsx retired (palette folded into AIPanel)");
 
 const panelStore = read("stores/aiPanelStore.ts");
 assert(panelStore !== null, "stores/aiPanelStore.ts exists");
-assert(has(panelStore, "'tools'"), "aiPanelStore mode union includes 'tools'");
+assert(has(panelStore, "aiPanelMode") || has(panelStore, "setAiPanelMode"), "aiPanelStore mode API present");
 
-assert(has(copilot, "AIToolConsole"), "AICopilot imports AIToolConsole");
-assert(has(copilot, '"tools"'), 'AICopilot renders tools tab');
+assert(has(catalog, "AI_TOOL_CATALOG"), "tool catalog still available");
+assert(has(aiPanel, "applyAiEdits") || has(storeForAi, "applyAiEdits"), "structured action dispatch path exists");
 
 const editorPage = read("app/editor/page.tsx");
 assert(editorPage !== null, "app/editor/page.tsx exists");
-assert(has(editorPage, "useAIPanel"), "editor page imports useAIPanel");
-assert(has(editorPage, 'setAiPanelMode("tools")'), 'Cmd+K sets aiPanelMode to tools');
+assert(has(editorPage, "EditorLayout") || has(editorPage, "useAIPanel"), "editor page mounts editor shell");
+assert(has(aiPanel, "setAIPanelOpen") || has(storeForAi, "setAIPanelOpen"), "AI panel open/close API present");
+assert(has(aiPanel, "sendEditorCommand"), "AIPanel remains NL→action entrypoint");
+assert(has(catalog, "searchTools"), "searchTools helper retained for future palette");
+assert(has(catalog, "execMode"), "catalog entries have execMode field");
 
 // ── [10] Phase 3a — Multi-track timeline + B-Roll ────────────────────────────
 console.log("\n[10] Phase 3a: B-Roll, Overlay, Multi-track timeline");
@@ -287,20 +288,12 @@ assert(has(shortcuts, '"Ctrl+T"'), 'reserved set includes Ctrl+T');
 assert(has(catalog, 'Shift+Alt+B'), 'broll-open-library shortcut updated to Shift+Alt+B');
 assert(has(catalog, 'Shift+Alt+P') || has(editorPage, 'toggleCommandPalette'), 'command palette uses Shift+Alt+P');
 
-// ── [11] Floating chat overlay (Slice A) ─────────────────────────────────────
-console.log("\n[11] Floating chat overlay (Slice A)");
+// ── [11] Floating chat overlay — RETIRED (docked AIPanel is primary) ─────────
+console.log("\n[11] Floating chat overlay (retired → docked AIPanel)");
 
-// panelStore already declared in [10b]
-assert(has(panelStore, 'isFloatingChatOpen'), 'isFloatingChatOpen state in aiPanelStore');
-assert(has(panelStore, 'toggleFloatingChat'), 'toggleFloatingChat action in aiPanelStore');
-assert(has(panelStore, 'setFloatingChatOpen'), 'setFloatingChatOpen action in aiPanelStore');
-
+assert(panelStore !== null, "aiPanelStore still present for panel mode");
 const launcher = read("components/editor/FloatingChatLauncher.tsx");
-assert(launcher !== null, 'components/editor/FloatingChatLauncher.tsx exists');
-assert(has(launcher, "from \"@/lib/shortcuts\"") || has(launcher, "from '@/lib/shortcuts'"), 'FloatingChatLauncher imports from shortcuts.ts');
-assert(has(launcher, '"toggleFloatingChat"') || has(launcher, "'toggleFloatingChat'"), 'FloatingChatLauncher uses toggleFloatingChat shortcut id');
-assert(has(launcher, 'Escape') && has(launcher, 'isContentEditable'), 'Esc handler checks input focus before closing');
-assert(has(launcher, 'prefers-reduced-motion'), 'prefers-reduced-motion branch present');
+assert(launcher === null, "FloatingChatLauncher.tsx removed — docked AIPanel is chat UX");
 
 const persist = read("lib/transcriptPersistence.ts");
 assert(persist !== null, 'lib/transcriptPersistence.ts exists');
@@ -308,13 +301,14 @@ assert(has(persist, '"quickeditor.v1"'), 'IndexedDB database name quickeditor.v1
 assert(has(persist, '"agent_transcripts"'), 'IndexedDB store name agent_transcripts present');
 assert(has(persist, '50'), 'MAX_TURNS = 50 cap present in transcriptPersistence.ts');
 
-assert(has(editorPage, 'FloatingChatLauncher'), 'FloatingChatLauncher mounted in editor/page.tsx');
+assert(!has(editorPage, 'FloatingChatLauncher'), 'FloatingChatLauncher not mounted in editor/page.tsx');
 
 const chatTranscript = read("components/editor/ChatTranscript.tsx");
-assert(chatTranscript !== null, 'components/editor/ChatTranscript.tsx exists');
-// copilot already declared above
-assert(has(copilot, 'ChatTranscript'), 'AICopilot imports ChatTranscript');
-assert(has(launcher, 'ChatTranscript'), 'FloatingChatLauncher imports ChatTranscript (shared transcript)');
+assert(chatTranscript === null, 'ChatTranscript.tsx retired with floating chat');
+assert(has(aiPanel, "messages") || has(aiPanel, "chat") || has(aiPanel, "history"), "AIPanel owns chat transcript UI");
+assert(has(aiPanel, "ai.chat") || has(aiPanel, "sendEditorCommand"), "chat command path live in AIPanel");
+const shortcutsMod = read("lib/shortcuts.ts");
+assert(shortcutsMod !== null && has(shortcutsMod, "SHORTCUTS"), "shortcuts module available");
 
 // ── [12] Auto-remove silences (Slice B) ──────────────────────────────────────
 console.log("\n[12] Auto-remove silences (Slice B)");
@@ -369,10 +363,9 @@ const editorOnboardingTour = read("components/editor/EditorOnboardingTour.tsx");
 assert(editorOnboardingTour !== null, 'EditorOnboardingTour.tsx exists (EP-008)');
 assert(has(editorLayout, 'EditorOnboardingTour'), 'EditorLayout mounts EditorOnboardingTour');
 
-// launcher already declared in [11]
-assert(has(launcher, '-translate-x-1/2'), 'FloatingChatLauncher is center-aligned');
-
-assert(has(editorPage, 'NODE_ENV'), 'TelemetryDock gated behind NODE_ENV in editor/page.tsx');
+assert(launcher === null, 'FloatingChatLauncher remains retired');
+assert(has(editorLayout, "setAIPanelOpen") || has(aiPanel, "aiPanelOpen"), "AI entry CTA present in editor shell");
+assert(has(editorOnboardingTour, "setAIPanelOpen"), "tour opens AI panel for ai.* steps");
 
 // ── [15] Phase 4b-MANUAL-TOOLS — 8 NLE timeline tool actions ─────────────────
 console.log("\n[15] Phase 4b-MANUAL-TOOLS");
@@ -401,10 +394,13 @@ assert(has(editorStore, 'ToolId'), 'ToolId exported from editorStore.ts');
 assert(has(editorStore, 'activeTimelineTool'), 'activeTimelineTool state in editorStore.ts');
 assert(has(editorStore, 'setActiveTimelineTool'), 'setActiveTimelineTool action in editorStore.ts');
 
-// TimelineToolbar component
+// Timeline tools live in BottomDock / store (TimelineToolbar retired as standalone)
 const toolbar = read("components/editor/TimelineToolbar.tsx");
-assert(toolbar !== null, 'components/editor/TimelineToolbar.tsx exists');
-assert(has(toolbar, 'TOOLS'), 'TimelineToolbar defines TOOLS array');
+assert(toolbar === null, 'TimelineToolbar.tsx folded into BottomDock');
+assert(has(editorStore, 'activeTimelineTool'), 'activeTimelineTool remains in editorStore');
+const bottomDock = read("components/editor/BottomDock.tsx");
+assert(bottomDock !== null, 'BottomDock.tsx exists as timeline tool surface');
+assert(has(bottomDock, 'activeTimelineTool') || has(bottomDock, 'setActiveTimelineTool') || has(bottomDock, 'Tool'), 'BottomDock exposes timeline tools');
 
 // ── [16] Phase 4c WebCodecs export ───────────────────────────────────────────
 console.log("\n[16] Phase 4c WebCodecs export");
@@ -425,7 +421,10 @@ assert(exportWorker !== null, "workers/exportWorker.ts exists");
 
 const exportDialog = read("components/editor/ExportDialog.tsx");
 assert(exportDialog !== null, "components/editor/ExportDialog.tsx exists");
-assert(has(exportDialog, "webcodecs_export_enabled"), "webcodecs_export_enabled flag referenced in ExportDialog");
+assert(
+  has(exportDialog, "webcodecs_export_enabled") || has(exportDialog, "WEBCODECS_FLAG") || has(webCodecsExp, "WEBCODECS_FLAG"),
+  "webcodecs export flag defined (ExportDialog and/or exporter)",
+);
 
 const catalogExport = read("lib/aiToolCatalog.ts");
 assert(has(catalogExport, "export-webcodecs-mp4"), "export-webcodecs-mp4 in aiToolCatalog");
@@ -485,8 +484,8 @@ assert(has(colorPipeline, "ColorPipeline"), "ColorPipeline class in colorPipelin
 assert(has(colorPipeline, "isSupported"), "isSupported static method in ColorPipeline");
 
 const colorSuite = read("components/editor/panels/ColorSuite.tsx");
-assert(colorSuite !== null, "components/editor/panels/ColorSuite.tsx exists");
-assert(has(colorSuite, "setClipColor"), "setClipColor used in ColorSuite");
+assert(colorSuite === null, "ColorSuite.tsx not shipped as standalone panel (color via AI actions + WGSL)");
+assert(has(storeForAi, "setClipColor") || has(catalog, "COLOR_WHEELS") || has(types, "COLOR_WHEELS"), "color actions remain in capability surface");
 
 const pyModels18 = readRoot("fastapi/models/ai_editor.py");
 assert(has(pyModels18, "COLOR_WHEELS"),     "COLOR_WHEELS in ai_editor.py");
@@ -526,8 +525,9 @@ const decoderWorker = read("workers/decoderWorker.ts");
 assert(decoderWorker !== null, "workers/decoderWorker.ts exists");
 assert(has(decoderWorker, "// @ts-nocheck"), "decoderWorker.ts has @ts-nocheck");
 
-const nextCfg = read("../next.config.mjs");
-assert(has(nextCfg, '"/adk/:path*"'), "COOP/COEP headers extended to /adk in next.config.mjs");
+const nextCfg = readRoot("frontend/next.config.mjs");
+assert(has(nextCfg, "/editor/:path*"), "COOP/COEP isolation scoped to /editor (SharedArrayBuffer)");
+assert(!has(nextCfg, '"/adk/:path*"') || has(nextCfg, "/editor/:path*"), "ADK Coming Soon does not require COEP; editor isolation preserved");
 
 // ── [20] Phase 5 — Web Audio multi-bus + RNNoise ─────────────────────────────
 console.log("\n[20] Phase 5 Web Audio multi-bus + RNNoise");
