@@ -1,6 +1,6 @@
 # Studio Roadmap (Execution)
 
-**Last updated:** 2026-07-20 (ops: Upstash Redis + Kernel flags live)
+**Last updated:** 2026-07-21 (ops: cost-policy Cloud Run reconciliation)
 
 ## Complete — current cycle
 
@@ -27,6 +27,13 @@
 - [x] Redis migrated to Upstash (`rediss://` TLS); Cloud Run + Vercel + local envs updated; `/health` → `redis:true`  
 - [x] `quickai-worker` `--min-instances=1` + `--no-cpu-throttling` so RQ stays registered on Upstash (verified `Worker.all() >= 1`)  
 - [x] Worker public health soak: `ingress=all` + unauthenticated invoker; hardened `BaseHTTPRequestHandler` — `/health` + `/health/ready` → 200 (`redis:true`)  
+- [x] **Cost policy (2026-07-21):** binding rule in `.cursor/rules/cost-efficient-architecture.mdc` + `CLAUDE.md`  
+- [x] **API cost cut:** `quickai-api` → `min-instances=0` + cpu-throttling (request-billed)  
+- [x] **Worker cost cut (keep reliability):** keep `min=1` / no throttling (RQ listener), reduce **cpu 2→1**, memory 4Gi; verified `Worker.all()=1` + `/health/ready` 200  
+
+### Gemini (honest blocker)
+
+- New AI Studio key: AUTH OK, **429 prepayment credits depleted** — founder must top up credits at https://ai.studio/projects before any Cloud Run/Vercel key rotate.
 
 ## Next cycle
 

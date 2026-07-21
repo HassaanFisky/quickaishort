@@ -1,6 +1,6 @@
 # Migration Status
 
-**Last updated:** 2026-07-20 (Upstash Redis + Kernel prod flags)
+**Last updated:** 2026-07-21 (cost-policy Cloud Run reconciliation)
 
 ## Project storage
 
@@ -35,9 +35,11 @@ Verified untouched at cycle close.
 
 1. ~~Vercel: `NEXT_PUBLIC_STUDIO_PROJECT_KERNEL=1`~~ ✅ (2026-07-20)  
 2. ~~Cloud Run: Kernel not forced off~~ ✅ `STUDIO_PROJECT_KERNEL=1`  
-3. ~~Worker always-on for RQ~~ ✅ `quickai-worker` min-instances=1, no CPU throttling (2026-07-20 soak)  
-4. Soak under real traffic (Redis = Upstash; RedisLabs host retired)  
-5. **Founder approval** before deleting legacy `Projects`
+3. ~~Worker always-on for RQ~~ ✅ **Justified under cost policy (2026-07-21):** RQ BLPOP needs a live listener — `min-instances=1` + `--no-cpu-throttling` kept. Idle waste cut via **cpu 2→1** (memory 4Gi). Blind `min=0` without wake path would drop `Worker.all()` and break renders.  
+4. ~~API scale-to-zero~~ ✅ `quickai-api` **min-instances=0** + **cpu-throttling=true** (request-billed; cold-start probes already tolerate heavy imports)  
+5. Soak under real traffic (Redis = Upstash; RedisLabs host retired) — health OK 2026-07-21  
+6. **Founder approval** before deleting legacy `Projects`  
+7. **Gemini blocker:** new AI Studio key authenticates but returns **429 prepayment credits depleted** on project `99900313102` — do not deploy until `generateContent` returns 200
 
 ## Irreversible ops
 
