@@ -1,0 +1,26 @@
+---
+description: Binding cost-efficiency policy for all QuickAI Studio engineering
+alwaysApply: false
+---
+# Cost-Efficient Architecture Policy
+
+Treat monthly operational cost as a first-class acceptance criterion alongside UX, reliability, maintainability, scalability, security, developer productivity, and simplicity.
+
+Before implementing a feature:
+- Prefer the cheapest production-safe architecture, not merely the easiest.
+- Prefer event-driven or scale-to-zero execution; justify every always-on process.
+- Prevent duplicate AI calls, uploads, renders, and jobs through idempotency and deduplication.
+- Cache and reuse expensive outputs when correctness permits; batch work where practical.
+- Avoid polling when events, streams, callbacks, or webhooks can be used.
+- Minimize Gemini, GCS, Firestore, Cloud Run, and cross-service network operations.
+- Give every expensive operation a business justification, attribution, measurable logging, timeout, bounded retry, and cancellation path.
+- Prevent recursive retries, infinite loops, fan-out explosions, and runaway job creation.
+- Design for a predictable monthly cost envelope and graceful quota exhaustion.
+
+Before recommending any new service, dependency, or infrastructure component, state:
+1. Why it is necessary.
+2. Estimated cost impact and billing unit.
+3. The lower-cost alternative.
+4. Why the selected option is justified.
+
+Stop before implementing when a materially cheaper production-safe design exists or when cost cannot be bounded. Propose the cost-efficient design first. Never weaken security, correctness, or production reliability merely to reduce cost.

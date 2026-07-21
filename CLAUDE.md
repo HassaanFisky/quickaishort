@@ -348,6 +348,17 @@ GENERAL
 - Delete dead code. Do not leave commented-out blocks "just in case."
 - Commits: imperative mood, present tense. "add viral scoring" not "added viral scoring."
 
+PERMANENT COST-EFFICIENCY POLICY (binding from 2026-07-21)
+- Treat predictable monthly cloud cost as a first-class acceptance criterion.
+- Select the cheapest production-safe design; stop before implementing when a materially cheaper safe alternative exists.
+- Prefer event-driven and scale-to-zero execution. Every always-on process requires a measured reliability/business justification.
+- Deduplicate AI calls, uploads, renders, and jobs. Cache/reuse expensive outputs and batch work when correctness permits.
+- Avoid polling when events/webhooks/streams work. Minimize Gemini, GCS, Firestore, Cloud Run, and cross-service traffic.
+- Every expensive operation needs attribution, measurable logs, timeout, bounded retries, cancellation, and runaway prevention.
+- New services/dependencies/infrastructure proposals must include: necessity, estimated cost/billing unit, lower-cost alternative, and selection justification.
+- Cost reduction must never weaken security, correctness, user experience, or production reliability.
+- Canonical always-on agent rule: `.cursor/rules/cost-efficient-architecture.mdc`.
+
 ---
 
 ## 7. DOCUMENTATION & COMMUNICATION STYLE
@@ -597,5 +608,11 @@ deprioritize it. Every hour counts.
 
 Read this file at the start of every session. When this file is updated, 
 acknowledge the change in one line before starting work.
+
+---
+
+## CHANGELOG
+
+- **2026-07-21:** Added the founder-mandated permanent cost-efficiency architecture policy and canonical Cursor rule. Cost is now a pre-implementation gate for every QuickAI Studio change.
 
 END OF PROTOCOL.
