@@ -40,11 +40,15 @@
 - AI Editor credits fail-closed + stream gated (`CREDITS_SOFT_FAIL` opt-in only)
 - Onboarding tour opens AI panel for `ai.*` steps
 - No canned fake Gemini analysis on failure
+- MediaGraph FinOps: ensure-by-project + 400ms facet debounce + suggestions single-read
+- Retired invent route `POST /api/ai/suggestions` → 410
+- Honest AIPanel 402/503/429 quota messaging
 
 ## Next cycle
 
 | Item | Gate |
 |------|------|
+| **Ship FE to production** (`git push origin main` + Vercel) | **Founder deploy approval** — 5+ local commits ahead of origin |
 | **EP-008** Editor First-Run Product Surface (upload parity, onboarding, ADK CS) | ✅ Implemented — ADK≠Ads correction shipped (`APPROVE ADK CORRECTION`) |
 | ADR-006 native Gemini tool-loop depth | Optional engineering EP |
 | Multiplayer | **Founder approval** (EP-007) |

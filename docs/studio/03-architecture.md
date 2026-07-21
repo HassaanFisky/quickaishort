@@ -86,7 +86,7 @@ Pre-Flight Agent (optional gate before publish)
 | Subsystem | Current | Intention | Gap | Reason | Approach | Complexity | Risk | Priority |
 |-----------|---------|-----------|-----|--------|----------|------------|------|----------|
 | Chat UX | AI panel + FAB; advanced panels behind `?advanced=1` | Chat primary | Medium | Product grew as timeline editor | Default chat-first layout; timeline dock secondary | M | Med | P0 |
-| Suggestions | Title heuristics + optional Gemini | Dynamic from analysis | High | Cost/latency; analysis not unified | Analysis job → suggestion API; keep heuristics as cache | M | Low | P0 |
+| Suggestions | MediaGraph facets → pure derive (EP-003) | Same + optional deeper AnalysisAgent | Low for rail; Med for vision depth | Rail shipped; invent route retired 410 | Keep edge upsert + debounce; no title heuristics | L | Low | Done |
 | Tool calling | Prompt-JSON | Native FC + runtime | High | Faster to ship JSON | Add Gemini tools; keep sanitiser | H | Med | P0 |
 | NLE execution | Client store | Real tools | Medium | Correct for preview | Keep client; add server tools for bake | M | Low | P0 |
 | Timeline truth | Client-only | Optional server project graph | High | Projects are script-oriented | Persist RenderManifest snapshots to Firestore | M | Med | P1 |

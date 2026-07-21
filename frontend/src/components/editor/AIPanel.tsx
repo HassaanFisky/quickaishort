@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import {
   buildEdgeFacets,
   createMediaGraph,
+  ensureMediaGraphForProject,
   fetchGroundedSuggestions,
   upsertMediaGraphFacets,
   type SuggestionIntent,
@@ -25,6 +26,9 @@ import {
   ensureStudioProject,
   isStudioProjectKernelEnabled,
 } from "@/lib/studio/projectKernel";
+
+/** Debounce edge facet upserts — transcript/silence/clips churn must not spam Firestore. */
+const FACET_REFRESH_DEBOUNCE_MS = 400;
 
 /* ─── Sub-components ───────────────────────────────────────────────────────── */
 
@@ -220,8 +224,8 @@ export function AIPanel() {
       videoMetadata.duration > 3600
         ? `${Math.round(videoMetadata.duration / 3600)}h ${Math.round((videoMetadata.duration % 3600) / 60)}m`
         : videoMetadata.duration > 60
-        ? `${Math.round(videoMetadata.duration / 60)}m ${Math.round(videoMetadata.duration % 60)}s`
-        : `${Math.round(videoMetadata.duration)}s`;
+          ? `${Math.round(videoMetadata.duration / 60)}m ${Math.round(videoMetadata.duration % 60)}s`
+          : `${Math.round(videoMetadata.duration)}s`;
 
     addAIMessage({
       role: "assistant",
@@ -246,9 +250,10 @@ export function AIPanel() {
         ) {
           return;
         }
-        const graph = await createMediaGraph({
-          project_id: projectId,
-        });
+        // Prefer ensure-by-project (idempotent) to avoid orphan Firestore graphs.
+        const graph = projectId
+          ? await ensureMediaGraphForProject(projectId)
+          : await createMediaGraph({ project_id: null });
         if (
           cancelled ||
           boundRunIdRef.current !== effectRunId
@@ -326,51 +331,54 @@ export function AIPanel() {
     const effectRunId = runId;
     if (!graphId || !videoMetadata) return;
     let cancelled = false;
-    (async () => {
-      try {
-        // Abort if a newer source video superseded this effect's run
-        if (
-          cancelled ||
-          boundRunIdRef.current !== effectRunId ||
-          mediaGraphIdRef.current !== graphId
-        ) {
-          return;
+    const timer = window.setTimeout(() => {
+      (async () => {
+        try {
+          // Abort if a newer source video superseded this effect's run
+          if (
+            cancelled ||
+            boundRunIdRef.current !== effectRunId ||
+            mediaGraphIdRef.current !== graphId
+          ) {
+            return;
+          }
+          const moments = clips.map((c) => ({
+            start: c.start,
+            end: c.end,
+            score: c.score ?? 0,
+          }));
+          const facets = buildEdgeFacets({
+            duration: videoMetadata.duration || duration || 0,
+            transcriptChunks: transcript?.chunks ?? null,
+            silenceSegments: silenceSegments ?? null,
+            captionsEnabled,
+            viralMoments: moments.length > 0 ? moments : null,
+          });
+          await upsertMediaGraphFacets(graphId, facets);
+          if (
+            cancelled ||
+            boundRunIdRef.current !== effectRunId ||
+            mediaGraphIdRef.current !== graphId
+          ) {
+            return;
+          }
+          const grounded = await fetchGroundedSuggestions(graphId);
+          if (
+            !cancelled &&
+            boundRunIdRef.current === effectRunId &&
+            mediaGraphIdRef.current === graphId &&
+            grounded.length > 0
+          ) {
+            setSuggestions(grounded);
+          }
+        } catch {
+          /* keep prior rail */
         }
-        const moments = clips.map((c) => ({
-          start: c.start,
-          end: c.end,
-          score: c.score ?? 0,
-        }));
-        const facets = buildEdgeFacets({
-          duration: videoMetadata.duration || duration || 0,
-          transcriptChunks: transcript?.chunks ?? null,
-          silenceSegments: silenceSegments ?? null,
-          captionsEnabled,
-          viralMoments: moments.length > 0 ? moments : null,
-        });
-        await upsertMediaGraphFacets(graphId, facets);
-        if (
-          cancelled ||
-          boundRunIdRef.current !== effectRunId ||
-          mediaGraphIdRef.current !== graphId
-        ) {
-          return;
-        }
-        const grounded = await fetchGroundedSuggestions(graphId);
-        if (
-          !cancelled &&
-          boundRunIdRef.current === effectRunId &&
-          mediaGraphIdRef.current === graphId &&
-          grounded.length > 0
-        ) {
-          setSuggestions(grounded);
-        }
-      } catch {
-        /* keep prior rail */
-      }
-    })();
+      })();
+    }, FACET_REFRESH_DEBOUNCE_MS);
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
     };
   }, [
     transcript,
@@ -585,16 +593,35 @@ export function AIPanel() {
         });
       } catch (err: unknown) {
         const errMsg = err instanceof Error ? err.message : String(err);
+        const status = axios.isAxiosError(err) ? err.response?.status : undefined;
+        const detail =
+          axios.isAxiosError(err) && err.response?.data?.detail
+            ? String(err.response.data.detail)
+            : "";
 
         let displayMsg = "Request failed — please try again.";
-        if (/api[_\s]?key|not configured|401|403/i.test(errMsg)) {
+        if (status === 402 || /insufficient credits|402/i.test(`${errMsg} ${detail}`)) {
+          displayMsg =
+            detail || "Insufficient credits. Upgrade to Pro to continue.";
+        } else if (status === 503 || /credit service unavailable/i.test(`${errMsg} ${detail}`)) {
+          displayMsg =
+            detail || "Credit service unavailable. Try again shortly.";
+        } else if (/api[_\s]?key|not configured|401|403/i.test(errMsg)) {
           displayMsg = "Gemini API key not configured on this server.";
-        } else if (/rate.?limit|quota|429|RESOURCE_EXHAUSTED/i.test(errMsg)) {
-          displayMsg = "Rate limit reached — wait a moment and retry.";
+        } else if (
+          status === 429 ||
+          /rate.?limit|quota|429|RESOURCE_EXHAUSTED|prepayment|credits? depleted/i.test(
+            `${errMsg} ${detail}`,
+          )
+        ) {
+          displayMsg =
+            "AI quota unavailable right now (credits or rate limit). Retry after credits are restored — edits you already made stay on the timeline.";
         } else if (/network|fetch|failed to fetch/i.test(errMsg)) {
           displayMsg = "Connection lost — check your internet.";
         } else if (/400|invalid argument/i.test(errMsg)) {
           displayMsg = "Invalid request — try rephrasing.";
+        } else if (detail) {
+          displayMsg = detail;
         } else if (errMsg && errMsg !== "Request failed") {
           displayMsg = errMsg;
         }
@@ -660,231 +687,231 @@ export function AIPanel() {
           exit={{ y: 40, opacity: 0 }}
           transition={{ type: "spring", damping: 28, stiffness: 260 }}
         >
-        <div className="flex flex-col h-full rounded-2xl overflow-hidden border border-white/[0.08] bg-[#111116]/95 backdrop-blur-2xl shadow-[0_24px_64px_rgba(0,0,0,0.7),0_0_0_1px_rgba(168,85,247,0.1)]">
-          {/* ── Header ──────────────────────────────────────────────── */}
-          <div className="ai-panel-header">
-            <div className="ai-header-left">
-              {/* Gem badge */}
-              <div className="ai-header-gem">✦</div>
-              <span className="ai-panel-title">QuickAI Editor</span>
-            </div>
-
-            <div className="ai-header-right">
-              {/* Status dot */}
-              <span
-                className={cn(
-                  "w-1.5 h-1.5 rounded-full shrink-0",
-                  isAIThinking
-                    ? "bg-amber-400 animate-pulse"
-                    : isVideoLoaded
-                    ? "bg-emerald-400"
-                    : "bg-white/20"
-                )}
-              />
-              {aiMessages.length > 0 && (
-                <button
-                  onClick={() => useEditorStore.setState({ aiMessages: [] })}
-                  className="text-[9px] text-white/30 hover:text-white/70 transition-colors uppercase tracking-wider px-1"
-                  aria-label="Clear conversation"
-                >
-                  Clear
-                </button>
-              )}
-              <button
-                className="ai-close-btn"
-                onClick={() => setAIPanelOpen(false)}
-                aria-label="Close QuickAI Editor"
-              >
-                <X size={14} />
-              </button>
-            </div>
-          </div>
-
-          {/* ── Context strip ─────────────────────────────────────── */}
-          <div className="px-4 py-2 flex items-center gap-2 border-b border-white/[0.05] bg-white/[0.02] shrink-0">
-            <Zap className="w-3 h-3 text-accent-p shrink-0" />
-            <span className="text-[10px] text-white/40 font-medium truncate">
-              {isVideoLoaded
-                ? videoMetadata!.title.length > 48
-                  ? videoMetadata!.title.slice(0, 48) + "…"
-                  : videoMetadata!.title
-                : "No video loaded — paste a YouTube URL to start"}
-            </span>
-          </div>
-
-          {/* ── Active edit state (only shown when something is non-default) ── */}
-          {(() => {
-            const tags: string[] = [];
-            if (editorState.filter !== "None") tags.push(editorState.filter);
-            if (editorState.audioBoost !== 85 && editorState.audioBoost !== 100) tags.push(`Audio ${editorState.audioBoost}%`);
-            if (editorState.playbackSpeed !== 100) tags.push(`${editorState.playbackSpeed}% speed`);
-            if (editorState.captionCount > 0) tags.push(`${editorState.captionCount} caption${editorState.captionCount > 1 ? "s" : ""}`);
-            if (editorState.transitionEnabled) tags.push("Transitions");
-            if (tags.length === 0) return null;
-            return (
-              <div className="flex flex-wrap gap-1.5 px-3.5 py-2 border-b border-white/[0.05] bg-white/[0.015] shrink-0">
-                <span className="text-[8px] font-black uppercase tracking-[0.2em] text-white/20 self-center">Active</span>
-                {tags.map((t) => (
-                  <span key={t} className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-white/[0.06] border border-white/[0.08] text-white/50">
-                    {t}
-                  </span>
-                ))}
+          <div className="flex flex-col h-full rounded-2xl overflow-hidden border border-white/[0.08] bg-[#111116]/95 backdrop-blur-2xl shadow-[0_24px_64px_rgba(0,0,0,0.7),0_0_0_1px_rgba(168,85,247,0.1)]">
+            {/* ── Header ──────────────────────────────────────────────── */}
+            <div className="ai-panel-header">
+              <div className="ai-header-left">
+                {/* Gem badge */}
+                <div className="ai-header-gem">✦</div>
+                <span className="ai-panel-title">QuickAI Editor</span>
               </div>
-            );
-          })()}
 
-          {/* ── Messages ────────────────────────────────────────────── */}
-          <div className="ai-messages">
-
-            {/* Empty state */}
-            {aiMessages.length === 0 && (
-              <div className="ai-empty-state">
-                <div className="w-12 h-12 rounded-2xl bg-white/[0.04] border border-white/[0.07] flex items-center justify-center mb-1">
-                  <Sparkles className="w-5 h-5 text-accent-p/60" />
-                </div>
-                <p className="text-[12px] font-semibold text-white/30">
-                  {isVideoLoaded ? "Tell me what to edit" : "Load a video first"}
-                </p>
-                <p className="text-[10px] text-white/15 max-w-[200px]">
-                  {isVideoLoaded
-                    ? "I'll apply your edits directly to the timeline"
-                    : "Upload a video or paste a YouTube URL to get started"}
-                </p>
-              </div>
-            )}
-
-            {/* Messages */}
-            {aiMessages.map((msg) => (
-              <motion.div
-                key={msg.id}
-                className={`ai-msg ai-msg-${msg.role}`}
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.18, ease: "easeOut" }}
-              >
-                {msg.role === "assistant" && (
-                  <div className="msg-gem-badge">✦</div>
-                )}
-                <div className="msg-content">
-                  {msg.role === "assistant" ? (
-                    <StreamingText text={msg.content} />
-                  ) : (
-                    <MessageText text={msg.content} />
+              <div className="ai-header-right">
+                {/* Status dot */}
+                <span
+                  className={cn(
+                    "w-1.5 h-1.5 rounded-full shrink-0",
+                    isAIThinking
+                      ? "bg-amber-400 animate-pulse"
+                      : isVideoLoaded
+                        ? "bg-emerald-400"
+                        : "bg-white/20"
                   )}
-                  {msg.actions && msg.actions.length > 0 && (
-                    <div className="action-tags">
-                      {msg.actions.map((a, i) => (
-                        <ActionTag key={i} type={a.type} index={i} />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </motion.div>
-            ))}
-
-            {/* Thinking indicator */}
-            {isAIThinking && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="ai-msg ai-msg-assistant"
-              >
-                <ThinkingBubble />
-              </motion.div>
-            )}
-
-            <div ref={messagesEndRef} />
-          </div>
-
-          {/* ── Suggestion chips (EP-003 grounded only) ─────────── */}
-          {suggestions.length > 0 && (
-            <div className="suggestions-rail" data-tour-id="ai.suggestions">
-              {suggestions.map((s) =>
-                s.interactive ? (
+                />
+                {aiMessages.length > 0 && (
                   <button
-                    key={s.suggestion_id}
-                    className="suggestion-chip"
-                    title={s.evidence.summary}
-                    onClick={() => void applyGroundedSuggestion(s)}
-                    disabled={isAIThinking}
+                    onClick={() => useEditorStore.setState({ aiMessages: [] })}
+                    className="text-[9px] text-white/30 hover:text-white/70 transition-colors uppercase tracking-wider px-1"
+                    aria-label="Clear conversation"
                   >
-                    {s.label}
+                    Clear
                   </button>
-                ) : (
-                  <span
-                    key={s.suggestion_id}
-                    className="suggestion-chip opacity-60 cursor-default pointer-events-none"
-                    title={s.evidence.summary}
-                    aria-disabled="true"
-                  >
-                    {s.label}
-                  </span>
-                ),
-              )}
+                )}
+                <button
+                  className="ai-close-btn"
+                  onClick={() => setAIPanelOpen(false)}
+                  aria-label="Close QuickAI Editor"
+                >
+                  <X size={14} />
+                </button>
+              </div>
             </div>
-          )}
 
-          {/* ── Input area ───────────────────────────────────────── */}
-          <div className="ai-input-area">
-            {interimText && (
-              <div className="interim-text">{interimText}</div>
+            {/* ── Context strip ─────────────────────────────────────── */}
+            <div className="px-4 py-2 flex items-center gap-2 border-b border-white/[0.05] bg-white/[0.02] shrink-0">
+              <Zap className="w-3 h-3 text-accent-p shrink-0" />
+              <span className="text-[10px] text-white/40 font-medium truncate">
+                {isVideoLoaded
+                  ? videoMetadata!.title.length > 48
+                    ? videoMetadata!.title.slice(0, 48) + "…"
+                    : videoMetadata!.title
+                  : "No video loaded — paste a YouTube URL to start"}
+              </span>
+            </div>
+
+            {/* ── Active edit state (only shown when something is non-default) ── */}
+            {(() => {
+              const tags: string[] = [];
+              if (editorState.filter !== "None") tags.push(editorState.filter);
+              if (editorState.audioBoost !== 85 && editorState.audioBoost !== 100) tags.push(`Audio ${editorState.audioBoost}%`);
+              if (editorState.playbackSpeed !== 100) tags.push(`${editorState.playbackSpeed}% speed`);
+              if (editorState.captionCount > 0) tags.push(`${editorState.captionCount} caption${editorState.captionCount > 1 ? "s" : ""}`);
+              if (editorState.transitionEnabled) tags.push("Transitions");
+              if (tags.length === 0) return null;
+              return (
+                <div className="flex flex-wrap gap-1.5 px-3.5 py-2 border-b border-white/[0.05] bg-white/[0.015] shrink-0">
+                  <span className="text-[8px] font-black uppercase tracking-[0.2em] text-white/20 self-center">Active</span>
+                  {tags.map((t) => (
+                    <span key={t} className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-white/[0.06] border border-white/[0.08] text-white/50">
+                      {t}
+                    </span>
+                  ))}
+                </div>
+              );
+            })()}
+
+            {/* ── Messages ────────────────────────────────────────────── */}
+            <div className="ai-messages">
+
+              {/* Empty state */}
+              {aiMessages.length === 0 && (
+                <div className="ai-empty-state">
+                  <div className="w-12 h-12 rounded-2xl bg-white/[0.04] border border-white/[0.07] flex items-center justify-center mb-1">
+                    <Sparkles className="w-5 h-5 text-accent-p/60" />
+                  </div>
+                  <p className="text-[12px] font-semibold text-white/30">
+                    {isVideoLoaded ? "Tell me what to edit" : "Load a video first"}
+                  </p>
+                  <p className="text-[10px] text-white/15 max-w-[200px]">
+                    {isVideoLoaded
+                      ? "I'll apply your edits directly to the timeline"
+                      : "Upload a video or paste a YouTube URL to get started"}
+                  </p>
+                </div>
+              )}
+
+              {/* Messages */}
+              {aiMessages.map((msg) => (
+                <motion.div
+                  key={msg.id}
+                  className={`ai-msg ai-msg-${msg.role}`}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.18, ease: "easeOut" }}
+                >
+                  {msg.role === "assistant" && (
+                    <div className="msg-gem-badge">✦</div>
+                  )}
+                  <div className="msg-content">
+                    {msg.role === "assistant" ? (
+                      <StreamingText text={msg.content} />
+                    ) : (
+                      <MessageText text={msg.content} />
+                    )}
+                    {msg.actions && msg.actions.length > 0 && (
+                      <div className="action-tags">
+                        {msg.actions.map((a, i) => (
+                          <ActionTag key={i} type={a.type} index={i} />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              ))}
+
+              {/* Thinking indicator */}
+              {isAIThinking && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="ai-msg ai-msg-assistant"
+                >
+                  <ThinkingBubble />
+                </motion.div>
+              )}
+
+              <div ref={messagesEndRef} />
+            </div>
+
+            {/* ── Suggestion chips (EP-003 grounded only) ─────────── */}
+            {suggestions.length > 0 && (
+              <div className="suggestions-rail" data-tour-id="ai.suggestions">
+                {suggestions.map((s) =>
+                  s.interactive ? (
+                    <button
+                      key={s.suggestion_id}
+                      className="suggestion-chip"
+                      title={s.evidence.summary}
+                      onClick={() => void applyGroundedSuggestion(s)}
+                      disabled={isAIThinking}
+                    >
+                      {s.label}
+                    </button>
+                  ) : (
+                    <span
+                      key={s.suggestion_id}
+                      className="suggestion-chip opacity-60 cursor-default pointer-events-none"
+                      title={s.evidence.summary}
+                      aria-disabled="true"
+                    >
+                      {s.label}
+                    </span>
+                  ),
+                )}
+              </div>
             )}
 
-            <div className="input-row">
-              <textarea
-                ref={textareaRef}
-                data-tour-id="ai.chat"
-                className="ai-textarea"
-                placeholder={
-                  !isVideoLoaded
-                    ? "Load a video to start editing…"
-                    : isRecording
-                    ? "Listening…"
-                    : "Tell me what to edit… (Enter to send)"
-                }
-                value={inputText}
-                onChange={handleInput}
-                onKeyDown={handleKeyDown}
-                rows={1}
-                disabled={isAIThinking || !isVideoLoaded}
-              />
+            {/* ── Input area ───────────────────────────────────────── */}
+            <div className="ai-input-area">
+              {interimText && (
+                <div className="interim-text">{interimText}</div>
+              )}
 
-              <button
-                className={`voice-btn ${isRecording ? "voice-btn-active" : ""}`}
-                onClick={toggleVoice}
-                disabled={!isVideoLoaded}
-                aria-label={isRecording ? "Stop recording" : "Voice input"}
-                title={isRecording ? "Stop voice input" : "Voice input"}
-              >
-                {isRecording ? <MicOff size={14} /> : <Mic size={14} />}
-              </button>
+              <div className="input-row">
+                <textarea
+                  ref={textareaRef}
+                  data-tour-id="ai.chat"
+                  className="ai-textarea"
+                  placeholder={
+                    !isVideoLoaded
+                      ? "Load a video to start editing…"
+                      : isRecording
+                        ? "Listening…"
+                        : "Tell me what to edit… (Enter to send)"
+                  }
+                  value={inputText}
+                  onChange={handleInput}
+                  onKeyDown={handleKeyDown}
+                  rows={1}
+                  disabled={isAIThinking || !isVideoLoaded}
+                />
 
-              <button
-                className="send-btn"
-                onClick={() => sendMessage(inputText)}
-                disabled={isAIThinking || !inputText.trim() || !isVideoLoaded}
-                aria-label="Send"
-                title="Send (Enter)"
-              >
-                <Send size={13} />
-              </button>
-            </div>
+                <button
+                  className={`voice-btn ${isRecording ? "voice-btn-active" : ""}`}
+                  onClick={toggleVoice}
+                  disabled={!isVideoLoaded}
+                  aria-label={isRecording ? "Stop recording" : "Voice input"}
+                  title={isRecording ? "Stop voice input" : "Voice input"}
+                >
+                  {isRecording ? <MicOff size={14} /> : <Mic size={14} />}
+                </button>
 
-            {voiceError && <p className="voice-error">{voiceError}</p>}
+                <button
+                  className="send-btn"
+                  onClick={() => sendMessage(inputText)}
+                  disabled={isAIThinking || !inputText.trim() || !isVideoLoaded}
+                  aria-label="Send"
+                  title="Send (Enter)"
+                >
+                  <Send size={13} />
+                </button>
+              </div>
 
-            {/* Keyboard hint */}
-            <div className="flex items-center justify-between px-0.5">
-              <span className="text-[9px] text-white/15">
-                Enter to send · Shift+Enter for new line
-              </span>
-              <span className="text-[9px] text-white/15 flex items-center gap-1">
-                <kbd className="px-1 py-0.5 rounded bg-white/[0.06] font-mono text-[9px]">Ctrl</kbd>
-                <kbd className="px-1 py-0.5 rounded bg-white/[0.06] font-mono text-[9px]">K</kbd>
-                to open
-              </span>
+              {voiceError && <p className="voice-error">{voiceError}</p>}
+
+              {/* Keyboard hint */}
+              <div className="flex items-center justify-between px-0.5">
+                <span className="text-[9px] text-white/15">
+                  Enter to send · Shift+Enter for new line
+                </span>
+                <span className="text-[9px] text-white/15 flex items-center gap-1">
+                  <kbd className="px-1 py-0.5 rounded bg-white/[0.06] font-mono text-[9px]">Ctrl</kbd>
+                  <kbd className="px-1 py-0.5 rounded bg-white/[0.06] font-mono text-[9px]">K</kbd>
+                  to open
+                </span>
+              </div>
             </div>
           </div>
-        </div>
         </motion.aside>
       )}
     </AnimatePresence>

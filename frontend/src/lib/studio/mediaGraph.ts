@@ -34,6 +34,16 @@ export async function createMediaGraph(opts?: {
   return data as MediaGraphDoc;
 }
 
+/** Idempotent graph bind — prefer over create when a Studio project exists (FinOps). */
+export async function ensureMediaGraphForProject(
+  projectId: string,
+): Promise<MediaGraphDoc> {
+  const { data } = await axios.post(
+    `${API_URL}/api/studio/v1/media-graphs/by-project/${encodeURIComponent(projectId)}/ensure`,
+  );
+  return data as MediaGraphDoc;
+}
+
 export async function upsertMediaGraphFacets(
   graphId: string,
   facets: Record<string, Record<string, unknown>>,

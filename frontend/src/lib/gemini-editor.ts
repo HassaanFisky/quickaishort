@@ -139,7 +139,7 @@ export async function sendEditorCommand(
       if (session?.user?.id) {
         headers["X-User-Id"] = session.user.id;
       }
-    } catch {}
+    } catch { }
   }
 
   const response = await fetch(`${API_BASE}/api/ai-editor/command`, {
@@ -149,10 +149,12 @@ export async function sendEditorCommand(
   })
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({}))
-    throw new Error(
-      error.detail || `AI Editor error: ${response.status}`
-    )
+    const error = await response.json().catch(() => ({}));
+    const detail =
+      typeof error.detail === "string"
+        ? error.detail
+        : `AI Editor error: ${response.status}`;
+    throw new Error(`${detail} (${response.status})`);
   }
 
   return response.json()
@@ -178,7 +180,7 @@ export async function streamEditorCommand(
       if (session?.user?.id) {
         headers["X-User-Id"] = session.user.id;
       }
-    } catch {}
+    } catch { }
   }
 
   const response = await fetch(`${API_BASE}/api/ai-editor/command/stream`, {

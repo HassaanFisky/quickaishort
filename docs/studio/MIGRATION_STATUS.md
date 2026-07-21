@@ -50,6 +50,15 @@ Verified untouched at cycle close.
 - Deploy scripts locked to cost-policy settings (no more min=1 / wrong bucket footgun).  
 - Frontend FE tour + honest Gemini + orphan strip cleanup committed — **needs Vercel deploy / git push** for production frontend.
 
+## FinOps MediaGraph cycle (2026-07-21 ownership — in progress / local)
+
+- AIPanel uses `POST .../media-graphs/by-project/{id}/ensure` when Studio project exists (idempotent; stops orphan graph creates).  
+- Facet refresh debounced 400ms (cuts Firestore write churn on transcript/silence/clips).  
+- Suggestions router: single ownership+derive read (no duplicate Firestore get).  
+- Orphan `POST /api/ai/suggestions` retired → **410** (ADR-009 landmine closed).  
+- `15-production-readiness.md` Go/No-Go synced: editor suggestion rail = Go; deep vision = Conditional; Gemini credits = No-Go until top-up.  
+- AIPanel error copy: honest 402/503/429 quota (not fake “rate limit only”).
+
 ## Irreversible ops
 
 No production Firestore/GCS deletes without explicit founder consent.

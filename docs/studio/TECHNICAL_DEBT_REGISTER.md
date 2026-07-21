@@ -13,6 +13,7 @@
 | TD-UI-02 | Medium | Dual AI panels (dashboard fake edits) | Product | **Closed** — dashboard FAQ + `/editor` CTA only |
 | TD-EP003-01 | Low | Deprecated `INSTANT_SUGGESTIONS` | EP-003 | **Closed** — removed |
 | TD-EP003-02 | Medium | Suggestion chip click free-text not structured Intent | EP-004 | **Closed** — Plan path |
+| TD-EP003-03 | Medium | Orphan Next route `/api/ai/suggestions` invent landmine | EP-003 follow-up | **Closed** — returns 410 |
 | TD-EP002-03 | Medium | AI edits not auto-committed to Kernel | EP-004 | **Closed** when flag on (structured_steps) |
 
 Update this file whenever debt is introduced or retired.
