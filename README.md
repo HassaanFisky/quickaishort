@@ -1,13 +1,8 @@
 <div align="center">
 
 <br />
-
 <img src="public/qs-logo.png" alt="QuickAI Short" width="320" />
-
-<br /><br />
-
-# QuickAI Short
-
+<br /> <br />
 ### Conversational AI video editing — from long-form to finished short.
 
 <br />
