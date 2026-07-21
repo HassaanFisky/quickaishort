@@ -1,7 +1,7 @@
 {
-  "name": "QuickAI Shorts",
+  "name": "QuickAI Short",
   "short_name": "QuickAI",
-  "description": "Elite AI Video Shorts Studio",
+  "description": "Conversational AI video editing",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#000000",

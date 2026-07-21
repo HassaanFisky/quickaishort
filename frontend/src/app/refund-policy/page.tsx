@@ -4,7 +4,7 @@ import Footer from "@/components/layout/Footer";
 
 export const metadata: Metadata = {
   title: "Refund Policy — Quick AI Shorts",
-  description: "Our fair and transparent refund policy for QuickAI Shorts digital services.",
+  description: "Our fair and transparent refund policy for QuickAI Short digital services.",
 };
 
 export default function RefundPolicyPage() {
@@ -34,7 +34,7 @@ export default function RefundPolicyPage() {
           <section className="space-y-4">
             <h2 className="text-2xl font-bold text-foreground tracking-tight">1. Digital Nature of Service</h2>
             <p>
-              QuickAI Shorts provides digital software-as-a-service (SaaS) products. Due to the 
+              QuickAI Short provides digital software-as-a-service (SaaS) products. Due to the 
               immediate delivery and nature of digital goods, all purchases are generally final 
               and non-refundable once credits have been consumed or a subscription has been active.
             </p>

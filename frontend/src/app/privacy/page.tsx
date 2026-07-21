@@ -4,7 +4,7 @@ import Footer from "@/components/layout/Footer";
 
 export const metadata: Metadata = {
   title: "Privacy Policy — Quick AI Shorts",
-  description: "How we collect, use, and protect your data at QuickAI Shorts.",
+  description: "How we collect, use, and protect your data at QuickAI Short.",
 };
 
 export default function PrivacyPage() {

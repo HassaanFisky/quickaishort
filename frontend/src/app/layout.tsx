@@ -32,10 +32,10 @@ const montserrat = Montserrat({
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://quickaishort.online"),
-  title: "QuickAI Shorts | The World's Most Powerful AI Short-Form Studio",
+  title: "QuickAI Short | Conversational AI Video Editing",
   description:
-    "Transform long-form videos into viral shorts instantly. Powered by Gemini 2.5 Flash and multi-agent AI for 100% stable extraction, automatic captions, and viral scoring.",
-  keywords: ["AI video editor", "youtube shorts generator", "viral clips", "gemini 2.5 flash", "video automation", "content creator tools"],
+    "Turn long-form video into finished shorts with conversational AI. Paste a URL or upload, chat your edits, preview, and export with Gemini.",
+  keywords: ["AI video editor", "conversational video editing", "youtube to shorts", "gemini", "video export", "content creator tools"],
   authors: [{ name: "QuickAI Team" }],
   manifest: "/manifest.json",
   icons: {
@@ -46,22 +46,22 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     url: "https://quickaishort.online",
-    title: "QuickAI Shorts | AI Video Studio",
-    description: "The elite studio for creating viral shorts with multi-agent AI.",
-    siteName: "QuickAI Shorts",
+    title: "QuickAI Short | Conversational AI Editor",
+    description: "Chat-driven video editing — ingest, preview, and export.",
+    siteName: "QuickAI Short",
     images: [
       {
         url: "/qs-logo.png",
         width: 1024,
         height: 1024,
-        alt: "QuickAI Shorts Logo",
+        alt: "QuickAI Short Logo",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "QuickAI Shorts | Viral AI Clips",
-    description: "Transform long-form videos into viral shorts instantly with AI.",
+    title: "QuickAI Short | AI Video Editor",
+    description: "Conversational AI editing for long-form to short-form video.",
     images: ["/qs-logo.png"],
     creator: "@quickaishort",
   },

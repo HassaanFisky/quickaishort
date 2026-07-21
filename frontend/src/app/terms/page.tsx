@@ -4,7 +4,7 @@ import Footer from "@/components/layout/Footer";
 
 export const metadata: Metadata = {
   title: "Terms of Service — Quick AI Shorts",
-  description: "The rules, regulations, and guidelines for using QuickAI Shorts.",
+  description: "The rules, regulations, and guidelines for using QuickAI Short.",
 };
 
 export default function TermsPage() {

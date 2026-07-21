@@ -71,7 +71,7 @@ export default function Sidebar() {
         >
           <Image
             src="/qs-logo-optimized.png"
-            alt="QuickAI Shorts"
+            alt="QuickAI Short"
             width={28}
             height={28}
             className="rounded-md shrink-0"
@@ -79,7 +79,7 @@ export default function Sidebar() {
           />
           {!isSidebarCollapsed && (
             <span className="ml-2 text-[13px] font-black tracking-tight text-foreground/90 whitespace-nowrap overflow-hidden">
-              Quick<span className="premium-gradient-text">AI</span> Shorts
+              Quick<span className="premium-gradient-text">AI</span> Short
             </span>
           )}
         </Link>

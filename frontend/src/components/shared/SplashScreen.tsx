@@ -58,7 +58,7 @@ export default function SplashScreen() {
           >
             <Image
               src="/qs-logo.png"
-              alt="QuickAI Shorts"
+              alt="QuickAI Short"
               width={220}
               height={220}
               priority

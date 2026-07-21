@@ -40,7 +40,7 @@ export default function Footer() {
 
         <div className="mt-12 pt-6 border-t border-white/[0.04] flex flex-col sm:flex-row items-center justify-between gap-3">
           <p className="text-[11px] text-[hsl(var(--fg-subtle))]">
-            © {new Date().getFullYear()} QuickAI Shorts. All rights reserved.
+            © {new Date().getFullYear()} QuickAI Short. All rights reserved.
           </p>
           <p className="text-[11px] text-[hsl(var(--fg-subtle))]">
             Built with Gemini 2.5 Flash · Google ADK

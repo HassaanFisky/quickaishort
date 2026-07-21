@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Editor — QuickAI Shorts",
+  title: "Editor — QuickAI Short",
   description: "AI-powered browser-native video editor. Paste a YouTube URL, edit with voice or text, export viral shorts.",
 };
 
