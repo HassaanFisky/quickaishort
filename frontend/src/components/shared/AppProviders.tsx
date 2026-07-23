@@ -38,7 +38,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
 
   return (
     <MotionConfig reducedMotion="user">
-      <SessionProvider>
+      <SessionProvider refetchInterval={5 * 60} refetchOnWindowFocus>
         <QueryClientProvider client={queryClient}>
           <PusherProvider>
             <ThemeProvider
