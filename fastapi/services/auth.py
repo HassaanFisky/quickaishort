@@ -47,7 +47,12 @@ def get_verified_user_id(
         )
 
     try:
-        payload = _jwt.decode(token, _NEXTAUTH_SECRET, algorithms=[_ALGORITHM])
+        payload = _jwt.decode(
+            token,
+            _NEXTAUTH_SECRET,
+            algorithms=[_ALGORITHM],
+            leeway=30,
+        )
         user_id = payload.get("sub") or payload.get("id") or ""
         if not user_id:
             raise HTTPException(status_code=401, detail="Token missing user identity.")

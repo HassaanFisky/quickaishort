@@ -1,4 +1,4 @@
-import axios from "axios";
+import axios, { type InternalAxiosRequestConfig } from "axios";
 import type { ClipCandidatePayload, PreflightResult } from "@/types/preflight";
 import type {
   ExportEnqueueResponse,
@@ -16,16 +16,77 @@ import type {
 export const API_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
+export const SESSION_EXPIRED_EVENT = "qai:session-expired";
+
+interface AuthRetryAxiosConfig extends InternalAxiosRequestConfig {
+  _authRetried?: boolean;
+}
+
+function resolveRequestUrl(config: InternalAxiosRequestConfig): string {
+  const url = config.url ?? "";
+  if (url.startsWith("http://") || url.startsWith("https://")) {
+    return url;
+  }
+  const base = (config.baseURL ?? "").replace(/\/$/, "");
+  const path = url.startsWith("/") ? url : `/${url}`;
+  return base ? `${base}${path}` : path;
+}
+
+function isFastApiRequest(config: InternalAxiosRequestConfig): boolean {
+  const full = resolveRequestUrl(config);
+  const apiBase = API_URL.replace(/\/$/, "");
+  return full.startsWith(apiBase);
+}
+
+/** Force-fetch session from server (bypasses client-side getSession cache). */
+export async function refreshBackendSession(): Promise<{
+  backendToken?: string;
+  userId?: string;
+} | null> {
+  try {
+    const res = await fetch("/api/auth/session", {
+      cache: "no-store",
+      credentials: "include",
+    });
+    if (!res.ok) return null;
+    const session = await res.json();
+    return {
+      backendToken: session?.backendToken as string | undefined,
+      userId: session?.user?.id as string | undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
 // Default timeout: 30 s. Long-running inference calls override per-request.
 axios.defaults.timeout = 30_000;
 
-// Global network-error response interceptor — shows a toast for connectivity
-// failures. 401 is intentionally excluded: the SessionExpiryModal handles it.
+// Global response interceptor — network toasts, FastAPI 401 refresh + retry, session modal signal.
 if (typeof window !== "undefined") {
   axios.interceptors.response.use(
     (response) => response,
     async (err) => {
       const status: number | undefined = err?.response?.status;
+      const config = err?.config as AuthRetryAxiosConfig | undefined;
+
+      if (status === 401 && config && isFastApiRequest(config) && !config._authRetried) {
+        config._authRetried = true;
+        const refreshed = await refreshBackendSession();
+        if (refreshed?.backendToken) {
+          config.headers = config.headers || {};
+          config.headers["Authorization"] = `Bearer ${refreshed.backendToken}`;
+          if (refreshed.userId) {
+            config.headers["X-User-Id"] = refreshed.userId;
+          }
+          return axios(config);
+        }
+      }
+
+      if (status === 401 && config && isFastApiRequest(config)) {
+        window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT));
+      }
+
       if (!status && err?.code === "ERR_NETWORK") {
         const { toast } = await import("sonner");
         toast.error("Connection lost — check your internet and try again.", { id: "network-error" });

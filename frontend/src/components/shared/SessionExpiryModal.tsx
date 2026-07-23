@@ -1,16 +1,17 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { signIn } from "next-auth/react";
+import { signIn, useSession } from "next-auth/react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Lock, Loader2 } from "lucide-react";
-import axios from "axios";
+import { SESSION_EXPIRED_EVENT } from "@/lib/api";
 
 /**
- * Listens for 401 Axios responses (session expiry) and renders an inline
- * re-authentication modal. The user signs in WITHOUT losing the current page.
+ * Listens for confirmed FastAPI auth failures (after one silent retry) and
+ * renders an inline re-authentication modal without losing the current page.
  */
 export function SessionExpiryModal() {
+  const { status } = useSession();
   const [isVisible, setIsVisible] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -18,22 +19,16 @@ export function SessionExpiryModal() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    const interceptorId = axios.interceptors.response.use(
-      (response) => response,
-      (err) => {
-        // Only trigger the modal for 401 from our own backend
-        if (err?.response?.status === 401 && !isVisible) {
-          setIsVisible(true);
-        }
-        return Promise.reject(err);
-      }
-    );
-
-    return () => {
-      axios.interceptors.response.eject(interceptorId);
+    const onSessionExpired = () => {
+      if (status === "loading") return;
+      setIsVisible(true);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+
+    window.addEventListener(SESSION_EXPIRED_EVENT, onSessionExpired);
+    return () => {
+      window.removeEventListener(SESSION_EXPIRED_EVENT, onSessionExpired);
+    };
+  }, [status]);
 
   const handleReLogin = useCallback(async () => {
     setLoading(true);

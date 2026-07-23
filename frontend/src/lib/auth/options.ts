@@ -7,6 +7,9 @@ import bcrypt from "bcryptjs";
 import { triggerWelcomeEmail } from "@/lib/email";
 
 import crypto from "crypto";
+import { SignJWT } from "jose";
+
+export const SESSION_MAX_AGE = 30 * 24 * 60 * 60; // 30 days
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -143,29 +146,35 @@ export const authOptions: NextAuthOptions = {
         session.user.id = token.id ?? "";
         session.user.isPro = token.isPro ?? false;
       }
-      // Re-encode the NextAuth JWT payload as a compact HS256 token that the
-      // FastAPI backend can verify with NEXTAUTH_SECRET.  The session cookie is
-      // httpOnly and unreachable from document.cookie, so we expose the token
-      // here and the axios interceptor reads session.backendToken instead.
+      // Mint a compact HS256 JWT that FastAPI verifies with NEXTAUTH_SECRET.
+      // next-auth/jwt encode() produces encrypted JWE — incompatible with PyJWT HS256.
       try {
-        const { encode } = await import("next-auth/jwt");
-        session.backendToken = await encode({
-          token,
-          secret: process.env.NEXTAUTH_SECRET!,
-          maxAge: 30 * 24 * 60 * 60,
-        });
+        const secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET!);
+        const subject = String(token.id ?? token.sub ?? "");
+        if (subject && secret.length > 0) {
+          session.backendToken = await new SignJWT({
+            id: token.id,
+            email: token.email,
+            isPro: token.isPro ?? false,
+          })
+            .setProtectedHeader({ alg: "HS256" })
+            .setSubject(subject)
+            .setIssuedAt()
+            .setExpirationTime(`${SESSION_MAX_AGE}s`)
+            .sign(secret);
+        }
       } catch {
-        // encode failure is non-fatal; API calls will receive 401 until resolved
+        // Sign failure is non-fatal; API calls will receive 401 until resolved
       }
       return session;
     },
   },
   session: {
     strategy: "jwt",
-    maxAge: 30 * 24 * 60 * 60, // 30 days
+    maxAge: SESSION_MAX_AGE,
   },
   jwt: {
-    maxAge: 30 * 24 * 60 * 60, // 30 days
+    maxAge: SESSION_MAX_AGE,
   },
   cookies: {
     sessionToken: {
