@@ -1,7 +1,7 @@
 # Architecture — QuickAI Short / QuickAI Studio
 
-**Last updated:** 2026-07-21  
-**Stack (verified):** Next.js 14.2.35 · FastAPI · Gemini 2.5 Flash · Google ADK (Pre-Flight agents) · Redis/RQ · ffmpeg-python · GCS primary · NextAuth JWT
+**Last updated:** 2026-07-23
+**Stack (verified):** Next.js 14.2.35 · FastAPI · Gemini 2.5 Flash · Google ADK (Pre-Flight agents) · Cloud Tasks · Redis · ffmpeg-python · GCS primary · NextAuth JWT
 
 Canonical deep docs: [`docs/studio/`](docs/studio/README.md)  
 Binding OS direction: [`docs/studio/PHASE2_ARCHITECTURAL_TRUTH_REVIEW.md`](docs/studio/PHASE2_ARCHITECTURAL_TRUTH_REVIEW.md)  
@@ -27,7 +27,7 @@ Browser → Next.js (frontend/src/app/)
        ├─ YouTube / upload ingest
        ├─ Gemini AI Editor (+ Studio Kernel when flagged)
        ├─ Optional Pre-Flight ADK pipeline (skill)
-       └─ RQ render jobs → render_worker.py → GCS exports/
+       └─ Cloud Tasks → private request renderer (min=0) → GCS exports/
 ```
 
 Realtime: Pusher + WebSocket fallback. Auth: NextAuth HS256 JWT validated in `fastapi/services/auth.py`.
@@ -41,11 +41,11 @@ User message / suggestion chip
         ↓
 POST AI editor / Studio orchestrator (flagged)
         ↓
-Gemini → structured actions (Capability Registry ABI — EP-001)
+Gemini + Luna orchestration profile → structured actions (Capability Registry ABI — EP-001)
         ↓
 Client applies preview edits (Zustand NLE)
         ↓
-Optional bake: RenderManifest / Kernel snapshot → RQ → ffmpeg → GCS
+Optional bake: RenderManifest / Kernel snapshot → Cloud Tasks → ffmpeg → GCS
 ```
 
 **Suggestions:** MediaGraph-grounded only (ADR-009). Heuristic-only chip lists are retired.
@@ -66,7 +66,10 @@ SequentialAgent (PreFlight Orchestrator)
         └─ ClipRefinement
 ```
 
-Model: Gemini 2.5 Flash via `fastapi/services/gemini_client.py`.
+Model: Gemini 2.5 Flash via `fastapi/services/gemini_client.py`. Luna is the
+ordered tool/JSON prompt profile; Terra is the single schema-repair profile.
+They are not external model providers. Redis blocks duplicate exact requests
+and shares bounded 429 cooldown state across instances.
 
 **ADK workspace UI (`/adk`):** Coming Soon — blurred, intentionally unavailable until release (ADR-013 / EP-008). Do not document it as a live script-to-video studio.
 
@@ -79,7 +82,10 @@ Model: Gemini 2.5 Flash via `fastapi/services/gemini_client.py`.
 | **GCS** | Primary media — uploads, exports, TTS cache (`quickaishort-agent-494304-media`) |
 | **MongoDB** | Job history, credits paths, legacy GridFS for `/api/v1/video/*` only |
 | **Firestore** | ADK session state (falls back to in-memory); some stats paths |
-| **Redis** | RQ queue + status streams / locks |
+| **Redis** | Render status, runId cancellation, locks/dedupe, tenant AI cache, Gemini 429 cooldown |
+
+Plan admission uses a fixed trusted-tier capability matrix; there is no rolling
+daily free-video pool.
 
 Historical notes that claimed “GridFS for all media” are obsolete. See ADR-002.
 
@@ -113,7 +119,7 @@ Never bypass EP-001. Never invent a second tool ABI.
 | `analysis.worker.ts` | Silence / energy analysis |
 | `ffmpegExport.worker.ts` | Client preview export path (CDN-timeout guarded) |
 
-Production export authority: server RQ worker + GCS.
+Production export authority: private request-bound Cloud Run renderer + GCS.
 
 ---
 
@@ -123,9 +129,10 @@ Production export authority: server RQ worker + GCS.
 |-----------|----------|
 | Frontend | Vercel — `https://www.quickaishort.online` |
 | API | Cloud Run `quickai-api` |
-| Worker | Cloud Run `quickai-worker` (min instances kept for RQ listener reliability) |
+| Renderer | Private Cloud Run `quickai-worker` (`min=0`, request CPU, concurrency 1) |
+| Durable dispatch | Cloud Tasks `quickai-render` (OIDC, 3 bounded attempts) |
 
-Cost policy: prefer API scale-to-zero; justify always-on worker for queue reliability. See cost-efficiency rules.
+Cost policy: API and renderer both scale to zero; Redis is no longer a compute wake path. See cost-efficiency rules.
 
 ---
 
