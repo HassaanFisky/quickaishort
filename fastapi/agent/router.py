@@ -567,6 +567,16 @@ class DualModelRouter:
             await self._cache.release(lookup)
             raise
 
+    async def execute(
+        self,
+        request: LogicRouteRequest | VisualRouteRequest,
+        *,
+        output_model: type[OutputModelT],
+    ) -> RouterResponse:
+        """Live-API alias for ``route`` (used by ai_editor_router wiring)."""
+
+        return await self.route(request, output_model=output_model)
+
     def _select_primary_model(
         self,
         request: LogicRouteRequest | VisualRouteRequest,
@@ -835,6 +845,18 @@ def get_dual_model_router() -> DualModelRouter:
     if _router is None:
         _router = DualModelRouter(provider_admission=True)
     return _router
+
+
+async def execute(
+    request: LogicRouteRequest | VisualRouteRequest,
+    *,
+    output_model: type[OutputModelT],
+    router: DualModelRouter | None = None,
+) -> RouterResponse:
+    """Module-level entry used by live API routers (aliases ``DualModelRouter.route``)."""
+
+    active = router or get_dual_model_router()
+    return await active.route(request, output_model=output_model)
 
 
 # Re-export for callers that still evaluate static limits without daily reserve.
