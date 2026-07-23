@@ -28,50 +28,6 @@ export interface EditorStateContext {
 // Live edit commands: sendEditorCommand → FastAPI /api/ai-editor/command (EP-001 registry).
 // Orphan client EDITOR_SYSTEM_PROMPT + callGeminiEditor removed (TD-EP001-01 / TD-01).
 
-// ─── Server-side helper (called only from Next.js API routes) ─────────────────
-// analyzeVideoWithGemini is imported by /api/analyze-video/route.ts which runs
-// server-side, so it can read GEMINI_API_KEY directly.
-
-export async function analyzeVideoWithGemini(
-  videoUrl: string,
-  videoTitle: string,
-): Promise<Pick<VideoAnalysis, "topics" | "suggestedEdits">> {
-  const { GoogleGenerativeAI } = await import("@google/generative-ai");
-  const apiKey = process.env.GEMINI_API_KEY ?? process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error("Gemini API key not configured");
-  }
-
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({
-    model: "gemini-2.5-flash",
-    generationConfig: { temperature: 0.2, responseMimeType: "application/json" },
-  });
-
-  // Topics only — never invent editing chips (ADR-009 / Phase 2 A5a).
-  // Interactive suggestions must come from MediaGraph evidence.
-  const prompt = `You are a video metadata assistant. Infer content topics from this title only.
-
-Video URL: ${videoUrl}
-Video Title: ${videoTitle}
-
-Return ONLY this JSON:
-{
-  "topics": ["topic1", "topic2", "topic3"]
-}
-
-topics: 3-5 content topics inferred from the title. Do not invent editing actions.`;
-
-  const result = await model.generateContent(prompt);
-  const text = result.response.text();
-  const cleaned = text.replace(/^```json\n?|\n?```$/g, "").trim();
-  const parsed = JSON.parse(cleaned) as { topics?: string[] };
-  return {
-    topics: Array.isArray(parsed.topics) ? parsed.topics : [],
-    suggestedEdits: [],
-  };
-}
-
 // ─── Shared utility ───────────────────────────────────────────────────────────
 
 export function buildVideoContext(
