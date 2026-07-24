@@ -232,7 +232,9 @@ async def _execute_via_dual_router(
 
     return EditorCommandResponse(
         intent="edit",
-        confidence=0.92 if result.cached or result.model_used == "mock-ai-mode" else 0.85,
+        confidence=(
+            0.92 if result.cached or result.model_used == "mock-ai-mode" else 0.85
+        ),
         actions=canonical,
         feedback=feedback,
         fallback="Rephrase the command and retry.",
@@ -285,8 +287,10 @@ async def _execute_ai_edit_via_dual_router(
             },
         )
     used_mock = bool(is_mock_ai_mode() or command.model_used == "mock-ai-mode")
-    mapped_status = "mocked" if used_mock else (
-        status if status in {"ok", "clarification_needed", "no_op"} else "ok"
+    mapped_status = (
+        "mocked"
+        if used_mock
+        else (status if status in {"ok", "clarification_needed", "no_op"} else "ok")
     )
     ta: TypeAdapter[Any] = TypeAdapter(AiEditorAction)
     actions: list[AiEditorAction] = []
@@ -475,7 +479,7 @@ async def handle_editor_command_stream(
             yield f"data: {result.model_dump_json()}\n\n"
         except HTTPException as exc:
             detail = exc.detail if isinstance(exc.detail, str) else str(exc.detail)
-            yield f"data: {{\"error\": {detail!r}, \"status\": {exc.status_code}}}\n\n"
+            yield f'data: {{"error": {detail!r}, "status": {exc.status_code}}}\n\n'
 
     return StreamingResponse(
         guarded_stream(),

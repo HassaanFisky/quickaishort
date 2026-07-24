@@ -640,9 +640,9 @@ async def test_gemini_quota_error_is_never_retried(monkeypatch) -> None:
         },
     )
     generate = AsyncMock(side_effect=quota_error)
-    client = SimpleNamespace(aio=SimpleNamespace(models=SimpleNamespace(
-        generate_content=generate
-    )))
+    client = SimpleNamespace(
+        aio=SimpleNamespace(models=SimpleNamespace(generate_content=generate))
+    )
     guard = RedisGeminiBackpressure(_FakeRedis(), clock=lambda: 100.0)
     monkeypatch.setattr(gemini_client, "get_client", lambda: client)
     monkeypatch.setattr(gemini_client, "_get_backpressure_guard", lambda: guard)
@@ -690,9 +690,9 @@ async def test_transient_429_uses_bounded_exponential_redis_cooldown() -> None:
 @pytest.mark.asyncio
 async def test_gemini_retry_count_is_hard_capped(monkeypatch) -> None:
     generate = AsyncMock()
-    client = SimpleNamespace(aio=SimpleNamespace(models=SimpleNamespace(
-        generate_content=generate
-    )))
+    client = SimpleNamespace(
+        aio=SimpleNamespace(models=SimpleNamespace(generate_content=generate))
+    )
     monkeypatch.setattr(gemini_client, "get_client", lambda: client)
 
     with pytest.raises(ValueError):
@@ -726,9 +726,7 @@ async def test_mock_ai_mode_short_circuits_gemini_http(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_mock_ai_mode_blocked_in_production(monkeypatch) -> None:
-    generate = AsyncMock(
-        return_value=SimpleNamespace(text='{"ok":true}')
-    )
+    generate = AsyncMock(return_value=SimpleNamespace(text='{"ok":true}'))
     client = SimpleNamespace(
         aio=SimpleNamespace(models=SimpleNamespace(generate_content=generate))
     )
@@ -738,7 +736,9 @@ async def test_mock_ai_mode_blocked_in_production(monkeypatch) -> None:
     monkeypatch.setattr(gemini_client, "get_client", lambda: client)
     monkeypatch.setattr(gemini_client, "_get_backpressure_guard", lambda: guard)
 
-    text = await gemini_client.call_gemini_text("hello", json_mode=False, max_attempts=1)
+    text = await gemini_client.call_gemini_text(
+        "hello", json_mode=False, max_attempts=1
+    )
 
     assert text == '{"ok":true}'
     generate.assert_awaited_once()

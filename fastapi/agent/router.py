@@ -585,11 +585,7 @@ class DualModelRouter:
         if isinstance(request, VisualRouteRequest):
             # Flash multimodal path for markers / boundaries / token coords.
             return self._analyst_model
-        return (
-            self._pro_logic_model
-            if tier is UserTier.PRO
-            else self._free_logic_model
-        )
+        return self._pro_logic_model if tier is UserTier.PRO else self._free_logic_model
 
 
 def _default_cache() -> SimilarQueryCache:
@@ -699,9 +695,7 @@ def _build_primary_contents(
         )
     ]
     for frame in request.frames:
-        parts.append(
-            genai_types.Part(text=f"Frame timestamp: {frame.timestamp_ms} ms")
-        )
+        parts.append(genai_types.Part(text=f"Frame timestamp: {frame.timestamp_ms} ms"))
         parts.append(
             genai_types.Part(
                 inline_data=genai_types.Blob(

@@ -82,7 +82,9 @@ class RedisGeminiBackpressure:
         clock: Callable[[], float] = time.time,
     ) -> None:
         if not 1 <= base_delay_seconds <= max_delay_seconds <= 3600:
-            raise ValueError("Backpressure delays must satisfy 1 <= base <= max <= 3600")
+            raise ValueError(
+                "Backpressure delays must satisfy 1 <= base <= max <= 3600"
+            )
         if not 1 <= hard_quota_delay_seconds <= 3600:
             raise ValueError("hard_quota_delay_seconds must be between 1 and 3600")
         self._redis = redis_client
