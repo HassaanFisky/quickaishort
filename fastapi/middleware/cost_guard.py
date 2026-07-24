@@ -254,9 +254,9 @@ return 0
             ) from exc
 
     def build_key(self, descriptor: CacheDescriptor) -> str:
-        tenant_hash = hashlib.sha256(
-            descriptor.user_id.encode("utf-8")
-        ).hexdigest()[:24]
+        tenant_hash = hashlib.sha256(descriptor.user_id.encode("utf-8")).hexdigest()[
+            :24
+        ]
         canonical = descriptor.model_dump(mode="json")
         canonical["user_id"] = tenant_hash
         canonical["query"] = normalize_query(descriptor.query)
@@ -443,9 +443,7 @@ async def defer_execution_with_backoff(
             ex=max(delay * 2, 300),
         )
     except Exception as exc:
-        raise CostGuardUnavailable(
-            "Deferral payload could not be persisted."
-        ) from exc
+        raise CostGuardUnavailable("Deferral payload could not be persisted.") from exc
 
     task_name = await _try_schedule_cloud_tasks_delay(
         payload=envelope,

@@ -389,6 +389,7 @@ async def _gemini_backpressure_unavailable_handler(
 ) -> JSONResponse:
     return JSONResponse(status_code=503, content={"detail": str(exc)})
 
+
 from routers.billing import router as billing_router
 
 app.include_router(billing_router)
@@ -2558,7 +2559,9 @@ async def adk_generate(
     try:
         await increment_stats(user_id, ai_run_delta=1)
     except Exception as exc:
-        logger.warning("adk_generate_stats_increment_failed job_id=%s err=%s", job_id, exc)
+        logger.warning(
+            "adk_generate_stats_increment_failed job_id=%s err=%s", job_id, exc
+        )
     return {
         "status": "queued",
         "job_id": job_id,
