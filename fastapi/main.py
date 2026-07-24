@@ -7,6 +7,9 @@ warnings.filterwarnings("ignore", category=DeprecationWarning, module="authlib")
 warnings.filterwarnings("ignore", category=FutureWarning, module="google")
 
 import asyncio
+import hashlib
+import importlib
+import importlib.util
 import json
 import logging
 import os
@@ -55,6 +58,12 @@ from models.export_request import (
     CanvasOverlayPayload,
     ExportRequest,
 )
+from core.limits import (
+    LimitEvaluation,
+    build_limit_request,
+    enforce_user_limits,
+    raise_resource_ceiling,
+)
 
 try:
     from sentry_sdk.integrations.fastapi import FastApiIntegration
@@ -76,7 +85,6 @@ except Exception as _sentry_err:
     print(f"[ERROR] Sentry initialization failed: {_sentry_err}")
 
 from app.utils.youtube_auth import inject_ydl_bypass
-from agent.viral_agent import get_viral_agent
 from models.user_stats import StatsIncrement
 from services.db import (
     close_db,
@@ -92,12 +100,12 @@ from services.events import (
     CHANNEL_EXPORT_PROGRESS,
     CHANNEL_STATS_INCREMENT,
 )
-from services.queue_service import (
-    JOB_FAILURE_TTL_SECONDS,
-    JOB_RESULT_TTL_SECONDS,
-    JOB_TIMEOUT_SECONDS,
-    redis_conn,
-    render_queue,
+from services.queue_service import redis_conn
+from services.render_dispatch import (
+    RenderTaskPayload,
+    dispatch_render_task,
+    load_render_task_payload,
+    mark_render_terminal,
 )
 from services.realtime import emit_export_event, ws_manager
 from services.auth import get_verified_user_id
@@ -117,6 +125,10 @@ from services.tts_service import get_tts_service
 from services.music_service import get_music_service
 from services.storage_service import get_storage_service
 from services.agent_runtime import ensure_agent_ready
+from services.gemini_backpressure import (
+    GeminiBackpressureError,
+    GeminiBackpressureUnavailable,
+)
 
 load_dotenv()
 from services.logging import setup_logging, get_logger, correlation_id
@@ -163,18 +175,25 @@ def _validate_env() -> None:
 _validate_env()
 
 
-try:
-    from agent import (
-        ClipCandidate as PreflightClipCandidate,
-        run_preflight_pipeline,
-        run_director_pipeline,
-    )
+_ADK_AVAILABLE = importlib.util.find_spec("google.adk") is not None
 
-    _ADK_AVAILABLE = True
-except Exception:
-    _ADK_AVAILABLE = False
-    PreflightClipCandidate = None  # type: ignore[assignment]
-    logger.warning("google-adk unavailable — POST /api/preflight will return 503")
+
+def _load_agent_module(module_name: str):
+    """Import one heavy ADK module on its first active request."""
+
+    if not _ADK_AVAILABLE:
+        raise HTTPException(
+            status_code=503,
+            detail="AI agent runtime unavailable — google-adk is not installed.",
+        )
+    try:
+        return importlib.import_module(module_name)
+    except Exception as exc:
+        logger.exception("agent_module_load_failed module=%s", module_name)
+        raise HTTPException(
+            status_code=503,
+            detail="AI agent runtime failed to initialize.",
+        ) from exc
 
 
 PUBSUB_CHANNELS = (
@@ -349,6 +368,26 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+
+
+@app.exception_handler(GeminiBackpressureError)
+async def _gemini_backpressure_handler(
+    _request: Request,
+    exc: GeminiBackpressureError,
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=429,
+        content={"detail": str(exc)},
+        headers={"Retry-After": str(exc.cooldown.retry_after_seconds)},
+    )
+
+
+@app.exception_handler(GeminiBackpressureUnavailable)
+async def _gemini_backpressure_unavailable_handler(
+    _request: Request,
+    exc: GeminiBackpressureUnavailable,
+) -> JSONResponse:
+    return JSONResponse(status_code=503, content={"detail": str(exc)})
 
 from routers.billing import router as billing_router
 
@@ -548,6 +587,36 @@ def _require_youtube_url(url: str) -> str:
     return video_id
 
 
+async def _admit_user_workload(
+    *,
+    user_id: str,
+    workload_id: str,
+    query: str,
+    deep_analysis: bool = False,
+) -> LimitEvaluation:
+    """Fail-closed plan ceiling BEFORE any agent import or Gemini spend.
+
+    Free tier: 3 unique daily workloads, 720p/1280 long-edge, 500MB.
+    Rejects immediately with HTTP 403 ``UPGRADE_PRO`` action intent.
+    """
+
+    evaluation = await enforce_user_limits(
+        user_id,
+        build_limit_request(
+            query=query,
+            workload_id=workload_id,
+            deep_analysis=deep_analysis,
+            reserve_daily_video=True,
+        ),
+    )
+    if not evaluation.decision.allowed:
+        raise_resource_ceiling(evaluation.decision)
+    return evaluation
+
+
+# Bound on the app for routers that need the same early gate without re-importing.
+app.state.admit_user_workload = _admit_user_workload  # type: ignore[attr-defined]
+
 # ---- Health + meta -----------------------------------------------------------
 
 
@@ -727,15 +796,20 @@ async def analyze_video(
     body: AnalyzeRequest,
     verified_user_id: str = Depends(get_verified_user_id),
 ):
+    user_id = verified_user_id or body.userId or "anonymous"
     try:
-        user_id = verified_user_id or body.userId or "anonymous"
+        await _admit_user_workload(
+            user_id=user_id,
+            workload_id=body.videoId,
+            query="viral video analysis",
+        )
         if not await deduct_credits(user_id, 10):
             raise HTTPException(
                 status_code=402,
                 detail="Insufficient credits. Please upgrade your plan to continue.",
             )
 
-        agent = get_viral_agent()
+        agent = _load_agent_module("agent.viral_agent").get_viral_agent()
         transcript_text = " ".join(c.text for c in body.transcript)
         suggestions = await agent.analyze_transcript(
             transcript_text, body.duration, video_id=body.videoId, user_id=user_id
@@ -753,6 +827,10 @@ async def analyze_video(
             "suggestedClips": suggestions,
             "status": "success",
         }
+    except HTTPException:
+        raise
+    except (GeminiBackpressureError, GeminiBackpressureUnavailable):
+        raise
     except Exception as exc:
         logger.exception("/api/analyze failed: %s", exc)
         raise HTTPException(
@@ -827,6 +905,11 @@ async def export_video(
             detail="Export duration exceeds maximum limit of 180 seconds.",
         )
 
+    await _admit_user_workload(
+        user_id=user_id,
+        workload_id=request.videoId,
+        query="video export",
+    )
     if not await deduct_credits(user_id, 20):
         raise HTTPException(
             status_code=402,
@@ -884,23 +967,16 @@ async def export_video(
     }
 
     try:
-        from render_worker import process_render_task
-        from rq import Retry as RqRetry
-
-        render_queue.enqueue(
-            process_render_task,
-            job_id,
-            request.videoId,
-            request.start_sec,
-            request.end_sec,
-            user_id,
-            options,
-            request.runId or "",
-            job_id=job_id,
-            job_timeout=JOB_TIMEOUT_SECONDS,
-            result_ttl=JOB_RESULT_TTL_SECONDS,
-            failure_ttl=JOB_FAILURE_TTL_SECONDS,
-            retry=RqRetry(max=2, interval=[30, 60]),
+        await dispatch_render_task(
+            RenderTaskPayload(
+                job_id=job_id,
+                video_id=request.videoId,
+                start_sec=float(request.start_sec),
+                end_sec=float(request.end_sec),
+                user_id=user_id,
+                options=options,
+                run_id=request.runId or "",
+            )
         )
     except Exception as exc:
         logger.exception("Failed to enqueue export %s: %s", job_id, exc)
@@ -917,39 +993,53 @@ async def export_video(
 
 
 @app.get("/api/status/{job_id}")
-async def export_status(job_id: str, user_id: str):
+async def export_status(
+    job_id: str,
+    user_id: str,
+    verified_user_id: str = Depends(get_verified_user_id),
+):
+    from services.render_queue import get_render_status
 
-    try:
-        from rq.job import Job
+    meta = get_render_status(job_id)
+    owner = meta.get("user_id")
+    if owner and owner != verified_user_id:
+        raise HTTPException(status_code=404, detail="Render job not found")
+    if user_id != verified_user_id:
+        raise HTTPException(status_code=403, detail="User identity mismatch")
 
-        job = Job.fetch(job_id, connection=redis_conn)
-    except Exception:
-        return {"status": "unknown", "job_id": job_id}
-
-    status = job.get_status(refresh=True) or "unknown"
+    internal_status = meta.get("status", "unknown")
+    status_map = {
+        "queued": "queued",
+        "retry_pending": "queued",
+        "processing": "started",
+        "success": "finished",
+        "dead": "failed",
+        "cancelled": "canceled",
+        "superseded": "canceled",
+        "duplicate": "started",
+    }
+    status = status_map.get(internal_status, "unknown")
     response: dict = {"status": status, "job_id": job_id}
-
     if status == "finished":
-        response["download_url"] = _build_download_url(job_id, user_id)
-        if isinstance(job.result, dict):
-            response["meta"] = {
-                k: job.result.get(k)
-                for k in ("duration_sec", "file_size_bytes", "elapsed_sec")
-            }
+        response["download_url"] = _build_download_url(job_id, verified_user_id)
     elif status == "failed":
-        response["error"] = (
-            (job.exc_info or "").splitlines()[-1] if job.exc_info else "failed"
-        )
-
+        response["error"] = meta.get("error", "failed")
     return response
 
 
 @app.get("/api/render/status/{job_id}")
-async def render_stream_status(job_id: str):
+async def render_stream_status(
+    job_id: str,
+    verified_user_id: str = Depends(get_verified_user_id),
+):
     """Rich status from the Redis Streams tracking layer."""
     from services.render_queue import get_render_status
 
-    return get_render_status(job_id)
+    status = get_render_status(job_id)
+    owner = status.get("user_id")
+    if owner and owner != verified_user_id:
+        raise HTTPException(status_code=404, detail="Render job not found")
+    return status
 
 
 @app.delete("/api/render/{job_id}")
@@ -964,8 +1054,14 @@ async def cancel_render(
     meta hash 'cancelled' and (b) bump render:runid so the worker's O1 stale-run
     guard discards the in-flight upload instead of publishing it. Idempotent.
     """
+    from services.render_queue import get_render_status
     from rq.job import Job
     from rq.exceptions import NoSuchJobError
+
+    meta = get_render_status(job_id)
+    owner = meta.get("user_id")
+    if owner and owner != verified_user_id:
+        raise HTTPException(status_code=404, detail="Render job not found")
 
     rq_cancelled = False
     try:
@@ -984,6 +1080,7 @@ async def cancel_render(
         redis_conn.set(
             f"render:runid:{job_id}", f"cancelled-{uuid.uuid4().hex}", ex=7200
         )
+        mark_render_terminal(job_id)
     except Exception as exc:
         logger.warning("cancel_render_meta_failed job_id=%s error=%s", job_id, exc)
 
@@ -1026,33 +1123,31 @@ async def render_retry_dead(
     if x_admin_secret != os.getenv("ADMIN_SECRET"):
         raise HTTPException(status_code=403, detail="Invalid admin secret")
     from services.render_queue import retry_dead_job
-    from render_worker import process_render_task
-    from rq import Retry as RqRetry
 
+    payload = load_render_task_payload(job_id)
+    if payload is None:
+        raise HTTPException(
+            status_code=409,
+            detail="Original render payload expired; retry cannot be reconstructed.",
+        )
     requeued = retry_dead_job(job_id)
     if not requeued:
         raise HTTPException(
             status_code=404, detail="Job not found or not in dead state"
         )
-    # Re-enqueue with a minimal placeholder so worker re-runs from idempotency cache
+    payload = payload.model_copy(update={"run_id": uuid.uuid4().hex})
     try:
-        render_queue.enqueue(
-            process_render_task,
-            job_id,
-            "",
-            0.0,
-            0.0,
-            "",
-            {},
-            uuid.uuid4().hex,
-            job_id=job_id,
-            job_timeout=JOB_TIMEOUT_SECONDS,
-            result_ttl=JOB_RESULT_TTL_SECONDS,
-            failure_ttl=JOB_FAILURE_TTL_SECONDS,
-            retry=RqRetry(max=2, interval=[30, 60]),
+        await dispatch_render_task(
+            payload,
+            retry_suffix=f"manual-{uuid.uuid4().hex[:12]}",
         )
     except Exception as exc:
-        logger.warning("render_retry_enqueue_failed job_id=%s error=%s", job_id, exc)
+        redis_conn.hset(
+            f"render:meta:{job_id}",
+            mapping={"status": "dead", "retry_error": str(exc)[:300]},
+        )
+        logger.exception("render_retry_enqueue_failed job_id=%s", job_id)
+        raise HTTPException(status_code=503, detail="Render retry dispatch failed")
     return {"status": "requeued", "job_id": job_id}
 
 
@@ -1923,6 +2018,16 @@ async def run_preflight(
             status_code=422, detail="clip_candidates must contain at least one clip"
         )
 
+    workload_id = (
+        VideoService.extract_video_id(body.youtube_url)
+        or hashlib.sha256(body.youtube_url.encode("utf-8")).hexdigest()
+    )
+    await _admit_user_workload(
+        user_id=user_id,
+        workload_id=workload_id,
+        query="preflight analysis",
+        deep_analysis=True,
+    )
     is_premium_active = await is_user_premium(user_id)
 
     if not await deduct_credits(user_id, 50):
@@ -1931,8 +2036,9 @@ async def run_preflight(
             detail="Insufficient credits. Please upgrade your plan to continue.",
         )
 
+    preflight_module = _load_agent_module("agent.preflight_agent")
     candidates = [
-        PreflightClipCandidate(
+        preflight_module.ClipCandidate(
             start_sec=c.start_sec,
             end_sec=c.end_sec,
             score=c.score,
@@ -1943,7 +2049,7 @@ async def run_preflight(
 
     try:
         result = await asyncio.wait_for(
-            run_preflight_pipeline(
+            preflight_module.run_preflight_pipeline(
                 youtube_url=body.youtube_url,
                 clip_candidates=candidates,
                 is_premium=is_premium_active,
@@ -1961,7 +2067,9 @@ async def run_preflight(
             "degraded": False,
         }
 
-    except (asyncio.TimeoutError, Exception) as primary_exc:
+    except (GeminiBackpressureError, GeminiBackpressureUnavailable):
+        raise
+    except Exception as primary_exc:
         # Classify the failure type for logging
         exc_type = (
             "timeout"
@@ -2059,6 +2167,12 @@ async def run_director(
             detail="Director pipeline unavailable — google-adk not installed",
         )
 
+    workload_id = hashlib.sha256(body.input_text.encode("utf-8")).hexdigest()
+    await _admit_user_workload(
+        user_id=user_id,
+        workload_id=workload_id,
+        query=body.input_text,
+    )
     try:
         if not await deduct_credits(user_id, 30):
             raise HTTPException(
@@ -2067,7 +2181,10 @@ async def run_director(
             )
 
         result = await asyncio.wait_for(
-            run_director_pipeline(input_text=body.input_text, user_id=user_id),
+            _load_agent_module("agent.director_agent").run_director_pipeline(
+                input_text=body.input_text,
+                user_id=user_id,
+            ),
             timeout=120.0,
         )
 
@@ -2080,6 +2197,8 @@ async def run_director(
         raise HTTPException(
             status_code=504, detail="Storyboard generation timed out after 120 seconds."
         )
+    except (GeminiBackpressureError, GeminiBackpressureUnavailable):
+        raise
     except Exception as exc:
         logger.error("POST /api/direct failed: %s", exc)
         raise HTTPException(
@@ -2095,6 +2214,18 @@ async def create_video(
     Runs: ScriptAgent → PreFlight → RenderService (Background)
     """
     user_id = verified_user_id or request.user_id
+    workload_id = hashlib.sha256(
+        json.dumps(
+            {"script": request.script, "clip_paths": request.clip_paths},
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+    await _admit_user_workload(
+        user_id=user_id,
+        workload_id=workload_id,
+        query=request.script,
+    )
     try:
         from agent.script_agent import ScriptAgent
 
@@ -2108,10 +2239,11 @@ async def create_video(
 
         if _ADK_AVAILABLE and production_plan["segments"]:
             try:
+                preflight_module = _load_agent_module("agent.preflight_agent")
                 is_premium_active = await is_user_premium(user_id)
                 hero = production_plan["segments"][0]
                 candidates = [
-                    PreflightClipCandidate(
+                    preflight_module.ClipCandidate(
                         start_sec=hero["start_sec"],
                         end_sec=hero["end_sec"],
                         score=0.9,
@@ -2119,7 +2251,7 @@ async def create_video(
                     )
                 ]
                 result = await asyncio.wait_for(
-                    run_preflight_pipeline(
+                    preflight_module.run_preflight_pipeline(
                         youtube_url="generated-pipeline",
                         clip_candidates=candidates,
                         is_premium=is_premium_active,
@@ -2134,30 +2266,23 @@ async def create_video(
                     f"Pre-flight analysis failed in video creation flow: {e}"
                 )
 
-        from render_worker import process_render_task
-
         options = {
             "production_plan": production_plan,
             "user_id": user_id,
         }
+        run_id = uuid.uuid4().hex
 
         try:
-            from rq import Retry as RqRetry
-
-            render_queue.enqueue(
-                process_render_task,
-                job_id,
-                "generated",
-                0,
-                0,
-                user_id,
-                options,
-                uuid.uuid4().hex,
-                job_id=job_id,
-                job_timeout=JOB_TIMEOUT_SECONDS,
-                result_ttl=JOB_RESULT_TTL_SECONDS,
-                failure_ttl=JOB_FAILURE_TTL_SECONDS,
-                retry=RqRetry(max=2, interval=[30, 60]),
+            await dispatch_render_task(
+                RenderTaskPayload(
+                    job_id=job_id,
+                    video_id="generated",
+                    start_sec=0.0,
+                    end_sec=0.0,
+                    user_id=user_id,
+                    options=options,
+                    run_id=run_id,
+                )
             )
         except Exception as exc:
             logger.exception("Failed to enqueue video creation job %s: %s", job_id, exc)
@@ -2171,6 +2296,10 @@ async def create_video(
             "production_plan": production_plan,
             "subscribe_channel": f"export-{job_id}",
         }
+    except HTTPException:
+        raise
+    except (GeminiBackpressureError, GeminiBackpressureUnavailable):
+        raise
     except Exception as exc:
         logger.exception("Video creation pipeline failed: %s", exc)
         raise HTTPException(
@@ -2339,6 +2468,8 @@ async def adk_enhance(
         agent = ScriptAgent()
         enhanced_text = await agent.enhance_script(body.topic)
         return {"enhanced_script": enhanced_text}
+    except (GeminiBackpressureError, GeminiBackpressureUnavailable):
+        raise
     except Exception as e:
         logger.error(f"ADK Enhance failed: {e}")
         raise HTTPException(status_code=500, detail="Failed to enhance script")
@@ -2355,6 +2486,23 @@ async def adk_generate(
         raise HTTPException(
             status_code=503, detail="System currently overloaded or in maintenance."
         )
+
+    workload_id = hashlib.sha256(
+        json.dumps(
+            {
+                "script": body.script,
+                "uploads": body.uploaded_file_ids,
+                "aspect_ratio": body.aspect_ratio,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+    await _admit_user_workload(
+        user_id=user_id,
+        workload_id=workload_id,
+        query=body.script,
+    )
 
     if not await deduct_credits(user_id, 50):
         logger.warning("low_credits_continuing", user_id=user_id)
@@ -2373,7 +2521,9 @@ async def adk_generate(
     job_id = uuid.uuid4().hex
     project_svc = get_project_service()
     project_id = await project_svc.create_project(
-        user_id, f"Short - {datetime.now().strftime('%Y-%m-%d %H:%M')}", body.script
+        user_id,
+        f"Short - {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+        body.script,
     )
 
     await project_svc.update_project(
@@ -2388,31 +2538,27 @@ async def adk_generate(
         },
     )
 
-    from render_worker import process_render_task
-    from rq import Retry as RqRetry
-
-    render_queue.enqueue(
-        process_render_task,
-        job_id,
-        "adk-generated",
-        0,
-        0,
-        user_id,
-        {
-            "production_plan": plan,
-            "quality": body.quality,
-            "aspect_ratio": body.aspect_ratio,
-        },
-        job_id=job_id,
-        job_timeout=JOB_TIMEOUT_SECONDS,
-        result_ttl=JOB_RESULT_TTL_SECONDS,
-        failure_ttl=JOB_FAILURE_TTL_SECONDS,
-        retry=RqRetry(max=2, interval=[30, 60]),
+    await dispatch_render_task(
+        RenderTaskPayload(
+            job_id=job_id,
+            video_id="adk-generated",
+            start_sec=0.0,
+            end_sec=0.0,
+            user_id=user_id,
+            options={
+                "production_plan": plan,
+                "quality": body.quality,
+                "aspect_ratio": body.aspect_ratio,
+            },
+        )
     )
 
     from services.stats_service import increment_stats
 
-    await increment_stats(user_id, ai_run_delta=1)
+    try:
+        await increment_stats(user_id, ai_run_delta=1)
+    except Exception as exc:
+        logger.warning("adk_generate_stats_increment_failed job_id=%s err=%s", job_id, exc)
     return {
         "status": "queued",
         "job_id": job_id,

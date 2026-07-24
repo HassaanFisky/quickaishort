@@ -30,7 +30,9 @@ steps:
         set -e
         EXTRA_FLAGS=""
         if [ "$_SERVICE_NAME" = "quickai-api" ]; then
-          EXTRA_FLAGS="--min-instances=1"
+          EXTRA_FLAGS="--min-instances=0 --cpu-throttling"
+        elif [ "$_SERVICE_NAME" = "quickai-worker" ]; then
+          EXTRA_FLAGS="--min-instances=0 --max-instances=3 --cpu-throttling --concurrency=1 --invoker-iam-check --command=uvicorn --args=render_service_app:app,--host,0.0.0.0,--port,8080"
         fi
         gcloud run services update "$_SERVICE_NAME" \
           --platform=managed \

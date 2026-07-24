@@ -69,7 +69,7 @@ npx tsc --noEmit      # type-check only
 python -m venv venv && source venv/bin/activate   # first-time setup
 pip install -r requirements.txt
 uvicorn main:app --reload --port 8000             # dev server
-python render_worker.py                           # start RQ render worker (requires Redis)
+python render_worker.py                           # local legacy RQ fallback only
 python -m py_compile agent/preflight_agent.py    # syntax-check an agent file
 ```
 
@@ -85,7 +85,8 @@ cd frontend && npm install --legacy-peer-deps && npm run build
 git diff --cached | grep -iE "(api_key|secret|token|password)"  # pre-push secret scan
 ```
 
-No test suite exists. CI validates via lint + `tsc --noEmit` + `next build`.
+Backend pytest coverage exists. CI validates frontend lint + `tsc --noEmit` +
+`next build`; backend changes must also run the complete pytest suite.
 
 ---
 
@@ -100,8 +101,8 @@ Browser → Next.js (frontend/src/app/)
              ├─ yt-dlp extracts YouTube stream URL (fastapi/app/utils/youtube_downloader.py)
              ├─ Google ADK agents run analysis  (fastapi/agent/)
              │    viral_agent.py → preflight_agent.py → director_agent.py
-             ├─ Long render jobs queued via Redis/RQ (fastapi/services/queue_service.py)
-             │    └─ render_worker.py processes jobs (fastapi/app/render/)
+             ├─ Long render jobs queued via Cloud Tasks (services/render_dispatch.py)
+             │    └─ private request renderer (render_service_app.py, min=0)
              └─ Results pushed via Pusher + WebSocket (fastapi/services/realtime.py)
 ```
 
@@ -115,6 +116,9 @@ The core AI pipeline lives in `fastapi/agent/`. Entry points exported from `__in
 - `run_director_pipeline` — scene composition via `director_agent.py` + `script_agent.py`
 
 All agents call Gemini 2.5 Flash via `fastapi/services/gemini_client.py`. Model constant: `DEFAULT_MODEL`.
+`luna-orchestration-v1` and `terra-json-repair-v1` are internal prompt/validation
+profiles in `agent/router.py`, not external provider model IDs. Gemini remains
+the only model provider.
 
 ### Browser-side processing (Web Workers)
 
@@ -122,7 +126,7 @@ Heavy media work runs off the main thread in `frontend/src/workers/`:
 
 - Whisper transcription (`useTranscription` hook → Whisper.wasm via `@xenova/transformers`)
 - Browser local export — two implemented paths: `clientExport.ts` (`MediaRecorder` API, Chrome/Firefox/Edge) and `ffmpegExport.worker.ts` (FFmpeg.wasm: canvas frame-capture → mp4), the latter instantiated in `VideoWorkspace.tsx` on the live `/editor`. The FFmpeg path warns at 10 s and surfaces a CDN-block error at 15 s instead of hanging.
-- Server export (`useServerExport` hook) sends the job to the backend render queue, processed by `ffmpeg-python` via the RQ worker (production path)
+- Server export (`useServerExport` hook) dispatches through Cloud Tasks to the private request-bound Cloud Run renderer; `ffmpeg-python` writes the result to GCS
 - MediaPipe face tracking (`useFaceTracker`)
 
 The `next.config.mjs` sets `Cross-Origin-Opener-Policy: same-origin` + `Cross-Origin-Embedder-Policy: require-corp` headers required for SharedArrayBuffer (used by Whisper.wasm).
@@ -145,7 +149,8 @@ NextAuth (`next-auth`) handles sessions on the frontend. `fastapi/services/auth.
 | Firestore | ADK agent session state (`firestore_session.py`) — falls back to InMemory |
 | GridFS (MongoDB) | LEGACY media path — only `/api/v1/video/*` uses it. `/adk` + `/editor` exports use GCS (below). |
 | GCS (`services/db.py` + `storage_service.py`) | **PRIMARY media storage**: uploads `adk_uploads/`, exports `exports/`, TTS cache `tts_cache/`. Bucket `quickaishort-agent-494304-media`, project `quickaishort-agent-494304` (verified via bucket listing 2026-05-29). |
-| Redis | RQ job queue + Pub/Sub for Pusher fan-out |
+| Cloud Tasks | **Production render dispatch/wake path** (`quickai-render`); OIDC, bounded retry, concurrency/backpressure |
+| Redis | Render status, runId cancellation, locks/dedupe, plus Pub/Sub for Pusher fan-out. RQ is local fallback only. |
 
 > **Storage correction (2026-05-29):** The 2026-05-09 "migrated to GridFS / removed GCS" note was inaccurate. **Verified source of truth = GCS** for all `/adk` + `/editor` media: `services/db.py` initializes the bucket, and `/api/adk/upload`, `render_worker.py`, and `/api/download` all read/write GCS. MongoDB GridFS (`services/storage.py`) survives only for the legacy `/api/v1/video/*` path. Fixed `adk_service.py` to emit correct `gs://` URIs (it previously emitted `gridfs://…mp4` with a hardcoded extension → non-mp4 uploads rendered as black frames).
 >
@@ -507,7 +512,7 @@ Do not claim a task is "done" until it passes every relevant item above.
 
 Keep this section updated as the project evolves.
 
-Last updated: 2026-07-21
+Last updated: 2026-07-23
 
 CURRENT PHASE: PRODUCTION LIVE — Submission Sprint + Studio Kernel dual-run
 
@@ -516,10 +521,11 @@ BLOCKED:
 - **Gemini prepayment credits depleted (429)** on project `99900313102` — founder must top up at https://ai.studio/projects before live demo / key rotate. Auth OK; generateContent fails.
 - Demo video + Devpost + Google for Startups form (challenge checklist).
 
-NOT BLOCKED (verified 2026-07-21):
+NOT BLOCKED (verified 2026-07-22):
 
 - API `/health` green (mongo/redis/adk/gcs)
-- Worker `/health/ready` green (RQ listener up)
+- Cloud Tasks `quickai-render` RUNNING; private renderer OIDC health and `/tasks/render` no-spend contract probe return 200
+- Renderer `quickai-worker`: `min=0`, request CPU, concurrency 1, max 3; unauthenticated request returns 403
 - Studio Kernel flags on Vercel + Cloud Run
 - EP-001…008 code shipped; AI Editor credits fail-closed; ADK sidebar = Coming Soon blur only
 
@@ -536,14 +542,14 @@ Evolution: **QuickAI Studio** — AI-native editing OS on the same codebase (Ker
 Pre-Flight: ADK multi-agent audience simulation = **skill/capability**, not sole identity.
 Tagline direction: conversation is the editing workflow; AI performs edits; user directs creativity.
 Stats / realtime: Pusher fan-out + Mongo/Firestore paths as implemented — **GCS primary media** (GridFS = legacy `/api/v1/video/*` only).
-Rendering: Cloud RQ + ffmpeg-python → GCS.
+Rendering: Cloud Tasks → private request-bound Cloud Run renderer → ffmpeg-python → GCS.
 ADK UI (`/adk`): **Coming Soon** (blurred). Backend `/api/adk/*` helpers may exist; do not market a live ADK Studio wizard.
 Studio Kernel: project document, MediaGraph suggestions, orchestrator, chat-primary shell under flags.
 
 LIVE SERVICES:
 
-- Backend API:    `https://quickai-api-y2cgnbsbxa-uc.a.run.app` (service: quickai-api, revision: 00030-vdg)
-- Render Worker:  `https://quickai-worker-99900313102.us-central1.run.app` (service: quickai-worker, revision: 00007-6xm)
+- Backend API:    `https://quickai-api-y2cgnbsbxa-uc.a.run.app` (service: quickai-api, revision: 00103-725)
+- Private Renderer: `https://quickai-worker-y2cgnbsbxa-uc.a.run.app` (service: quickai-worker, revision: 00088-sig; IAM protected)
 - Frontend:       `https://www.quickaishort.online`
 - Health:         `{"status":"ok","mongo":true,"redis":true,"adk":true,"firestore_status":"connected","redis_status":"ready","agent_ready_state":"ready"}`
 
@@ -553,7 +559,7 @@ COMPLETED:
 - FastAPI backend with yt-dlp ingestion + proxy
 - Browser-based Whisper transcription (Web Worker)
 - Viral analysis heuristics (audio energy + speech density)
-- Browser local export via MediaRecorder API (`clientExport.ts`); server export via ffmpeg-python RQ worker
+- Browser local export via MediaRecorder API (`clientExport.ts`); server export via Cloud Tasks + request-bound ffmpeg renderer
 - GCP project created: quickaishort-agent (ID: 946316698978) — **superseded project id for media:** `quickaishort-agent-494304`
 - ADK multi-agent system (/fastapi/agent/viral_agent.py) with Gemini 2.5 Flash
 - Frontend/Backend type synchronization for viral analysis
@@ -580,20 +586,27 @@ COMPLETED:
 
 KEY DECISIONS (do not change without reason):
 - ADMIN_SECRET env var: "quickai-admin-2026" — required for all /api/admin/* endpoints (X-Admin-Secret header). Set on quickai-api Cloud Run service 2026-05-24.
-- render:jobs / render:results / render:dead Redis Streams: supplementary status layer alongside RQ. Does NOT replace RQ — actual job execution still uses render_queue.enqueue(). Use get_render_status() for job observability.
+- render:jobs / render:results / render:dead Redis Streams are supplementary status/DLQ state. Production execution is Cloud Tasks → private request renderer; RQ is a local fallback only. Use get_render_status() for observability.
+- Cloud Tasks queue `quickai-render`: region `us-central1`, max concurrency 3, 2 dispatches/s, 3 total attempts, 30–120s backoff, 1h retry window. Named task IDs dedupe API retries.
+- `quickai-worker` is private and request-bound: invoker IAM enforced, OIDC audience is the base service URL, `min=0`, request CPU, concurrency 1, max 3, timeout 900s.
 - cookie_rotator.py caches validation result 1 hour in-process (_VALIDATION_CACHE_TTL). Cloud Scheduler fires every 6h to ensure at least one fresh check per day.
 - video_acquisition.py: Tier 1 = cookies + PoToken (15s), Tier 2 = PoToken only (15s). Redis cache key = sha256(video_id:start:end)[:16]. Skip cache with skip_cache=True when forcing fresh download.
 - pipeline_monitor.py writes to MongoDB collection "pipeline_runs". Firestore was considered but MongoDB is already the primary store and avoids cross-service latency.
 - tenacity in agents: retries only TimeoutError/ConnectionError/OSError — NOT ValueError/RuntimeError which signal bad input or quota exhaustion that retrying won't fix.
+- Central Gemini client follows the same transport-only retry policy, hard-capped at 3 attempts; quota/auth/model errors are never retried. Redis shares a 2–60s exponential transient-429 cooldown and a 300s depleted-credit circuit across API instances, preventing duplicate provider calls without sleeping in billed requests.
 - BigQuery adk_analytics dataset created but empty — BigQueryAgentAnalyticsPlugin requires google-adk > 1.0.0. analytics_queries.py falls back to MongoDB until then.
-- No subscription gating — core product is free and unblocked until billing is intentionally shipped
+- DEPRECATED (2026-07-22): "No subscription gating — core product is free and unblocked until billing is intentionally shipped." The temporary replacement added 3 unique AI videos/day.
+- SUPERSEDED (2026-07-23): Rolling daily AI-video admission is removed. The trusted Firestore tier now selects only the fixed application matrix: Free = 720p + mandatory "Made with QuickAI" watermark + no 4K/Deep Analysis + 500 MB projected-storage boundary; Pro unlocks those capabilities. Credit deduction remains a separate fail-closed spend gate.
+- DEPRECATED production path (2026-07-22): RQ worker uses a dedicated Redis connection whose socket timeout exceeds blocking dequeue; retained only for local fallback.
+- A 60s `sys.exit` timer is forbidden. Cloud Tasks now supplies the durable scale-from-zero wake path; no always-on listener exists in production.
+- Paid unauthenticated Next.js Video Intelligence/Gemini/STT routes are retired with HTTP 410; browser voice input uses the free Web Speech API.
 - /api/audio: yt-dlp subprocess (bestaudio m4a/webm) → Cobalt v10 fallback → always returns audio/mpeg MP3
 - COEP/COOP headers scoped to /editor/:path* only — Google OAuth works on /signin
 - Browser export: BOTH paths are implemented — MediaRecorder (`clientExport.ts`) AND FFmpeg.wasm (`ffmpegExport.worker.ts`, active in `VideoWorkspace` on `/editor`). The FFmpeg path warns at 10s and surfaces a CDN-block error at 15s instead of hanging. (Corrected 2026-06-05: prior note claimed FFmpeg.wasm "was never implemented" — it is.)
-- Server export: ffmpeg-python via RQ worker (production path, stored in GCS at exports/{user}/{job}.mp4)
+- Server export: Cloud Tasks → request-bound ffmpeg-python renderer, stored in GCS at exports/{user}/{job}.mp4
 - All protected endpoints use verified_user_id from JWT, not request body
 - 6 personas in preflight panel (genz, millennial, sports, tech, entertainment, news)
-- Startup probe: failureThreshold=20, periodSeconds=10, timeoutSeconds=5 — heavy deps (google-adk, google-genai, celery) take 13s+ to import before gunicorn workers are ready
+- Startup probe remains failureThreshold=20, periodSeconds=10, timeoutSeconds=5. Historical eager agent import was 8.282s locally; lazy package exports now import in 0.022s and `agent.router` in 1.163s. Heavy ADK graphs load only on the first matching AI request.
 - /ready endpoint: must NOT call get_extractor_service() lazily (2s Redis ping exceeds 1s probe timeout). Check _service_instance directly.
 - run_startup_checks(): runs as asyncio.create_task() after lifespan yields — never blocks probe window
 - gcloud deploy on this machine: requires CLOUDSDK_CONFIG=E:\gcloud-config, TMP=E:\gcloud-temp (C: drive is 100% full). Use --async flag for long-running deploys to avoid C: saturation.
@@ -644,6 +657,9 @@ Read this file at the start of every session. When this file is updated, acknowl
 
 ## CHANGELOG
 
+- **2026-07-23:** Local orchestration/cost hardening (not deployed): Gemini-only Luna/visual/Terra profiles made explicit; Terra remains one strict JSON-repair attempt; rolling daily pool removed in favor of the fixed trusted-tier matrix; tenant cache moved to MD5 fingerprint + SHA-256 collision guard; Redis-backed Gemini 429 cooldown added; SDK quota retry fan-out disabled; ADK package and google-genai imports made request-lazy; all `sys.exit()` worker paths removed. Verified 167 backend tests. Production Gemini remains blocked by depleted prepayment credits.
+- **2026-07-22:** Cloud Tasks production cutover deployed: `quickai-render` durable queue; `quickai-worker` converted from public always-on RQ listener to private OIDC-only request renderer (`min=0`, request CPU, concurrency 1, max 3); API switched to named-task dispatch; Redis retained for status/runId/locks/dedupe. Live no-spend `/tasks/render` probes returned 200 and caught/fixed a latent non-manifest `time` shadowing crash; request-level DLQ fallback covers pre-render failures. API rev `00103-725`, renderer rev `00088-sig`; 163 backend tests pass.
+- **2026-07-22:** Local cost/reliability hardening baseline (subsequently deployed by the Cloud Tasks cutover above; daily admission superseded 2026-07-23): trusted tier + 3-video daily admission wired to active AI/render routes; exact-state Redis cache avoids duplicate model calls and credits; worker forces Free 720p/watermark across legacy, manifest, and production-plan renders; RQ Redis restart-loop and swallowed retry failures fixed; Gemini quota retries eliminated; unauthenticated paid Next.js analysis/STT paths retired and three unused Google client dependencies removed. Verified 155 backend tests, FFmpeg 720p watermark integration, TypeScript, ESLint, and Next.js production build.
 - **2026-07-21:** Documentation synchronization pass — root README/VISION/ARCHITECTURE + studio index realigned to QuickAI Short (production) → QuickAI Studio (evolution); ADK UI Coming Soon; GCS primary; EP package status corrected; DEVPOST/DEMO scripts de-hyped.
 - **2026-07-21:** Ownership cycle — AI Editor credits fail-closed + stream gate; honest Gemini analyze failures; onboarding tour opens AI panel for `ai.*` steps; orphan `YouTubeInputStrip` removed (IngestSurface is sole ingest UI); CLAUDE.md auth/version/Gemini blocker drift corrected.
 - **2026-07-21:** Added the founder-mandated permanent principal engineering ownership policy, continuous whole-system production review, and explicit approval boundaries; activated both canonical governance rules for every repository session.
