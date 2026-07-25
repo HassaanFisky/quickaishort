@@ -1,6 +1,6 @@
 # Vision — QuickAI Short → QuickAI Studio
 
-**Last updated:** 2026-07-21  
+**Last updated:** 2026-07-24  
 **Authority:** Aligns with [`docs/studio/01-product-vision.md`](docs/studio/01-product-vision.md) and [`docs/studio/PHASE2_ARCHITECTURAL_TRUTH_REVIEW.md`](docs/studio/PHASE2_ARCHITECTURAL_TRUTH_REVIEW.md).
 
 ---
@@ -41,7 +41,7 @@ Studio is not a second product. It is the operating-system direction of QuickAI 
 - Browser Whisper transcription
 - Conversational AI editor → edit actions → live preview
 - MediaGraph-grounded suggestions
-- Server export (RQ + ffmpeg → GCS)
+- Server export (Cloud Tasks → private request-bound ffmpeg renderer → GCS; RQ = local fallback only)
 - Studio Kernel APIs dual-running under flags
 - Pre-Flight multi-agent validation available as a pipeline capability
 

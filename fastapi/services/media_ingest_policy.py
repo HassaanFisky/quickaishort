@@ -9,6 +9,8 @@ import os
 from pathlib import Path
 from typing import Any, Optional
 
+from services.ingest_fsm import INGEST_STAGES, TERMINAL_STAGES
+
 # Minimum set required by EP-008 DoD
 _DEFAULT_EXTENSIONS = (
     ".mp4",
@@ -58,6 +60,9 @@ def get_ingest_policy() -> dict[str, Any]:
         "max_bytes": max_b,
         "warn_bytes": warn,
         "examples_label": "MP4, MOV, MKV, WebM, AVI, and more",
+        # M2 — staged ingest vocabulary (FE owns runtime; BE publishes contract)
+        "lifecycle_stages": list(INGEST_STAGES),
+        "terminal_stages": sorted(TERMINAL_STAGES),
     }
 
 

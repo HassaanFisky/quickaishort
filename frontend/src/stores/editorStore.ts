@@ -13,6 +13,12 @@ import { Track, createDefaultTracks } from "@/types/timeline";
 import { RenderManifest } from "@/lib/render/renderManifest";
 import { compileRenderManifest, validateRenderManifest } from "@/lib/render/compileRenderManifest";
 import type { PreflightFixPlan } from "@/lib/preflight/preflightFixPlan";
+import type {
+  IngestFailCode,
+  IngestSourceKind,
+  IngestStage,
+} from "@/lib/studio/ingestFsm";
+import { canTransitionIngest } from "@/lib/studio/ingestFsm";
 
 // ─── AI Editor Types ──────────────────────────────────────────────────────────
 
@@ -71,137 +77,137 @@ export interface TrimMarker {
 
 export interface EditorAction {
   type:
-    // ─── Caption tools ───────────────────────────────────────────────────────
-    | "ADD_CAPTION"         // { text, startTime, endTime, style? }
-    | "REMOVE_CAPTION"      // { id }
-    | "UPDATE_CAPTION"      // { id, patch }
-    // ─── Clip tools ─────────────────────────────────────────────────────────
-    | "TRIM"                // { start, end } — sets trimMarker + seeks
-    | "SPLIT_CLIP"          // { time } — splits selected clip at time
-    | "DELETE_CLIP"         // { id? } — deletes clip by id or selected clip
-    | "SELECT_CLIP"         // { id?, index? } — selects a clip
-    // ─── Visual tools ───────────────────────────────────────────────────────
-    | "ADD_FILTER"          // { filter: "brightness"|"contrast"|"saturation"|"hue"|"blur", value }
-    | "RESET_FILTER"        // {} — resets frame filters
-    | "SET_VISUAL_FILTER"   // { filter: "None"|"Urban"|"Retro"|"Cinematic" }
-    // ─── Audio tools ────────────────────────────────────────────────────────
-    | "SET_AUDIO_BOOST"     // { value: 0-200 }
-    | "SET_NOISE_REDUCTION" // { value: 0-100 }
-    | "SET_PLAYBACK_SPEED"  // { value: 50-200 }
-    // ─── Feature toggles ────────────────────────────────────────────────────
-    | "TOGGLE_CAPTIONS"     // { enabled: boolean }
-    | "TOGGLE_TRANSITIONS"  // { enabled: boolean }
-    | "TOGGLE_VOICEOVER"    // { enabled: boolean }
-    // ─── Playback ────────────────────────────────────────────────────────────
-    | "SEEK"                // { time }
-    | "PLAY"                // {}
-    | "PAUSE"               // {}
-    // ─── Pipeline ────────────────────────────────────────────────────────────
-    | "EXPORT_CLIP"         // {} — fires qai:export event
-    // ─── Pillar-1 element actions (payload envelope, see applyAiEdits) ───────
-    | "ADD_ELEMENT"         // { element: Omit<EditorElement,"id"> }
-    | "UPDATE_ELEMENT"      // { id, patch }
-    | "REMOVE_ELEMENT"      // { id }
-    // ─── Intelligent tool actions (surface suggestions, no direct edit) ──────
-    | "DETECT_VIRAL_MOMENTS"  // { moments: AiViralMoment[] }
-    | "GENERATE_HOOK_CAPTION" // { captions: string[] }
-    | "SUGGEST_STYLE_PRESET"  // { preset, reason, actions }
-    | "EXPLAIN_LAST_EDIT"     // { explanation, confidence }
-    // ─── Phase 3a: B-Roll / Overlay actions ─────────────────────────────────
-    | "ADD_BROLL"             // { pexels_id, download_url, thumbnail_url, title, start_sec, duration_sec, position, opacity }
-    | "ADD_VIDEO_OVERLAY"     // { source_url, start_sec, duration_sec, position, opacity, mute_audio }
-    | "REMOVE_OVERLAY"        // { element_id }
-    | "BROLL_OPEN_LIBRARY"    // {} — UI-only: opens the B-roll drawer
-    | "BROLL_CLEAR_ALL"       // {} — removes all BROLL elements
-    | "REMOVE_SILENCES"       // { min_silence_sec, padding_sec } — trims leading/trailing silence
-    // ─── Phase 4b: NLE Timeline Tools ───────────────────────────────────────
-    | "POINTER_SELECT"        // { clip_id? } — activate pointer tool
-    | "BLADE_SPLIT"           // { time_sec } — split all clips at time
-    | "RIPPLE_TRIM"           // { clip_id, edge, delta_sec }
-    | "ROLLING_TRIM"          // { clip_id, neighbor_id, edge, delta_sec }
-    | "SLIP_CLIP"             // { clip_id, delta_sec } — shift source in/out
-    | "SLIDE_CLIP"            // { clip_id, delta_sec } — move in timeline
-    | "RIPPLE_DELETE"         // { clip_id } — delete + close gap
-    | "DURATION_STRETCH"      // { clip_id, target_duration_sec?, speed_factor? }
-    // ─── Phase 4b-wave-2: 14 additional NLE tools ───────────────────────────
-    | "FORWARD_LANE_SELECT"   // { clip_id? }
-    | "BACKWARD_LANE_SELECT"  // { clip_id? }
-    | "MARK_IN"               // { time_sec }
-    | "MARK_OUT"              // { time_sec }
-    | "CLIP_RANGE_MARK"       // { clip_id }
-    | "RANGE_MARK"            // { in_sec, out_sec }
-    | "EXTRACT"               // { clip_id } — ripple remove
-    | "LIFT"                  // { clip_id } — gap remove
-    | "INSERT_EDIT"           // { clip_id, insert_time_sec }
-    | "OVERWRITE_EDIT"        // { clip_id, insert_time_sec }
-    | "SWAP_CLIP"             // { clip_id, target_clip_id }
-    | "SCROLL_HAND"           // { delta_x?, delta_y? }
-    | "TIMELINE_ZOOM"         // { zoom_factor }
-    | "MAGNETIC_SNAP_TOGGLE"  // { enabled? }
-    // ─── Phase 3b: Color Suite ───────────────────────────────────────────────
-    | "COLOR_WHEELS"          // { clip_id, lift?, gamma?, gain?, offset? }
-    | "COLOR_CURVES"          // { clip_id, master?, red?, green?, blue? }
-    | "HSL_SECONDARIES"       // { clip_id, hue_shift?, saturation_adjust?, luminance_adjust? }
-    | "APPLY_LUT"             // { clip_id, lut_url, lut_size?, intensity? }
-    | "RESET_COLOR"           // { clip_id }
-    // ─── Phase 5: Web Audio mix ──────────────────────────────────────────────
-    | "SET_CLIP_GAIN"         // { clip_id, gain_db }
-    | "SET_MASTER_GAIN"       // { gain_db }
-    | "ENABLE_DENOISE"        // { clip_id, enabled }
-    | "ENABLE_LIMITER"        // { enabled }
-    | "ADD_FADE_IN"           // { clip_id, duration_ms }
-    | "ADD_FADE_OUT"          // { clip_id, start_ms, duration_ms }
-    // ─── Phase 6: Masking suite ──────────────────────────────────────────────
-    | "ADD_RECT_MASK"         // { clip_id, x, y, width, height, feather?, invert? }
-    | "ADD_ELLIPSE_MASK"      // { clip_id, cx, cy, rx, ry, rotation?, feather?, invert? }
-    | "ADD_BEZIER_MASK"       // { clip_id, points, feather?, invert? }
-    | "ADD_AI_PERSON_MASK"    // { clip_id, confidence?, invert? }
-    | "CLEAR_MASKS"           // { clip_id }
-    // ─── Phase 7: Motion keyframes ───────────────────────────────────────────
-    | "SET_KEYFRAME"          // { clip_id, property, time_ms, value, easing? }
-    | "DELETE_KEYFRAME"       // { clip_id, property, keyframe_id }
-    | "CLEAR_KEYFRAMES"       // { clip_id }
-    // ─── Phase 8: Project file ───────────────────────────────────────────────
-    | "SAVE_PROJECT"          // { title? }
-    | "LOAD_PROJECT"          // { project_id }
-    // ─── Phase 9: Auto-reframe ───────────────────────────────────────────────
-    | "AUTO_REFRAME"          // { clip_id, target_ar?, sample_rate_ms? }
-    // ─── Phase 10: Voiceover, SFX, Transitions ──────────────────────────────
-    | "ADD_VOICEOVER"         // { clip_id, start_sec?, duration_sec }
-    | "ADD_SFX"               // { sfx_id, start_sec?, volume? }
-    | "SET_TRANSITION"        // { clip_id, transition? }
-    // ─── Phase 20: Chroma Key ───────────────────────────────────────────────
-    | "ENABLE_CHROMA_KEY"        // { enabled: boolean }
-    | "SET_CHROMA_KEY_COLOR"     // { color: string } — hex
-    | "SET_CHROMA_KEY_TOLERANCE" // { value: number } — 0-1
-    | "SET_CHROMA_KEY_SOFTNESS"  // { value: number } — 0-1
-    | "SET_CHROMA_KEY_SPILL"     // { value: number } — 0-1
-    // ─── Phase 21: Speed Ramp ────────────────────────────────────────────────
-    | "SET_SPEED_KEYFRAME"       // { clip_id, time_ms, speed }
-    | "DELETE_SPEED_KEYFRAME"    // { clip_id, time_ms }
-    | "CLEAR_SPEED_RAMP"         // { clip_id }
-    // ─── Phase 23: Quick-win actions ────────────────────────────────────────
-    | "FREEZE_FRAME"             // { clip_id, time_sec }
-    | "EXTEND_EDIT"              // { clip_id? }
-    | "GOTO_TIMECODE"            // { timecode: string }
-    | "TAG_AUDIO_CATEGORY"       // { clip_id, category }
-    | "MATCH_FRAME"              // {}
-    | "REVERSE_CLIP"             // { clip_id }
-    | "SET_CLIP_COLOR_LABEL"     // { clip_id, color }
-    // ─── Phase 24: Adjustment layers + audio ducking ─────────────────────────
-    | "APPLY_FILTER_TO_ALL"      // { filter, value }
-    | "ENABLE_AUDIO_DUCKING"     // { enabled, threshold?, reduction? }
-    // ─── Phase 25: Grouping, auto-split, track matte ─────────────────────────
-    | "GROUP_CLIPS"              // { clip_ids: string[] }
-    | "AUTO_SPLIT_SCENES"        // { threshold? }
-    | "SET_TRACK_MATTE"          // { clip_id, matte_clip_id }
-    // ─── Phase 34: Crop / Pan / Opacity / BG Remove / Split Screen ───────────
-    | "SET_CROP"                 // { top, bottom, left, right } — 0-1 fraction
-    | "SET_PAN"                  // { x, y } — -1 to 1
-    | "RESET_CROP_PAN"           // {} — resets crop + pan to zero
-    | "SET_CLIP_OPACITY"         // { value: 0-1 }
-    | "TOGGLE_BACKGROUND_REMOVE" // { enabled?: boolean }
-    | "SET_SPLIT_SCREEN";        // { preset_id: string }
+  // ─── Caption tools ───────────────────────────────────────────────────────
+  | "ADD_CAPTION"         // { text, startTime, endTime, style? }
+  | "REMOVE_CAPTION"      // { id }
+  | "UPDATE_CAPTION"      // { id, patch }
+  // ─── Clip tools ─────────────────────────────────────────────────────────
+  | "TRIM"                // { start, end } — sets trimMarker + seeks
+  | "SPLIT_CLIP"          // { time } — splits selected clip at time
+  | "DELETE_CLIP"         // { id? } — deletes clip by id or selected clip
+  | "SELECT_CLIP"         // { id?, index? } — selects a clip
+  // ─── Visual tools ───────────────────────────────────────────────────────
+  | "ADD_FILTER"          // { filter: "brightness"|"contrast"|"saturation"|"hue"|"blur", value }
+  | "RESET_FILTER"        // {} — resets frame filters
+  | "SET_VISUAL_FILTER"   // { filter: "None"|"Urban"|"Retro"|"Cinematic" }
+  // ─── Audio tools ────────────────────────────────────────────────────────
+  | "SET_AUDIO_BOOST"     // { value: 0-200 }
+  | "SET_NOISE_REDUCTION" // { value: 0-100 }
+  | "SET_PLAYBACK_SPEED"  // { value: 50-200 }
+  // ─── Feature toggles ────────────────────────────────────────────────────
+  | "TOGGLE_CAPTIONS"     // { enabled: boolean }
+  | "TOGGLE_TRANSITIONS"  // { enabled: boolean }
+  | "TOGGLE_VOICEOVER"    // { enabled: boolean }
+  // ─── Playback ────────────────────────────────────────────────────────────
+  | "SEEK"                // { time }
+  | "PLAY"                // {}
+  | "PAUSE"               // {}
+  // ─── Pipeline ────────────────────────────────────────────────────────────
+  | "EXPORT_CLIP"         // {} — fires qai:export event
+  // ─── Pillar-1 element actions (payload envelope, see applyAiEdits) ───────
+  | "ADD_ELEMENT"         // { element: Omit<EditorElement,"id"> }
+  | "UPDATE_ELEMENT"      // { id, patch }
+  | "REMOVE_ELEMENT"      // { id }
+  // ─── Intelligent tool actions (surface suggestions, no direct edit) ──────
+  | "DETECT_VIRAL_MOMENTS"  // { moments: AiViralMoment[] }
+  | "GENERATE_HOOK_CAPTION" // { captions: string[] }
+  | "SUGGEST_STYLE_PRESET"  // { preset, reason, actions }
+  | "EXPLAIN_LAST_EDIT"     // { explanation, confidence }
+  // ─── Phase 3a: B-Roll / Overlay actions ─────────────────────────────────
+  | "ADD_BROLL"             // { pexels_id, download_url, thumbnail_url, title, start_sec, duration_sec, position, opacity }
+  | "ADD_VIDEO_OVERLAY"     // { source_url, start_sec, duration_sec, position, opacity, mute_audio }
+  | "REMOVE_OVERLAY"        // { element_id }
+  | "BROLL_OPEN_LIBRARY"    // {} — UI-only: opens the B-roll drawer
+  | "BROLL_CLEAR_ALL"       // {} — removes all BROLL elements
+  | "REMOVE_SILENCES"       // { min_silence_sec, padding_sec } — trims leading/trailing silence
+  // ─── Phase 4b: NLE Timeline Tools ───────────────────────────────────────
+  | "POINTER_SELECT"        // { clip_id? } — activate pointer tool
+  | "BLADE_SPLIT"           // { time_sec } — split all clips at time
+  | "RIPPLE_TRIM"           // { clip_id, edge, delta_sec }
+  | "ROLLING_TRIM"          // { clip_id, neighbor_id, edge, delta_sec }
+  | "SLIP_CLIP"             // { clip_id, delta_sec } — shift source in/out
+  | "SLIDE_CLIP"            // { clip_id, delta_sec } — move in timeline
+  | "RIPPLE_DELETE"         // { clip_id } — delete + close gap
+  | "DURATION_STRETCH"      // { clip_id, target_duration_sec?, speed_factor? }
+  // ─── Phase 4b-wave-2: 14 additional NLE tools ───────────────────────────
+  | "FORWARD_LANE_SELECT"   // { clip_id? }
+  | "BACKWARD_LANE_SELECT"  // { clip_id? }
+  | "MARK_IN"               // { time_sec }
+  | "MARK_OUT"              // { time_sec }
+  | "CLIP_RANGE_MARK"       // { clip_id }
+  | "RANGE_MARK"            // { in_sec, out_sec }
+  | "EXTRACT"               // { clip_id } — ripple remove
+  | "LIFT"                  // { clip_id } — gap remove
+  | "INSERT_EDIT"           // { clip_id, insert_time_sec }
+  | "OVERWRITE_EDIT"        // { clip_id, insert_time_sec }
+  | "SWAP_CLIP"             // { clip_id, target_clip_id }
+  | "SCROLL_HAND"           // { delta_x?, delta_y? }
+  | "TIMELINE_ZOOM"         // { zoom_factor }
+  | "MAGNETIC_SNAP_TOGGLE"  // { enabled? }
+  // ─── Phase 3b: Color Suite ───────────────────────────────────────────────
+  | "COLOR_WHEELS"          // { clip_id, lift?, gamma?, gain?, offset? }
+  | "COLOR_CURVES"          // { clip_id, master?, red?, green?, blue? }
+  | "HSL_SECONDARIES"       // { clip_id, hue_shift?, saturation_adjust?, luminance_adjust? }
+  | "APPLY_LUT"             // { clip_id, lut_url, lut_size?, intensity? }
+  | "RESET_COLOR"           // { clip_id }
+  // ─── Phase 5: Web Audio mix ──────────────────────────────────────────────
+  | "SET_CLIP_GAIN"         // { clip_id, gain_db }
+  | "SET_MASTER_GAIN"       // { gain_db }
+  | "ENABLE_DENOISE"        // { clip_id, enabled }
+  | "ENABLE_LIMITER"        // { enabled }
+  | "ADD_FADE_IN"           // { clip_id, duration_ms }
+  | "ADD_FADE_OUT"          // { clip_id, start_ms, duration_ms }
+  // ─── Phase 6: Masking suite ──────────────────────────────────────────────
+  | "ADD_RECT_MASK"         // { clip_id, x, y, width, height, feather?, invert? }
+  | "ADD_ELLIPSE_MASK"      // { clip_id, cx, cy, rx, ry, rotation?, feather?, invert? }
+  | "ADD_BEZIER_MASK"       // { clip_id, points, feather?, invert? }
+  | "ADD_AI_PERSON_MASK"    // { clip_id, confidence?, invert? }
+  | "CLEAR_MASKS"           // { clip_id }
+  // ─── Phase 7: Motion keyframes ───────────────────────────────────────────
+  | "SET_KEYFRAME"          // { clip_id, property, time_ms, value, easing? }
+  | "DELETE_KEYFRAME"       // { clip_id, property, keyframe_id }
+  | "CLEAR_KEYFRAMES"       // { clip_id }
+  // ─── Phase 8: Project file ───────────────────────────────────────────────
+  | "SAVE_PROJECT"          // { title? }
+  | "LOAD_PROJECT"          // { project_id }
+  // ─── Phase 9: Auto-reframe ───────────────────────────────────────────────
+  | "AUTO_REFRAME"          // { clip_id, target_ar?, sample_rate_ms? }
+  // ─── Phase 10: Voiceover, SFX, Transitions ──────────────────────────────
+  | "ADD_VOICEOVER"         // { clip_id, start_sec?, duration_sec }
+  | "ADD_SFX"               // { sfx_id, start_sec?, volume? }
+  | "SET_TRANSITION"        // { clip_id, transition? }
+  // ─── Phase 20: Chroma Key ───────────────────────────────────────────────
+  | "ENABLE_CHROMA_KEY"        // { enabled: boolean }
+  | "SET_CHROMA_KEY_COLOR"     // { color: string } — hex
+  | "SET_CHROMA_KEY_TOLERANCE" // { value: number } — 0-1
+  | "SET_CHROMA_KEY_SOFTNESS"  // { value: number } — 0-1
+  | "SET_CHROMA_KEY_SPILL"     // { value: number } — 0-1
+  // ─── Phase 21: Speed Ramp ────────────────────────────────────────────────
+  | "SET_SPEED_KEYFRAME"       // { clip_id, time_ms, speed }
+  | "DELETE_SPEED_KEYFRAME"    // { clip_id, time_ms }
+  | "CLEAR_SPEED_RAMP"         // { clip_id }
+  // ─── Phase 23: Quick-win actions ────────────────────────────────────────
+  | "FREEZE_FRAME"             // { clip_id, time_sec }
+  | "EXTEND_EDIT"              // { clip_id? }
+  | "GOTO_TIMECODE"            // { timecode: string }
+  | "TAG_AUDIO_CATEGORY"       // { clip_id, category }
+  | "MATCH_FRAME"              // {}
+  | "REVERSE_CLIP"             // { clip_id }
+  | "SET_CLIP_COLOR_LABEL"     // { clip_id, color }
+  // ─── Phase 24: Adjustment layers + audio ducking ─────────────────────────
+  | "APPLY_FILTER_TO_ALL"      // { filter, value }
+  | "ENABLE_AUDIO_DUCKING"     // { enabled, threshold?, reduction? }
+  // ─── Phase 25: Grouping, auto-split, track matte ─────────────────────────
+  | "GROUP_CLIPS"              // { clip_ids: string[] }
+  | "AUTO_SPLIT_SCENES"        // { threshold? }
+  | "SET_TRACK_MATTE"          // { clip_id, matte_clip_id }
+  // ─── Phase 34: Crop / Pan / Opacity / BG Remove / Split Screen ───────────
+  | "SET_CROP"                 // { top, bottom, left, right } — 0-1 fraction
+  | "SET_PAN"                  // { x, y } — -1 to 1
+  | "RESET_CROP_PAN"           // {} — resets crop + pan to zero
+  | "SET_CLIP_OPACITY"         // { value: 0-1 }
+  | "TOGGLE_BACKGROUND_REMOVE" // { enabled?: boolean }
+  | "SET_SPLIT_SCREEN";        // { preset_id: string }
   payload: Record<string, unknown>;
 }
 
@@ -502,6 +508,24 @@ interface EditorState {
   studioAckedRevision: number;
   studioSnapshotHash: string | null;
 
+  // M2 — staged ingest lifecycle (URL + upload)
+  ingestStage: IngestStage;
+  ingestSourceKind: IngestSourceKind | null;
+  ingestFingerprint: string | null;
+  ingestFailCode: IngestFailCode | null;
+  ingestFailMessage: string | null;
+  ingestFromCache: boolean;
+  ingestUploadProgress: number | null;
+  setIngestStage: (stage: IngestStage) => void;
+  setIngestMeta: (patch: {
+    sourceKind?: IngestSourceKind | null;
+    fingerprint?: string | null;
+    fromCache?: boolean;
+    uploadProgress?: number | null;
+  }) => void;
+  failIngest: (code: IngestFailCode, message: string) => void;
+  resetIngestLifecycle: () => void;
+
   // Processing State
   isProcessing: boolean;
   currentStage: "idle" | "loading" | "transcribing" | "analyzing" | "ready";
@@ -611,7 +635,7 @@ interface EditorState {
   slideClip: (clipId: string, deltaSec: number) => void;
   rippleDelete: (clipId: string) => void;
   setExportSetting: <K extends keyof ExportSettings>(key: K, value: ExportSettings[K]) => void;
-  
+
   // Canvas Actions
   addCanvasElement: (element: Omit<CanvasElement, "id">) => void;
   updateCanvasElement: (id: string, updates: Partial<CanvasElement>) => void;
@@ -724,6 +748,13 @@ export const useEditorStore = create<EditorState>()(
       studioProjectId: null,
       studioAckedRevision: 0,
       studioSnapshotHash: null,
+      ingestStage: "idle",
+      ingestSourceKind: null,
+      ingestFingerprint: null,
+      ingestFailCode: null,
+      ingestFailMessage: null,
+      ingestFromCache: false,
+      ingestUploadProgress: null,
       isProcessing: false,
       currentStage: "idle",
       progress: 0,
@@ -881,6 +912,66 @@ export const useEditorStore = create<EditorState>()(
         }),
 
       setThumbnailUrl: (url) => set({ thumbnailUrl: url }),
+
+      setIngestStage: (stage) =>
+        set((state) => {
+          if (!canTransitionIngest(state.ingestStage, stage)) {
+            if (process.env.NODE_ENV !== "production") {
+              console.warn(
+                `[ingest] illegal transition ignored: ${state.ingestStage} → ${stage}`,
+              );
+            }
+            return state;
+          }
+          return {
+            ingestStage: stage,
+            ...(stage === "ready" || stage === "failed"
+              ? { ingestUploadProgress: null }
+              : {}),
+            ...(stage !== "failed"
+              ? { ingestFailCode: null, ingestFailMessage: null }
+              : {}),
+          };
+        }),
+
+      setIngestMeta: (patch) =>
+        set({
+          ...(patch.sourceKind !== undefined
+            ? { ingestSourceKind: patch.sourceKind }
+            : {}),
+          ...(patch.fingerprint !== undefined
+            ? { ingestFingerprint: patch.fingerprint }
+            : {}),
+          ...(patch.fromCache !== undefined
+            ? { ingestFromCache: patch.fromCache }
+            : {}),
+          ...(patch.uploadProgress !== undefined
+            ? { ingestUploadProgress: patch.uploadProgress }
+            : {}),
+        }),
+
+      failIngest: (code, message) =>
+        set({
+          ingestStage: "failed",
+          ingestFailCode: code,
+          ingestFailMessage: message,
+          ingestUploadProgress: null,
+          isProcessing: false,
+          currentStage: "idle",
+        }),
+
+      resetIngestLifecycle: () =>
+        // Hard reset — not an FSM edge. Used only when starting a new ingest
+        // or dismissing failure UI; mid-flight cancel uses failIngest instead.
+        set({
+          ingestStage: "idle",
+          ingestSourceKind: null,
+          ingestFingerprint: null,
+          ingestFailCode: null,
+          ingestFailMessage: null,
+          ingestFromCache: false,
+          ingestUploadProgress: null,
+        }),
 
       setProcessing: (isProcessing, stage) =>
         set((state) => ({
@@ -1091,11 +1182,11 @@ export const useEditorStore = create<EditorState>()(
         set((state) => ({
           canvasElements: [
             ...state.canvasElements,
-            { 
-              ...element, 
-              id: typeof crypto !== "undefined" && crypto.randomUUID 
-                ? crypto.randomUUID() 
-                : Math.random().toString(36).substring(2, 15) 
+            {
+              ...element,
+              id: typeof crypto !== "undefined" && crypto.randomUUID
+                ? crypto.randomUUID()
+                : Math.random().toString(36).substring(2, 15)
             },
           ],
         })),
@@ -1282,7 +1373,7 @@ export const useEditorStore = create<EditorState>()(
               if (videoEl) videoEl.currentTime = action.payload.time as number;
               break;
             case "PLAY":
-              if (videoEl) videoEl.play().catch(() => {});
+              if (videoEl) videoEl.play().catch(() => { });
               store.setIsPlaying(true);
               break;
             case "PAUSE":
@@ -1620,7 +1711,7 @@ export const useEditorStore = create<EditorState>()(
             case "SET_SPEED_KEYFRAME": {
               const spClipId = action.payload.clip_id as string;
               const spTimeMs = action.payload.time_ms as number;
-              const spSpeed  = action.payload.speed as number;
+              const spSpeed = action.payload.speed as number;
               if (!spClipId || spTimeMs == null || spSpeed == null) break;
               upsertKeyframe(spClipId, "speed", {
                 id: `speed-${spTimeMs}`,
@@ -1756,10 +1847,10 @@ export const useEditorStore = create<EditorState>()(
             // ─── Phase 34: Crop / Pan / Opacity / BG Remove / Split Screen ───
             case "SET_CROP": {
               store.setFrameFilter({
-                cropTop:    (action.payload.top    as number) ?? 0,
+                cropTop: (action.payload.top as number) ?? 0,
                 cropBottom: (action.payload.bottom as number) ?? 0,
-                cropLeft:   (action.payload.left   as number) ?? 0,
-                cropRight:  (action.payload.right  as number) ?? 0,
+                cropLeft: (action.payload.left as number) ?? 0,
+                cropRight: (action.payload.right as number) ?? 0,
               });
               break;
             }
@@ -2035,11 +2126,11 @@ export const useEditorStore = create<EditorState>()(
         set((state) => ({
           preflightFixPlan: state.preflightFixPlan
             ? {
-                ...state.preflightFixPlan,
-                suggestions: state.preflightFixPlan.suggestions.map((s) =>
-                  s.id === suggestionId ? { ...s, applied: true } : s,
-                ),
-              }
+              ...state.preflightFixPlan,
+              suggestions: state.preflightFixPlan.suggestions.map((s) =>
+                s.id === suggestionId ? { ...s, applied: true } : s,
+              ),
+            }
             : null,
         }));
 

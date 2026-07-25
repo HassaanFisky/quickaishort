@@ -1,20 +1,25 @@
 # 08 — Media Pipeline
 
-## Happy path (YouTube → editor)
+## Happy path (YouTube / upload → editor)
 
 ```text
 Paste URL / upload file
-  → setSourceUrl / setSourceFile (editorStore) + mint runId
-  → useMediaPipeline
+  → useIngestLifecycle (canonical staged FSM)
+      identify → validate → acquire_meta → projectize → analyze → ready|failed
+  → Kernel ensureStudioProject after acquire_meta (flag on)
+  → IDB analysis artifact cache (skip Whisper+/api/analyze on hit)
+  → useMediaPipeline (analyze stage only)
       → proxy/audio (/api/audio, /api/proxy*)
       → Whisper.wasm transcript (browser worker)
-      → silence / energy heuristics → clip suggestions
-      → optional face tracking (useFaceTracker)
+      → POST /api/analyze clip suggestions (existing; not an extra ingest call)
   → AI panel context updated (title + transcript slice)
-  → instant suggestions (title heuristics)
 ```
 
-Evidence: `EditorLayout.tsx`, `useMediaPipeline`, `gemini-editor.ts`, CLAUDE working memory.
+**Entry points (all must use `useIngestLifecycle`):** `IngestSurface` Generate/upload, EditorLayout drop, query-param auto-import, session cache restore, `retry-analysis` → `retryAnalyze`.
+
+Evidence: `useIngestLifecycle.ts`, `ingestFsm.ts`, `EditorLayout.tsx`, `useMediaPipeline.ts`.
+
+Do **not** call `setSourceUrl` / `runPipeline` from ad-hoc UI paths.
 
 ---
 

@@ -1,6 +1,6 @@
 # Canonical Project Memory
 
-**Last rebuilt:** 2026-07-21 (documentation synchronization pass)  
+**Last rebuilt:** 2026-07-25 (M3 ingest FSM integration)  
 **Authority:** Latest accepted EPs / ADRs / founder decisions only
 
 ## Product
@@ -41,6 +41,7 @@ Editor is the product surface. AI performs edits via tools. Chat-primary UX dire
 - MediaGraph: `/api/studio/v1/media-graphs`  
 - Orchestrator: `/api/studio/v1/orchestrator`  
 - Ingest policy: `GET /api/studio/v1/ingest/policy` (not EP-001)  
+- Ingest lifecycle: staged FSM via `useIngestLifecycle` (`identify→…→ready|failed`); contract `services/ingest_fsm.py`  
 - Onboarding: `GET/PUT /api/studio/v1/me/onboarding`  
 - Editor: `IngestSurface` (Upload ≡ URL), lazy onboarding tour  
 - **ADK UI:** `/adk` Google Agent Development Kit — **Coming Soon** + reserved IA skeleton (not Ads, not a live wizard)  

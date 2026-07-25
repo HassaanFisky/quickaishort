@@ -10,7 +10,6 @@ import dynamic from "next/dynamic";
 import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
 import Image from "next/image";
-import { GlowButton } from "@/components/ui/GlowButton";
 import QSLogo from "@/components/shared/QSLogo";
 import {
   Zap,
@@ -24,31 +23,26 @@ import {
   Download,
   SlidersHorizontal,
   GripHorizontal,
-  CheckCircle2,
-  Link2,
   Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import {
-  getVideoInfo,
-  requestPresignedUploadUrl,
-  uploadFileToGcs,
-} from "@/lib/api";
 import { parseYouTubeId } from "@/lib/youtube-utils";
 import { PROJECT_TEMPLATES } from "@/lib/project/templates";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useSwipeGesture } from "@/hooks/useTouchGestures";
-import { trackEvent } from "@/lib/analytics";
-import {
-  fetchIngestPolicy,
-  FALLBACK_INGEST_POLICY,
-  validateFileAgainstPolicy,
-} from "@/lib/studio/ingestPolicy";
+import { FALLBACK_INGEST_POLICY } from "@/lib/studio/ingestPolicy";
 import {
   consumeTourReplay,
   fetchOnboarding,
 } from "@/lib/studio/onboarding";
+import { useIngestLifecycle } from "@/hooks/useIngestLifecycle";
+import {
+  INGEST_STAGE_LABELS,
+  isDirectVideoUrl,
+} from "@/lib/studio/ingestFsm";
+import { loadIngestSession } from "@/lib/studio/ingestSession";
+import { loadIngestArtifact } from "@/lib/studio/ingestArtifacts";
 
 import LeftPanel from "./LeftPanel";
 import RightPanel from "./RightPanel";
@@ -59,7 +53,7 @@ import Sidebar from "@/components/layout/Sidebar";
 import { TimelineLoader } from "@/components/ui/TimelineLoader";
 import { LiquidThemeToggle } from "@/components/shared/LiquidThemeToggle";
 import { AIPanel } from "@/components/editor/AIPanel";
-import IngestSurface, { type IngestUiStatus } from "./IngestSurface";
+import IngestSurface from "./IngestSurface";
 import VideoWorkspace from "./VideoWorkspace";
 import ExportDialog from "./ExportDialog";
 
@@ -70,25 +64,32 @@ const EditorOnboardingTour = dynamic(
 
 export default function EditorLayout() {
   const {
-    setSourceFile,
-    setSourceUrl,
-    setSourceGcsPath,
     setProcessing,
     isProcessing,
     currentStage,
     sourceUrl,
     sourceFile,
-    setThumbnailUrl: storeThumbnail,
-    setVideoMetadata,
-    aiPanelOpen,
     setExportSetting,
     selectedClipId,
+    ingestStage,
+    ingestFailMessage,
+    ingestUploadProgress,
+    ingestFromCache,
   } = useEditorStore();
 
   const { runPipeline, cancelPipeline } = useMediaPipeline();
   const { setVideoContext } = useAIPanel();
   const setAIPanelOpen = useEditorStore((s) => s.setAIPanelOpen);
   const { isSidebarCollapsed, leftPanelOpen, rightPanelOpen, setLeftPanelOpen, setRightPanelOpen } = useUIStore();
+
+  const {
+    ingestUrl,
+    ingestFile,
+    retryAnalyze,
+    cancelUpload,
+    cancelAnalyze,
+    lastFileRef,
+  } = useIngestLifecycle({ runPipeline, cancelPipeline });
 
   // Sync transcript to AI panel context after pipeline completes
   const storeTranscript = useEditorStore((s) => s.transcript);
@@ -128,19 +129,13 @@ export default function EditorLayout() {
 
   const [urlValid, setUrlValid] = useState<boolean | null>(null);
   const [youtubePreviewId, setYoutubePreviewId] = useState<string | null>(null);
-  const [backendFailed, setBackendFailed] = useState(false);
   const [centerMode, setCenterMode] = useState<"preview" | "effects">("preview");
   const [panelCollapsed, setPanelCollapsed] = useState(false);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
-  const [lastError, setLastError] = useState<string | null>(null);
-  const [ingestStatus, setIngestStatus] = useState<IngestUiStatus>("idle");
-  const [ingestProgress, setIngestProgress] = useState<number | null>(null);
-  const [ingestError, setIngestError] = useState<string | null>(null);
   const [showTour, setShowTour] = useState(false);
   const [tourStep, setTourStep] = useState(0);
-  const uploadAbortRef = useRef<AbortController | null>(null);
-  const lastFileRef = useRef<File | null>(null);
   const hasAutoImportedRef = useRef(false);
+  const aiPanelOpen = useEditorStore((s) => s.aiPanelOpen);
 
   // Mobile inspector bottom-sheet — lightweight (non-advanced-mode) replacement
   // for the desktop inline RightPanel, since RightPanel is otherwise only
@@ -178,22 +173,22 @@ export default function EditorLayout() {
   // (transcription worker status), which never left "loading" after init.
   const isAnalysing = isProcessing;
 
-  // Collapse URL bar 1.5s after video loads
+  // Collapse URL bar 1.5s after video loads (and ingest reached ready)
   useEffect(() => {
-    if (!sourceUrl || isAnalysing) {
-      setPanelCollapsed(false);
+    if (!sourceUrl || isAnalysing || (ingestStage !== "ready" && ingestStage !== "idle")) {
+      if (ingestStage !== "ready") setPanelCollapsed(false);
       return;
     }
     const t = setTimeout(() => setPanelCollapsed(true), 1500);
     return () => clearTimeout(t);
-  }, [sourceUrl, isAnalysing]);
+  }, [sourceUrl, isAnalysing, ingestStage]);
 
   // Keyboard shortcut hint — fires once after first video load
   useEffect(() => {
     if (sourceUrl && !hasShownShortcutsRef.current) {
       hasShownShortcutsRef.current = true;
       toast("Pro tip: Use keyboard shortcuts", {
-        description: "Ctrl+K for AI Editor · I/O to mark range · M for markers · ? for all shortcuts",
+        description: "Shift+Alt+A for AI Editor · I/O to mark range · M for markers · ? for all shortcuts",
         duration: 8000,
       });
     }
@@ -226,18 +221,16 @@ export default function EditorLayout() {
     });
   }, []);
 
-  // Keep a ref so the retry listener never needs to re-register when runPipeline
-  // recreates (it captures transcription via closure, so it changes every render).
-  // A re-registration window between removeEventListener and addEventListener
-  // could silently swallow a retry-analysis event during active pipeline state changes.
-  const runPipelineRef = useRef(runPipeline);
-  useEffect(() => { runPipelineRef.current = runPipeline; });
+  // Keep a ref so the retry listener never needs to re-register when retryAnalyze
+  // recreates. Routes through canonical FSM (not raw runPipeline).
+  const retryAnalyzeRef = useRef(retryAnalyze);
+  useEffect(() => { retryAnalyzeRef.current = retryAnalyze; });
 
   useEffect(() => {
-    const handler = () => void runPipelineRef.current();
+    const handler = () => void retryAnalyzeRef.current();
     window.addEventListener("retry-analysis", handler);
     return () => window.removeEventListener("retry-analysis", handler);
-  }, []); // stable — ref keeps it current without re-registration
+  }, []);
 
   // Watchdog: 3-minute window covers first-time Whisper model download (~150 MB).
   // cancelPipeline() now terminates the worker as well as aborting the audio-fetch
@@ -248,6 +241,13 @@ export default function EditorLayout() {
       if (useEditorStore.getState().currentStage === "transcribing") {
         cancelPipeline();
         setProcessing(false, "idle");
+        const st = useEditorStore.getState();
+        if (st.ingestStage === "analyze") {
+          st.setIngestStage("ready");
+        } else if (st.ingestStage !== "ready" && st.ingestStage !== "failed") {
+          st.setIngestStage("analyze");
+          st.setIngestStage("ready");
+        }
         toast.info(
           "Transcription is taking too long. Click Generate again — the AI model will be cached and load faster next time.",
           { duration: 12_000 }
@@ -258,7 +258,6 @@ export default function EditorLayout() {
   }, [currentStage, cancelPipeline, setProcessing]);
 
   // Auto-import from Chrome extension query params
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (hasAutoImportedRef.current) return;
     const params = new URLSearchParams(window.location.search);
@@ -270,8 +269,26 @@ export default function EditorLayout() {
     if (targetUrl) {
       hasAutoImportedRef.current = true;
       setUrlInput(targetUrl);
-      void handleAnalyze(targetUrl);
+      void ingestUrl(targetUrl);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot URL bootstrap
+  }, []);
+
+  // M3 — session restore: if refresh cleared Zustand but IDB artifact exists, re-ingest via FSM (cache hit → no Gemini).
+  const hasSessionRestoredRef = useRef(false);
+  useEffect(() => {
+    if (hasSessionRestoredRef.current || hasAutoImportedRef.current) return;
+    hasSessionRestoredRef.current = true;
+    const snap = loadIngestSession();
+    if (!snap?.url) return;
+    if (useEditorStore.getState().sourceUrl || useEditorStore.getState().sourceFile) return;
+    setUrlInput(snap.url);
+    void loadIngestArtifact(snap.fingerprint).then((art) => {
+      if (!art) return;
+      if (useEditorStore.getState().sourceUrl) return;
+      void ingestUrl(snap.url);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot recovery
   }, []);
 
   // EP-008 — lazy interactive tour (once / replay)
@@ -300,13 +317,11 @@ export default function EditorLayout() {
     };
   }, []);
 
-  const isDirectVideoUrl = (url: string) =>
-    /\.(mp4|webm|mov)([\?#].*)?$/i.test(url.trim());
+  const isDirectVideoUrlCheck = isDirectVideoUrl;
 
   const handleUrlChange = (e: ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setUrlInput(val);
-    setBackendFailed(false);
     if (!val.trim()) {
       setUrlValid(null);
       setYoutubePreviewId(null);
@@ -316,7 +331,7 @@ export default function EditorLayout() {
     if (videoId) {
       setUrlValid(true);
       setYoutubePreviewId(videoId);
-    } else if (isDirectVideoUrl(val)) {
+    } else if (isDirectVideoUrlCheck(val)) {
       setUrlValid(true);
       setYoutubePreviewId(null);
     } else {
@@ -325,175 +340,16 @@ export default function EditorLayout() {
     }
   };
 
-  const handleAnalyze = async (overrideUrl?: string) => {
-    const url = overrideUrl ?? urlInput;
-    if (!url.trim()) {
-      toast.error("Please paste a YouTube URL or direct video URL first.");
-      return;
-    }
-
-    // Direct video URL — skip backend, load straight into the pipeline
-    if (isDirectVideoUrl(url)) {
-      setBackendFailed(false);
-      setYoutubePreviewId(null);
-      setVideoMetadata({ id: url, url, title: url.split("/").pop() ?? "Video", duration: 0, nativeWidth: 1280, nativeHeight: 720, fps: 30 });
-      setSourceUrl(url);
-      trackEvent({ name: "video_loaded", props: { source: "upload", durationSec: 0 } });
-      void runPipeline();
-      return;
-    }
-
-    const videoId = parseYouTubeId(url);
-    if (videoId) {
-      setYoutubePreviewId(videoId);
-      setBackendFailed(false);
-    }
-    try {
-      setProcessing(true, "loading");
-      toast.info("Connecting to Viral Intelligence Engine...");
-      const info = await getVideoInfo(url);
-      if (info.code === "YOUTUBE_FETCH_FAILED") {
-        toast.warning(
-          "YouTube server-side access failed. Preview is still playing. Upload MP4 for AI analysis.",
-          { duration: 7000 }
-        );
-        setBackendFailed(true);
-        setProcessing(false, "idle");
-        return;
-      }
-      setLastError(null);
-      toast.success(`Found: ${info.title}`);
-
-      // Whisper tiny.en transcribes at ~10–20× realtime in WASM. Videos over
-      // 30 minutes (1800s) will likely exceed the 180s watchdog. Surface this
-      // before the pipeline starts so users know what to expect.
-      if (info.duration && info.duration > 1800) {
-        toast.warning(
-          `This video is ${Math.round(info.duration / 60)} minutes. Browser AI works best under 30 minutes — analysis may take longer or time out on first use.`,
-          { duration: 8000 }
-        );
-      }
-
-      if (info.thumbnail) storeThumbnail(info.thumbnail);
-      setVideoContext({
-        id: info.id ?? videoId ?? "",
-        title: info.title ?? "YouTube Video",
-        transcript: "",
-      });
-      setVideoMetadata({
-        id: info.id ?? videoId ?? "",
-        url,
-        title: info.title ?? "YouTube Video",
-        duration: info.duration ?? 0,
-        nativeWidth: 1280,
-        nativeHeight: 720,
-        fps: 30,
-      });
-      setSourceUrl(url);
-      trackEvent({ name: "video_loaded", props: { source: "youtube", durationSec: Math.round(info.duration ?? 0) } });
-      void runPipeline();
-    } catch (error: unknown) {
-      setBackendFailed(true);
-      let errMsg = "Process interrupted. Please try another link.";
-      if (error && typeof error === "object" && "isAxiosError" in error) {
-        const axErr = error as { isAxiosError: boolean; code?: string; response?: { status: number; data: { detail?: string; code?: string } } };
-        if (axErr.code === "ERR_NETWORK") {
-          errMsg = "Network Error: Could not connect to the backend server.";
-        } else if (axErr.response?.data?.code === "YOUTUBE_FETCH_FAILED") {
-          toast.warning(
-            "YouTube server-side access failed. Upload MP4 instead.",
-            { duration: 7000 }
-          );
-          setProcessing(false, "idle");
-          return;
-        } else if (axErr.response) {
-          errMsg =
-            axErr.response.data?.detail ||
-            `Server error ${axErr.response.status}`;
-        }
-      } else if (error instanceof Error) {
-        errMsg = error.message || errMsg;
-      }
-      setLastError(errMsg);
-      toast.error(`Error: ${errMsg}`);
-      setProcessing(false, "idle");
-    }
-  };
-
   const handleCancel = () => {
-    cancelPipeline();
-    setProcessing(false, "idle");
-    toast.info("Processing cancelled.");
+    cancelAnalyze();
   };
-
-  const ingestLocalFile = useCallback(
-    async (file: File) => {
-      lastFileRef.current = file;
-      setIngestError(null);
-      setIngestStatus("validating");
-      const policy = await fetchIngestPolicy().catch(() => FALLBACK_INGEST_POLICY);
-      const v = validateFileAgainstPolicy(file, policy);
-      if (!v.ok) {
-        setIngestStatus("error");
-        setIngestError(v.message);
-        toast.error(v.message);
-        return;
-      }
-      if (file.size > policy.warn_bytes) {
-        toast.warning("Large file — upload may take a while.", { duration: 5000 });
-      }
-
-      uploadAbortRef.current?.abort();
-      const ac = new AbortController();
-      uploadAbortRef.current = ac;
-
-      setIngestStatus("uploading");
-      setIngestProgress(0);
-      const blobUrl = URL.createObjectURL(file);
-      setSourceFile(file, blobUrl);
-      setBackendFailed(false);
-      setYoutubePreviewId(null);
-      trackEvent({ name: "video_loaded", props: { source: "upload", durationSec: 0 } });
-
-      try {
-        const { presigned_url, gcs_path } = await requestPresignedUploadUrl(
-          file.name,
-          file.type || "video/mp4",
-        );
-        await uploadFileToGcs(
-          presigned_url,
-          file,
-          file.type || "video/mp4",
-          (pct) => setIngestProgress(pct),
-          ac.signal,
-        );
-        setSourceGcsPath(gcs_path);
-      } catch (err) {
-        if (err instanceof DOMException && err.name === "AbortError") {
-          setIngestStatus("cancelled");
-          setIngestProgress(null);
-          return;
-        }
-        const msg = err instanceof Error ? err.message : "Upload failed";
-        setIngestError(`${msg} — preview may still work locally.`);
-        toast.warning("Cloud upload failed — continuing with local preview.");
-      }
-
-      setIngestStatus("processing");
-      setIngestProgress(null);
-      setPanelCollapsed(true);
-      runPipeline();
-      setIngestStatus("ready");
-    },
-    [setSourceFile, setSourceGcsPath, runPipeline],
-  );
 
   const handleDrop = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDraggingOver(false);
     const file = e.dataTransfer.files?.[0];
-    if (file) void ingestLocalFile(file);
+    if (file) void ingestFile(file);
   };
 
   const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
@@ -553,35 +409,51 @@ export default function EditorLayout() {
           <div
             className={cn(
               "flex items-center gap-2 pl-2.5 pr-3 py-1.5 rounded-full border backdrop-blur-md transition-colors duration-300",
-              isProcessing
-                ? "border-amber-400/25 bg-amber-400/[0.06]"
-                : "border-emerald-400/25 bg-emerald-400/[0.06]"
+              ingestStage === "failed"
+                ? "border-red-400/25 bg-red-400/[0.06]"
+                : isProcessing || (ingestStage !== "idle" && ingestStage !== "ready")
+                  ? "border-amber-400/25 bg-amber-400/[0.06]"
+                  : "border-emerald-400/25 bg-emerald-400/[0.06]"
             )}
           >
             <span className="relative flex h-2 w-2 shrink-0">
-              {isProcessing && (
-                <span className="absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-60 animate-ping" />
-              )}
+              {ingestStage !== "failed" &&
+                ingestStage !== "idle" &&
+                ingestStage !== "ready" && (
+                  <span className="absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-60 animate-ping" />
+                )}
               <span
                 className={cn(
                   "relative inline-flex h-2 w-2 rounded-full",
-                  isProcessing ? "bg-amber-400" : "bg-emerald-400"
+                  ingestStage === "failed"
+                    ? "bg-red-400"
+                    : isProcessing || (ingestStage !== "idle" && ingestStage !== "ready")
+                      ? "bg-amber-400"
+                      : "bg-emerald-400"
                 )}
               />
             </span>
             <span
               className={cn(
                 "text-[10px] font-black tracking-[0.18em] uppercase leading-none whitespace-nowrap",
-                isProcessing ? "text-amber-300" : "text-emerald-300"
+                ingestStage === "failed"
+                  ? "text-red-300"
+                  : isProcessing || (ingestStage !== "idle" && ingestStage !== "ready")
+                    ? "text-amber-300"
+                    : "text-emerald-300"
               )}
             >
-              {isProcessing
-                ? currentStage === "transcribing"
+              {ingestStage === "failed"
+                ? "Ingest Failed"
+                : ingestStage === "analyze" && currentStage === "transcribing"
                   ? "Creating Subtitles"
-                  : currentStage === "analyzing"
-                  ? "Finding Viral Hooks"
-                  : "Downloading Video"
-                : "Studio Ready"}
+                  : ingestStage === "analyze" && currentStage === "analyzing"
+                    ? "Finding Viral Hooks"
+                    : ingestStage !== "idle" && ingestStage !== "ready"
+                      ? INGEST_STAGE_LABELS[ingestStage].replace(/…$/, "")
+                      : isProcessing
+                        ? "Working…"
+                        : "Studio Ready"}
             </span>
           </div>
 
@@ -653,7 +525,7 @@ export default function EditorLayout() {
               )}
             >
               <Zap size={11} />
-              {localEngineEnabled ? "Local" : "Local"}
+              {localEngineEnabled ? "Local On" : "Local Off"}
             </button>
           )}
 
@@ -661,7 +533,13 @@ export default function EditorLayout() {
             data-tour-id="export.button"
             onClick={() => setExportOpen(true)}
             disabled={!sourceUrl || isProcessing}
-            title="Export — Shift+Alt+E"
+            title={
+              sourceUrl && !isProcessing
+                ? "Export — Shift+Alt+E"
+                : isProcessing
+                  ? "Export is disabled while your video is processing"
+                  : "Load a video to enable export"
+            }
             aria-label="Export video"
             className={cn(
               "h-9 px-3.5 rounded-xl flex items-center gap-2 text-xs font-bold transition-all duration-200",
@@ -675,9 +553,10 @@ export default function EditorLayout() {
           </button>
 
           <button
-            onClick={() => setAIPanelOpen(true)}
-            title="AI Editor (Ctrl+K)"
-            aria-label="Open AI Editor"
+            onClick={() => setAIPanelOpen(!aiPanelOpen)}
+            title={aiPanelOpen ? "Close AI Editor (Shift+Alt+A)" : "Open AI Editor (Shift+Alt+A)"}
+            aria-label={aiPanelOpen ? "Close AI Editor" : "Open AI Editor"}
+            aria-pressed={aiPanelOpen}
             className={cn(
               "h-9 w-9 rounded-xl flex items-center justify-center border transition-all duration-200",
               aiPanelOpen
@@ -692,9 +571,9 @@ export default function EditorLayout() {
         </div>
       </header>
 
-      {/* Error recovery banner */}
+      {/* Error recovery banner — ingest FSM terminal failures */}
       <AnimatePresence>
-        {lastError && (
+        {ingestStage === "failed" && ingestFailMessage && (
           <motion.div
             key="error-banner"
             initial={{ height: 0, opacity: 0 }}
@@ -704,16 +583,19 @@ export default function EditorLayout() {
           >
             <div className="flex items-center gap-3 px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs">
               <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-              <span className="flex-1 truncate">{lastError}</span>
+              <span className="flex-1 truncate">{ingestFailMessage}</span>
               <button
-                onClick={() => setLastError(null)}
+                onClick={() => useEditorStore.getState().resetIngestLifecycle()}
                 className="shrink-0 hover:text-red-300 transition-colors"
                 aria-label="Dismiss error"
               >
                 <X size={13} />
               </button>
               <button
-                onClick={() => { setLastError(null); void handleAnalyze(); }}
+                onClick={() => {
+                  if (lastFileRef.current) void ingestFile(lastFileRef.current);
+                  else void ingestUrl(urlInput);
+                }}
                 className="shrink-0 font-bold hover:text-red-300 transition-colors text-[10px] uppercase tracking-widest"
               >
                 Retry
@@ -723,384 +605,219 @@ export default function EditorLayout() {
         )}
       </AnimatePresence>
 
-      {/* Main workspace — 3-column when ?advanced=1, single center column otherwise */}
-      <main className={cn(
-        "flex-1 min-h-0 grid grid-cols-1 gap-4 overflow-hidden",
-        isAdvancedMode && "lg:grid-cols-[minmax(220px,18%)_1fr_minmax(260px,22%)]"
-      )}>
+      {/* Main workspace row — grid + docked AI panel. The AI panel is a layout
+          sibling so the canvas resizes when it opens and is never overlaid. */}
+      <div className="flex-1 min-h-0 flex overflow-hidden">
+        <main className={cn(
+          "flex-1 min-w-0 min-h-0 grid grid-cols-1 gap-4 overflow-hidden",
+          isAdvancedMode && "lg:grid-cols-[minmax(220px,18%)_1fr_minmax(260px,22%)]"
+        )}>
 
-        {/* Left — Viral Suggestions (desktop inline, advanced mode only) */}
-        {isAdvancedMode && (
-          <section className="hidden lg:flex bg-card border border-border rounded-2xl flex-col overflow-hidden min-h-0">
-            <div className="flex-1 overflow-y-auto p-4 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-foreground/10 [&::-webkit-scrollbar-thumb]:rounded-full">
-              <LeftPanel />
-            </div>
-          </section>
-        )}
+          {/* Left — Viral Suggestions (desktop inline, advanced mode only) */}
+          {isAdvancedMode && (
+            <section className="hidden lg:flex bg-card border border-border rounded-2xl flex-col overflow-hidden min-h-0">
+              <div className="flex-1 overflow-y-auto p-4 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-foreground/10 [&::-webkit-scrollbar-thumb]:rounded-full">
+                <LeftPanel />
+              </div>
+            </section>
+          )}
 
-        {/* Center — Stage */}
-        <section className="relative flex flex-col items-center justify-center gap-4 min-h-0">
-          <IngestSurface
-            urlInput={urlInput}
-            urlValid={urlValid}
-            youtubePreviewId={youtubePreviewId}
-            isAnalysing={isAnalysing}
-            panelCollapsed={panelCollapsed}
-            currentStage={currentStage}
-            videoTitle={storeVideoMetadata?.title}
-            hasSource={Boolean(sourceUrl || sourceFile)}
-            ingestStatus={ingestStatus}
-            ingestProgress={ingestProgress}
-            ingestError={ingestError}
-            onUrlChange={handleUrlChange}
-            onAnalyze={() => void handleAnalyze()}
-            onCancelAnalyze={handleCancel}
-            onExpandPanel={() => setPanelCollapsed(false)}
-            onFileChosen={(f) => void ingestLocalFile(f)}
-            onCancelUpload={() => {
-              uploadAbortRef.current?.abort();
-              setIngestStatus("cancelled");
-              setIngestProgress(null);
-            }}
-            onRetryUpload={() => {
-              if (lastFileRef.current) void ingestLocalFile(lastFileRef.current);
-            }}
-            onReplace={() => {
-              setPanelCollapsed(false);
-              setIngestStatus("idle");
-              setIngestError(null);
-            }}
-          />
-          {false && (
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 z-40 w-full max-w-xl px-4">
-            <AnimatePresence mode="wait">
-              {panelCollapsed ? (
-                <motion.div
-                  key="panel-collapsed"
-                  initial={{ y: -8, opacity: 0 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  exit={{ y: -8, opacity: 0 }}
-                  transition={{ type: "spring", damping: 24, stiffness: 200 }}
-                  className="bg-card border border-border rounded-xl px-4 py-2.5 flex items-center justify-between gap-3 shadow-xl"
-                >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                    <span className="text-[10px] font-black text-fg-muted uppercase tracking-widest truncate">
-                      {storeVideoMetadata?.title ?? urlInput.slice(0, 50) ?? "Video loaded"}
-                    </span>
-                  </div>
-                  <button
-                    onClick={() => setPanelCollapsed(false)}
-                    className="text-[9px] font-black text-primary hover:text-primary/80 uppercase tracking-widest shrink-0 transition-colors"
+          {/* Center — Stage */}
+          <section className="relative flex flex-col items-center justify-center gap-4 min-h-0">
+            <IngestSurface
+              urlInput={urlInput}
+              urlValid={urlValid}
+              youtubePreviewId={youtubePreviewId}
+              isAnalysing={isAnalysing}
+              panelCollapsed={panelCollapsed}
+              currentStage={currentStage}
+              ingestStage={ingestStage}
+              videoTitle={storeVideoMetadata?.title}
+              hasSource={Boolean(sourceUrl || sourceFile)}
+              ingestUploadProgress={ingestUploadProgress}
+              ingestError={ingestFailMessage}
+              ingestFromCache={ingestFromCache}
+              onUrlChange={handleUrlChange}
+              onAnalyze={() => void ingestUrl(urlInput)}
+              onCancelAnalyze={handleCancel}
+              onExpandPanel={() => setPanelCollapsed(false)}
+              onFileChosen={(f) => void ingestFile(f)}
+              onCancelUpload={cancelUpload}
+              onRetryUpload={() => {
+                if (lastFileRef.current) void ingestFile(lastFileRef.current);
+                else void ingestUrl(urlInput);
+              }}
+              onReplace={() => {
+                setPanelCollapsed(false);
+                useEditorStore.getState().resetIngestLifecycle();
+              }}
+            />
+            {/* Video stage */}
+            <div className="editor-stage-bg w-full h-full flex items-center justify-center rounded-2xl overflow-hidden border border-border relative">
+              <AnimatePresence mode="wait">
+                {isAnalysing ? (
+                  <motion.div
+                    key="stage-analysing"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.3 }}
+                    className="absolute inset-0 z-10 flex items-center justify-center"
                   >
-                    Change
-                  </button>
-                </motion.div>
-              ) : (
-                <motion.div
-                  key="panel-expanded"
-                  initial={{ y: -20, opacity: 0 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  exit={{ y: -8, opacity: 0 }}
-                  transition={{ type: "spring", damping: 20, stiffness: 100 }}
-                  className="bg-card border border-border rounded-2xl p-2 flex flex-col gap-1 shadow-xl"
-                >
-                  <div className="flex items-center justify-center pt-2 pb-1">
-                    {urlValid === true ? (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[9px] font-black uppercase tracking-[0.2em] text-emerald-400">
-                        <CheckCircle2 className="w-3 h-3" />
-                        Video Ready
-                      </span>
-                    ) : (
-                      <span className="text-[9px] font-black uppercase tracking-[0.25em] text-muted-foreground">Import Your Video</span>
-                    )}
-                  </div>
-
-                  <AnimatePresence>
-                    {youtubePreviewId && urlValid && !isAnalysing && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: "auto" }}
-                        exit={{ opacity: 0, height: 0 }}
-                        className="px-1.5 pb-1"
-                      >
-                        <div className="relative rounded-xl overflow-hidden border border-emerald-500/20 bg-muted">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={`https://i.ytimg.com/vi/${(youtubePreviewId??"").replace(/[^a-zA-Z0-9_-]/g,"")}/mqdefault.jpg`}
-                            alt="YouTube thumbnail"
-                            className="w-full h-24 object-cover opacity-70"
-                          />
-                          <div className="absolute inset-0 bg-gradient-to-r from-background/70 to-transparent" />
-                          <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                            <span className="text-[9px] font-black text-emerald-400 uppercase tracking-widest">
-                              Video Found
+                    {youtubePreviewId ? (
+                      <div className="relative w-full h-full flex items-center justify-center p-16">
+                        {/* Video stays fully visible at all times — status floats below, never covers */}
+                        <YouTubePlayer videoId={youtubePreviewId} className="max-w-lg w-full" />
+                        {/* Thin top progress shimmer — premium, non-blocking */}
+                        <div className="absolute top-0 left-0 right-0 h-0.5 overflow-hidden pointer-events-none">
+                          <div className="h-full w-1/3 bg-gradient-to-r from-transparent via-primary to-transparent animate-[shimmer_1.4s_ease-in-out_infinite]" />
+                        </div>
+                        {/* Floating glass status chip — bottom-center, never obscures the frame */}
+                        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
+                          <div className="flex items-center gap-2.5 px-4 py-2 rounded-full bg-base/85 backdrop-blur-xl border border-border shadow-2xl">
+                            <Loader2 className="w-3.5 h-3.5 text-primary animate-spin shrink-0" />
+                            <span className="text-[10px] font-black uppercase tracking-[0.18em] text-foreground whitespace-nowrap">
+                              {currentStage === "transcribing"
+                                ? "Creating subtitles"
+                                : currentStage === "analyzing"
+                                  ? "Finding viral hooks"
+                                  : "Loading video"}
                             </span>
                           </div>
                         </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-
-                  <div className="flex items-center gap-2 p-1.5">
-                    <label htmlFor="youtube-url-input" className="sr-only">
-                      YouTube video URL
-                    </label>
-                    <div
-                      className={cn(
-                        "flex-1 flex items-center bg-muted border rounded-xl transition-colors",
-                        urlValid === true
-                          ? "border-emerald-500/30"
-                          : urlValid === false
-                          ? "border-red-500/30"
-                          : "border-border"
-                      )}
-                    >
-                      <span className="pl-3.5 shrink-0">
-                        {urlValid === true ? (
-                          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                        ) : urlValid === false ? (
-                          <AlertCircle className="w-4 h-4 text-red-400" />
-                        ) : (
-                          <Link2 className="w-4 h-4 text-muted-foreground" />
-                        )}
-                      </span>
-                      <input
-                        id="youtube-url-input"
-                        type="text"
-                        placeholder="Paste a YouTube URL..."
-                        className="bg-transparent border-none outline-none text-sm w-full text-foreground placeholder:text-muted-foreground h-11 pl-3 pr-4 font-medium"
-                        value={urlInput}
-                        onChange={handleUrlChange}
-                        onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) =>
-                          e.key === "Enter" && !isAnalysing && handleAnalyze()
-                        }
-                        disabled={isAnalysing}
-                      />
-                    </div>
-
-                    {isAnalysing ? (
-                      <button
-                        onClick={handleCancel}
-                        className="h-11 px-5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 transition-colors font-black text-[10px] uppercase tracking-widest flex items-center gap-2"
-                      >
-                        <X className="w-4 h-4" />
-                        Cancel
-                      </button>
+                      </div>
                     ) : (
-                      <GlowButton
-                        variant="premium"
-                        size="sm"
-                        className="rounded-xl h-11 px-6 font-black text-[10px] uppercase tracking-widest"
-                        onClick={() => handleAnalyze()}
-                        disabled={!urlInput.trim()}
-                      >
-                        <div className="flex items-center gap-2">
-                          <Zap className="w-4 h-4 fill-white" />
-                          <span>Generate</span>
-                        </div>
-                      </GlowButton>
-                    )}
-                  </div>
-
-                  <AnimatePresence>
-                    {urlValid === false && urlInput.trim() && (
-                      <motion.p
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: "auto" }}
-                        exit={{ opacity: 0, height: 0 }}
-                        className="text-[9px] text-red-400/80 font-bold px-4 pb-2"
-                      >
-                        Only YouTube URLs are supported (youtube.com or youtu.be)
-                      </motion.p>
-                    )}
-                  </AnimatePresence>
-
-                  <AnimatePresence>
-                    {backendFailed && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: "auto" }}
-                        exit={{ opacity: 0, height: 0 }}
-                        className="px-4 pb-2"
-                      >
-                        <button
-                          onClick={() => setPanelCollapsed(false)}
-                          className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-amber-400 hover:text-amber-300 transition-colors"
-                        >
-                          <Upload className="w-3 h-3" />
-                          Upload MP4 instead
-                        </button>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </motion.div>
-              )}
-            </AnimatePresence>
-            </div>
-          )}
-
-          {/* Video stage */}
-          <div className="editor-stage-bg w-full h-full flex items-center justify-center rounded-2xl overflow-hidden border border-border relative">
-            <AnimatePresence mode="wait">
-              {isAnalysing ? (
-                <motion.div
-                  key="stage-analysing"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.3 }}
-                  className="absolute inset-0 z-10 flex items-center justify-center"
-                >
-                  {youtubePreviewId ? (
-                    <div className="relative w-full h-full flex items-center justify-center p-16">
-                      {/* Video stays fully visible at all times — status floats below, never covers */}
-                      <YouTubePlayer videoId={youtubePreviewId} className="max-w-lg w-full" />
-                      {/* Thin top progress shimmer — premium, non-blocking */}
-                      <div className="absolute top-0 left-0 right-0 h-0.5 overflow-hidden pointer-events-none">
-                        <div className="h-full w-1/3 bg-gradient-to-r from-transparent via-primary to-transparent animate-[shimmer_1.4s_ease-in-out_infinite]" />
-                      </div>
-                      {/* Floating glass status chip — bottom-center, never obscures the frame */}
-                      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
-                        <div className="flex items-center gap-2.5 px-4 py-2 rounded-full bg-base/85 backdrop-blur-xl border border-border shadow-2xl">
-                          <Loader2 className="w-3.5 h-3.5 text-primary animate-spin shrink-0" />
-                          <span className="text-[10px] font-black uppercase tracking-[0.18em] text-foreground whitespace-nowrap">
-                            {currentStage === "transcribing"
-                              ? "Creating subtitles"
+                      <div className="w-full h-full flex items-center justify-center">
+                        <TimelineLoader
+                          phases={
+                            currentStage === "transcribing"
+                              ? ["Transcribing...", "Captioning...", "Building subtitles..."]
                               : currentStage === "analyzing"
-                              ? "Finding viral hooks"
-                              : "Loading video"}
-                          </span>
-                        </div>
+                                ? ["Analyzing...", "Scoring virality...", "Finding hooks..."]
+                                : ["Downloading...", "Preparing...", "Extracting..."]
+                          }
+                        />
+                      </div>
+                    )}
+                  </motion.div>
+                ) : youtubePreviewId && !sourceUrl ? (
+                  <motion.div
+                    key="stage-youtube-preview"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="w-full h-full flex items-center justify-center p-16"
+                  >
+                    <YouTubePlayer videoId={youtubePreviewId} className="max-w-lg w-full" />
+                  </motion.div>
+                ) : !sourceUrl && !youtubePreviewId && !isAnalysing ? (
+                  <motion.div
+                    key="stage-empty"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="w-full h-full flex flex-col items-center justify-center gap-6 text-center p-8"
+                  >
+                    <div className="relative">
+                      <div className="absolute inset-0 bg-primary/10 blur-3xl rounded-full scale-150" />
+                      <div className="relative w-20 h-20 rounded-2xl bg-card border border-border flex items-center justify-center shadow-lg">
+                        <Image src="/qs-logo.png" alt="" width={40} height={40} className="object-contain opacity-60" />
                       </div>
                     </div>
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <TimelineLoader
-                        phases={
-                          currentStage === "transcribing"
-                            ? ["Transcribing...", "Captioning...", "Building subtitles..."]
-                            : currentStage === "analyzing"
-                            ? ["Analyzing...", "Scoring virality...", "Finding hooks..."]
-                            : ["Downloading...", "Preparing...", "Extracting..."]
-                        }
-                      />
+                    <div className="max-w-sm">
+                      <h3 className="text-lg font-bold text-foreground mb-2 tracking-tight">
+                        Ready to create
+                      </h3>
+                      <p className="text-sm text-muted-foreground leading-relaxed">
+                        Paste a YouTube URL, drop a video file, or enter any direct video link.
+                        <span className="text-[10px] text-fg-subtle mt-1 block">
+                          Supports MP4, WebM, MOV · YouTube · Direct URLs
+                        </span>
+                      </p>
                     </div>
-                  )}
-                </motion.div>
-              ) : youtubePreviewId && !sourceUrl ? (
-                <motion.div
-                  key="stage-youtube-preview"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="w-full h-full flex items-center justify-center p-16"
-                >
-                  <YouTubePlayer videoId={youtubePreviewId} className="max-w-lg w-full" />
-                </motion.div>
-              ) : !sourceUrl && !youtubePreviewId && !isAnalysing ? (
-                <motion.div
-                  key="stage-empty"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="w-full h-full flex flex-col items-center justify-center gap-6 text-center p-8"
-                >
-                  <div className="relative">
-                    <div className="absolute inset-0 bg-primary/10 blur-3xl rounded-full scale-150" />
-                    <div className="relative w-20 h-20 rounded-2xl bg-card border border-border flex items-center justify-center shadow-lg">
-                      <Image src="/qs-logo.png" alt="" width={40} height={40} className="object-contain opacity-60" />
-                    </div>
-                  </div>
-                  <div className="max-w-sm">
-                    <h3 className="text-lg font-bold text-foreground mb-2 tracking-tight">
-                      Ready to create
-                    </h3>
-                    <p className="text-sm text-muted-foreground leading-relaxed">
-                      Paste a YouTube URL, drop a video file, or enter any direct video link.
-                      <span className="text-[10px] text-fg-subtle mt-1 block">
-                        Supports MP4, WebM, MOV · YouTube · Direct URLs
+                    <div className="flex items-center gap-3 text-[10px] text-fg-subtle">
+                      <span className="flex items-center gap-1.5">
+                        <kbd className="px-1.5 py-0.5 rounded bg-foreground/5 border border-foreground/8 font-mono text-[9px]">Shift</kbd>
+                        <kbd className="px-1.5 py-0.5 rounded bg-foreground/5 border border-foreground/8 font-mono text-[9px]">Alt</kbd>
+                        <kbd className="px-1.5 py-0.5 rounded bg-foreground/5 border border-foreground/8 font-mono text-[9px]">A</kbd>
+                        <span>AI Editor</span>
                       </span>
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-3 text-[10px] text-fg-subtle">
-                    <span className="flex items-center gap-1.5">
-                      <kbd className="px-1.5 py-0.5 rounded bg-foreground/5 border border-foreground/8 font-mono text-[9px]">Ctrl</kbd>
-                      <kbd className="px-1.5 py-0.5 rounded bg-foreground/5 border border-foreground/8 font-mono text-[9px]">K</kbd>
-                      <span>AI Editor</span>
-                    </span>
-                    <span className="w-px h-3 bg-foreground/10" />
-                    <span className="flex items-center gap-1.5">
-                      <kbd className="px-1.5 py-0.5 rounded bg-foreground/5 border border-foreground/8 font-mono text-[9px]">?</kbd>
-                      <span>Shortcuts</span>
-                    </span>
-                  </div>
-                  {/* Template selector — quick-start presets */}
-                  <div className="w-full max-w-sm">
-                    <p className="text-[9px] font-black uppercase tracking-widest text-fg-subtle mb-2">Start from a template</p>
-                    <div className="grid grid-cols-5 gap-1.5">
-                      {PROJECT_TEMPLATES.map((tpl) => (
-                        <button
-                          key={tpl.id}
-                          onClick={() => {
-                            const ar = tpl.aspectRatio === "16:9" ? "9:16" : tpl.aspectRatio;
-                            setExportSetting("aspectRatio", ar as "9:16" | "1:1");
-                            toast(`Template: ${tpl.label}`, { description: `Aspect ratio set to ${tpl.aspectRatio} · max ${tpl.maxDuration}s`, duration: 3000 });
-                          }}
-                          className="flex flex-col items-center gap-1 px-1 py-2 rounded-xl bg-card border border-border hover:border-primary/40 hover:bg-primary/5 transition-colors group"
-                        >
-                          <div className={cn(
-                            "rounded border border-foreground/10 bg-foreground/5 group-hover:border-primary/30 transition-colors",
-                            tpl.aspectRatio === "9:16" ? "w-3 h-5" : tpl.aspectRatio === "1:1" ? "w-4 h-4" : "w-5 h-3"
-                          )} />
-                          <span className="text-[8px] font-bold text-fg-subtle group-hover:text-primary transition-colors leading-tight text-center">{tpl.label.replace(" ", "\n")}</span>
-                        </button>
-                      ))}
+                      <span className="w-px h-3 bg-foreground/10" />
+                      <span className="flex items-center gap-1.5">
+                        <kbd className="px-1.5 py-0.5 rounded bg-foreground/5 border border-foreground/8 font-mono text-[9px]">?</kbd>
+                        <span>Shortcuts</span>
+                      </span>
                     </div>
-                  </div>
-                </motion.div>
-              ) : centerMode === "effects" ? (
-                <motion.div
-                  key="stage-effects"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="w-full h-full overflow-auto"
-                >
-                  <VideoWorkspace />
-                </motion.div>
-              ) : (
-                <motion.div
-                  key="stage-canvas"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="w-full h-full flex items-center justify-center"
-                >
-                  <VideoCanvas />
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        </section>
-
-        {/* Right — Property Inspector (desktop inline, advanced mode only) */}
-        {isAdvancedMode && (
-          <section className="hidden lg:flex bg-card border border-border rounded-2xl flex-col overflow-hidden min-h-0">
-            <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-foreground/10 [&::-webkit-scrollbar-thumb]:rounded-full">
-              <RightPanel />
+                    {/* Template selector — quick-start presets */}
+                    <div className="w-full max-w-sm">
+                      <p className="text-[9px] font-black uppercase tracking-widest text-fg-subtle mb-2">Start from a template</p>
+                      <div className="grid grid-cols-5 gap-1.5">
+                        {PROJECT_TEMPLATES.map((tpl) => (
+                          <button
+                            key={tpl.id}
+                            onClick={() => {
+                              const ar = tpl.aspectRatio === "16:9" ? "9:16" : tpl.aspectRatio;
+                              setExportSetting("aspectRatio", ar as "9:16" | "1:1");
+                              toast(`Template: ${tpl.label}`, { description: `Aspect ratio set to ${tpl.aspectRatio} · max ${tpl.maxDuration}s`, duration: 3000 });
+                            }}
+                            className="flex flex-col items-center gap-1 px-1 py-2 rounded-xl bg-card border border-border hover:border-primary/40 hover:bg-primary/5 transition-colors group"
+                          >
+                            <div className={cn(
+                              "rounded border border-foreground/10 bg-foreground/5 group-hover:border-primary/30 transition-colors",
+                              tpl.aspectRatio === "9:16" ? "w-3 h-5" : tpl.aspectRatio === "1:1" ? "w-4 h-4" : "w-5 h-3"
+                            )} />
+                            <span className="text-[8px] font-bold text-fg-subtle group-hover:text-primary transition-colors leading-tight text-center">{tpl.label.replace(" ", "\n")}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </motion.div>
+                ) : centerMode === "effects" ? (
+                  <motion.div
+                    key="stage-effects"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="w-full h-full overflow-auto"
+                  >
+                    <VideoWorkspace />
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    key="stage-canvas"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="w-full h-full flex items-center justify-center"
+                  >
+                    <VideoCanvas />
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </section>
-        )}
-      </main>
+
+          {/* Right — Property Inspector (desktop inline, advanced mode only) */}
+          {isAdvancedMode && (
+            <section className="hidden lg:flex bg-card border border-border rounded-2xl flex-col overflow-hidden min-h-0">
+              <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-foreground/10 [&::-webkit-scrollbar-thumb]:rounded-full">
+                <RightPanel />
+              </div>
+            </section>
+          )}
+        </main>
+
+        {/* AI Editor — docked right column on desktop, bottom sheet on mobile.
+          Toggled via header Sparkles or Shift+Alt+A. */}
+        <AIPanel />
+      </div>
 
       {/* Timeline — EP-005: collapsed monitor by default; expand on demand */}
       <footer
         data-tour-id="timeline.dock"
         className={cn(
           "shrink-0 bg-card border border-border rounded-2xl flex flex-col overflow-hidden relative transition-[height] duration-300",
-          timelineExpanded || isAdvancedMode ? "h-44" : "h-14",
+          timelineExpanded || isAdvancedMode ? "h-[clamp(11rem,22vh,14rem)]" : "h-14",
         )}
       >
         <div className="flex items-center justify-between px-3 h-14 shrink-0 border-b border-border/60">
@@ -1222,7 +939,7 @@ export default function EditorLayout() {
         <button
           onClick={() => setMobileInspectorOpen(true)}
           aria-label="Open clip inspector"
-          className="fixed bottom-5 right-5 z-40 h-14 w-14 rounded-full bg-card/90 backdrop-blur-xl border border-border/50 shadow-[0_8px_32px_rgba(0,0,0,0.3)] flex items-center justify-center text-fg-muted hover:text-primary hover:border-primary/30 transition-colors touch-manipulation"
+          className="fixed bottom-[4.5rem] right-4 z-40 h-14 w-14 rounded-full bg-card/90 backdrop-blur-xl border border-border/50 shadow-[0_8px_32px_rgba(0,0,0,0.3)] flex items-center justify-center text-fg-muted hover:text-primary hover:border-primary/30 transition-colors touch-manipulation"
         >
           <SlidersHorizontal size={18} />
         </button>
@@ -1266,39 +983,6 @@ export default function EditorLayout() {
               </div>
             </motion.div>
           </>
-        )}
-      </AnimatePresence>
-
-      {/* AI Editor — full action dispatch panel (Sparkles / Ctrl+K opens this) */}
-      <AIPanel />
-
-      {/* Floating AI pill — visible when panel is closed and video is loaded */}
-      <AnimatePresence>
-        {!aiPanelOpen && storeVideoMetadata && (
-          <motion.button
-            onClick={() => setAIPanelOpen(true)}
-            className="fixed bottom-5 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2.5 px-5 py-3 rounded-2xl bg-card/90 backdrop-blur-xl border border-border/50 shadow-[0_8px_32px_rgba(0,0,0,0.3),0_0_0_1px_rgba(168,85,247,0.06)] hover:border-primary/25 hover:shadow-[0_8px_32px_rgba(168,85,247,0.12)] transition-[border-color,box-shadow] duration-300 group"
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 20, opacity: 0 }}
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.97 }}
-            aria-label="Open AI Editor"
-          >
-            <motion.span
-              className="w-6 h-6 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary text-xs"
-              animate={{ scale: [1, 1.08, 1] }}
-              transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-            >
-              ✦
-            </motion.span>
-            <span className="text-[12px] font-semibold text-fg-muted group-hover:text-foreground transition-colors">
-              Ask AI to edit...
-            </span>
-            <kbd className="text-[9px] text-fg-subtle font-mono px-1.5 py-0.5 rounded-md bg-foreground/5 border border-foreground/8">
-              {typeof navigator !== "undefined" && /Mac/.test(navigator.userAgent) ? "⌘K" : "Ctrl+K"}
-            </kbd>
-          </motion.button>
         )}
       </AnimatePresence>
 

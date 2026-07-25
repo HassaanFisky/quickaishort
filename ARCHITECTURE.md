@@ -1,6 +1,6 @@
 # Architecture — QuickAI Short / QuickAI Studio
 
-**Last updated:** 2026-07-23
+**Last updated:** 2026-07-25
 **Stack (verified):** Next.js 14.2.35 · FastAPI · Gemini 2.5 Flash · Google ADK (Pre-Flight agents) · Cloud Tasks · Redis · ffmpeg-python · GCS primary · NextAuth JWT
 
 Canonical deep docs: [`docs/studio/`](docs/studio/README.md)  
@@ -52,6 +52,21 @@ Optional bake: RenderManifest / Kernel snapshot → Cloud Tasks → ffmpeg → G
 
 ---
 
+## Media ingest lifecycle (M2/M3)
+
+Canonical FSM (FE runtime + BE contract in `services/ingest_fsm.py`):
+
+```text
+identify → validate → acquire_meta → projectize → analyze → ready | failed
+```
+
+- Hook: `frontend/src/hooks/useIngestLifecycle.ts` — **only** Studio ingest entry.
+- Re-analysis: `ready|failed → analyze` via `retryAnalyze` (no duplicate Gemini on cache hit).
+- Artifacts: IndexedDB (`ingestArtifacts.ts`); URL session restore via `sessionStorage` (no extra cloud).
+- GCS file upload owned by lifecycle; pipeline must not double-PUT.
+
+---
+
 ## Pre-Flight (ADK skill — not sole product identity)
 
 Backend topology (agents live in `fastapi/agent/`):
@@ -84,8 +99,11 @@ and shares bounded 429 cooldown state across instances.
 | **Firestore** | ADK session state (falls back to in-memory); some stats paths |
 | **Redis** | Render status, runId cancellation, locks/dedupe, tenant AI cache, Gemini 429 cooldown |
 
-Plan admission uses a fixed trusted-tier capability matrix; there is no rolling
-daily free-video pool.
+Plan admission uses a fixed trusted-tier capability matrix (`fastapi/core/limits.py`):
+Free = 720p + forced watermark + 500 MB storage + no deep analysis +
+`daily_ai_video_limit=3`; Pro unlocks 4K / no watermark / deep analysis /
+unlimited daily AI loops. There is no separate “rolling daily pool” product —
+the Free daily ceiling is part of that fixed matrix.
 
 Historical notes that claimed “GridFS for all media” are obsolete. See ADR-002.
 

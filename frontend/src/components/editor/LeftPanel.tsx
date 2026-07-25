@@ -157,25 +157,40 @@ const TEXT_COLORS = [
 ] as const;
 
 const ELEMENT_ICONS = [
-  { Icon: Flame,        label: "Fire",    color: "text-orange-400" },
-  { Icon: Rocket,       label: "Rocket",  color: "text-blue-400" },
-  { Icon: Lightbulb,    label: "Idea",    color: "text-yellow-400" },
-  { Icon: Target,       label: "Target",  color: "text-red-400" },
-  { Icon: Sparkles,     label: "Shine",   color: "text-primary" },
-  { Icon: CheckCircle2, label: "Check",   color: "text-emerald-400" },
-  { Icon: XCircle,      label: "Stop",    color: "text-destructive" },
-  { Icon: Diamond,      label: "Diamond", color: "text-cyan-400" },
+  { Icon: Flame, label: "Fire", color: "text-orange-400" },
+  { Icon: Rocket, label: "Rocket", color: "text-blue-400" },
+  { Icon: Lightbulb, label: "Idea", color: "text-yellow-400" },
+  { Icon: Target, label: "Target", color: "text-red-400" },
+  { Icon: Sparkles, label: "Shine", color: "text-primary" },
+  { Icon: CheckCircle2, label: "Check", color: "text-emerald-400" },
+  { Icon: XCircle, label: "Stop", color: "text-destructive" },
+  { Icon: Diamond, label: "Diamond", color: "text-cyan-400" },
 ] as const;
 
 export default function LeftPanel() {
-  const { suggestions, selectedClipId, selectClip, setSuggestions, sourceFile, sourceUrl, currentStage, agentStates, addCanvasElement } =
-    useEditorStore();
+  const {
+    suggestions,
+    selectedClipId,
+    selectClip,
+    setSuggestions,
+    sourceFile,
+    sourceUrl,
+    currentStage,
+    ingestStage,
+    agentStates,
+    addCanvasElement,
+  } = useEditorStore();
   const [activeTab, setActiveTab] = useState<Tab>("clips");
   const [textColor, setTextColor] = useState("text-white");
 
-  const analysisErrored = agentStates.viralAnalysis.status === "error";
+  const analysisErrored =
+    agentStates.viralAnalysis.status === "error" || ingestStage === "failed";
   const hasSource = !!(sourceFile || sourceUrl);
-  const isAnalyzing = hasSource && ["loading", "analyzing", "transcribing"].includes(currentStage ?? "");
+  const isAnalyzing =
+    hasSource &&
+    ingestStage !== "failed" &&
+    (ingestStage === "analyze" ||
+      ["loading", "analyzing", "transcribing"].includes(currentStage ?? ""));
 
   const handleRetry = () => {
     window.dispatchEvent(new Event("retry-analysis"));
@@ -193,9 +208,9 @@ export default function LeftPanel() {
   }
 
   const tabs = [
-    { id: "clips",      icon: Scissors,  label: "Clips" },
-    { id: "text",       icon: Type,      label: "Text" },
-    { id: "elements",   icon: Shapes,    label: "Elements" },
+    { id: "clips", icon: Scissors, label: "Clips" },
+    { id: "text", icon: Type, label: "Text" },
+    { id: "elements", icon: Shapes, label: "Elements" },
     { id: "transcript", icon: AlignLeft, label: "Script" },
   ];
 

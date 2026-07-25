@@ -12,6 +12,8 @@ export interface MediaIngestPolicy {
   max_bytes: number;
   warn_bytes: number;
   examples_label: string;
+  lifecycle_stages?: string[];
+  terminal_stages?: string[];
 }
 
 const CACHE_KEY = "qai_ingest_policy_v1";

@@ -6,9 +6,13 @@ import { useTranscription } from "./useTranscription";
 import { useAnalysis } from "./useAnalysis";
 import { extractAudioData } from "@/lib/utils/audioExtractor";
 import { toast } from "sonner";
-import { API_URL, getAudioUrl, requestPresignedUploadUrl, uploadFileToGcs } from "@/lib/api";
+import { API_URL, getAudioUrl } from "@/lib/api";
 import { useSession } from "next-auth/react";
 import type { Clip, Transcript } from "@/types/pipeline";
+import { saveIngestArtifact } from "@/lib/studio/ingestArtifacts";
+import { isDirectVideoUrl, type IngestStage } from "@/lib/studio/ingestFsm";
+import { saveIngestSession } from "@/lib/studio/ingestSession";
+import { parseYouTubeId } from "@/lib/youtube-utils";
 
 /**
  * Reduce a Float32Array to 120 amplitude peaks for waveform display.
@@ -32,19 +36,74 @@ function computeWaveformPeaks(audioData: Float32Array, barCount = 120): number[]
   });
 }
 
+/** Walk legal forward edges to terminal ready (never skips the FSM table). */
+function advanceIngestToReady(): void {
+  const store = useEditorStore.getState();
+  const path: IngestStage[] = [
+    "identify",
+    "validate",
+    "acquire_meta",
+    "projectize",
+    "analyze",
+    "ready",
+  ];
+  let cur = store.ingestStage;
+  if (cur === "ready" || cur === "failed" || cur === "idle") return;
+  const idx = path.indexOf(cur);
+  if (idx < 0) return;
+  for (let i = idx + 1; i < path.length; i++) {
+    store.setIngestStage(path[i]!);
+    cur = path[i]!;
+  }
+}
+
+async function persistArtifactsAndReady(opts: {
+  suggestions: Clip[];
+}): Promise<void> {
+  const store = useEditorStore.getState();
+  const fingerprint = store.ingestFingerprint;
+  const transcript = store.transcript;
+  if (fingerprint && transcript?.chunks?.length) {
+    await saveIngestArtifact({
+      fingerprint,
+      duration: store.duration,
+      transcript,
+      suggestions: opts.suggestions,
+      silenceSegments: store.silenceSegments,
+      waveformPeaks: store.waveformPeaks,
+      title: store.videoMetadata?.title,
+    });
+    // Refresh-safe URL session (files cannot survive reload — no extra cloud writes).
+    const url = store.sourceUrl;
+    if (url && (parseYouTubeId(url) || isDirectVideoUrl(url))) {
+      saveIngestSession({
+        v: 1,
+        url,
+        fingerprint,
+        kind: parseYouTubeId(url) ? "youtube" : "direct_url",
+        title: store.videoMetadata?.title,
+      });
+    }
+  }
+  // MediaGraph upsert stays in AIPanel — avoid duplicate Firestore writes here.
+  advanceIngestToReady();
+}
+
+function markIngestReadySoft(): void {
+  advanceIngestToReady();
+}
+
 export function useMediaPipeline() {
   const { data: session } = useSession();
   const userId = session?.user?.id ?? "anonymous";
 
   const {
-    sourceFile,
     setProcessing,
     setProgress,
     setTranscript,
     setSuggestions,
     setAgentState,
     setWaveformPeaks,
-    setSourceGcsPath,
   } = useEditorStore();
 
   const transcription = useTranscription();
@@ -52,26 +111,16 @@ export function useMediaPipeline() {
 
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  // transcription is a plain object recreated each render (standard hook pattern).
-  // Storing it in a ref gives cancelPipeline a stable, dep-free closure that always
-  // calls the current terminate function without adding transcription to the callback deps.
   const transcriptionRef = useRef(transcription);
-  useEffect(() => { transcriptionRef.current = transcription; });
+  useEffect(() => {
+    transcriptionRef.current = transcription;
+  });
 
-  // Run-ID guard: each runPipeline invocation writes a UUID here.
-  // cancelPipeline clears it to null. The transcription-complete and
-  // analyzeWithBackend handlers check this ref before writing to the store,
-  // preventing stale messages from a terminated worker reaching the UI.
   const activeRunIdRef = useRef<string | null>(null);
 
-  // Cleanup only — terminate if a worker was ever created. initWorker is NOT called
-  // here to avoid setting worker status "loading" on mount before any user action.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => () => transcriptionRef.current.terminate(), []);
 
-  /** Cancels the running pipeline: aborts the audio fetch, terminates the
-   *  Whisper worker, and invalidates the run-ID so any in-flight async
-   *  completions are discarded. Stable callback — no deps needed. */
   const cancelPipeline = useCallback(() => {
     abortControllerRef.current?.abort();
     abortControllerRef.current = null;
@@ -80,26 +129,44 @@ export function useMediaPipeline() {
   }, []);
 
   const runPipeline = useCallback(async () => {
-    // Guard: a pipeline is already live. Prevents concurrent runs from rapid
-    // Generate clicks or retry-analysis events arriving before the first run finishes.
     if (useEditorStore.getState().isProcessing) return;
 
-    const { sourceFile, sourceUrl } = useEditorStore.getState();
+    const { sourceFile, sourceUrl, ingestFromCache, ingestStage } =
+      useEditorStore.getState();
+    if (ingestFromCache && ingestStage === "ready") return;
+
     let source: File | string | null = sourceFile || sourceUrl;
 
     if (!source) {
       toast.error("No video source found");
+      useEditorStore.getState().failIngest("unknown", "No video source found");
       return;
     }
 
-    // Route YouTube URLs through the backend audio endpoint.
+    const stageNow = useEditorStore.getState().ingestStage;
+    if (stageNow === "projectize") {
+      useEditorStore.getState().setIngestStage("analyze");
+    } else if (
+      stageNow !== "analyze" &&
+      stageNow !== "ready" &&
+      stageNow !== "failed"
+    ) {
+      useEditorStore.getState().setIngestStage("analyze");
+    }
+
     if (typeof source === "string") {
-      const isAlreadyProxied = API_URL && source.startsWith(API_URL);
+      const isAlreadyProxied = Boolean(API_URL && source.startsWith(API_URL));
       const isYouTube =
         source.includes("youtube.com") || source.includes("youtu.be");
+      const isDirect = /\.(mp4|webm|mov)([\?#].*)?$/i.test(source);
 
-      if (!isAlreadyProxied && !isYouTube) {
-        toast.error("Only YouTube URLs are supported. Google Drive and other links are not yet supported.");
+      if (!isAlreadyProxied && !isYouTube && !isDirect) {
+        toast.error(
+          "Only YouTube URLs are supported. Google Drive and other links are not yet supported.",
+        );
+        useEditorStore
+          .getState()
+          .failIngest("unsupported_provider", "Unsupported media URL for analysis.");
         return;
       }
 
@@ -115,21 +182,12 @@ export function useMediaPipeline() {
     setProcessing(true, "loading");
     setAgentState("ingestion", { status: "working", progress: 10 });
     setProgress(10);
-
-    // ── Audio extraction runs in background — video already shows via /api/proxy-video.
-    // Transcription and analysis follow when extraction completes.
-    toast.info("Preparing content for viral analysis...");
+    toast.info("Preparing content for analysis…");
 
     void extractAudioData(source, controller.signal)
       .then(({ audioData, sampleRate, duration }) => {
         clearTimeout(timeoutId);
-        // Compute 120-bar peaks here (O(1) per bar via stride sampling) and store
-        // only those — never persist the raw Float32Array in Zustand. A 4-hour video
-        // produces a ~920 MB Float32Array; storing it globally would cause OOM on
-        // mobile and block the main thread for 77ms+ in BottomDock's useMemo.
         setWaveformPeaks(computeWaveformPeaks(audioData));
-        // audioData is passed to the worker below; local ref is GC-eligible once
-        // the .then() callback returns.
 
         if (useEditorStore.getState().duration === 0) {
           useEditorStore.setState({ duration });
@@ -141,11 +199,7 @@ export function useMediaPipeline() {
         setProcessing(true, "transcribing");
         setAgentState("transcription", { status: "working", progress: 0 });
         toast.info("Reading video content...");
-        // Stamp the active run-ID before starting the worker so the
-        // transcription-complete handler can verify this message belongs
-        // to the current pipeline (not a terminated one).
         activeRunIdRef.current = crypto.randomUUID();
-        // Lazy init — idempotent (useWorker guards against re-init with workerRef check).
         transcription.init();
         transcription.transcribe(audioData, sampleRate);
       })
@@ -171,53 +225,38 @@ export function useMediaPipeline() {
         } else if (lowerMsg.includes("private")) {
           infoMsg = "This video is private. Try a public YouTube video.";
         } else if (lowerMsg.includes("video unavailable") || lowerMsg.includes("yt-dlp")) {
-          infoMsg = "This video is unavailable — it may be region-locked. Try uploading the MP4 directly.";
+          infoMsg =
+            "This video is unavailable — it may be region-locked. Try uploading the MP4 directly.";
         }
 
         toast.info(infoMsg, { duration: 6000 });
         setAgentState("ingestion", { status: "error" });
         setProcessing(false, "idle");
+        markIngestReadySoft();
       });
 
-    // ── GCS upload runs in parallel for local File sources only.
-    // Sets sourceGcsPath so the server render worker can read directly from GCS
-    // instead of downloading via yt-dlp.  Failure is silent — MediaRecorder
-    // fallback remains the safety net.
-    // EP-008: skip if IngestSurface already completed GCS put
-    const st = useEditorStore.getState();
-    const fileSource = st.sourceFile;
-    if (fileSource instanceof File && !st.sourceGcsPath) {
-      void requestPresignedUploadUrl(fileSource.name, fileSource.type || "video/mp4")
-        .then(({ presigned_url, gcs_path }) =>
-          uploadFileToGcs(presigned_url, fileSource, fileSource.type || "video/mp4").then(
-            () => setSourceGcsPath(gcs_path),
-          ),
-        )
-        .catch((err: unknown) => {
-          const msg = err instanceof Error ? err.message : String(err);
-          if (process.env.NODE_ENV !== "production") console.warn("[useMediaPipeline] GCS upload failed (non-fatal):", msg);
-        });
-    }
-  }, [setProcessing, setProgress, setAgentState, setWaveformPeaks, setSourceGcsPath, transcription]);
+    // GCS upload is owned by useIngestLifecycle.ingestFile (canonical path).
+    // Do not duplicate presigned PUT here — avoids double GCS ops / cost.
+  }, [setProcessing, setProgress, setAgentState, setWaveformPeaks, transcription]);
 
-  // Handle Transcription Complete
   useEffect(() => {
     if (
       transcription.lastMessage?.type === "complete" &&
       transcription.lastMessage.stage === "process"
     ) {
-      // @xenova/transformers ASR returns { text, chunks: [{ text, timestamp:[s,e] }] }.
-      // Our internal TranscriptChunk shape expects { text, start, end }.
-      // Normalize at this single boundary so every downstream consumer gets
-      // the correct shape: CaptionOverlay, generateSRT, VideoWorkspace word tokens,
-      // RightPanel preflight filter, and analyzeWithBackend.
-      type XenovaChunk = { text?: string; timestamp?: [number, number]; start?: number; end?: number };
+      type XenovaChunk = {
+        text?: string;
+        timestamp?: [number, number];
+        start?: number;
+        end?: number;
+      };
       type XenovaTranscript = { text?: string; chunks?: XenovaChunk[] };
-      // Discard if this completion belongs to a cancelled run. A terminated
-      // worker can still deliver one final message before the thread dies.
       if (!activeRunIdRef.current) return;
 
-      const raw = transcription.lastMessage.payload.transcript as unknown as XenovaTranscript | null | undefined;
+      const raw = transcription.lastMessage.payload.transcript as unknown as
+        | XenovaTranscript
+        | null
+        | undefined;
       if (!raw) return;
 
       const transcript: Transcript = {
@@ -232,7 +271,6 @@ export function useMediaPipeline() {
       setTranscript(transcript);
       setAgentState("transcription", { status: "done", progress: 100 });
 
-      // 3. Analyze with Backend (Gemini)
       setProcessing(true, "analyzing");
       setAgentState("viralAnalysis", { status: "working", progress: 10 });
       toast.info("Finding the best clips...");
@@ -247,22 +285,18 @@ export function useMediaPipeline() {
         message?: string;
       }
 
-      // Capture run-ID so the promise callback can verify it hasn't been
-      // superseded by a cancel + re-generate while the HTTP request was in flight.
       const capturedRunId = activeRunIdRef.current;
-      analysis.analyzeWithBackend({
-        videoId: sourceUrl || "local-video",
-        transcript: transcript.chunks,
-        duration: useEditorStore.getState().duration || 0,
-        user_id: userId,
-      }).then((response: AnalysisResponse) => {
-        if (activeRunIdRef.current !== capturedRunId) return; // stale — discard
-        if (response.suggestedClips) {
-          setAgentState("viralAnalysis", { status: "done", progress: 100 });
-          setAgentState("reframing", { status: "working", progress: 50 });
-
-          setSuggestions(
-            response.suggestedClips.map((s) => ({
+      analysis
+        .analyzeWithBackend({
+          videoId: sourceUrl || "local-video",
+          transcript: transcript.chunks,
+          duration: useEditorStore.getState().duration || 0,
+          user_id: userId,
+        })
+        .then(async (response: AnalysisResponse) => {
+          if (activeRunIdRef.current !== capturedRunId) return;
+          const mapped: Clip[] = response.suggestedClips
+            ? response.suggestedClips.map((s) => ({
               ...s,
               aspectRatio: "9:16" as const,
               captionsEnabled: true,
@@ -272,24 +306,36 @@ export function useMediaPipeline() {
               end: s.end ?? 0,
               confidence: s.confidence ?? 0,
               reason: s.reason ?? "",
-            })),
-          );
+            }))
+            : [];
 
-          setAgentState("reframing", { status: "done", progress: 100 });
+          if (mapped.length) {
+            setAgentState("viralAnalysis", { status: "done", progress: 100 });
+            setAgentState("reframing", { status: "working", progress: 50 });
+            setSuggestions(mapped);
+            setAgentState("reframing", { status: "done", progress: 100 });
+            toast.success("AI Analysis complete! Suggestions ready.");
+          } else {
+            setAgentState("viralAnalysis", { status: "done", progress: 100 });
+            toast.info("Transcript ready — no clip suggestions returned.");
+          }
+
           setProcessing(false, "ready");
           setProgress(100);
-          toast.success("AI Analysis complete! Suggestions ready.");
-        }
-      }).catch((err: AnalysisError) => {
-        const msg =
-          err?.response?.data?.detail ||
-          err?.response?.data?.message ||
-          err?.message ||
-          "Analysis failed";
-        toast.error(typeof msg === "string" ? msg : "Analysis failed. Please try again.");
-        setAgentState("viralAnalysis", { status: "error" });
-        setProcessing(false, "idle");
-      });
+          await persistArtifactsAndReady({ suggestions: mapped });
+        })
+        .catch(async (err: AnalysisError) => {
+          if (activeRunIdRef.current !== capturedRunId) return;
+          const msg =
+            err?.response?.data?.detail ||
+            err?.response?.data?.message ||
+            err?.message ||
+            "Analysis failed";
+          toast.error(typeof msg === "string" ? msg : "Analysis failed. Please try again.");
+          setAgentState("viralAnalysis", { status: "error" });
+          setProcessing(false, "ready");
+          await persistArtifactsAndReady({ suggestions: [] });
+        });
     } else if (transcription.progress) {
       setAgentState("transcription", { progress: transcription.progress });
     }
@@ -302,9 +348,9 @@ export function useMediaPipeline() {
     setSuggestions,
     setProgress,
     analysis,
+    userId,
   ]);
 
-  // Handle errors
   useEffect(() => {
     const error = transcription.error || analysis.error;
     if (error) {
@@ -312,6 +358,7 @@ export function useMediaPipeline() {
       if (transcription.error) setAgentState("transcription", { status: "error" });
       if (analysis.error) setAgentState("viralAnalysis", { status: "error" });
       setProcessing(false, "idle");
+      markIngestReadySoft();
     }
   }, [transcription.error, analysis.error, setProcessing, setAgentState]);
 

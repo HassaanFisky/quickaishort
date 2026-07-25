@@ -24,15 +24,12 @@ import {
   type MediaIngestPolicy,
   validateFileAgainstPolicy,
 } from "@/lib/studio/ingestPolicy";
-
-export type IngestUiStatus =
-  | "idle"
-  | "validating"
-  | "uploading"
-  | "processing"
-  | "ready"
-  | "error"
-  | "cancelled";
+import {
+  INGEST_PROGRESS_STEPS,
+  INGEST_STAGE_LABELS,
+  ingestStageIndex,
+  type IngestStage,
+} from "@/lib/studio/ingestFsm";
 
 export interface IngestSurfaceProps {
   urlInput: string;
@@ -41,11 +38,12 @@ export interface IngestSurfaceProps {
   isAnalysing: boolean;
   panelCollapsed: boolean;
   currentStage: string;
+  ingestStage: IngestStage;
   videoTitle?: string | null;
   hasSource: boolean;
-  ingestStatus: IngestUiStatus;
-  ingestProgress: number | null;
+  ingestUploadProgress: number | null;
   ingestError: string | null;
+  ingestFromCache?: boolean;
   onUrlChange: (e: ChangeEvent<HTMLInputElement>) => void;
   onAnalyze: () => void;
   onCancelAnalyze: () => void;
@@ -57,7 +55,7 @@ export interface IngestSurfaceProps {
 }
 
 /**
- * EP-008 — Equal first-class Upload Video + Paste YouTube URL.
+ * EP-008 + M2 — Equal first-class Upload + URL with staged ingest progress.
  */
 export default function IngestSurface({
   urlInput,
@@ -66,11 +64,12 @@ export default function IngestSurface({
   isAnalysing,
   panelCollapsed,
   currentStage,
+  ingestStage,
   videoTitle,
   hasSource,
-  ingestStatus,
-  ingestProgress,
+  ingestUploadProgress,
   ingestError,
+  ingestFromCache,
   onUrlChange,
   onAnalyze,
   onCancelAnalyze,
@@ -90,8 +89,8 @@ export default function IngestSurface({
     void fetchIngestPolicy().then(setPolicy);
     setClipboardOk(
       typeof navigator !== "undefined" &&
-        !!navigator.clipboard &&
-        typeof navigator.clipboard.read === "function",
+      !!navigator.clipboard &&
+      typeof navigator.clipboard.read === "function",
     );
   }, []);
 
@@ -148,13 +147,20 @@ export default function IngestSurface({
     }
   };
 
-  const busy =
-    ingestStatus === "validating" ||
-    ingestStatus === "uploading" ||
-    ingestStatus === "processing" ||
-    isAnalysing;
+  const inFlight =
+    ingestStage !== "idle" &&
+    ingestStage !== "ready" &&
+    ingestStage !== "failed";
 
-  const errMsg = localError || ingestError;
+  const busy = inFlight || isAnalysing;
+  const errMsg = localError || (ingestStage === "failed" ? ingestError : null);
+  const stageIdx = ingestStageIndex(ingestStage);
+  const stageLabel =
+    ingestStage === "analyze" && currentStage === "transcribing"
+      ? "Transcribing…"
+      : ingestStage === "analyze" && currentStage === "analyzing"
+        ? "Finding clips…"
+        : INGEST_STAGE_LABELS[ingestStage];
 
   if (panelCollapsed && hasSource) {
     return (
@@ -167,6 +173,7 @@ export default function IngestSurface({
           <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />
           <span className="text-[10px] font-bold text-fg-muted truncate flex-1 min-w-0">
             {videoTitle ?? urlInput.slice(0, 50) ?? "Video loaded"}
+            {ingestFromCache ? " · cached" : ""}
           </span>
           <button
             type="button"
@@ -220,7 +227,6 @@ export default function IngestSurface({
           </span>
         </div>
 
-        {/* Equal peers: Upload | URL */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 px-0.5">
           <button
             type="button"
@@ -302,7 +308,7 @@ export default function IngestSurface({
         )}
 
         <AnimatePresence>
-          {youtubePreviewId && urlValid && !isAnalysing && (
+          {youtubePreviewId && urlValid && !busy && (
             <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
@@ -317,20 +323,15 @@ export default function IngestSurface({
           )}
         </AnimatePresence>
 
-        {/* URL generate / cancel */}
         <div className="flex items-center gap-2 px-0.5 pb-0.5">
-          {isAnalysing ? (
+          {busy ? (
             <button
               type="button"
               onClick={onCancelAnalyze}
               className="flex-1 h-9 rounded-xl flex items-center justify-center gap-1.5 bg-red-500/10 border border-red-500/20 text-red-400 text-[11px] font-bold"
             >
               <X className="w-3 h-3" />
-              {currentStage === "transcribing"
-                ? "Transcribing…"
-                : currentStage === "analyzing"
-                  ? "Analyzing…"
-                  : "Loading…"}
+              {stageLabel}
             </button>
           ) : (
             <GlowButton
@@ -355,51 +356,59 @@ export default function IngestSurface({
           )}
         </div>
 
-        {/* Upload progress / errors */}
-        {(ingestStatus === "uploading" ||
-          ingestStatus === "validating" ||
-          ingestStatus === "processing") && (
+        {/* M2 staged progress */}
+        {inFlight && (
           <div
             className="px-1 pb-1"
-            role="status"
+            role="progressbar"
             aria-live="polite"
-            aria-valuenow={ingestProgress ?? undefined}
+            aria-valuenow={
+              ingestUploadProgress ??
+              Math.round(((stageIdx + 1) / INGEST_PROGRESS_STEPS.length) * 100)
+            }
             aria-valuemin={0}
             aria-valuemax={100}
+            aria-label={stageLabel}
           >
-            <div className="flex items-center justify-between text-[10px] text-muted-foreground mb-1">
+            <div className="flex items-center justify-between text-[10px] text-muted-foreground mb-1.5">
               <span className="inline-flex items-center gap-1.5">
                 <Loader2 className="w-3 h-3 animate-spin" aria-hidden />
-                {ingestStatus === "validating"
-                  ? "Checking file…"
-                  : ingestStatus === "uploading"
-                    ? "Uploading…"
-                    : "Preparing preview…"}
+                {stageLabel}
               </span>
-              {ingestProgress != null && <span>{ingestProgress}%</span>}
-              {ingestStatus === "uploading" && (
-                <button
-                  type="button"
-                  onClick={onCancelUpload}
-                  className="text-red-400 font-bold uppercase tracking-wider"
-                >
-                  Cancel
-                </button>
+              {ingestStage === "acquire_meta" && ingestUploadProgress != null && (
+                <span className="inline-flex items-center gap-2">
+                  <span>{ingestUploadProgress}%</span>
+                  <button
+                    type="button"
+                    onClick={onCancelUpload}
+                    className="text-red-400 font-bold uppercase tracking-wider"
+                  >
+                    Cancel
+                  </button>
+                </span>
               )}
             </div>
-            <div className="h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
-              <div
-                className="h-full bg-primary transition-[width] duration-200"
-                style={{
-                  width:
-                    ingestProgress != null
-                      ? `${ingestProgress}%`
-                      : ingestStatus === "uploading"
-                        ? "35%"
-                        : "60%",
-                }}
-              />
+            <div className="flex gap-1 mb-1.5" aria-hidden>
+              {INGEST_PROGRESS_STEPS.map((step, i) => {
+                const done =
+                  (stageIdx >= 0 && i < stageIdx) || step === ingestStage;
+                const active = step === ingestStage;
+                return (
+                  <div
+                    key={step}
+                    className={cn(
+                      "h-1 flex-1 rounded-full transition-colors",
+                      done || active ? "bg-primary" : "bg-white/[0.08]",
+                      active && "opacity-90",
+                    )}
+                    title={INGEST_STAGE_LABELS[step]}
+                  />
+                );
+              })}
             </div>
+            <p className="text-[9px] text-muted-foreground text-center tabular-nums">
+              Step {Math.max(1, stageIdx + 1)} of {INGEST_PROGRESS_STEPS.length}
+            </p>
           </div>
         )}
 

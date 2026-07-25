@@ -25,6 +25,13 @@ def test_policy_includes_required_extensions():
     assert p["max_bytes"] >= p["warn_bytes"]
 
 
+def test_policy_includes_lifecycle_stages():
+    p = get_ingest_policy()
+    assert "identify" in p["lifecycle_stages"]
+    assert "ready" in p["terminal_stages"]
+    assert "failed" in p["terminal_stages"]
+
+
 def test_validate_rejects_unknown_format():
     err = validate_ingest_file(
         filename="hack.exe", content_type="application/octet-stream"
