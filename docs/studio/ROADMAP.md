@@ -1,63 +1,66 @@
 # Studio Roadmap (Execution)
 
-**Last updated:** 2026-07-21 (ops: cost-policy Cloud Run reconciliation)
+**Last updated:** 2026-07-25 (Master Audit + M3 ingest FSM live)
 
 ## Complete — current cycle
 
 | Track | Status |
 |-------|--------|
-| EP-001…007 substrate | ✅ |
+| EP-001…008 substrate | ✅ |
 | Pipeline JWT + credits fail-closed | ✅ |
-| Heuristic suggestion dead code removed | ✅ |
+| M3 ingest FSM (`useIngestLifecycle`) | ✅ Live — FE Vercel + API `00109+` |
 | Chat → Kernel via structured_steps | ✅ |
 | CI BE↔FE registry hash | ✅ |
-| Auto-ensure Studio project (chat + export) | ✅ |
-| Orphan client prompt / useAiCommander removed | ✅ |
-| Dashboard AI ≠ editor timeline authority | ✅ |
-| Kernel flags in `.env.example` | ✅ |
-| FE legacy `{tool,params}` translator removed (TD-EP001-03) | ✅ |
-| Production-ready verification gate | ✅ |
+| Auto-ensure Studio project (chat + export + ingest projectize) | ✅ |
+| Heuristic invent suggestions → 410 | ✅ |
+| Cloud Tasks render dispatch + private `min=0` worker | ✅ Live |
+| Admin gate fail-closed + ADK generate credits fail-closed | ✅ (2026-07-25 audit) |
 
-**Report:** `packages/EP-COMPLETION-CYCLE-IMPLEMENTATION-REPORT.md`
+## Production render plane (SoT)
 
-## Ops handoff (founder / deploy) — not code blockers
+| Layer | Truth |
+|-------|--------|
+| Dispatch | `RENDER_DISPATCH_MODE=cloud_tasks` (prod); RQ = **local/dev fallback only** |
+| Worker | `quickai-worker` private OIDC, **min-instances=0**, request CPU, concurrency 1 |
+| Wake path | Cloud Tasks queue `quickai-render` |
+| Status / locks | Redis (Upstash) — not the execution plane |
 
-- [x] Set `NEXT_PUBLIC_STUDIO_PROJECT_KERNEL=1` on Vercel production (2026-07-20)  
-- [x] Confirm Cloud Run `STUDIO_PROJECT_KERNEL=1` on `quickai-api` (+ worker)  
-- [x] Redis migrated to Upstash (`rediss://` TLS); Cloud Run + Vercel + local envs updated; `/health` → `redis:true`  
-- [x] `quickai-worker` `--min-instances=1` + `--no-cpu-throttling` so RQ stays registered on Upstash (verified `Worker.all() >= 1`)  
-- [x] Worker public health soak: `ingress=all` + unauthenticated invoker; hardened `BaseHTTPRequestHandler` — `/health` + `/health/ready` → 200 (`redis:true`)  
-- [x] **Cost policy (2026-07-21):** binding rule in `.cursor/rules/cost-efficient-architecture.mdc` + `CLAUDE.md`  
-- [x] **API cost cut:** `quickai-api` → `min-instances=0` + cpu-throttling (request-billed)  
-- [x] **Worker cost cut (keep reliability):** keep `min=1` / no throttling (RQ listener), reduce **cpu 2→1**, memory 4Gi; verified `Worker.all()=1` + `/health/ready` 200  
+> Superseded (2026-07-22+): any doc claiming worker `min=1` + always-on RQ listener as production SoT.
 
-### Gemini (honest blocker)
+## Ops handoff — founder-owned
 
-- New AI Studio key: AUTH OK, **429 prepayment credits depleted** — founder must top up credits at https://ai.studio/projects before any Cloud Run/Vercel key rotate.
+- [x] `NEXT_PUBLIC_STUDIO_PROJECT_KERNEL=1` on Vercel (2026-07-20)
+- [x] `STUDIO_PROJECT_KERNEL=1` on Cloud Run API (+ worker)
+- [x] Redis Upstash TLS
+- [x] API `min-instances=0` + cpu-throttling
+- [x] Worker Cloud Tasks cutover (`min=0`)
+- [ ] **Gemini prepayment top-up** at https://ai.studio/projects — unblock analyze + AI chat + demo
+- [ ] **Rotate `ADMIN_SECRET`** — value previously recorded in docs; set new secret on Cloud Run only (never commit)
+- [ ] Demo video 2:50–3:00 + Devpost + Google for Startups form
+- [ ] Approve auth-gate / rate-limit for public `/api/proxy*`, `/api/audio`, `/api/info` (FinOps)
+- [ ] Approve Legacy `Projects` / GridFS `/api/v1/video` cutover delete
 
-### Code hardening (2026-07-21) — not waiting on founder
+## Code hardening backlog (engineering — no product redesign)
 
-- AI Editor credits fail-closed + stream gated (`CREDITS_SOFT_FAIL` opt-in only)
-- Onboarding tour opens AI panel for `ai.*` steps
-- No canned fake Gemini analysis on failure
-- MediaGraph FinOps: ensure-by-project + 400ms facet debounce + suggestions single-read
-- Retired invent route `POST /api/ai/suggestions` → 410
-- Honest AIPanel 402/503/429 quota messaging
+| Priority | Item | Gate |
+|----------|------|------|
+| Critical | Commit `render_service_app.py` into git (worker rebuild) | Engineering |
+| High | Auth WIP (`mintBackendToken` / `authenticatedFetch`) — ship atomic or revert dirty tree | Engineering |
+| High | Rate-limit or auth public bandwidth endpoints | **Founder** |
+| Medium | Align FE/BE Kernel flag defaults documentation | Engineering |
+| Medium | Dual export path docs (server primary; MediaRecorder/FFmpeg.wasm fallback) | Engineering |
+| Low | Remove `_archive` ADK wizard + orphan `uploadVideo` client | Engineering |
 
 ## Next cycle
 
 | Item | Gate |
 |------|------|
-| **Ship FE + BE FinOps bind** (`a8da56c`) | ✅ Done — Vercel READY + `quickai-api-00097-n9g` |
-| **EP-008** Editor First-Run Product Surface (upload parity, onboarding, ADK CS) | ✅ Implemented — ADK≠Ads correction + full-workspace CS polish |
-| ADR-006 native Gemini tool-loop depth | Optional engineering EP |
-| Multiplayer | **Founder approval** (EP-007) |
-| Legacy `Projects` cutover delete | **Founder consent** (irreversible) |
-| Gemini `generateContent` live | **Founder top-up** — 429 prepayment credits |
-| Demo / Devpost / Google form | **Founder** (challenge checklist) |
-
-> Note: Request labeled “EP-002” for this UX work is a **naming conflict** — EP-002 is frozen Project Kernel. Package id = **EP-008**.
+| Live Gemini `generateContent` | **Founder top-up** |
+| Demo / Devpost / Google form | **Founder** |
+| ADR-006 native Gemini tool-loop depth | Optional EP |
+| Multiplayer | **Founder** (EP-007) |
+| Legacy Projects / GridFS delete | **Founder** |
 
 ## Deferred UI
 
-Coming Soon placeholders for intentionally deferred features (incl. planned ADK). Non-interactive; must not imply live functionality.
+Coming Soon placeholders for intentionally deferred features (incl. planned ADK workspace). Non-interactive; must not imply live functionality.

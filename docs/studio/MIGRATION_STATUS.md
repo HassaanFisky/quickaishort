@@ -1,6 +1,6 @@
 # Migration Status
 
-**Last updated:** 2026-07-21 (cost-policy Cloud Run reconciliation)
+**Last updated:** 2026-07-25 (Cloud Tasks production SoT + M3 ingest)
 
 ## Project storage
 
@@ -21,6 +21,7 @@ Verified untouched at cycle close.
 - Pipeline JWT + fail-closed credits ✅  
 - Editor chat → Kernel (`structured_steps`) when FE flag on ✅  
 - Export `ensureStudioProject` + `project_id` / revision bind ✅  
+- Ingest FSM projectize → `ensureStudioProject` (M3) ✅  
 - Flags documented in `.env.example` ✅  
 - FE accepts canonical actions only (legacy translator removed) ✅  
 - EP-008 ingest policy + onboarding prefs (`studio_user_prefs`) ✅  
@@ -35,9 +36,11 @@ Verified untouched at cycle close.
 
 1. ~~Vercel: `NEXT_PUBLIC_STUDIO_PROJECT_KERNEL=1`~~ ✅ (2026-07-20)  
 2. ~~Cloud Run: Kernel not forced off~~ ✅ `STUDIO_PROJECT_KERNEL=1`  
-3. ~~Worker always-on for RQ~~ ✅ **Justified under cost policy (2026-07-21):** RQ BLPOP needs a live listener — `min-instances=1` + `--no-cpu-throttling` kept. Idle waste cut via **cpu 2→1** (memory 4Gi). Blind `min=0` without wake path would drop `Worker.all()` and break renders.  
-4. ~~API scale-to-zero~~ ✅ `quickai-api` **min-instances=0** + **cpu-throttling=true** (request-billed; cold-start probes already tolerate heavy imports)  
-5. Soak under real traffic (Redis = Upstash; RedisLabs host retired) — health OK 2026-07-21  
+3. ~~Durable render wake path~~ ✅ **Cloud Tasks `quickai-render` → private `quickai-worker` (`min=0`, request CPU).** RQ is local/dev fallback only. (Supersedes 2026-07-21 “keep min=1 RQ listener” note.)  
+4. ~~API scale-to-zero~~ ✅ `quickai-api` **min-instances=0** + **cpu-throttling=true**  
+5. Soak under real traffic (Redis = Upstash) — health OK 2026-07-25  
+6. Gemini credits top-up — **founder** (still blocked)  
+7. Commit `render_service_app.py` to git — **engineering** (worker rebuild safety)  
 6. **Founder approval** before deleting legacy `Projects`  
 7. **Gemini blocker:** new AI Studio key authenticates but returns **429 prepayment credits depleted** on project `99900313102` — do not deploy until `generateContent` returns 200  
 

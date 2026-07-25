@@ -273,7 +273,15 @@ async def dispatch_render_task(
 ) -> RenderDispatchReceipt:
     """Durably enqueue one render without blocking the FastAPI event loop."""
 
-    mode = os.environ.get("RENDER_DISPATCH_MODE", "rq").strip().lower()
+    # Production defaults to Cloud Tasks so a missing env cannot silently enqueue
+    # into RQ with no listener (worker is request-bound / min=0).
+    explicit = os.environ.get("RENDER_DISPATCH_MODE", "").strip().lower()
+    if explicit:
+        mode = explicit
+    elif os.environ.get("ENVIRONMENT", "").strip().lower() == "production":
+        mode = "cloud_tasks"
+    else:
+        mode = "rq"
     try:
         await asyncio.to_thread(_claim_run_id, payload)
         if mode == "cloud_tasks":

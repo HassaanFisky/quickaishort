@@ -1108,8 +1108,7 @@ async def render_dead_jobs(
     x_admin_secret: Optional[str] = Header(None, alias="X-Admin-Secret"),
 ):
     """List all dead-lettered render jobs."""
-    if x_admin_secret != os.getenv("ADMIN_SECRET"):
-        raise HTTPException(status_code=403, detail="Invalid admin secret")
+    _require_admin(x_admin_secret)
     from services.render_queue import get_dead_jobs
 
     return {"dead_jobs": get_dead_jobs()}
@@ -1121,8 +1120,7 @@ async def render_retry_dead(
     x_admin_secret: Optional[str] = Header(None, alias="X-Admin-Secret"),
 ):
     """Re-queue a dead render job."""
-    if x_admin_secret != os.getenv("ADMIN_SECRET"):
-        raise HTTPException(status_code=403, detail="Invalid admin secret")
+    _require_admin(x_admin_secret)
     from services.render_queue import retry_dead_job
 
     payload = load_render_task_payload(job_id)
@@ -1157,8 +1155,7 @@ async def render_dlq_stats(
     x_admin_secret: Optional[str] = Header(None, alias="X-Admin-Secret"),
 ):
     """Dead-letter queue summary statistics."""
-    if x_admin_secret != os.getenv("ADMIN_SECRET"):
-        raise HTTPException(status_code=403, detail="Invalid admin secret")
+    _require_admin(x_admin_secret)
     from services.render_queue import get_dlq_stats
 
     return get_dlq_stats()
@@ -1175,8 +1172,7 @@ async def reward_referral_bonus(
     body: ReferralBonusRequest,
     x_admin_secret: Optional[str] = Header(None, alias="X-Admin-Secret"),
 ):
-    if x_admin_secret != os.getenv("ADMIN_SECRET"):
-        raise HTTPException(status_code=403, detail="Invalid admin secret")
+    _require_admin(x_admin_secret)
 
     from google.cloud import firestore
     from datetime import timezone
@@ -1268,7 +1264,10 @@ async def reward_referral_bonus(
 
 
 def _require_admin(secret: Optional[str]) -> None:
-    if secret != os.getenv("ADMIN_SECRET"):
+    """Fail closed: missing ADMIN_SECRET or missing/mismatched header → 403."""
+    expected = (os.getenv("ADMIN_SECRET") or "").strip()
+    provided = (secret or "").strip()
+    if not expected or not provided or provided != expected:
         raise HTTPException(status_code=403, detail="Invalid admin secret")
 
 
@@ -2406,7 +2405,9 @@ async def adk_upload(
 
 @app.get("/api/adk/stock")
 async def adk_stock_search(
-    q: str = Query(..., min_length=1), per_page: int = Query(12, ge=1, le=20)
+    q: str = Query(..., min_length=1),
+    per_page: int = Query(12, ge=1, le=20),
+    _user_id: str = Depends(get_verified_user_id),
 ):
     api_key = os.getenv("PEXELS_API_KEY")
     if not api_key:
@@ -2506,7 +2507,10 @@ async def adk_generate(
     )
 
     if not await deduct_credits(user_id, 50):
-        logger.warning("low_credits_continuing", user_id=user_id)
+        raise HTTPException(
+            status_code=402,
+            detail="Insufficient credits for ADK generate (50 required).",
+        )
 
     from services.adk_service import ADKService
 
