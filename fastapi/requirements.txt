@@ -20,6 +20,7 @@ pymongo==4.8.0
 celery==5.4.0
 google-cloud-bigquery>=3.25.0
 google-cloud-storage>=2.14.0
+google-cloud-tasks>=2.16.0
 httpx==0.28.1
 # python-jose removed (Critical CVE GHSA-cjwg-qfpm-7377 — replaced with PyJWT)
 PyJWT[crypto]==2.13.0
