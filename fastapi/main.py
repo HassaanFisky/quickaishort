@@ -746,11 +746,13 @@ def debug_tiers(request: Request):
     """
     from services.extractor_service import get_extractor_service
 
-    internal_secret = os.environ.get("INTERNAL_SECRET")
-    if internal_secret:
-        provided = request.headers.get("X-Internal-Secret", "")
-        if provided != internal_secret:
-            raise HTTPException(status_code=403, detail="Forbidden")
+    internal_secret = (os.environ.get("INTERNAL_SECRET") or "").strip()
+    provided = (request.headers.get("X-Internal-Secret") or "").strip()
+    # Fail closed: debug tier state is never public. Prefer INTERNAL_SECRET;
+    # fall back to ADMIN_SECRET so misconfigured INTERNAL_SECRET cannot open the door.
+    expected = internal_secret or (os.environ.get("ADMIN_SECRET") or "").strip()
+    if not expected or provided != expected:
+        raise HTTPException(status_code=403, detail="Forbidden")
 
     svc = get_extractor_service()
     return {

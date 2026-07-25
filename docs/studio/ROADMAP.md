@@ -44,7 +44,7 @@
 
 | Priority | Item | Gate |
 |----------|------|------|
-| Critical | Commit `render_service_app.py` into git (worker rebuild) | Engineering |
+| Critical | ~~Commit `render_service_app.py`~~ ✅ `39be105` | Done |
 | High | Auth WIP (`mintBackendToken` / `authenticatedFetch`) — ship atomic or revert dirty tree | Engineering |
 | High | Rate-limit or auth public bandwidth endpoints | **Founder** |
 | Medium | Align FE/BE Kernel flag defaults documentation | Engineering |

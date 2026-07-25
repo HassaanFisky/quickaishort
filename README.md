@@ -69,7 +69,7 @@ Conversational AI editor (Gemini) → structured edit actions
         ↓
 Client NLE preview (Zustand timeline) + MediaGraph suggestions
         ↓
-Export → Redis/RQ worker → ffmpeg → GCS signed download
+Export → Cloud Tasks → private request-bound Cloud Run renderer → ffmpeg → GCS signed download
 ```
 
 **Optional capability — Pre-Flight:** Google ADK multi-agent audience simulation (six personas, trend/analytics grounding, consensus score). Available as a validation skill — not the product’s sole identity.
@@ -86,9 +86,10 @@ Export → Redis/RQ worker → ffmpeg → GCS signed download
 - MediaGraph-grounded suggestion chips (not hardcoded heuristic lists)
 - Live preview with Web Audio chain (noise reduction + boost)
 - Multi-track timeline visualization
-- Server-side export via RQ + ffmpeg-python → GCS
+- Server-side export via Cloud Tasks + ffmpeg-python → GCS (RQ = local/dev fallback only)
 - Cancel, runId isolation, render DLQ, and status observability
 - Studio Kernel APIs (project document, orchestrator, media graphs) behind flags
+- Staged ingest FSM (`identify → … → ready|failed`) as sole editor ingest path
 - NextAuth JWT auth on protected backend routes
 
 ---
@@ -115,9 +116,9 @@ Deeper Google ADK orchestration, native Gemini tool-loop depth, and the ADK work
 | Frontend | Next.js 14.2.35 · App Router · TypeScript · Zustand · Tailwind v4 |
 | Backend | Python 3.12 · FastAPI · Pydantic v2 |
 | AI | Gemini 2.5 Flash · Google ADK for Pre-Flight agents · Studio Kernel orchestration |
-| Queue | Redis · RQ (`render_worker.py`) |
+| Queue | Cloud Tasks (`quickai-render`) → private `quickai-worker` (`min=0`); Redis status/locks; RQ local fallback |
 | Media storage | **GCS** primary (`quickaishort-agent-494304-media`); MongoDB GridFS = legacy `/api/v1/video/*` only |
-| Data | MongoDB (history/credits paths) · Firestore (agent sessions / some stats) |
+| Data | Firestore (UserStats / credits / Studio Kernel) · MongoDB (export history + legacy GridFS) |
 | Auth | NextAuth HS256 JWT ↔ FastAPI `auth.py` |
 | Deploy | Vercel (frontend) · Cloud Run (`quickai-api` + `quickai-worker`) |
 
