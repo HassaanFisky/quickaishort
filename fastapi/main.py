@@ -452,10 +452,6 @@ from routers.dub_router import router as dub_router  # noqa: E402
 
 app.include_router(dub_router)
 
-from routers.dub_router import router as dub_router
-
-app.include_router(dub_router)
-
 
 def get_real_ip(request: Request) -> str:
     """
