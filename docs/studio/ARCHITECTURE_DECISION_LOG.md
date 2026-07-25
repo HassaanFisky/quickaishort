@@ -17,8 +17,11 @@ Living index. Full ADRs live under `docs/studio/adrs/`.
 | ADR-011 | Chat-Primary Studio Shell | Accepted | EP-005 |
 | ADR-012 | Bake from Kernel Snapshot | Accepted | EP-006 |
 | ADR-013 | Editor Ingest Parity + Onboarding + ADK CS | **Accepted** | EP-008 + ADK≠Ads correction implemented |
+| ADR-014 | Dub Video Pipeline | **Accepted** | Translate + TTS + mute/replace export |
 
 ## Latest binding change
+
+2026-07-25: **ADR-014 Dub Video** accepted — staged translate/TTS/align pipeline; EN-source Whisper; Google TTS; Cloud Tasks `/tasks/dub`; captions-only fallback.
 
 2026-07-20: EP-008 **implemented** + ADR-013 accepted. Same day: **`APPROVE ADK CORRECTION`** — Ads nav/page removed; `/adk` is Google Agent Development Kit Coming Soon workspace with reserved IA skeleton. Legacy ADK Studio wizard archived off-route. EP-001/Kernel/MediaGraph untouched.
 

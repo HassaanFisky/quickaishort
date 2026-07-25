@@ -53,6 +53,7 @@ import Sidebar from "@/components/layout/Sidebar";
 import { TimelineLoader } from "@/components/ui/TimelineLoader";
 import { LiquidThemeToggle } from "@/components/shared/LiquidThemeToggle";
 import { AIPanel } from "@/components/editor/AIPanel";
+import { DubPanel } from "@/components/editor/DubPanel";
 import IngestSurface from "./IngestSurface";
 import VideoWorkspace from "./VideoWorkspace";
 import ExportDialog from "./ExportDialog";
@@ -80,7 +81,7 @@ export default function EditorLayout() {
   const { runPipeline, cancelPipeline } = useMediaPipeline();
   const { setVideoContext } = useAIPanel();
   const setAIPanelOpen = useEditorStore((s) => s.setAIPanelOpen);
-  const { isSidebarCollapsed, leftPanelOpen, rightPanelOpen, setLeftPanelOpen, setRightPanelOpen } = useUIStore();
+  const { isSidebarCollapsed, leftPanelOpen, rightPanelOpen, setLeftPanelOpen, setRightPanelOpen, activeTool, setActiveTool } = useUIStore();
 
   const {
     ingestUrl,
@@ -111,6 +112,26 @@ export default function EditorLayout() {
   const [localEngineEnabled, setLocalEngineEnabled] = useState(false);
   const [isAdvancedMode, setIsAdvancedMode] = useState(false);
   const hasShownShortcutsRef = useRef(false);
+  useEffect(() => {
+    const onDub = (ev: Event) => {
+      const detail = (ev as CustomEvent<{ targetLang?: string; mode?: string }>).detail;
+      useUIStore.getState().setActiveTool("dub");
+      useUIStore.getState().setRightPanelOpen(true);
+      // Persist intent for DubPanel auto-start
+      if (typeof window !== "undefined" && detail) {
+        sessionStorage.setItem(
+          "qai:dub-intent",
+          JSON.stringify({
+            targetLang: detail.targetLang ?? "es",
+            mode: detail.mode ?? "full_dub",
+          }),
+        );
+      }
+    };
+    window.addEventListener("qai:dub-video", onDub as EventListener);
+    return () => window.removeEventListener("qai:dub-video", onDub as EventListener);
+  }, []);
+
   useEffect(() => {
     setIsAdvancedMode(new URLSearchParams(window.location.search).get("advanced") === "1");
     // First-run welcome toast (once per browser session)
@@ -811,6 +832,35 @@ export default function EditorLayout() {
           Toggled via header Sparkles or Shift+Alt+A. */}
         <AIPanel />
       </div>
+
+      {/* Chat-primary Dub Video sheet (works without ?advanced=1) */}
+      <AnimatePresence>
+        {activeTool === "dub" && !isAdvancedMode && (
+          <motion.aside
+            key="dub-sheet"
+            initial={{ opacity: 0, x: 24 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 24 }}
+            transition={{ duration: 0.2 }}
+            className="fixed right-4 top-24 z-40 w-[min(100%-2rem,22rem)] rounded-2xl border border-border bg-card/95 backdrop-blur-xl shadow-2xl p-4"
+          >
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-fg-muted">
+                Dub Video
+              </span>
+              <button
+                type="button"
+                aria-label="Close Dub Video"
+                className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-foreground/10"
+                onClick={() => setActiveTool(null)}
+              >
+                <X size={14} />
+              </button>
+            </div>
+            <DubPanel />
+          </motion.aside>
+        )}
+      </AnimatePresence>
 
       {/* Timeline — EP-005: collapsed monitor by default; expand on demand */}
       <footer

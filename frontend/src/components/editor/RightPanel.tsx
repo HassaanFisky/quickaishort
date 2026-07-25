@@ -21,6 +21,7 @@ import {
   Type,
   Layout,
   Mic,
+  Languages,
   AlignLeft,
   AlignCenter,
   AlignRight,
@@ -53,6 +54,7 @@ import CurvesEditor from "@/components/editor/CurvesEditor";
 import LoudnessMeter from "@/components/editor/LoudnessMeter";
 import { WGSL_TRANSITIONS } from "@/lib/transitions/wgslTransitions";
 import { SPLIT_PRESETS } from "@/lib/splitScreenPresets";
+import { DubPanel } from "@/components/editor/DubPanel";
 
 const QUALITY_OPTIONS = ["low", "medium", "high"] as const;
 const FILTER_OPTIONS = ["None", "Urban", "Retro", "Cinematic"] as const;
@@ -126,12 +128,13 @@ function AccordionHeader({
 // ---------------------------------------------------------------------------
 
 const TOOL_META: Record<EditorTool, { label: string; icon: React.ElementType }> = {
-  split:       { label: "Split",       icon: SquareSplitHorizontal },
-  trim:        { label: "Trim",        icon: Scissors },
-  text:        { label: "Text Overlay", icon: Type },
-  fx:          { label: "Visual FX",   icon: Palette },
+  split: { label: "Split", icon: SquareSplitHorizontal },
+  trim: { label: "Trim", icon: Scissors },
+  text: { label: "Text Overlay", icon: Type },
+  fx: { label: "Visual FX", icon: Palette },
   transitions: { label: "Transitions", icon: Layout },
-  voiceover:   { label: "Voiceover",   icon: Mic },
+  voiceover: { label: "Vocal EQ", icon: Mic },
+  dub: { label: "Dub Video", icon: Languages },
 };
 
 function ToolInspector({ tool }: { tool: EditorTool }) {
@@ -152,12 +155,13 @@ function ToolInspector({ tool }: { tool: EditorTool }) {
         </div>
         <span className="text-[10px] font-black uppercase tracking-[0.2em] text-fg-muted">{meta.label}</span>
       </div>
-      {tool === "split"       && <SplitPanel />}
-      {tool === "trim"        && <TrimPanel />}
-      {tool === "text"        && <TextPanel />}
-      {tool === "fx"          && <FXPanel />}
+      {tool === "split" && <SplitPanel />}
+      {tool === "trim" && <TrimPanel />}
+      {tool === "text" && <TextPanel />}
+      {tool === "fx" && <FXPanel />}
       {tool === "transitions" && <TransitionsPanel />}
-      {tool === "voiceover"   && <VoiceoverPanel />}
+      {tool === "voiceover" && <VoiceoverPanel />}
+      {tool === "dub" && <DubPanel />}
     </motion.div>
   );
 }
@@ -573,19 +577,19 @@ export default function RightPanel() {
   // Local color state — feeds ColorWheels + exposure/contrast/sat sliders.
   // Not yet wired to colorPipeline (requires WebGPU feature flag).
   const [colorAdj, setColorAdj] = React.useState({
-    lift:       [0, 0, 0] as [number, number, number],
-    gamma:      [1, 1, 1] as [number, number, number],
-    gain:       [1, 1, 1] as [number, number, number],
-    exposure:   0,
-    contrast:   1,
+    lift: [0, 0, 0] as [number, number, number],
+    gamma: [1, 1, 1] as [number, number, number],
+    gain: [1, 1, 1] as [number, number, number],
+    exposure: 0,
+    contrast: 1,
     saturation: 1,
   });
 
   const [vignetteAdj, setVignetteAdj] = React.useState({
-    amount:     0,
-    midpoint:   0.5,
-    roundness:  0.5,
-    feather:    0.3,
+    amount: 0,
+    midpoint: 0.5,
+    roundness: 0.5,
+    feather: 0.3,
   });
   const updateVignette = React.useCallback(
     (patch: Partial<typeof vignetteAdj>) =>
@@ -720,851 +724,851 @@ export default function RightPanel() {
       </AnimatePresence>
 
       <div className="flex flex-col gap-1 p-4">
-      {/* Clip meta */}
-      <div className="px-1 pb-3 border-b border-border mb-1">
-        <h3 className="text-[11px] font-black text-foreground truncate uppercase tracking-tight">
-          {sourceFile?.name ??
-            (selectedClip
-              ? `Clip ${selectedClip.id.slice(0, 4).toUpperCase()}`
-              : "Selection")}
-        </h3>
-        {selectedClip && (
-          <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-0.5">
-            <Clock3 className="w-3 h-3" />
-            <span>
-              {formatTime(selectedClip.start)} — {formatTime(selectedClip.end)}
-            </span>
-            <span className="text-primary">{clipDuration}s</span>
-          </div>
-        )}
-      </div>
+        {/* Clip meta */}
+        <div className="px-1 pb-3 border-b border-border mb-1">
+          <h3 className="text-[11px] font-black text-foreground truncate uppercase tracking-tight">
+            {sourceFile?.name ??
+              (selectedClip
+                ? `Clip ${selectedClip.id.slice(0, 4).toUpperCase()}`
+                : "Selection")}
+          </h3>
+          {selectedClip && (
+            <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-0.5">
+              <Clock3 className="w-3 h-3" />
+              <span>
+                {formatTime(selectedClip.start)} — {formatTime(selectedClip.end)}
+              </span>
+              <span className="text-primary">{clipDuration}s</span>
+            </div>
+          )}
+        </div>
 
-      {/* â"€â"€ Group 1: Basic & Audio â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
-      <div className="rounded-xl border border-border overflow-hidden">
-        <AccordionHeader
-          label="Basic & Audio"
-          isOpen={openGroup === "audio"}
-          onToggle={() => toggleGroup("audio")}
-        />
-        <AnimatePresence initial={false}>
-          {openGroup === "audio" && (
-            <motion.div
-              key="audio-body"
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
-              className="overflow-hidden"
-            >
-              <div className="px-4 pb-4 flex flex-col gap-4 border-t border-border pt-3">
-                {/* Precision Trim */}
-                <div className="flex flex-col gap-3">
-                  <div className="flex items-center gap-2">
-                    <Scissors className="w-3.5 h-3.5 text-primary" />
-                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-fg-muted">
-                      Precision Trim
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-[10px] font-bold text-fg-muted tabular-nums">
-                    <span>{selectedClip ? formatTime(selectedClip.start) : "—"}</span>
-                    <span className="text-muted-foreground">
-                      {selectedClip
-                        ? `${Math.max(0, Math.round(selectedClip.end - selectedClip.start))}s`
-                        : "—"}
-                    </span>
-                    <span>{selectedClip ? formatTime(selectedClip.end) : "—"}</span>
-                  </div>
-                  {selectedClip ? (
-                    <Slider
-                      value={[selectedClip.start, selectedClip.end]}
-                      min={0}
-                      max={duration > 0 ? duration : selectedClip.end + 10}
-                      step={0.1}
-                      onValueChange={([s, e]: [number, number]) =>
-                        updateClip(selectedClip.id, { start: s, end: e })
-                      }
-                      className="py-1"
-                    />
-                  ) : (
-                    <div className="h-8 flex items-center justify-center">
-                      <span className="text-[9px] text-muted-foreground uppercase tracking-widest">
-                        Select a clip to trim
+        {/* â"€â"€ Group 1: Basic & Audio â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
+        <div className="rounded-xl border border-border overflow-hidden">
+          <AccordionHeader
+            label="Basic & Audio"
+            isOpen={openGroup === "audio"}
+            onToggle={() => toggleGroup("audio")}
+          />
+          <AnimatePresence initial={false}>
+            {openGroup === "audio" && (
+              <motion.div
+                key="audio-body"
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+                className="overflow-hidden"
+              >
+                <div className="px-4 pb-4 flex flex-col gap-4 border-t border-border pt-3">
+                  {/* Precision Trim */}
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center gap-2">
+                      <Scissors className="w-3.5 h-3.5 text-primary" />
+                      <span className="text-[10px] font-black uppercase tracking-[0.2em] text-fg-muted">
+                        Precision Trim
                       </span>
                     </div>
-                  )}
+                    <div className="flex justify-between text-[10px] font-bold text-fg-muted tabular-nums">
+                      <span>{selectedClip ? formatTime(selectedClip.start) : "—"}</span>
+                      <span className="text-muted-foreground">
+                        {selectedClip
+                          ? `${Math.max(0, Math.round(selectedClip.end - selectedClip.start))}s`
+                          : "—"}
+                      </span>
+                      <span>{selectedClip ? formatTime(selectedClip.end) : "—"}</span>
+                    </div>
+                    {selectedClip ? (
+                      <Slider
+                        value={[selectedClip.start, selectedClip.end]}
+                        min={0}
+                        max={duration > 0 ? duration : selectedClip.end + 10}
+                        step={0.1}
+                        onValueChange={([s, e]: [number, number]) =>
+                          updateClip(selectedClip.id, { start: s, end: e })
+                        }
+                        className="py-1"
+                      />
+                    ) : (
+                      <div className="h-8 flex items-center justify-center">
+                        <span className="text-[9px] text-muted-foreground uppercase tracking-widest">
+                          Select a clip to trim
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Audio Boost */}
+                  <SliderRow
+                    label="Audio Boost"
+                    value={exportSettings.audioBoost}
+                    display={`${exportSettings.audioBoost}%`}
+                    min={0}
+                    max={200}
+                    step={1}
+                    onChange={(v) => setExportSetting("audioBoost", v)}
+                  />
+
+                  {/* Playback Speed */}
+                  <SliderRow
+                    label="Playback Speed"
+                    value={exportSettings.playbackSpeed}
+                    display={`${(exportSettings.playbackSpeed / 100).toFixed(1)}x`}
+                    min={50}
+                    max={200}
+                    step={5}
+                    onChange={(v) => setExportSetting("playbackSpeed", v)}
+                  />
+
+                  {/* Background Noise */}
+                  <SliderRow
+                    label="Noise Reduction"
+                    value={exportSettings.noiseSuppression}
+                    display={`${exportSettings.noiseSuppression}%`}
+                    min={0}
+                    max={100}
+                    step={1}
+                    onChange={(v) => setExportSetting("noiseSuppression", v)}
+                  />
                 </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
 
-                {/* Audio Boost */}
-                <SliderRow
-                  label="Audio Boost"
-                  value={exportSettings.audioBoost}
-                  display={`${exportSettings.audioBoost}%`}
-                  min={0}
-                  max={200}
-                  step={1}
-                  onChange={(v) => setExportSetting("audioBoost", v)}
-                />
+        {/* â"€â"€ Group 2: Captions & Visuals â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
+        <div className="rounded-xl border border-border overflow-hidden">
+          <AccordionHeader
+            label="Captions & Visuals"
+            isOpen={openGroup === "visuals"}
+            onToggle={() => toggleGroup("visuals")}
+          />
+          <AnimatePresence initial={false}>
+            {openGroup === "visuals" && (
+              <motion.div
+                key="visuals-body"
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+                className="overflow-hidden"
+              >
+                <div className="px-4 pb-4 flex flex-col gap-4 border-t border-border pt-3">
+                  <ToggleRow
+                    label="Auto Subtitles"
+                    sub="Burned-in text for social"
+                    enabled={captionsEnabled}
+                    onToggle={() => setCaptionsEnabled(!captionsEnabled)}
+                    ariaLabel={captionsEnabled ? "Disable Auto Subtitles" : "Enable Auto Subtitles"}
+                  />
+                  <ToggleRow
+                    label="Smart Transitions"
+                    sub="Fade & motion smoothing"
+                    enabled={exportSettings.transitionEnabled}
+                    onToggle={() =>
+                      setExportSetting("transitionEnabled", !exportSettings.transitionEnabled)
+                    }
+                    ariaLabel={
+                      exportSettings.transitionEnabled
+                        ? "Disable Smart Transitions"
+                        : "Enable Smart Transitions"
+                    }
+                  />
+                  <ToggleRow
+                    label="AI Voiceover"
+                    sub="Synthetic narration"
+                    enabled={exportSettings.voiceoverEnabled}
+                    onToggle={() =>
+                      setExportSetting("voiceoverEnabled", !exportSettings.voiceoverEnabled)
+                    }
+                    ariaLabel={
+                      exportSettings.voiceoverEnabled
+                        ? "Disable AI Voiceover"
+                        : "Enable AI Voiceover"
+                    }
+                  />
 
-                {/* Playback Speed */}
-                <SliderRow
-                  label="Playback Speed"
-                  value={exportSettings.playbackSpeed}
-                  display={`${(exportSettings.playbackSpeed / 100).toFixed(1)}x`}
-                  min={50}
-                  max={200}
-                  step={5}
-                  onChange={(v) => setExportSetting("playbackSpeed", v)}
-                />
+                  {/* Visual Style */}
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center gap-2">
+                      <Palette className="w-3.5 h-3.5 text-primary" />
+                      <span className="text-[10px] font-black uppercase tracking-[0.2em] text-fg-muted">
+                        Visual Style
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {FILTER_OPTIONS.map((filter) => (
+                        <Button
+                          key={filter}
+                          variant="ghost"
+                          className={cn(
+                            "h-9 justify-center rounded-lg text-[10px] font-black tracking-widest border transition-colors uppercase",
+                            activeFilter === filter
+                              ? "bg-primary/15 border-primary/30 text-primary"
+                              : "bg-muted border-border text-fg-muted hover:text-foreground"
+                          )}
+                          onClick={() =>
+                            setExportSetting("filter", filter as typeof activeFilter)
+                          }
+                        >
+                          {filter}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
 
-                {/* Background Noise */}
-                <SliderRow
-                  label="Noise Reduction"
-                  value={exportSettings.noiseSuppression}
-                  display={`${exportSettings.noiseSuppression}%`}
-                  min={0}
-                  max={100}
-                  step={1}
-                  onChange={(v) => setExportSetting("noiseSuppression", v)}
-                />
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+                  {/* Chroma Key */}
+                  <div className="flex flex-col gap-3">
+                    <ToggleRow
+                      label="Chroma Key"
+                      sub="Remove green screen background"
+                      enabled={frameFilters.chromaKeyEnabled ?? false}
+                      onToggle={() =>
+                        setFrameFilter({ chromaKeyEnabled: !(frameFilters.chromaKeyEnabled ?? false) })
+                      }
+                      ariaLabel={
+                        (frameFilters.chromaKeyEnabled ?? false)
+                          ? "Disable Chroma Key"
+                          : "Enable Chroma Key"
+                      }
+                    />
+                    {(frameFilters.chromaKeyEnabled ?? false) && (
+                      <>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-black uppercase tracking-widest text-fg-muted">
+                            Key Color
+                          </span>
+                          <input
+                            type="color"
+                            value={frameFilters.chromaKeyColor ?? "#00FF00"}
+                            onChange={(e) => setFrameFilter({ chromaKeyColor: e.target.value })}
+                            aria-label="Chroma key color"
+                            className="w-8 h-8 rounded-lg border border-border cursor-pointer bg-transparent p-0.5"
+                          />
+                        </div>
+                        <SliderRow
+                          label="Tolerance"
+                          value={frameFilters.chromaKeyTolerance ?? 0.3}
+                          display={(frameFilters.chromaKeyTolerance ?? 0.3).toFixed(2)}
+                          min={0}
+                          max={1}
+                          step={0.01}
+                          onChange={(v) => setFrameFilter({ chromaKeyTolerance: v })}
+                        />
+                        <SliderRow
+                          label="Softness"
+                          value={frameFilters.chromaKeySoftness ?? 0.1}
+                          display={(frameFilters.chromaKeySoftness ?? 0.1).toFixed(2)}
+                          min={0}
+                          max={1}
+                          step={0.01}
+                          onChange={(v) => setFrameFilter({ chromaKeySoftness: v })}
+                        />
+                        <SliderRow
+                          label="Spill Suppression"
+                          value={frameFilters.chromaKeySpill ?? 0.5}
+                          display={(frameFilters.chromaKeySpill ?? 0.5).toFixed(2)}
+                          min={0}
+                          max={1}
+                          step={0.01}
+                          onChange={(v) => setFrameFilter({ chromaKeySpill: v })}
+                        />
+                      </>
+                    )}
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
 
-      {/* â"€â"€ Group 2: Captions & Visuals â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */}
-      <div className="rounded-xl border border-border overflow-hidden">
-        <AccordionHeader
-          label="Captions & Visuals"
-          isOpen={openGroup === "visuals"}
-          onToggle={() => toggleGroup("visuals")}
-        />
-        <AnimatePresence initial={false}>
-          {openGroup === "visuals" && (
-            <motion.div
-              key="visuals-body"
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
-              className="overflow-hidden"
-            >
-              <div className="px-4 pb-4 flex flex-col gap-4 border-t border-border pt-3">
-                <ToggleRow
-                  label="Auto Subtitles"
-                  sub="Burned-in text for social"
-                  enabled={captionsEnabled}
-                  onToggle={() => setCaptionsEnabled(!captionsEnabled)}
-                  ariaLabel={captionsEnabled ? "Disable Auto Subtitles" : "Enable Auto Subtitles"}
-                />
-                <ToggleRow
-                  label="Smart Transitions"
-                  sub="Fade & motion smoothing"
-                  enabled={exportSettings.transitionEnabled}
-                  onToggle={() =>
-                    setExportSetting("transitionEnabled", !exportSettings.transitionEnabled)
-                  }
-                  ariaLabel={
-                    exportSettings.transitionEnabled
-                      ? "Disable Smart Transitions"
-                      : "Enable Smart Transitions"
-                  }
-                />
-                <ToggleRow
-                  label="AI Voiceover"
-                  sub="Synthetic narration"
-                  enabled={exportSettings.voiceoverEnabled}
-                  onToggle={() =>
-                    setExportSetting("voiceoverEnabled", !exportSettings.voiceoverEnabled)
-                  }
-                  ariaLabel={
-                    exportSettings.voiceoverEnabled
-                      ? "Disable AI Voiceover"
-                      : "Enable AI Voiceover"
-                  }
-                />
-
-                {/* Visual Style */}
-                <div className="flex flex-col gap-2">
-                  <div className="flex items-center gap-2">
-                    <Palette className="w-3.5 h-3.5 text-primary" />
+        {/* ── Group: Speed Ramp ────────────────────────────────────────── */}
+        <div className="rounded-xl border border-border overflow-hidden">
+          <AccordionHeader
+            label="Speed Ramp"
+            isOpen={openGroup === "speed"}
+            onToggle={() => toggleGroup("speed")}
+          />
+          <AnimatePresence initial={false}>
+            {openGroup === "speed" && (
+              <motion.div
+                key="speed-body"
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+                className="overflow-hidden"
+              >
+                <div className="px-3 pb-4 flex flex-col gap-3 border-t border-border pt-3">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Zap className="w-3.5 h-3.5 text-primary" />
                     <span className="text-[10px] font-black uppercase tracking-[0.2em] text-fg-muted">
-                      Visual Style
+                      Time Remapping
                     </span>
                   </div>
+                  <SpeedRampEditor />
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* ── Group: Transform & Layers ────────────────────────────────── */}
+        <div className="rounded-xl border border-border overflow-hidden">
+          <AccordionHeader
+            label="Transform & Layers"
+            isOpen={openGroup === "transform"}
+            onToggle={() => toggleGroup("transform")}
+          />
+          <AnimatePresence initial={false}>
+            {openGroup === "transform" && (
+              <motion.div
+                key="transform-body"
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+                className="overflow-hidden"
+              >
+                <div className="px-4 pb-4 flex flex-col gap-4 border-t border-border pt-3">
+
+                  {/* Opacity */}
+                  <div className="flex items-center gap-2 mb-1">
+                    <Eye className="w-3.5 h-3.5 text-primary" />
+                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-fg-muted">Opacity</span>
+                  </div>
+                  <SliderRow
+                    label="Opacity"
+                    value={(frameFilters.opacity ?? 1) * 100}
+                    display={`${Math.round((frameFilters.opacity ?? 1) * 100)}%`}
+                    min={0}
+                    max={100}
+                    step={1}
+                    onChange={(v) => setFrameFilter({ opacity: v / 100 })}
+                  />
+
+                  <div className="h-px bg-border" />
+
+                  {/* Crop */}
+                  <div className="flex items-center gap-2">
+                    <Move className="w-3.5 h-3.5 text-primary" />
+                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-fg-muted">Crop</span>
+                  </div>
+                  <SliderRow label="Top" value={(frameFilters.cropTop ?? 0) * 100} display={`${Math.round((frameFilters.cropTop ?? 0) * 100)}%`} min={0} max={50} step={1} onChange={(v) => setFrameFilter({ cropTop: v / 100 })} />
+                  <SliderRow label="Bottom" value={(frameFilters.cropBottom ?? 0) * 100} display={`${Math.round((frameFilters.cropBottom ?? 0) * 100)}%`} min={0} max={50} step={1} onChange={(v) => setFrameFilter({ cropBottom: v / 100 })} />
+                  <SliderRow label="Left" value={(frameFilters.cropLeft ?? 0) * 100} display={`${Math.round((frameFilters.cropLeft ?? 0) * 100)}%`} min={0} max={50} step={1} onChange={(v) => setFrameFilter({ cropLeft: v / 100 })} />
+                  <SliderRow label="Right" value={(frameFilters.cropRight ?? 0) * 100} display={`${Math.round((frameFilters.cropRight ?? 0) * 100)}%`} min={0} max={50} step={1} onChange={(v) => setFrameFilter({ cropRight: v / 100 })} />
+
+                  {/* Pan */}
+                  <div className="h-px bg-border" />
+                  <span className="text-[9px] font-black uppercase tracking-[0.2em] text-fg-muted">Pan</span>
+                  <SliderRow label="Pan X" value={(frameFilters.panX ?? 0) * 100} display={`${Math.round((frameFilters.panX ?? 0) * 100)}%`} min={-100} max={100} step={1} onChange={(v) => setFrameFilter({ panX: v / 100 })} />
+                  <SliderRow label="Pan Y" value={(frameFilters.panY ?? 0) * 100} display={`${Math.round((frameFilters.panY ?? 0) * 100)}%`} min={-100} max={100} step={1} onChange={(v) => setFrameFilter({ panY: v / 100 })} />
+
+                  <button
+                    onClick={() => setFrameFilter({ cropTop: 0, cropBottom: 0, cropLeft: 0, cropRight: 0, panX: 0, panY: 0 })}
+                    className="w-full h-8 rounded-lg bg-muted border border-border text-[9px] font-black uppercase tracking-widest text-muted-foreground hover:text-foreground hover:border-border transition-colors flex items-center justify-center gap-1.5"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    Reset Crop & Pan
+                  </button>
+
+                  <div className="h-px bg-border" />
+
+                  {/* Background Remove */}
+                  <ToggleRow
+                    label="Background Remove"
+                    sub="AI person mask (beta)"
+                    enabled={frameFilters.backgroundRemoveEnabled ?? false}
+                    onToggle={() => setFrameFilter({ backgroundRemoveEnabled: !(frameFilters.backgroundRemoveEnabled ?? false) })}
+                    ariaLabel="Toggle background removal"
+                  />
+
+                  <div className="h-px bg-border" />
+
+                  {/* Default Transition */}
+                  <div className="flex items-center gap-2">
+                    <Layers className="w-3.5 h-3.5 text-primary" />
+                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-fg-muted">Default Transition</span>
+                  </div>
                   <div className="grid grid-cols-2 gap-1.5">
-                    {FILTER_OPTIONS.map((filter) => (
-                      <Button
-                        key={filter}
-                        variant="ghost"
+                    {Object.keys(WGSL_TRANSITIONS).map((name) => (
+                      <button
+                        key={name}
+                        onClick={() => setDefaultTransition(name)}
                         className={cn(
-                          "h-9 justify-center rounded-lg text-[10px] font-black tracking-widest border transition-colors uppercase",
-                          activeFilter === filter
+                          "h-9 rounded-lg text-[9px] font-black uppercase tracking-widest border transition-colors",
+                          defaultTransition === name
                             ? "bg-primary/15 border-primary/30 text-primary"
-                            : "bg-muted border-border text-fg-muted hover:text-foreground"
+                            : "bg-muted border-border text-fg-muted hover:text-foreground hover:border-border"
                         )}
-                        onClick={() =>
-                          setExportSetting("filter", filter as typeof activeFilter)
-                        }
                       >
-                        {filter}
-                      </Button>
+                        {name.replace("_", " ")}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="h-px bg-border" />
+
+                  {/* Split Screen Presets */}
+                  <div className="flex items-center gap-2">
+                    <SquareSplitHorizontal className="w-3.5 h-3.5 text-primary" />
+                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-fg-muted">Split Screen</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {SPLIT_PRESETS.map((preset) => (
+                      <button
+                        key={preset.id}
+                        onClick={() => setSplitScreenPreset(splitScreenPresetId === preset.id ? null : preset.id)}
+                        title={preset.description}
+                        className={cn(
+                          "h-9 rounded-lg text-[9px] font-black uppercase tracking-widest border transition-colors",
+                          splitScreenPresetId === preset.id
+                            ? "bg-primary/15 border-primary/30 text-primary"
+                            : "bg-muted border-border text-fg-muted hover:text-foreground hover:border-border"
+                        )}
+                      >
+                        {preset.label}
+                      </button>
                     ))}
                   </div>
                 </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
 
-                {/* Chroma Key */}
-                <div className="flex flex-col gap-3">
-                  <ToggleRow
-                    label="Chroma Key"
-                    sub="Remove green screen background"
-                    enabled={frameFilters.chromaKeyEnabled ?? false}
-                    onToggle={() =>
-                      setFrameFilter({ chromaKeyEnabled: !(frameFilters.chromaKeyEnabled ?? false) })
-                    }
-                    ariaLabel={
-                      (frameFilters.chromaKeyEnabled ?? false)
-                        ? "Disable Chroma Key"
-                        : "Enable Chroma Key"
-                    }
+        {/* ── Group 3: Color Grading ────────────────────────────────────── */}
+        <div className="rounded-xl border border-border overflow-hidden">
+          <AccordionHeader
+            label="Color Grading"
+            isOpen={openGroup === "color"}
+            onToggle={() => toggleGroup("color")}
+          />
+          <AnimatePresence initial={false}>
+            {openGroup === "color" && (
+              <motion.div
+                key="color-body"
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+                className="overflow-hidden"
+              >
+                <div className="px-3 pb-4 flex flex-col gap-4 border-t border-border pt-3">
+                  {/* 3-Way Color Wheels */}
+                  <ColorWheels
+                    lift={colorAdj.lift}
+                    gamma={colorAdj.gamma}
+                    gain={colorAdj.gain}
+                    onChange={(u) => {
+                      updateColor({
+                        ...(u.lift && { lift: u.lift }),
+                        ...(u.gamma && { gamma: u.gamma }),
+                        ...(u.gain && { gain: u.gain }),
+                      });
+                    }}
                   />
-                  {(frameFilters.chromaKeyEnabled ?? false) && (
-                    <>
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-fg-muted">
-                          Key Color
-                        </span>
-                        <input
-                          type="color"
-                          value={frameFilters.chromaKeyColor ?? "#00FF00"}
-                          onChange={(e) => setFrameFilter({ chromaKeyColor: e.target.value })}
-                          aria-label="Chroma key color"
-                          className="w-8 h-8 rounded-lg border border-border cursor-pointer bg-transparent p-0.5"
-                        />
-                      </div>
-                      <SliderRow
-                        label="Tolerance"
-                        value={frameFilters.chromaKeyTolerance ?? 0.3}
-                        display={(frameFilters.chromaKeyTolerance ?? 0.3).toFixed(2)}
-                        min={0}
-                        max={1}
-                        step={0.01}
-                        onChange={(v) => setFrameFilter({ chromaKeyTolerance: v })}
-                      />
-                      <SliderRow
-                        label="Softness"
-                        value={frameFilters.chromaKeySoftness ?? 0.1}
-                        display={(frameFilters.chromaKeySoftness ?? 0.1).toFixed(2)}
-                        min={0}
-                        max={1}
-                        step={0.01}
-                        onChange={(v) => setFrameFilter({ chromaKeySoftness: v })}
-                      />
-                      <SliderRow
-                        label="Spill Suppression"
-                        value={frameFilters.chromaKeySpill ?? 0.5}
-                        display={(frameFilters.chromaKeySpill ?? 0.5).toFixed(2)}
-                        min={0}
-                        max={1}
-                        step={0.01}
-                        onChange={(v) => setFrameFilter({ chromaKeySpill: v })}
-                      />
-                    </>
-                  )}
+
+                  <div className="h-px bg-border" />
+
+                  {/* Exposure / Contrast / Saturation */}
+                  <SliderRow
+                    label="Exposure"
+                    value={colorAdj.exposure}
+                    display={colorAdj.exposure >= 0 ? `+${colorAdj.exposure.toFixed(2)} EV` : `${colorAdj.exposure.toFixed(2)} EV`}
+                    min={-3}
+                    max={3}
+                    step={0.05}
+                    onChange={(v) => updateColor({ exposure: v })}
+                  />
+                  <SliderRow
+                    label="Contrast"
+                    value={colorAdj.contrast}
+                    display={colorAdj.contrast.toFixed(2)}
+                    min={0}
+                    max={2}
+                    step={0.05}
+                    onChange={(v) => updateColor({ contrast: v })}
+                  />
+                  <SliderRow
+                    label="Saturation"
+                    value={colorAdj.saturation}
+                    display={colorAdj.saturation.toFixed(2)}
+                    min={0}
+                    max={3}
+                    step={0.05}
+                    onChange={(v) => updateColor({ saturation: v })}
+                  />
+
+                  {/* Reset button */}
+                  <button
+                    onClick={() => {
+                      setColorAdj({ lift: [0, 0, 0], gamma: [1, 1, 1], gain: [1, 1, 1], exposure: 0, contrast: 1, saturation: 1 });
+                      setVignetteAdj({ amount: 0, midpoint: 0.5, roundness: 0.5, feather: 0.3 });
+                    }}
+                    className="w-full h-8 rounded-lg bg-muted border border-border text-[9px] font-black uppercase tracking-widest text-muted-foreground hover:text-foreground hover:border-border transition-colors"
+                  >
+                    Reset All
+                  </button>
+
+                  <div className="h-px bg-border" />
+
+                  {/* Vignette */}
+                  <p className="text-[9px] font-black uppercase tracking-[0.2em] text-fg-muted">Vignette</p>
+                  <SliderRow
+                    label="Amount"
+                    value={vignetteAdj.amount}
+                    display={vignetteAdj.amount.toFixed(2)}
+                    min={0} max={1} step={0.01}
+                    onChange={(v) => updateVignette({ amount: v })}
+                  />
+                  <SliderRow
+                    label="Midpoint"
+                    value={vignetteAdj.midpoint}
+                    display={vignetteAdj.midpoint.toFixed(2)}
+                    min={0} max={1} step={0.01}
+                    onChange={(v) => updateVignette({ midpoint: v })}
+                  />
+                  <SliderRow
+                    label="Roundness"
+                    value={vignetteAdj.roundness}
+                    display={vignetteAdj.roundness.toFixed(2)}
+                    min={0} max={1} step={0.01}
+                    onChange={(v) => updateVignette({ roundness: v })}
+                  />
+                  <SliderRow
+                    label="Feather"
+                    value={vignetteAdj.feather}
+                    display={vignetteAdj.feather.toFixed(2)}
+                    min={0} max={1} step={0.01}
+                    onChange={(v) => updateVignette({ feather: v })}
+                  />
+
+                  <div className="h-px bg-border" />
+
+                  {/* RGB Curves */}
+                  <p className="text-[9px] font-black uppercase tracking-[0.2em] text-fg-muted">RGB Curves</p>
+                  <CurvesEditor />
                 </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
 
-      {/* ── Group: Speed Ramp ────────────────────────────────────────── */}
-      <div className="rounded-xl border border-border overflow-hidden">
-        <AccordionHeader
-          label="Speed Ramp"
-          isOpen={openGroup === "speed"}
-          onToggle={() => toggleGroup("speed")}
-        />
-        <AnimatePresence initial={false}>
-          {openGroup === "speed" && (
-            <motion.div
-              key="speed-body"
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
-              className="overflow-hidden"
-            >
-              <div className="px-3 pb-4 flex flex-col gap-3 border-t border-border pt-3">
-                <div className="flex items-center gap-2 mb-1">
-                  <Zap className="w-3.5 h-3.5 text-primary" />
-                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-fg-muted">
-                    Time Remapping
-                  </span>
-                </div>
-                <SpeedRampEditor />
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-
-      {/* ── Group: Transform & Layers ────────────────────────────────── */}
-      <div className="rounded-xl border border-border overflow-hidden">
-        <AccordionHeader
-          label="Transform & Layers"
-          isOpen={openGroup === "transform"}
-          onToggle={() => toggleGroup("transform")}
-        />
-        <AnimatePresence initial={false}>
-          {openGroup === "transform" && (
-            <motion.div
-              key="transform-body"
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
-              className="overflow-hidden"
-            >
-              <div className="px-4 pb-4 flex flex-col gap-4 border-t border-border pt-3">
-
-                {/* Opacity */}
-                <div className="flex items-center gap-2 mb-1">
-                  <Eye className="w-3.5 h-3.5 text-primary" />
-                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-fg-muted">Opacity</span>
-                </div>
-                <SliderRow
-                  label="Opacity"
-                  value={(frameFilters.opacity ?? 1) * 100}
-                  display={`${Math.round((frameFilters.opacity ?? 1) * 100)}%`}
-                  min={0}
-                  max={100}
-                  step={1}
-                  onChange={(v) => setFrameFilter({ opacity: v / 100 })}
-                />
-
-                <div className="h-px bg-border" />
-
-                {/* Crop */}
-                <div className="flex items-center gap-2">
-                  <Move className="w-3.5 h-3.5 text-primary" />
-                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-fg-muted">Crop</span>
-                </div>
-                <SliderRow label="Top" value={(frameFilters.cropTop ?? 0) * 100} display={`${Math.round((frameFilters.cropTop ?? 0) * 100)}%`} min={0} max={50} step={1} onChange={(v) => setFrameFilter({ cropTop: v / 100 })} />
-                <SliderRow label="Bottom" value={(frameFilters.cropBottom ?? 0) * 100} display={`${Math.round((frameFilters.cropBottom ?? 0) * 100)}%`} min={0} max={50} step={1} onChange={(v) => setFrameFilter({ cropBottom: v / 100 })} />
-                <SliderRow label="Left" value={(frameFilters.cropLeft ?? 0) * 100} display={`${Math.round((frameFilters.cropLeft ?? 0) * 100)}%`} min={0} max={50} step={1} onChange={(v) => setFrameFilter({ cropLeft: v / 100 })} />
-                <SliderRow label="Right" value={(frameFilters.cropRight ?? 0) * 100} display={`${Math.round((frameFilters.cropRight ?? 0) * 100)}%`} min={0} max={50} step={1} onChange={(v) => setFrameFilter({ cropRight: v / 100 })} />
-
-                {/* Pan */}
-                <div className="h-px bg-border" />
-                <span className="text-[9px] font-black uppercase tracking-[0.2em] text-fg-muted">Pan</span>
-                <SliderRow label="Pan X" value={(frameFilters.panX ?? 0) * 100} display={`${Math.round((frameFilters.panX ?? 0) * 100)}%`} min={-100} max={100} step={1} onChange={(v) => setFrameFilter({ panX: v / 100 })} />
-                <SliderRow label="Pan Y" value={(frameFilters.panY ?? 0) * 100} display={`${Math.round((frameFilters.panY ?? 0) * 100)}%`} min={-100} max={100} step={1} onChange={(v) => setFrameFilter({ panY: v / 100 })} />
-
-                <button
-                  onClick={() => setFrameFilter({ cropTop: 0, cropBottom: 0, cropLeft: 0, cropRight: 0, panX: 0, panY: 0 })}
-                  className="w-full h-8 rounded-lg bg-muted border border-border text-[9px] font-black uppercase tracking-widest text-muted-foreground hover:text-foreground hover:border-border transition-colors flex items-center justify-center gap-1.5"
-                >
-                  <RotateCcw className="w-3 h-3" />
-                  Reset Crop & Pan
-                </button>
-
-                <div className="h-px bg-border" />
-
-                {/* Background Remove */}
-                <ToggleRow
-                  label="Background Remove"
-                  sub="AI person mask (beta)"
-                  enabled={frameFilters.backgroundRemoveEnabled ?? false}
-                  onToggle={() => setFrameFilter({ backgroundRemoveEnabled: !(frameFilters.backgroundRemoveEnabled ?? false) })}
-                  ariaLabel="Toggle background removal"
-                />
-
-                <div className="h-px bg-border" />
-
-                {/* Default Transition */}
-                <div className="flex items-center gap-2">
-                  <Layers className="w-3.5 h-3.5 text-primary" />
-                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-fg-muted">Default Transition</span>
-                </div>
-                <div className="grid grid-cols-2 gap-1.5">
-                  {Object.keys(WGSL_TRANSITIONS).map((name) => (
-                    <button
-                      key={name}
-                      onClick={() => setDefaultTransition(name)}
-                      className={cn(
-                        "h-9 rounded-lg text-[9px] font-black uppercase tracking-widest border transition-colors",
-                        defaultTransition === name
-                          ? "bg-primary/15 border-primary/30 text-primary"
-                          : "bg-muted border-border text-fg-muted hover:text-foreground hover:border-border"
-                      )}
-                    >
-                      {name.replace("_", " ")}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="h-px bg-border" />
-
-                {/* Split Screen Presets */}
-                <div className="flex items-center gap-2">
-                  <SquareSplitHorizontal className="w-3.5 h-3.5 text-primary" />
-                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-fg-muted">Split Screen</span>
-                </div>
-                <div className="grid grid-cols-2 gap-1.5">
-                  {SPLIT_PRESETS.map((preset) => (
-                    <button
-                      key={preset.id}
-                      onClick={() => setSplitScreenPreset(splitScreenPresetId === preset.id ? null : preset.id)}
-                      title={preset.description}
-                      className={cn(
-                        "h-9 rounded-lg text-[9px] font-black uppercase tracking-widest border transition-colors",
-                        splitScreenPresetId === preset.id
-                          ? "bg-primary/15 border-primary/30 text-primary"
-                          : "bg-muted border-border text-fg-muted hover:text-foreground hover:border-border"
-                      )}
-                    >
-                      {preset.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-
-      {/* ── Group 3: Color Grading ────────────────────────────────────── */}
-      <div className="rounded-xl border border-border overflow-hidden">
-        <AccordionHeader
-          label="Color Grading"
-          isOpen={openGroup === "color"}
-          onToggle={() => toggleGroup("color")}
-        />
-        <AnimatePresence initial={false}>
-          {openGroup === "color" && (
-            <motion.div
-              key="color-body"
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
-              className="overflow-hidden"
-            >
-              <div className="px-3 pb-4 flex flex-col gap-4 border-t border-border pt-3">
-                {/* 3-Way Color Wheels */}
-                <ColorWheels
-                  lift={colorAdj.lift}
-                  gamma={colorAdj.gamma}
-                  gain={colorAdj.gain}
-                  onChange={(u) => {
-                    updateColor({
-                      ...(u.lift  && { lift:  u.lift  }),
-                      ...(u.gamma && { gamma: u.gamma }),
-                      ...(u.gain  && { gain:  u.gain  }),
-                    });
-                  }}
-                />
-
-                <div className="h-px bg-border" />
-
-                {/* Exposure / Contrast / Saturation */}
-                <SliderRow
-                  label="Exposure"
-                  value={colorAdj.exposure}
-                  display={colorAdj.exposure >= 0 ? `+${colorAdj.exposure.toFixed(2)} EV` : `${colorAdj.exposure.toFixed(2)} EV`}
-                  min={-3}
-                  max={3}
-                  step={0.05}
-                  onChange={(v) => updateColor({ exposure: v })}
-                />
-                <SliderRow
-                  label="Contrast"
-                  value={colorAdj.contrast}
-                  display={colorAdj.contrast.toFixed(2)}
-                  min={0}
-                  max={2}
-                  step={0.05}
-                  onChange={(v) => updateColor({ contrast: v })}
-                />
-                <SliderRow
-                  label="Saturation"
-                  value={colorAdj.saturation}
-                  display={colorAdj.saturation.toFixed(2)}
-                  min={0}
-                  max={3}
-                  step={0.05}
-                  onChange={(v) => updateColor({ saturation: v })}
-                />
-
-                {/* Reset button */}
-                <button
-                  onClick={() => {
-                    setColorAdj({ lift: [0, 0, 0], gamma: [1, 1, 1], gain: [1, 1, 1], exposure: 0, contrast: 1, saturation: 1 });
-                    setVignetteAdj({ amount: 0, midpoint: 0.5, roundness: 0.5, feather: 0.3 });
-                  }}
-                  className="w-full h-8 rounded-lg bg-muted border border-border text-[9px] font-black uppercase tracking-widest text-muted-foreground hover:text-foreground hover:border-border transition-colors"
-                >
-                  Reset All
-                </button>
-
-                <div className="h-px bg-border" />
-
-                {/* Vignette */}
-                <p className="text-[9px] font-black uppercase tracking-[0.2em] text-fg-muted">Vignette</p>
-                <SliderRow
-                  label="Amount"
-                  value={vignetteAdj.amount}
-                  display={vignetteAdj.amount.toFixed(2)}
-                  min={0} max={1} step={0.01}
-                  onChange={(v) => updateVignette({ amount: v })}
-                />
-                <SliderRow
-                  label="Midpoint"
-                  value={vignetteAdj.midpoint}
-                  display={vignetteAdj.midpoint.toFixed(2)}
-                  min={0} max={1} step={0.01}
-                  onChange={(v) => updateVignette({ midpoint: v })}
-                />
-                <SliderRow
-                  label="Roundness"
-                  value={vignetteAdj.roundness}
-                  display={vignetteAdj.roundness.toFixed(2)}
-                  min={0} max={1} step={0.01}
-                  onChange={(v) => updateVignette({ roundness: v })}
-                />
-                <SliderRow
-                  label="Feather"
-                  value={vignetteAdj.feather}
-                  display={vignetteAdj.feather.toFixed(2)}
-                  min={0} max={1} step={0.01}
-                  onChange={(v) => updateVignette({ feather: v })}
-                />
-
-                <div className="h-px bg-border" />
-
-                {/* RGB Curves */}
-                <p className="text-[9px] font-black uppercase tracking-[0.2em] text-fg-muted">RGB Curves</p>
-                <CurvesEditor />
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-
-      {/* ── Group 4: Scopes ───────────────────────────────────────────── */}
-      <div className="rounded-xl border border-border overflow-hidden">
-        <AccordionHeader
-          label="Scopes"
-          isOpen={openGroup === "scopes"}
-          onToggle={() => toggleGroup("scopes")}
-        />
-        <AnimatePresence initial={false}>
-          {openGroup === "scopes" && (
-            <motion.div
-              key="scopes-body"
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
-              className="overflow-hidden"
-            >
-              <div className="px-3 pb-4 flex flex-col gap-3 border-t border-border pt-3">
-                <div className="flex flex-col gap-1">
-                  <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">
-                    Waveform
-                  </span>
-                  <WaveformMonitor />
-                </div>
-                <div className="flex items-start gap-3">
+        {/* ── Group 4: Scopes ───────────────────────────────────────────── */}
+        <div className="rounded-xl border border-border overflow-hidden">
+          <AccordionHeader
+            label="Scopes"
+            isOpen={openGroup === "scopes"}
+            onToggle={() => toggleGroup("scopes")}
+          />
+          <AnimatePresence initial={false}>
+            {openGroup === "scopes" && (
+              <motion.div
+                key="scopes-body"
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+                className="overflow-hidden"
+              >
+                <div className="px-3 pb-4 flex flex-col gap-3 border-t border-border pt-3">
                   <div className="flex flex-col gap-1">
                     <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">
-                      Vectorscope
+                      Waveform
                     </span>
-                    <Vectorscope />
+                    <WaveformMonitor />
                   </div>
-                  <div className="flex-1 flex flex-col gap-1 text-[9px] text-muted-foreground leading-relaxed pt-6">
-                    <p>Center = neutral</p>
-                    <p>Distance = saturation</p>
-                    <p>Angle = hue direction</p>
-                    <p className="text-muted-foreground/50 mt-1">Updates ~10fps</p>
-                  </div>
-                  <LoudnessMeter />
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-
-      {/* ── Group 5: Export ───────────────────────────────────────────── */}
-      <div className="rounded-xl border border-border overflow-hidden">
-        <AccordionHeader
-          label="Export"
-          isOpen={openGroup === "export"}
-          onToggle={() => toggleGroup("export")}
-        />
-        <AnimatePresence initial={false}>
-          {openGroup === "export" && (
-            <motion.div
-              key="export-body"
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
-              className="overflow-hidden"
-            >
-              <div className="px-4 pb-5 flex flex-col gap-5 border-t border-border pt-4">
-                {/* Output format — calm segmented controls, sentence case */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="flex flex-col gap-2">
-                    <span className="text-[11px] font-semibold text-muted-foreground">Quality</span>
-                    <div className="flex gap-1 p-1 bg-secondary/50 rounded-xl border border-border">
-                      {QUALITY_OPTIONS.map((q) => (
-                        <button
-                          key={q}
-                          onClick={() => setExportSetting("quality", q)}
-                          className={cn(
-                            "flex-1 h-8 rounded-lg text-[11px] font-semibold capitalize transition-colors",
-                            quality === q
-                              ? "bg-primary text-primary-foreground shadow-sm"
-                              : "text-muted-foreground hover:text-foreground"
-                          )}
-                        >
-                          {q}
-                        </button>
-                      ))}
+                  <div className="flex items-start gap-3">
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">
+                        Vectorscope
+                      </span>
+                      <Vectorscope />
                     </div>
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <span className="text-[11px] font-semibold text-muted-foreground">Format</span>
-                    <div className="flex gap-1 p-1 bg-secondary/50 rounded-xl border border-border">
-                      {(["9:16", "1:1"] as const).map((ratio) => (
-                        <button
-                          key={ratio}
-                          onClick={() => setExportSetting("aspectRatio", ratio)}
-                          aria-pressed={exportSettings.aspectRatio === ratio}
-                          className={cn(
-                            "flex-1 h-8 rounded-lg text-[11px] font-semibold tabular-nums transition-colors",
-                            exportSettings.aspectRatio === ratio
-                              ? "bg-primary text-primary-foreground shadow-sm"
-                              : "text-muted-foreground hover:text-foreground"
-                          )}
-                        >
-                          {ratio}
-                        </button>
-                      ))}
+                    <div className="flex-1 flex flex-col gap-1 text-[9px] text-muted-foreground leading-relaxed pt-6">
+                      <p>Center = neutral</p>
+                      <p>Distance = saturation</p>
+                      <p>Angle = hue direction</p>
+                      <p className="text-muted-foreground/50 mt-1">Updates ~10fps</p>
                     </div>
+                    <LoudnessMeter />
                   </div>
                 </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
 
-                {/* Action / state — final step of the journey, kept emotionally calm */}
-                <AnimatePresence mode="wait">
-                  {exportDone ? (
-                    <motion.div
-                      key="export-done"
-                      initial={{ opacity: 0, y: 6 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -6 }}
-                      className="flex flex-col gap-3"
-                    >
-                      <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] p-4 flex flex-col items-center text-center gap-3">
-                        <div className="w-11 h-11 rounded-full bg-emerald-500/15 flex items-center justify-center">
-                          <CheckCircle className="w-5 h-5 text-emerald-400" />
+        {/* ── Group 5: Export ───────────────────────────────────────────── */}
+        <div className="rounded-xl border border-border overflow-hidden">
+          <AccordionHeader
+            label="Export"
+            isOpen={openGroup === "export"}
+            onToggle={() => toggleGroup("export")}
+          />
+          <AnimatePresence initial={false}>
+            {openGroup === "export" && (
+              <motion.div
+                key="export-body"
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+                className="overflow-hidden"
+              >
+                <div className="px-4 pb-5 flex flex-col gap-5 border-t border-border pt-4">
+                  {/* Output format — calm segmented controls, sentence case */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="flex flex-col gap-2">
+                      <span className="text-[11px] font-semibold text-muted-foreground">Quality</span>
+                      <div className="flex gap-1 p-1 bg-secondary/50 rounded-xl border border-border">
+                        {QUALITY_OPTIONS.map((q) => (
+                          <button
+                            key={q}
+                            onClick={() => setExportSetting("quality", q)}
+                            className={cn(
+                              "flex-1 h-8 rounded-lg text-[11px] font-semibold capitalize transition-colors",
+                              quality === q
+                                ? "bg-primary text-primary-foreground shadow-sm"
+                                : "text-muted-foreground hover:text-foreground"
+                            )}
+                          >
+                            {q}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <span className="text-[11px] font-semibold text-muted-foreground">Format</span>
+                      <div className="flex gap-1 p-1 bg-secondary/50 rounded-xl border border-border">
+                        {(["9:16", "1:1"] as const).map((ratio) => (
+                          <button
+                            key={ratio}
+                            onClick={() => setExportSetting("aspectRatio", ratio)}
+                            aria-pressed={exportSettings.aspectRatio === ratio}
+                            className={cn(
+                              "flex-1 h-8 rounded-lg text-[11px] font-semibold tabular-nums transition-colors",
+                              exportSettings.aspectRatio === ratio
+                                ? "bg-primary text-primary-foreground shadow-sm"
+                                : "text-muted-foreground hover:text-foreground"
+                            )}
+                          >
+                            {ratio}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Action / state — final step of the journey, kept emotionally calm */}
+                  <AnimatePresence mode="wait">
+                    {exportDone ? (
+                      <motion.div
+                        key="export-done"
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -6 }}
+                        className="flex flex-col gap-3"
+                      >
+                        <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] p-4 flex flex-col items-center text-center gap-3">
+                          <div className="w-11 h-11 rounded-full bg-emerald-500/15 flex items-center justify-center">
+                            <CheckCircle className="w-5 h-5 text-emerald-400" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold text-foreground">Your short is ready</p>
+                            <p className="text-[12px] text-muted-foreground mt-0.5 capitalize">
+                              {quality} quality · {exportSettings.aspectRatio}
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-sm font-bold text-foreground">Your short is ready</p>
-                          <p className="text-[12px] text-muted-foreground mt-0.5 capitalize">
-                            {quality} quality · {exportSettings.aspectRatio}
-                          </p>
+                        <button
+                          onClick={() => {
+                            if (lastDownloadUrl) {
+                              const a = document.createElement("a");
+                              a.href = lastDownloadUrl;
+                              a.download = "quickai-short.mp4";
+                              a.target = "_blank";
+                              a.rel = "noopener";
+                              document.body.appendChild(a);
+                              a.click();
+                              a.remove();
+                            }
+                          }}
+                          className="w-full h-12 rounded-2xl bg-primary text-primary-foreground font-semibold text-sm flex items-center justify-center gap-2 shadow-lg shadow-primary/20 hover:brightness-110 transition"
+                        >
+                          <Download className="w-4 h-4" />
+                          Download
+                        </button>
+                        <button
+                          onClick={() => resetExportState()}
+                          className="w-full h-9 text-[12px] font-semibold text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          Export again
+                        </button>
+                      </motion.div>
+                    ) : exportError ? (
+                      <motion.div
+                        key="export-error"
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -6 }}
+                        className="flex flex-col gap-3"
+                      >
+                        <div className="rounded-2xl border border-destructive/25 bg-destructive/[0.06] p-4 flex flex-col gap-1">
+                          <p className="text-sm font-bold text-destructive">Export failed</p>
+                          <p className="text-[12px] text-muted-foreground leading-relaxed">{exportError}</p>
                         </div>
-                      </div>
-                      <button
-                        onClick={() => {
-                          if (lastDownloadUrl) {
-                            const a = document.createElement("a");
-                            a.href = lastDownloadUrl;
-                            a.download = "quickai-short.mp4";
-                            a.target = "_blank";
-                            a.rel = "noopener";
-                            document.body.appendChild(a);
-                            a.click();
-                            a.remove();
-                          }
-                        }}
-                        className="w-full h-12 rounded-2xl bg-primary text-primary-foreground font-semibold text-sm flex items-center justify-center gap-2 shadow-lg shadow-primary/20 hover:brightness-110 transition"
+                        <button
+                          onClick={() => {
+                            resetExportState();
+                            handleExport();
+                          }}
+                          className="w-full h-12 rounded-2xl bg-secondary/50 border border-border flex items-center justify-center gap-2 text-foreground font-semibold text-sm hover:bg-secondary transition-colors"
+                        >
+                          <RefreshCw className="w-4 h-4" />
+                          Try again
+                        </button>
+                      </motion.div>
+                    ) : isExporting ? (
+                      <motion.div
+                        key="export-progress"
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -6 }}
+                        className="rounded-2xl border border-border bg-secondary/40 p-4 flex flex-col gap-3"
                       >
-                        <Download className="w-4 h-4" />
-                        Download
-                      </button>
-                      <button
-                        onClick={() => resetExportState()}
-                        className="w-full h-9 text-[12px] font-semibold text-muted-foreground hover:text-foreground transition-colors"
+                        <div className="flex items-center justify-between">
+                          <span className="text-[12px] font-semibold text-foreground flex items-center gap-2">
+                            <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
+                            Rendering your short…
+                          </span>
+                          <span className="text-[12px] font-bold text-primary tabular-nums">{exportProgress}%</span>
+                        </div>
+                        <div className="h-2 rounded-full bg-foreground/10 overflow-hidden">
+                          <motion.div
+                            className="h-full rounded-full bg-primary"
+                            initial={{ width: 0 }}
+                            animate={{ width: `${exportProgress}%` }}
+                            transition={{ ease: "easeOut", duration: 0.3 }}
+                          />
+                        </div>
+                        <p className="text-[11px] text-muted-foreground leading-relaxed">
+                          Usually under a minute — feel free to keep editing.
+                        </p>
+                      </motion.div>
+                    ) : (
+                      <motion.div
+                        key="export-idle"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="flex flex-col gap-2"
                       >
-                        Export again
-                      </button>
-                    </motion.div>
-                  ) : exportError ? (
-                    <motion.div
-                      key="export-error"
-                      initial={{ opacity: 0, y: 6 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -6 }}
-                      className="flex flex-col gap-3"
-                    >
-                      <div className="rounded-2xl border border-destructive/25 bg-destructive/[0.06] p-4 flex flex-col gap-1">
-                        <p className="text-sm font-bold text-destructive">Export failed</p>
-                        <p className="text-[12px] text-muted-foreground leading-relaxed">{exportError}</p>
-                      </div>
-                      <button
-                        onClick={() => {
-                          resetExportState();
-                          handleExport();
-                        }}
-                        className="w-full h-12 rounded-2xl bg-secondary/50 border border-border flex items-center justify-center gap-2 text-foreground font-semibold text-sm hover:bg-secondary transition-colors"
-                      >
-                        <RefreshCw className="w-4 h-4" />
-                        Try again
-                      </button>
-                    </motion.div>
-                  ) : isExporting ? (
-                    <motion.div
-                      key="export-progress"
-                      initial={{ opacity: 0, y: 6 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -6 }}
-                      className="rounded-2xl border border-border bg-secondary/40 p-4 flex flex-col gap-3"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-[12px] font-semibold text-foreground flex items-center gap-2">
-                          <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
-                          Rendering your short…
-                        </span>
-                        <span className="text-[12px] font-bold text-primary tabular-nums">{exportProgress}%</span>
-                      </div>
-                      <div className="h-2 rounded-full bg-foreground/10 overflow-hidden">
-                        <motion.div
-                          className="h-full rounded-full bg-primary"
-                          initial={{ width: 0 }}
-                          animate={{ width: `${exportProgress}%` }}
-                          transition={{ ease: "easeOut", duration: 0.3 }}
-                        />
-                      </div>
-                      <p className="text-[11px] text-muted-foreground leading-relaxed">
-                        Usually under a minute — feel free to keep editing.
-                      </p>
-                    </motion.div>
-                  ) : (
-                    <motion.div
-                      key="export-idle"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      className="flex flex-col gap-2"
-                    >
-                      <button
-                        className={cn(
-                          "w-full h-12 rounded-2xl font-semibold text-sm flex items-center justify-center gap-2 transition",
-                          !selectedClip || (!sourceFile && !sourceUrl)
-                            ? "bg-secondary/50 text-muted-foreground cursor-not-allowed"
-                            : "bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:brightness-110"
-                        )}
-                        onClick={handleExport}
-                        disabled={!selectedClip || (!sourceFile && !sourceUrl)}
-                      >
-                        <Download className="w-4 h-4" />
-                        Export Short
-                      </button>
-                      <p className="text-center text-[11px] text-muted-foreground capitalize">
-                        {quality} · {exportSettings.aspectRatio} · captions {captionsEnabled ? "on" : "off"}
-                      </p>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                        <button
+                          className={cn(
+                            "w-full h-12 rounded-2xl font-semibold text-sm flex items-center justify-center gap-2 transition",
+                            !selectedClip || (!sourceFile && !sourceUrl)
+                              ? "bg-secondary/50 text-muted-foreground cursor-not-allowed"
+                              : "bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:brightness-110"
+                          )}
+                          onClick={handleExport}
+                          disabled={!selectedClip || (!sourceFile && !sourceUrl)}
+                        >
+                          <Download className="w-4 h-4" />
+                          Export Short
+                        </button>
+                        <p className="text-center text-[11px] text-muted-foreground capitalize">
+                          {quality} · {exportSettings.aspectRatio} · captions {captionsEnabled ? "on" : "off"}
+                        </p>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* â"€â"€ Pre-Flight "" shown below accordion when clip is selected â"€â"€ */}
+        {hasClip && (
+          <div className="mt-2 pt-4 border-t border-border flex flex-col gap-4">
+            <div className="flex items-center justify-between px-1">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-3.5 h-3.5 text-primary" />
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-fg-muted">
+                  Audience Preview
+                </span>
               </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-
-      {/* â"€â"€ Pre-Flight "" shown below accordion when clip is selected â"€â"€ */}
-      {hasClip && (
-        <div className="mt-2 pt-4 border-t border-border flex flex-col gap-4">
-          <div className="flex items-center justify-between px-1">
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-3.5 h-3.5 text-primary" />
-              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-fg-muted">
-                Audience Preview
+              <span className="text-[9px] font-bold text-muted-foreground tracking-tighter">
+                Shift+P
               </span>
             </div>
-            <span className="text-[9px] font-bold text-muted-foreground tracking-tighter">
-              Shift+P
-            </span>
-          </div>
 
-          {!preflightResult && !isPreflightRunning && !isPremiumGated && (
-            <div
-              className="p-6 rounded-xl bg-muted/50 border border-border flex flex-col items-center gap-4 cursor-pointer hover:bg-muted transition-colors"
-              onClick={handleRunPreflight}
-            >
-              <div className="w-12 h-12 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center">
-                <Rocket className="w-5 h-5 text-primary" />
-              </div>
-              <div className="text-center space-y-1">
-                <p className="text-xs font-black text-foreground uppercase tracking-widest">
-                  Test with Audience
-                </p>
-                <p className="text-[10px] text-muted-foreground max-w-[180px]">
-                  See how a test audience would respond to this clip
-                </p>
-              </div>
-              <GlowButton variant="premium" size="sm" className="h-8 px-5 rounded-full text-[9px] uppercase font-black tracking-widest">
-                Run Pre-Flight
-              </GlowButton>
-            </div>
-          )}
-
-          {preflightError && !isPreflightRunning && !isPremiumGated && (
-            <div className="p-5 rounded-xl bg-red-500/8 border border-red-500/20 flex flex-col items-center gap-3">
-              <p className="text-[10px] font-black text-red-400 uppercase tracking-widest text-center">
-                {preflightError}
-              </p>
-              <button
+            {!preflightResult && !isPreflightRunning && !isPremiumGated && (
+              <div
+                className="p-6 rounded-xl bg-muted/50 border border-border flex flex-col items-center gap-4 cursor-pointer hover:bg-muted transition-colors"
                 onClick={handleRunPreflight}
-                className="h-8 px-5 rounded-full bg-red-500/10 border border-red-500/20 text-[9px] font-black text-red-400 uppercase tracking-widest hover:bg-red-500/20 transition-colors"
               >
-                Try Again
-              </button>
-            </div>
-          )}
+                <div className="w-12 h-12 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center">
+                  <Rocket className="w-5 h-5 text-primary" />
+                </div>
+                <div className="text-center space-y-1">
+                  <p className="text-xs font-black text-foreground uppercase tracking-widest">
+                    Test with Audience
+                  </p>
+                  <p className="text-[10px] text-muted-foreground max-w-[180px]">
+                    See how a test audience would respond to this clip
+                  </p>
+                </div>
+                <GlowButton variant="premium" size="sm" className="h-8 px-5 rounded-full text-[9px] uppercase font-black tracking-widest">
+                  Run Pre-Flight
+                </GlowButton>
+              </div>
+            )}
 
-          {isPremiumGated && !isPreflightRunning && (
-            <InlinePaywallCard
-              feature="Audience Pre-Flight"
-              body="Run multi-persona simulations on every clip before you publish. Pro unlocks all six audience personas, refined-clip suggestions, and trend grounding."
-              ctaLabel="Upgrade to Pro"
-              footnote="Your clip selection stays here while you decide."
-            />
-          )}
+            {preflightError && !isPreflightRunning && !isPremiumGated && (
+              <div className="p-5 rounded-xl bg-red-500/8 border border-red-500/20 flex flex-col items-center gap-3">
+                <p className="text-[10px] font-black text-red-400 uppercase tracking-widest text-center">
+                  {preflightError}
+                </p>
+                <button
+                  onClick={handleRunPreflight}
+                  className="h-8 px-5 rounded-full bg-red-500/10 border border-red-500/20 text-[9px] font-black text-red-400 uppercase tracking-widest hover:bg-red-500/20 transition-colors"
+                >
+                  Try Again
+                </button>
+              </div>
+            )}
 
-          {isPreflightRunning && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 py-1">
-              {PREFLIGHT_PERSONAS.map((persona, i) => (
-                <PersonaThinkingCard key={persona.id} persona={persona} delay={i * 0.1} />
-              ))}
-            </div>
-          )}
+            {isPremiumGated && !isPreflightRunning && (
+              <InlinePaywallCard
+                feature="Audience Pre-Flight"
+                body="Run multi-persona simulations on every clip before you publish. Pro unlocks all six audience personas, refined-clip suggestions, and trend grounding."
+                ctaLabel="Upgrade to Pro"
+                footnote="Your clip selection stays here while you decide."
+              />
+            )}
 
-          {preflightResult && !isPreflightRunning && (
-            <PreflightResultsPanel
-              result={preflightResult}
-              onReset={resetPreflight}
-              selectedClipId={selectedClipId}
-              updateClip={updateClip}
-            />
-          )}
-        </div>
-      )}
+            {isPreflightRunning && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 py-1">
+                {PREFLIGHT_PERSONAS.map((persona, i) => (
+                  <PersonaThinkingCard key={persona.id} persona={persona} delay={i * 0.1} />
+                ))}
+              </div>
+            )}
+
+            {preflightResult && !isPreflightRunning && (
+              <PreflightResultsPanel
+                result={preflightResult}
+                onReset={resetPreflight}
+                selectedClipId={selectedClipId}
+                updateClip={updateClip}
+              />
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1671,12 +1675,12 @@ function RecommendationBadge({ rec }: { rec: Recommendation }) {
 }
 
 const PERSONA_LABELS: Record<string, { name: string; emoji: string }> = {
-  genz:          { name: "Gen Z",         emoji: "⚡" },
-  millennial:    { name: "Millennial",    emoji: "💼" },
-  sports:        { name: "Sports Fan",    emoji: "🏆" },
-  tech:          { name: "Tech Nerd",     emoji: "🖥️" },
+  genz: { name: "Gen Z", emoji: "⚡" },
+  millennial: { name: "Millennial", emoji: "💼" },
+  sports: { name: "Sports Fan", emoji: "🏆" },
+  tech: { name: "Tech Nerd", emoji: "🖥️" },
   entertainment: { name: "Entertainment", emoji: "🎬" },
-  news:          { name: "News Reader",   emoji: "📰" },
+  news: { name: "News Reader", emoji: "📰" },
 };
 
 function PersonaCard({ vote, index }: { vote: PersonaVote; index: number }) {
@@ -1687,8 +1691,8 @@ function PersonaCard({ vote, index }: { vote: PersonaVote; index: number }) {
     vote.hook_verdict === "strong"
       ? "text-emerald-400"
       : vote.hook_verdict === "weak"
-      ? "text-red-400"
-      : "text-amber-400";
+        ? "text-red-400"
+        : "text-amber-400";
 
   return (
     <motion.div
@@ -1741,10 +1745,10 @@ function PersonaCard({ vote, index }: { vote: PersonaVote; index: number }) {
               vote.predicted_retention_pct >= 90
                 ? { background: "linear-gradient(to right,#ec4899,#a855f7)" }
                 : vote.predicted_retention_pct >= 71
-                ? { background: "#a855f7" }
-                : vote.predicted_retention_pct >= 41
-                ? { background: "#f59e0b" }
-                : { background: "#6b7280" }
+                  ? { background: "#a855f7" }
+                  : vote.predicted_retention_pct >= 41
+                    ? { background: "#f59e0b" }
+                    : { background: "#6b7280" }
             }
           />
         </div>

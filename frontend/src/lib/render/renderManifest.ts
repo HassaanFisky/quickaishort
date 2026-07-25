@@ -73,6 +73,8 @@ export interface RenderManifest {
   effects: RenderEffect[];
   keyframes: RenderKeyframe[];
   sourceHash?: string;
+  dubAudioUri?: string;
+  muteSourceAudio?: boolean;
 }
 
 export const EMPTY_RENDER_MANIFEST: RenderManifest = {

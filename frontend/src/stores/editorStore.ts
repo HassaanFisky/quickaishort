@@ -176,6 +176,8 @@ export interface EditorAction {
   | "ADD_VOICEOVER"         // { clip_id, start_sec?, duration_sec }
   | "ADD_SFX"               // { sfx_id, start_sec?, volume? }
   | "SET_TRANSITION"        // { clip_id, transition? }
+  | "DUB_VIDEO"             // { target_lang, mode?, voice_id? }
+  | "TRANSLATE_CAPTIONS"    // { target_lang }
   // ─── Phase 20: Chroma Key ───────────────────────────────────────────────
   | "ENABLE_CHROMA_KEY"        // { enabled: boolean }
   | "SET_CHROMA_KEY_COLOR"     // { color: string } — hex
@@ -476,6 +478,44 @@ const DEFAULT_EXPORT_SETTINGS: ExportSettings = {
   voiceoverEnabled: false,
 };
 
+export type DubJobState = {
+  jobId: string | null;
+  status:
+  | "idle"
+  | "queued"
+  | "translating"
+  | "synthesizing"
+  | "aligning"
+  | "subtitling"
+  | "ready"
+  | "degraded"
+  | "failed"
+  | "cancelled";
+  mode: "full_dub" | "voiceover_only" | "captions_only";
+  targetLang: string | null;
+  progress: number;
+  message: string;
+  dubAudioUri: string | null;
+  previewAudioUrl: string | null;
+  muteSourceAudio: boolean;
+  fallbackReason: string | null;
+  error: string | null;
+};
+
+export const DEFAULT_DUB_JOB: DubJobState = {
+  jobId: null,
+  status: "idle",
+  mode: "full_dub",
+  targetLang: null,
+  progress: 0,
+  message: "",
+  dubAudioUri: null,
+  previewAudioUrl: null,
+  muteSourceAudio: false,
+  fallbackReason: null,
+  error: null,
+};
+
 // Per-session isolation id generator. Guarded for SSR / older runtimes that
 // lack crypto.randomUUID (mirrors the addCanvasElement pattern below).
 const genRunId = (): string =>
@@ -554,6 +594,11 @@ interface EditorState {
   waveformPeaks: number[] | null;
   captionsEnabled: boolean;
   selectedClipId: string | null;
+
+  // Dub Video preview / export artifact binding
+  dubJob: DubJobState;
+  setDubJob: (patch: Partial<DubJobState> | DubJobState) => void;
+  clearDubJob: () => void;
 
   // Canvas Elements (Interactivity like PowerPoint/Canva)
   canvasElements: CanvasElement[];
@@ -775,6 +820,12 @@ export const useEditorStore = create<EditorState>()(
       waveformPeaks: null,
       captionsEnabled: true,
       selectedClipId: null,
+      dubJob: { ...DEFAULT_DUB_JOB },
+      setDubJob: (patch) =>
+        set((s) => ({
+          dubJob: { ...s.dubJob, ...patch },
+        })),
+      clearDubJob: () => set({ dubJob: { ...DEFAULT_DUB_JOB } }),
       canvasElements: [],
       exportSettings: { ...DEFAULT_EXPORT_SETTINGS },
 
@@ -1691,6 +1742,23 @@ export const useEditorStore = create<EditorState>()(
               break;
             case "SET_TRANSITION":
               break;
+            case "DUB_VIDEO":
+            case "TRANSLATE_CAPTIONS":
+              // Heavy path is owned by useDubVideo / DubPanel (not instant client mutate).
+              if (typeof window !== "undefined") {
+                window.dispatchEvent(
+                  new CustomEvent("qai:dub-video", {
+                    detail: {
+                      targetLang: action.payload?.target_lang ?? "es",
+                      mode:
+                        action.type === "TRANSLATE_CAPTIONS"
+                          ? "captions_only"
+                          : (action.payload?.mode ?? "full_dub"),
+                    },
+                  }),
+                );
+              }
+              break;
             // ─── Phase 20: Chroma Key ──────────────────────────────────────────
             case "ENABLE_CHROMA_KEY":
               store.setFrameFilter({ chromaKeyEnabled: action.payload.enabled as boolean });
@@ -2045,6 +2113,7 @@ export const useEditorStore = create<EditorState>()(
           tracks: createDefaultTracks(),
           timelineRevision: 0,
           compiledManifest: null,
+          dubJob: { ...DEFAULT_DUB_JOB },
         }),
 
       reset: () =>

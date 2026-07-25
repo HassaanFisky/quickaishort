@@ -42,6 +42,8 @@ export interface ExportRequestPayload {
   filter_name?: string;
   transition_enabled?: boolean;
   voiceover_enabled?: boolean;
+  mute_source_audio?: boolean;
+  dub_audio_uri?: string | null;
   render_manifest?: RenderManifest | null;
   /** EP-002 — optional Studio Kernel pin (legacy omits) */
   project_id?: string | null;

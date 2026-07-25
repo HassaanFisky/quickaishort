@@ -795,6 +795,24 @@ class SetTransitionAction(BaseModel):
     transition: _TRANSITION_TYPE = "fade"
 
 
+class DubVideoAction(BaseModel):
+    """Start Dub Video: translate speech, synthesize voice, sync subtitles."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["DUB_VIDEO"]
+    target_lang: Literal["es", "fr", "hi", "pt", "de", "ar", "ur"] = "es"
+    mode: Literal["full_dub", "voiceover_only", "captions_only"] = "full_dub"
+    voice_id: Optional[str] = Field(default=None, max_length=128)
+
+
+class TranslateCaptionsAction(BaseModel):
+    """Translate captions/transcript text only (no voice synthesis)."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["TRANSLATE_CAPTIONS"]
+    target_lang: Literal["es", "fr", "hi", "pt", "de", "ar", "ur"] = "es"
+
+
 AiEditorAction = Annotated[
     Union[
         AddCaptionAction,
@@ -875,6 +893,8 @@ AiEditorAction = Annotated[
         AddVoiceoverAction,
         AddSfxAction,
         SetTransitionAction,
+        DubVideoAction,
+        TranslateCaptionsAction,
     ],
     Field(discriminator="type"),
 ]

@@ -219,6 +219,8 @@ class RenderJob:
     filter_name: str = "None"
     transition_enabled: bool = False
     voiceover_enabled: bool = False
+    mute_source_audio: bool = False
+    dub_audio_uri: Optional[str] = None
     manifest_filter_complex: Optional[str] = None
     manifest_meta: Optional[dict] = None
 
@@ -411,6 +413,33 @@ class RenderService:
         if job.voiceover_enabled:
             # AI Voiceover Enhancement: Boost vocal frequencies (around 3kHz)
             audio = audio.filter("equalizer", f=3000, width_type="h", width=2000, g=5)
+
+        # Dub Video: mute/duck original + replace with synthesized track
+        if job.mute_source_audio:
+            audio = audio.filter("volume", 0.0)
+
+        if job.dub_audio_uri:
+            from services.storage_service import get_storage_service
+
+            dub_local = workdir / "dub_vo.mp3"
+            storage = get_storage_service()
+            downloaded = storage.download_gcs_file(job.dub_audio_uri, dub_local)
+            if not downloaded and job.dub_audio_uri.startswith("gridfs://"):
+                downloaded = storage.download_file(
+                    job.dub_audio_uri[len("gridfs://") :],
+                    dub_local,
+                    _bucket_name="uploads",
+                )
+            if downloaded and dub_local.exists():
+                vo = ffmpeg.input(str(dub_local)).audio
+                if job.mute_source_audio:
+                    audio = vo.filter("volume", 1.0)
+                else:
+                    a_ambient = audio.filter("volume", 0.15)
+                    a_voice = vo.filter("volume", 1.0)
+                    audio = ffmpeg.filter(
+                        [a_ambient, a_voice], "amix", inputs=2, duration="first"
+                    )
 
         # ---------------------------------------------------------
 
@@ -792,21 +821,28 @@ def render_video(production_plan: dict) -> str:
         # Overlay voiceover if provided
         if voiceover_path:
             local_vo = voiceover_path
-            if voiceover_path.startswith("gridfs://"):
+            if voiceover_path.startswith("gs://"):
+                local_vo = str(workdir / "voiceover.mp3")
+                get_storage_service().download_gcs_file(voiceover_path, Path(local_vo))
+            elif voiceover_path.startswith("gridfs://"):
                 remote_vo = voiceover_path[len("gridfs://") :]  # noqa: E203
                 local_vo = str(workdir / "voiceover.mp3")
                 get_storage_service().download_file(
                     remote_vo, Path(local_vo), _bucket_name="uploads"
                 )
 
+            mute_original = bool(production_plan.get("mute_source_audio", False))
             if os.path.exists(local_vo):
                 vo = ffmpeg.input(local_vo)
-                # Mix voiceover (higher volume) with ambient audio (lower volume)
-                a_ambient = a.filter("volume", 0.3)
-                a_voice = vo.filter("volume", 1.5)
-                a = ffmpeg.filter(
-                    [a_ambient, a_voice], "amix", inputs=2, duration="first"
-                )
+                if mute_original:
+                    a = vo.filter("volume", 1.0)
+                else:
+                    # Mix voiceover (higher volume) with ambient audio (lower volume)
+                    a_ambient = a.filter("volume", 0.3)
+                    a_voice = vo.filter("volume", 1.5)
+                    a = ffmpeg.filter(
+                        [a_ambient, a_voice], "amix", inputs=2, duration="first"
+                    )
 
         output_path = workdir / "final_output.mp4"
         # Use the longer final-concat timeout — number of clips scales the work.

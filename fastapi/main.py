@@ -448,6 +448,14 @@ from routers.studio_ingest_router import router as studio_ingest_router
 
 app.include_router(studio_ingest_router)
 
+from routers.dub_router import router as dub_router  # noqa: E402
+
+app.include_router(dub_router)
+
+from routers.dub_router import router as dub_router
+
+app.include_router(dub_router)
+
 
 def get_real_ip(request: Request) -> str:
     """
@@ -963,6 +971,14 @@ async def export_video(
         "emotional_peaks": emotional_peaks,
         "cinematic_style": cinematic_style,
         "canvas_overlays": [ov.model_dump() for ov in request.canvas_overlays],
+        "audio_boost": request.audio_boost,
+        "playback_speed": request.playback_speed,
+        "noise_suppression": request.noise_suppression,
+        "filter_name": request.filter_name,
+        "transition_enabled": request.transition_enabled,
+        "voiceover_enabled": request.voiceover_enabled,
+        "mute_source_audio": request.mute_source_audio,
+        "dub_audio_uri": request.dub_audio_uri,
         # Phase 59 / EP-006: bake IR — Kernel snapshot when project_id present
         "render_manifest": (bake_manifest.model_dump() if bake_manifest else None),
         "project_id": request.project_id,

@@ -223,3 +223,43 @@ async def handle_render_task(
         "result_status": result.get("status", "success"),
         "attempt": attempt,
     }
+
+
+@app.post("/tasks/dub")
+async def handle_dub_task(
+    payload: dict,
+    task_name: str | None = Header(default=None, alias="X-CloudTasks-TaskName"),
+    retry_count: str | None = Header(
+        default=None, alias="X-CloudTasks-TaskRetryCount"
+    ),
+) -> dict[str, object]:
+    """Process Dub Video synthesize/align stages (Cloud Tasks → private worker)."""
+
+    if os.environ.get("ENVIRONMENT", "").lower() == "production" and not task_name:
+        raise HTTPException(status_code=403, detail="Cloud Tasks request required.")
+
+    from models.dub import DubTaskPayload
+    from services.dub_service import process_dub_job
+
+    attempt = _attempt_number(retry_count)
+    try:
+        body = DubTaskPayload.model_validate(payload)
+        await _ensure_clients()
+        result = await process_dub_job(body.job_id)
+    except Exception as exc:
+        logger.exception(
+            "request_dub_attempt_failed attempt=%d task=%s",
+            attempt,
+            task_name or "local",
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "retryable_failure", "attempt": attempt},
+        ) from exc
+
+    return {
+        "status": "acknowledged",
+        "job_id": body.job_id,
+        "result_status": result.status,
+        "attempt": attempt,
+    }

@@ -130,3 +130,10 @@ class RenderManifest(BaseModel):
     sourceHash: Optional[str] = Field(
         default=None, description="Verification integrity hash of input tracks"
     )
+    # Dub Video bake hints (optional — export options remain primary)
+    dubAudioUri: Optional[str] = Field(
+        default=None, description="GCS URI of synthesized dub audio track"
+    )
+    muteSourceAudio: bool = Field(
+        default=False, description="Mute original speech when dub track is present"
+    )

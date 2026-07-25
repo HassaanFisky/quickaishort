@@ -56,7 +56,9 @@
 | Item | Gate |
 |------|------|
 | Live Gemini `generateContent` | **Founder top-up** |
+| `GOOGLE_TTS_API_KEY` on API + worker | **Founder** — required for full Dub Video voice |
 | Demo / Devpost / Google form | **Founder** |
+| Dub Video live smoke (translate+TTS+export) | After Gemini + TTS secrets |
 | ADR-006 native Gemini tool-loop depth | Optional EP |
 | Multiplayer | **Founder** (EP-007) |
 | Legacy Projects / GridFS delete | **Founder** |

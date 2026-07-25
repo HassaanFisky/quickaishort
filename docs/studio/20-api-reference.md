@@ -18,6 +18,19 @@ This is an evidence-based inventory, not OpenAPI export. Paths verified via rout
 | POST | `/api/ai-editor/command` | JWT |
 | POST | `/api/ai-editor/command/stream` | JWT |
 | GET | `/api/ai-editor/health` | verify |
+| GET | `/api/capabilities` | verify |
+
+## Studio Dub Video (ADR-014)
+
+| Method | Path | Auth | Notes |
+|--------|------|------|-------|
+| GET | `/api/studio/v1/dub/languages` | JWT | Curated target langs + default voices |
+| POST | `/api/studio/v1/dub` | JWT | Start job; credits fail-closed (40 full / 15 captions) |
+| GET | `/api/studio/v1/dub/{job_id}` | JWT | Status / artifacts (owner only) |
+| DELETE | `/api/studio/v1/dub/{job_id}` | JWT | Cancel in-flight job |
+| POST | `/tasks/dub` | Cloud Tasks OIDC | Private worker: synthesize + align |
+
+Export bake: `POST /api/process-video` accepts `mute_source_audio` + `dub_audio_uri` (from ready dub job).
 
 ## Media / YouTube / export
 

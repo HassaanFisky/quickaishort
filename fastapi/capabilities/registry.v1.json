@@ -2011,6 +2011,93 @@
       "param_schema": {
         "type": "object"
       }
+    },
+    {
+      "id": "DUB_VIDEO",
+      "version": 1,
+      "title": "Dub Video",
+      "description": "Translate speech, synthesize dubbed voice, and generate synced subtitles.",
+      "tags": [
+        "audio",
+        "captions",
+        "ai"
+      ],
+      "side_effects": [
+        "preview",
+        "network",
+        "bake"
+      ],
+      "exec_locus": "worker",
+      "cost_class": "bake",
+      "latency_class": "slow",
+      "idempotent": true,
+      "parallel_safe": false,
+      "requires_facets": [
+        "transcript"
+      ],
+      "orchestrator_emit": false,
+      "runtime_status": "wired",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object",
+        "properties": {
+          "target_lang": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "full_dub",
+              "voiceover_only",
+              "captions_only"
+            ]
+          },
+          "voice_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "target_lang"
+        ]
+      }
+    },
+    {
+      "id": "TRANSLATE_CAPTIONS",
+      "version": 1,
+      "title": "Translate Captions",
+      "description": "Translate transcript text into target-language captions without voice synthesis.",
+      "tags": [
+        "captions",
+        "ai"
+      ],
+      "side_effects": [
+        "preview",
+        "network"
+      ],
+      "exec_locus": "server",
+      "cost_class": "llm",
+      "latency_class": "slow",
+      "idempotent": true,
+      "parallel_safe": false,
+      "requires_facets": [
+        "transcript"
+      ],
+      "orchestrator_emit": false,
+      "runtime_status": "wired",
+      "compensating_hint": "undo_event",
+      "aliases": [],
+      "param_schema": {
+        "type": "object",
+        "properties": {
+          "target_lang": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "target_lang"
+        ]
+      }
     }
   ]
 }

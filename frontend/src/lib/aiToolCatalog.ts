@@ -336,11 +336,11 @@ export const AI_TOOL_CATALOG: AiTool[] = [
     buildActions: (s) =>
       s.lastCaptionId
         ? [
-            {
-              type: "UPDATE_CAPTION",
-              payload: { id: s.lastCaptionId, patch: { style: { bold: true } } },
-            },
-          ]
+          {
+            type: "UPDATE_CAPTION",
+            payload: { id: s.lastCaptionId, patch: { style: { bold: true } } },
+          },
+        ]
         : [],
   },
 
@@ -551,14 +551,14 @@ export const AI_TOOL_CATALOG: AiTool[] = [
     buildActions: (s) =>
       s.selectedElementId
         ? [
-            {
-              type: "UPDATE_ELEMENT",
-              payload: {
-                id: s.selectedElementId,
-                patch: { scale: Math.min(5, s.selectedElementScale + 0.2) },
-              },
+          {
+            type: "UPDATE_ELEMENT",
+            payload: {
+              id: s.selectedElementId,
+              patch: { scale: Math.min(5, s.selectedElementScale + 0.2) },
             },
-          ]
+          },
+        ]
         : [],
   },
   {
@@ -820,20 +820,20 @@ export const AI_TOOL_CATALOG: AiTool[] = [
     buildActions: () => [],
   },
   // ── Phase 4b-wave-2 timeline tools ───────────────────────────────────────────
-  { id: "timeline-forward-lane",   name: "Timeline · Forward lane select",   description: "Select clip on the next track forward.",               category: "Timeline", iconName: "ChevronRight",  keywords: ["forward","lane","select","track"],      execMode: "direct", buildActions: () => [] },
-  { id: "timeline-backward-lane",  name: "Timeline · Backward lane select",  description: "Select clip on the previous track.",                   category: "Timeline", iconName: "ChevronLeft",   keywords: ["backward","lane","select","track"],     execMode: "direct", buildActions: () => [] },
-  { id: "timeline-mark-in",        name: "Timeline · Mark In",               description: "Set the In point at the current playhead.",            category: "Timeline", iconName: "LogIn",         keywords: ["mark","in","range","start"],            execMode: "direct", buildActions: () => [] },
-  { id: "timeline-mark-out",       name: "Timeline · Mark Out",              description: "Set the Out point at the current playhead.",           category: "Timeline", iconName: "LogOut",        keywords: ["mark","out","range","end"],             execMode: "direct", buildActions: () => [] },
-  { id: "timeline-clip-range-mark",name: "Timeline · Mark clip range",       description: "Set In/Out to match a clip's boundaries.",             category: "Timeline", iconName: "Brackets",      keywords: ["clip","range","mark"],                  execMode: "direct", buildActions: () => [] },
-  { id: "timeline-range-mark",     name: "Timeline · Mark range",            description: "Set an arbitrary In/Out range.",                       category: "Timeline", iconName: "ChevronsLeftRight", keywords: ["range","mark","in","out"],            execMode: "direct", buildActions: () => [] },
-  { id: "timeline-extract",        name: "Timeline · Extract",               description: "Remove clip and close the gap (ripple).",              category: "Timeline", iconName: "Scissors",      keywords: ["extract","remove","ripple","delete"],   execMode: "direct", buildActions: () => [] },
-  { id: "timeline-lift",           name: "Timeline · Lift",                  description: "Remove clip leaving a gap (non-ripple).",              category: "Timeline", iconName: "ArrowUpFromLine",keywords: ["lift","remove","gap","delete"],         execMode: "direct", buildActions: () => [] },
-  { id: "timeline-insert-edit",    name: "Timeline · Insert edit",           description: "Insert a clip at the playhead, pushing others right.", category: "Timeline", iconName: "Plus",          keywords: ["insert","edit","push","clip"],          execMode: "direct", buildActions: () => [] },
-  { id: "timeline-overwrite-edit", name: "Timeline · Overwrite edit",        description: "Overwrite the timeline at the playhead position.",     category: "Timeline", iconName: "PenLine",       keywords: ["overwrite","edit","replace","clip"],    execMode: "direct", buildActions: () => [] },
-  { id: "timeline-swap-clip",      name: "Timeline · Swap clip",             description: "Swap positions of two clips.",                        category: "Timeline", iconName: "ArrowLeftRight", keywords: ["swap","clip","exchange","move"],        execMode: "direct", buildActions: () => [] },
-  { id: "timeline-scroll-hand",    name: "Timeline · Scroll hand",           description: "Pan the timeline view.",                              category: "Timeline", iconName: "Hand",          keywords: ["hand","scroll","pan","navigate"],       execMode: "direct", buildActions: () => [] },
-  { id: "timeline-zoom",           name: "Timeline · Zoom",                  description: "Zoom the timeline in or out.",                        category: "Timeline", iconName: "ZoomIn",        keywords: ["zoom","timeline","scale"],              execMode: "direct", buildActions: () => [] },
-  { id: "timeline-magnetic-snap",  name: "Timeline · Magnetic snap",         description: "Toggle magnetic snap alignment.",                     category: "Timeline", iconName: "Magnet",        keywords: ["snap","magnetic","align","toggle"],     execMode: "direct", buildActions: () => [] },
+  { id: "timeline-forward-lane", name: "Timeline · Forward lane select", description: "Select clip on the next track forward.", category: "Timeline", iconName: "ChevronRight", keywords: ["forward", "lane", "select", "track"], execMode: "direct", buildActions: () => [] },
+  { id: "timeline-backward-lane", name: "Timeline · Backward lane select", description: "Select clip on the previous track.", category: "Timeline", iconName: "ChevronLeft", keywords: ["backward", "lane", "select", "track"], execMode: "direct", buildActions: () => [] },
+  { id: "timeline-mark-in", name: "Timeline · Mark In", description: "Set the In point at the current playhead.", category: "Timeline", iconName: "LogIn", keywords: ["mark", "in", "range", "start"], execMode: "direct", buildActions: () => [] },
+  { id: "timeline-mark-out", name: "Timeline · Mark Out", description: "Set the Out point at the current playhead.", category: "Timeline", iconName: "LogOut", keywords: ["mark", "out", "range", "end"], execMode: "direct", buildActions: () => [] },
+  { id: "timeline-clip-range-mark", name: "Timeline · Mark clip range", description: "Set In/Out to match a clip's boundaries.", category: "Timeline", iconName: "Brackets", keywords: ["clip", "range", "mark"], execMode: "direct", buildActions: () => [] },
+  { id: "timeline-range-mark", name: "Timeline · Mark range", description: "Set an arbitrary In/Out range.", category: "Timeline", iconName: "ChevronsLeftRight", keywords: ["range", "mark", "in", "out"], execMode: "direct", buildActions: () => [] },
+  { id: "timeline-extract", name: "Timeline · Extract", description: "Remove clip and close the gap (ripple).", category: "Timeline", iconName: "Scissors", keywords: ["extract", "remove", "ripple", "delete"], execMode: "direct", buildActions: () => [] },
+  { id: "timeline-lift", name: "Timeline · Lift", description: "Remove clip leaving a gap (non-ripple).", category: "Timeline", iconName: "ArrowUpFromLine", keywords: ["lift", "remove", "gap", "delete"], execMode: "direct", buildActions: () => [] },
+  { id: "timeline-insert-edit", name: "Timeline · Insert edit", description: "Insert a clip at the playhead, pushing others right.", category: "Timeline", iconName: "Plus", keywords: ["insert", "edit", "push", "clip"], execMode: "direct", buildActions: () => [] },
+  { id: "timeline-overwrite-edit", name: "Timeline · Overwrite edit", description: "Overwrite the timeline at the playhead position.", category: "Timeline", iconName: "PenLine", keywords: ["overwrite", "edit", "replace", "clip"], execMode: "direct", buildActions: () => [] },
+  { id: "timeline-swap-clip", name: "Timeline · Swap clip", description: "Swap positions of two clips.", category: "Timeline", iconName: "ArrowLeftRight", keywords: ["swap", "clip", "exchange", "move"], execMode: "direct", buildActions: () => [] },
+  { id: "timeline-scroll-hand", name: "Timeline · Scroll hand", description: "Pan the timeline view.", category: "Timeline", iconName: "Hand", keywords: ["hand", "scroll", "pan", "navigate"], execMode: "direct", buildActions: () => [] },
+  { id: "timeline-zoom", name: "Timeline · Zoom", description: "Zoom the timeline in or out.", category: "Timeline", iconName: "ZoomIn", keywords: ["zoom", "timeline", "scale"], execMode: "direct", buildActions: () => [] },
+  { id: "timeline-magnetic-snap", name: "Timeline · Magnetic snap", description: "Toggle magnetic snap alignment.", category: "Timeline", iconName: "Magnet", keywords: ["snap", "magnetic", "align", "toggle"], execMode: "direct", buildActions: () => [] },
   // ── Export ───────────────────────────────────────────────────────────────────
   {
     id: "export-webcodecs-mp4",
@@ -1178,6 +1178,34 @@ export const AI_TOOL_CATALOG: AiTool[] = [
     buildActions: (s) => [{
       type: "ADD_VOICEOVER",
       payload: { clip_id: s.selectedClipId ?? "", start_sec: 0, duration_sec: 10 },
+    }],
+  },
+  {
+    id: "dub-video",
+    name: "Dub Video",
+    description: "Translate speech, generate dubbed voice, and sync subtitles.",
+    category: "Audio",
+    iconName: "Languages",
+    keywords: ["dub", "translate", "voice", "subtitle", "language", "tts"],
+    execMode: "direct",
+    isEnabled: () => true,
+    buildActions: () => [{
+      type: "DUB_VIDEO",
+      payload: { target_lang: "es", mode: "full_dub" },
+    }],
+  },
+  {
+    id: "translate-captions",
+    name: "Translate Captions",
+    description: "Translate transcript text into target-language subtitles only.",
+    category: "Captions",
+    iconName: "Languages",
+    keywords: ["translate", "captions", "subtitles", "language"],
+    execMode: "direct",
+    isEnabled: () => true,
+    buildActions: () => [{
+      type: "TRANSLATE_CAPTIONS",
+      payload: { target_lang: "es" },
     }],
   },
   {

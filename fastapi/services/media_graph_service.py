@@ -142,28 +142,44 @@ def derive_suggestions(graph: MediaGraph) -> list[SuggestionIntent]:
     captions_on = bool(
         captions and captions.status == "ready" and captions.data.get("enabled")
     )
-    if (
+    transcript_ready = bool(
         transcript
         and transcript.status == "ready"
-        and not captions_on
         and (transcript.data.get("chunk_count") or transcript.data.get("chunks"))
-    ):
+    )
+    if transcript_ready:
         chunk_count = transcript.data.get("chunk_count")
         if chunk_count is None:
             chunks = transcript.data.get("chunks") or []
             chunk_count = len(chunks)
+        if not captions_on:
+            out.append(
+                SuggestionIntent(
+                    suggestion_id="sug-add-captions",
+                    label="Add captions from transcript",
+                    capability_id="TOGGLE_CAPTIONS",
+                    intent_kind="capability",
+                    params={"enabled": True},
+                    evidence=SuggestionEvidence(
+                        facet_keys=["transcript"],
+                        summary=f"Transcript ready ({chunk_count} chunks); captions not enabled",
+                    ),
+                    confidence=0.85,
+                    interactive=True,
+                )
+            )
         out.append(
             SuggestionIntent(
-                suggestion_id="sug-add-captions",
-                label="Add captions from transcript",
-                capability_id="TOGGLE_CAPTIONS",
+                suggestion_id="sug-dub-video",
+                label="Dub Video — translate voice + subtitles",
+                capability_id="DUB_VIDEO",
                 intent_kind="capability",
-                params={"enabled": True},
+                params={"mode": "full_dub", "target_lang": "es"},
                 evidence=SuggestionEvidence(
                     facet_keys=["transcript"],
-                    summary=f"Transcript ready ({chunk_count} chunks); captions not enabled",
+                    summary=f"Transcript ready ({chunk_count} chunks) — can dub to another language",
                 ),
-                confidence=0.85,
+                confidence=0.8,
                 interactive=True,
             )
         )

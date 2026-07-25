@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-export type EditorTool = "split" | "trim" | "text" | "fx" | "transitions" | "voiceover";
+export type EditorTool = "split" | "trim" | "text" | "fx" | "transitions" | "voiceover" | "dub";
 
 interface UIState {
   isSidebarCollapsed: boolean;

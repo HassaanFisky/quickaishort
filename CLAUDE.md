@@ -514,11 +514,12 @@ Keep this section updated as the project evolves.
 
 Last updated: 2026-07-25
 
-CURRENT PHASE: PRODUCTION LIVE — Submission Sprint + Studio Kernel dual-run
+CURRENT PHASE: PRODUCTION LIVE — Submission Sprint + Studio Kernel dual-run + Dub Video code
 
 BLOCKED:
 
 - **Gemini prepayment credits depleted (429)** on project `99900313102` — founder must top up at https://ai.studio/projects before live demo / key rotate. Auth OK; generateContent fails.
+- **Dub Video live smoke** blocked on Gemini credits + `GOOGLE_TTS_API_KEY` on API/worker (code shipped; voice degrades to captions-only without key).
 - Demo video + Devpost + Google for Startups form (challenge checklist).
 
 NOT BLOCKED (verified 2026-07-25):
@@ -527,7 +528,8 @@ NOT BLOCKED (verified 2026-07-25):
 - Cloud Tasks `quickai-render` RUNNING; private renderer OIDC; worker revision unchanged `00088-sig`
 - Studio Kernel flags on Vercel + Cloud Run
 - EP-001…008 code shipped; AI Editor credits fail-closed; ADK sidebar = Coming Soon blur only
-- **M3 ingest FSM live**: sole editor ingest path `useIngestLifecycle` (identify→validate→acquire_meta→projectize→analyze→ready|failed); commits `9c6ca78` + deploy-unblocker `2f7e18f`
+- **M3 ingest FSM live**: sole editor ingest path `useIngestLifecycle`
+- **Dub Video (ADR-014) code complete**: `DUB_VIDEO` + `TRANSLATE_CAPTIONS` registry; `/api/studio/v1/dub`; `/tasks/dub`; mute+replace export; FE DubPanel; 8 unit tests + tsc + pnpm build green. Deploy + live smoke pending founder secrets.
 
 NEXT ACTIONS:
 
@@ -657,6 +659,7 @@ Read this file at the start of every session. When this file is updated, acknowl
 
 ## CHANGELOG
 
+- **2026-07-25:** **Dub Video (ADR-014)** implemented: staged translate (Gemini) → Google TTS → align → preview → export mute+replace; capabilities `DUB_VIDEO`/`TRANSLATE_CAPTIONS`; `/api/studio/v1/dub` + worker `/tasks/dub`; FE DubPanel + chat chip; EN-source only; TTS fail → explicit degraded captions. Verified: 8 dub tests, registry sync, `tsc --noEmit`, `pnpm build`. Live smoke blocked on Gemini credits + TTS key.
 - **2026-07-25:** M3 ingest FSM shipped to production (`9c6ca78`): sole Studio ingest path via `useIngestLifecycle`; FE Vercel + API `quickai-api-00109-57j`. Deploy unblocker (`2f7e18f`) committed missing `render_dispatch.py` + `google-cloud-tasks` so Cloud Build import smoke check passes. Worker left at `00088-sig` (no M3 worker surface). Gemini credits still depleted.
 - **2026-07-23:** Local orchestration/cost hardening (not deployed): Gemini-only Luna/visual/Terra profiles made explicit; Terra remains one strict JSON-repair attempt; rolling daily pool removed in favor of the fixed trusted-tier matrix; tenant cache moved to MD5 fingerprint + SHA-256 collision guard; Redis-backed Gemini 429 cooldown added; SDK quota retry fan-out disabled; ADK package and google-genai imports made request-lazy; all `sys.exit()` worker paths removed. Verified 167 backend tests. Production Gemini remains blocked by depleted prepayment credits.
 - **2026-07-22:** Cloud Tasks production cutover deployed: `quickai-render` durable queue; `quickai-worker` converted from public always-on RQ listener to private OIDC-only request renderer (`min=0`, request CPU, concurrency 1, max 3); API switched to named-task dispatch; Redis retained for status/runId/locks/dedupe. Live no-spend `/tasks/render` probes returned 200 and caught/fixed a latent non-manifest `time` shadowing crash; request-level DLQ fallback covers pre-render failures. API rev `00103-725`, renderer rev `00088-sig`; 163 backend tests pass.

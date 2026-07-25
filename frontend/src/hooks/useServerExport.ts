@@ -320,9 +320,9 @@ export function useServerExport({ userId }: UseServerExportArgs) {
         watermark_enabled: Boolean(options.watermarkEnabled),
         reframing: clip.reframing
           ? {
-              center: clip.reframing.center,
-              scale: clip.reframing.scale,
-            }
+            center: clip.reframing.center,
+            scale: clip.reframing.scale,
+          }
           : null,
         canvas_overlays,
         audio_boost: useEditorStore.getState().exportSettings.audioBoost,
@@ -331,12 +331,17 @@ export function useServerExport({ userId }: UseServerExportArgs) {
         filter_name: useEditorStore.getState().exportSettings.filter,
         transition_enabled: useEditorStore.getState().exportSettings.transitionEnabled,
         voiceover_enabled: useEditorStore.getState().exportSettings.voiceoverEnabled,
+        mute_source_audio: Boolean(
+          useEditorStore.getState().dubJob.muteSourceAudio &&
+          useEditorStore.getState().dubJob.dubAudioUri,
+        ),
+        dub_audio_uri: useEditorStore.getState().dubJob.dubAudioUri,
         render_manifest: manifest,
         ...(studioProjectId
           ? {
-              project_id: studioProjectId,
-              project_revision: studioProjectRevision,
-            }
+            project_id: studioProjectId,
+            project_revision: studioProjectRevision,
+          }
           : {}),
       };
 

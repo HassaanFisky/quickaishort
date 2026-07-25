@@ -322,3 +322,62 @@ async def dispatch_render_task(
         receipt.deduplicated,
     )
     return receipt
+
+
+def _enqueue_dub_cloud_task(payload: "DubTaskPayload") -> RenderDispatchReceipt:
+    from models.dub import DubTaskPayload as _DubTaskPayload
+
+    assert isinstance(payload, _DubTaskPayload)
+    config = CloudTasksConfig.from_env()
+    base = os.environ.get("CLOUD_TASKS_RENDER_URL", "").rstrip("/")
+    dub_url = f"{base}/tasks/dub"
+    client = _get_cloud_tasks_client()
+    parent = client.queue_path(config.project_id, config.location, config.queue)
+    task_name = client.task_path(
+        config.project_id,
+        config.location,
+        config.queue,
+        _task_id(f"dub-{payload.job_id}"),
+    )
+    deadline = duration_pb2.Duration(seconds=config.dispatch_deadline_seconds)
+    task = tasks_v2.Task(
+        name=task_name,
+        http_request=tasks_v2.HttpRequest(
+            http_method=tasks_v2.HttpMethod.POST,
+            url=dub_url,
+            headers={"Content-Type": "application/json"},
+            oidc_token=tasks_v2.OidcToken(
+                service_account_email=config.service_account_email,
+                audience=config.oidc_audience,
+            ),
+            body=payload.model_dump_json().encode("utf-8"),
+        ),
+        dispatch_deadline=deadline,
+    )
+    try:
+        created = client.create_task(
+            request=tasks_v2.CreateTaskRequest(parent=parent, task=task)
+        )
+        return RenderDispatchReceipt(
+            mode="cloud_tasks",
+            task_name=created.name or task_name,
+        )
+    except AlreadyExists:
+        return RenderDispatchReceipt(
+            mode="cloud_tasks",
+            task_name=task_name,
+            deduplicated=True,
+        )
+
+
+async def dispatch_dub_task(payload: "DubTaskPayload") -> RenderDispatchReceipt:
+    """Enqueue Dub Video synthesize/align work on the private request renderer."""
+
+    receipt = await asyncio.to_thread(_enqueue_dub_cloud_task, payload)
+    logger.info(
+        "dub_dispatched job_id=%s mode=%s deduplicated=%s",
+        payload.job_id,
+        receipt.mode,
+        receipt.deduplicated,
+    )
+    return receipt

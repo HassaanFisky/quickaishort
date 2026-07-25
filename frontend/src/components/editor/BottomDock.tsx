@@ -6,13 +6,12 @@ import { useUIStore, type EditorTool } from "@/stores/uiStore";
 import { Button } from "@/components/ui/button";
 import type { Clip } from "@/types/pipeline";
 import {
-  Play,
-  Pause,
   Square,
   Scissors,
   Type,
   Wand2,
   Mic,
+  Languages,
   Layout,
   SquareSplitHorizontal,
   GripVertical,
@@ -254,7 +253,6 @@ export default function BottomDock() {
     setSuggestions,
     duration,
     currentTime,
-    isPlaying,
     isProcessing,
     setIsPlaying,
     setCurrentTime,
@@ -563,49 +561,56 @@ export default function BottomDock() {
     action: () => void;
     tooltip: string;
   }> = [
-    {
-      icon: SquareSplitHorizontal,
-      label: "Split",
-      toolId: "split",
-      action: handleSplit,
-      tooltip: "Split — S — Cut clip at playhead",
-    },
-    {
-      icon: Scissors,
-      label: "Trim",
-      toolId: "trim",
-      action: () => toast.info("Drag clip edges on the timeline to trim."),
-      tooltip: "Trim — Drag clip edges to resize",
-    },
-    {
-      icon: Type,
-      label: "Text",
-      toolId: "text",
-      action: handleAddText,
-      tooltip: "Text — T — Add text overlay to canvas",
-    },
-    {
-      icon: Wand2,
-      label: "FX",
-      toolId: "fx",
-      action: handleFX,
-      tooltip: `FX — Visual filter (current: ${exportSettings.filter})`,
-    },
-    {
-      icon: Layout,
-      label: "Transitions",
-      toolId: "transitions",
-      action: handleTransitions,
-      tooltip: "Transitions — Toggle crossfade between clips",
-    },
-    {
-      icon: Mic,
-      label: "Voiceover",
-      toolId: "voiceover",
-      action: handleVoiceover,
-      tooltip: "Voiceover — Toggle AI voice enhancement",
-    },
-  ];
+      {
+        icon: SquareSplitHorizontal,
+        label: "Split",
+        toolId: "split",
+        action: handleSplit,
+        tooltip: "Split — S — Cut clip at playhead",
+      },
+      {
+        icon: Scissors,
+        label: "Trim",
+        toolId: "trim",
+        action: () => toast.info("Drag clip edges on the timeline to trim."),
+        tooltip: "Trim — Drag clip edges to resize",
+      },
+      {
+        icon: Type,
+        label: "Text",
+        toolId: "text",
+        action: handleAddText,
+        tooltip: "Text — T — Add text overlay to canvas",
+      },
+      {
+        icon: Wand2,
+        label: "FX",
+        toolId: "fx",
+        action: handleFX,
+        tooltip: `FX — Visual filter (current: ${exportSettings.filter})`,
+      },
+      {
+        icon: Layout,
+        label: "Transitions",
+        toolId: "transitions",
+        action: handleTransitions,
+        tooltip: "Transitions — Toggle crossfade between clips",
+      },
+      {
+        icon: Mic,
+        label: "Voiceover",
+        toolId: "voiceover",
+        action: handleVoiceover,
+        tooltip: "Vocal EQ — Toggle vocal frequency boost (not Dub Video)",
+      },
+      {
+        icon: Languages,
+        label: "Dub",
+        toolId: "dub",
+        action: () => setActiveTool("dub"),
+        tooltip: "Dub Video — Translate voice + subtitles",
+      },
+    ];
 
   return (
     <div
@@ -642,22 +647,7 @@ export default function BottomDock() {
           >
             <Redo2 className={cn("redo-icon", isMobile ? "w-5 h-5" : "w-4 h-4")} aria-hidden="true" />
           </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label={isPlaying ? "Pause" : "Play"}
-            className={cn(
-              "text-foreground/60 hover:text-primary transition-colors touch-manipulation",
-              isMobile ? "h-16 w-16" : "w-8 h-8",
-            )}
-            onClick={() => setIsPlaying(!isPlaying)}
-          >
-            {isPlaying ? (
-              <Pause className={cn("fill-current", isMobile ? "w-7 h-7" : "w-4 h-4")} aria-hidden="true" />
-            ) : (
-              <Play className={cn("fill-current", isMobile ? "w-7 h-7" : "w-4 h-4")} aria-hidden="true" />
-            )}
-          </Button>
+          {/* Play/Pause lives on VideoCanvas transport + Space/K shortcuts — no dock duplicate. */}
           <Button
             variant="ghost"
             size="icon"
@@ -705,63 +695,63 @@ export default function BottomDock() {
             </DropdownMenuContent>
           </DropdownMenu>
         ) : (
-        <div className="flex items-center gap-5 flex-1 select-none">
-          {tools.map(({ icon: Icon, label, toolId, action, tooltip }) => {
-            const isActive = activeTool === toolId;
-            return (
-              <button
-                key={label}
-                onClick={() => { action(); setActiveTool(toolId); }}
-                title={tooltip}
-                aria-label={tooltip}
-                aria-pressed={isActive}
-                className={cn(
-                  "flex items-center gap-2 group cursor-pointer focus:outline-none transition-all duration-200 touch-manipulation",
-                  isMobile && "py-2",
-                  isActive && "relative"
-                )}
-              >
-                {isActive && (
-                  <span className="absolute -inset-x-2 -inset-y-1 rounded-lg bg-primary/10 border border-primary/20 pointer-events-none" />
-                )}
-                <Icon
+          <div className="flex items-center gap-5 flex-1 select-none">
+            {tools.map(({ icon: Icon, label, toolId, action, tooltip }) => {
+              const isActive = activeTool === toolId;
+              return (
+                <button
+                  key={label}
+                  onClick={() => { action(); setActiveTool(toolId); }}
+                  title={tooltip}
+                  aria-label={tooltip}
+                  aria-pressed={isActive}
                   className={cn(
-                    "transition-colors relative",
-                    isMobile ? "w-5 h-5" : "w-4 h-4",
-                    isActive ? "text-primary" : "text-foreground/40 group-hover:text-primary"
-                  )}
-                  aria-hidden={true}
-                />
-                <span
-                  className={cn(
-                    "font-black uppercase tracking-widest transition-colors relative",
-                    isMobile ? "text-[11px]" : "text-[10px]",
-                    isActive ? "text-primary" : "text-foreground/40 group-hover:text-primary"
+                    "flex items-center gap-2 group cursor-pointer focus:outline-none transition-all duration-200 touch-manipulation",
+                    isMobile && "py-2",
+                    isActive && "relative"
                   )}
                 >
-                  {label}
+                  {isActive && (
+                    <span className="absolute -inset-x-2 -inset-y-1 rounded-lg bg-primary/10 border border-primary/20 pointer-events-none" />
+                  )}
+                  <Icon
+                    className={cn(
+                      "transition-colors relative",
+                      isMobile ? "w-5 h-5" : "w-4 h-4",
+                      isActive ? "text-primary" : "text-foreground/40 group-hover:text-primary"
+                    )}
+                    aria-hidden={true}
+                  />
+                  <span
+                    className={cn(
+                      "font-black uppercase tracking-widest transition-colors relative",
+                      isMobile ? "text-[11px]" : "text-[10px]",
+                      isActive ? "text-primary" : "text-foreground/40 group-hover:text-primary"
+                    )}
+                  >
+                    {label}
+                  </span>
+                </button>
+              );
+            })}
+            {selectedClipId && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  deleteClip(selectedClipId);
+                  toast.success("Clip deleted");
+                }}
+                title="Delete — Del/Backspace — Remove selected clip"
+                className="flex items-center gap-2 group cursor-pointer focus:outline-none h-auto py-0 px-0"
+              >
+                <Trash2 className="w-4 h-4 text-red-400/40 group-hover:text-red-400 transition-colors" />
+                <span className="text-[10px] font-black text-red-400/40 uppercase tracking-widest group-hover:text-red-400 transition-colors">
+                  Delete
                 </span>
-              </button>
-            );
-          })}
-          {selectedClipId && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                deleteClip(selectedClipId);
-                toast.success("Clip deleted");
-              }}
-              title="Delete — Del/Backspace — Remove selected clip"
-              className="flex items-center gap-2 group cursor-pointer focus:outline-none h-auto py-0 px-0"
-            >
-              <Trash2 className="w-4 h-4 text-red-400/40 group-hover:text-red-400 transition-colors" />
-              <span className="text-[10px] font-black text-red-400/40 uppercase tracking-widest group-hover:text-red-400 transition-colors">
-                Delete
-              </span>
-            </Button>
-          )}
-        </div>
+              </Button>
+            )}
+          </div>
         )}
         {/* Detect Scenes */}
         <button
@@ -856,167 +846,167 @@ export default function BottomDock() {
             Video
           </span>
           <div style={{ width: `${timelineZoom * 100}%`, minWidth: "100%", position: "relative" }}>
-          <div
-            id="video-track-area"
-            ref={videoTrackRef}
-            onMouseDown={handleTrackMouseDown}
-            onMouseMove={(e) => {
-              if (!videoTrackRef.current || duration === 0) return;
-              const rect = videoTrackRef.current.getBoundingClientRect();
-              const x = e.clientX - rect.left;
-              setHoverX(x);
-              setHoverTime((x / rect.width) * duration);
-            }}
-            onMouseLeave={() => setHoverTime(null)}
-            className={cn(
-              "w-full rounded-lg bg-foreground/5 border border-foreground/5 relative overflow-visible cursor-crosshair",
-              isMobile ? "h-12" : "h-8",
-            )}
-          >
-            {isProcessing ? (
-              /* Pulsing skeleton while pipeline is running */
-              <div className="absolute inset-0 flex items-end gap-[2px] px-2 py-1 pointer-events-none">
-                {Array.from({ length: 24 }).map((_, i) => (
+            <div
+              id="video-track-area"
+              ref={videoTrackRef}
+              onMouseDown={handleTrackMouseDown}
+              onMouseMove={(e) => {
+                if (!videoTrackRef.current || duration === 0) return;
+                const rect = videoTrackRef.current.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                setHoverX(x);
+                setHoverTime((x / rect.width) * duration);
+              }}
+              onMouseLeave={() => setHoverTime(null)}
+              className={cn(
+                "w-full rounded-lg bg-foreground/5 border border-foreground/5 relative overflow-visible cursor-crosshair",
+                isMobile ? "h-12" : "h-8",
+              )}
+            >
+              {isProcessing ? (
+                /* Pulsing skeleton while pipeline is running */
+                <div className="absolute inset-0 flex items-end gap-[2px] px-2 py-1 pointer-events-none">
+                  {Array.from({ length: 24 }).map((_, i) => (
+                    <div
+                      key={i}
+                      className="flex-1 rounded-sm bg-primary/25 animate-pulse"
+                      style={{
+                        height: `${20 + ((i * 13 + 7) % 55)}%`,
+                        animationDelay: `${(i * 60) % 800}ms`,
+                        animationDuration: "1.2s",
+                      }}
+                    />
+                  ))}
+                </div>
+              ) : duration > 0 && suggestions.length > 0 ? (
+                suggestions.map((clip) => (
+                  <TimelineClip
+                    key={clip.id}
+                    clip={clip}
+                    duration={duration}
+                    isSelected={clip.id === selectedClipId}
+                    isMobile={isMobile}
+                    onSelect={() => selectClip(clip.id)}
+                    onContextMenu={handleClipContextMenu}
+                    onOpenInspector={handleOpenInspector}
+                  />
+                ))
+              ) : (
+                <div className="flex items-center justify-center h-full pointer-events-none">
+                  <span className="text-[8px] text-muted-foreground/30 uppercase tracking-widest">
+                    {duration === 0 ? "No video" : "No clips"}
+                  </span>
+                </div>
+              )}
+
+              {/* AI hook markers — clips with viralAnalysis.score > 70 */}
+              {suggestions
+                .filter((c) => (c.viralAnalysis?.score ?? 0) > 70)
+                .map((clip) => (
                   <div
-                    key={i}
-                    className="flex-1 rounded-sm bg-primary/25 animate-pulse"
-                    style={{
-                      height: `${20 + ((i * 13 + 7) % 55)}%`,
-                      animationDelay: `${(i * 60) % 800}ms`,
-                      animationDuration: "1.2s",
-                    }}
+                    key={`hook-${clip.id}`}
+                    className="absolute top-0 w-0.5 bg-emerald-400/70 z-20 pointer-events-none"
+                    style={{ left: `${(clip.start / duration) * 100}%`, height: "100%" }}
+                    title={`Hook — Score: ${clip.viralAnalysis?.score}`}
                   />
                 ))}
-              </div>
-            ) : duration > 0 && suggestions.length > 0 ? (
-              suggestions.map((clip) => (
-                <TimelineClip
-                  key={clip.id}
-                  clip={clip}
-                  duration={duration}
-                  isSelected={clip.id === selectedClipId}
-                  isMobile={isMobile}
-                  onSelect={() => selectClip(clip.id)}
-                  onContextMenu={handleClipContextMenu}
-                  onOpenInspector={handleOpenInspector}
-                />
-              ))
-            ) : (
-              <div className="flex items-center justify-center h-full pointer-events-none">
-                <span className="text-[8px] text-muted-foreground/30 uppercase tracking-widest">
-                  {duration === 0 ? "No video" : "No clips"}
-                </span>
-              </div>
-            )}
 
-            {/* AI hook markers — clips with viralAnalysis.score > 70 */}
-            {suggestions
-              .filter((c) => (c.viralAnalysis?.score ?? 0) > 70)
-              .map((clip) => (
+              {/* Silence markers */}
+              {silenceSegments.map((seg, i) => (
                 <div
-                  key={`hook-${clip.id}`}
-                  className="absolute top-0 w-0.5 bg-emerald-400/70 z-20 pointer-events-none"
-                  style={{ left: `${(clip.start / duration) * 100}%`, height: "100%" }}
-                  title={`Hook — Score: ${clip.viralAnalysis?.score}`}
+                  key={`silence-${i}`}
+                  className="absolute top-0 bottom-0 bg-red-500/15 border-x border-red-500/30 pointer-events-none z-5"
+                  style={{
+                    left: `${(seg.start / duration) * 100}%`,
+                    width: `${((seg.end - seg.start) / duration) * 100}%`,
+                  }}
+                  title={`Silence: ${seg.start.toFixed(1)}s – ${seg.end.toFixed(1)}s`}
                 />
               ))}
 
-            {/* Silence markers */}
-            {silenceSegments.map((seg, i) => (
-              <div
-                key={`silence-${i}`}
-                className="absolute top-0 bottom-0 bg-red-500/15 border-x border-red-500/30 pointer-events-none z-5"
-                style={{
-                  left: `${(seg.start / duration) * 100}%`,
-                  width: `${((seg.end - seg.start) / duration) * 100}%`,
-                }}
-                title={`Silence: ${seg.start.toFixed(1)}s – ${seg.end.toFixed(1)}s`}
-              />
-            ))}
-
-            {/* Playhead */}
-            {duration > 0 && (
-              <div
-                className="absolute top-[-30px] bottom-[-10px] w-0.5 z-30 pointer-events-none"
-                style={{ left: `${playheadPct}%` }}
-              >
-                {/* Glow line */}
-                <div className="absolute inset-0 w-px bg-primary shadow-[0_0_8px_rgba(168,85,247,0.5)]" />
-                {/* Head triangle / thumb grip */}
-                {isMobile ? (
-                  <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 w-5 h-5 rounded-full bg-primary border-2 border-white/80 shadow-[0_0_8px_rgba(168,85,247,0.7)]" />
-                ) : (
-                  <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[5px] border-r-[5px] border-t-[6px] border-l-transparent border-r-transparent border-t-primary drop-shadow-[0_0_4px_rgba(168,85,247,0.6)]" />
-                )}
-              </div>
-            )}
-
-            {/* In/Out range highlight */}
-            {markIn !== null && markOut !== null && duration > 0 && markOut > markIn && (
-              <div
-                className="absolute top-0 bottom-0 bg-purple-500/15 border-x border-purple-500/40 pointer-events-none z-10"
-                style={{
-                  left: `${(markIn / duration) * 100}%`,
-                  width: `${((markOut - markIn) / duration) * 100}%`,
-                }}
-              />
-            )}
-            {/* Mark-in line */}
-            {markIn !== null && duration > 0 && (
-              <div
-                className="absolute top-0 bottom-0 w-0.5 bg-purple-400 z-20 pointer-events-none"
-                style={{ left: `${(markIn / duration) * 100}%` }}
-                title={`Mark In: ${formatTime(markIn)}`}
-              >
-                <div className="absolute top-0 left-0 w-2 h-2 border-t-2 border-l-2 border-purple-400" />
-              </div>
-            )}
-            {/* Mark-out line */}
-            {markOut !== null && duration > 0 && (
-              <div
-                className="absolute top-0 bottom-0 w-0.5 bg-purple-400 z-20 pointer-events-none"
-                style={{ left: `${(markOut / duration) * 100}%` }}
-                title={`Mark Out: ${formatTime(markOut)}`}
-              >
-                <div className="absolute top-0 right-0 w-2 h-2 border-t-2 border-r-2 border-purple-400" />
-              </div>
-            )}
-
-            {/* Timeline markers — colored diamonds, click to seek */}
-            {duration > 0 && timelineMarkers.map((marker) => (
-              <button
-                key={marker.id}
-                className="absolute top-0 z-25 -translate-x-1/2 flex flex-col items-center pointer-events-auto focus:outline-none"
-                style={{ left: `${(marker.time / duration) * 100}%` }}
-                title={marker.label ? `${marker.label} — ${formatTime(marker.time)}` : formatTime(marker.time)}
-                aria-label={marker.label ? `Seek to ${marker.label} at ${formatTime(marker.time)}` : `Seek to ${formatTime(marker.time)}`}
-                onClick={(e) => { e.stopPropagation(); setPendingSeek(marker.time); }}
-              >
+              {/* Playhead */}
+              {duration > 0 && (
                 <div
-                  className="w-2.5 h-2.5 rotate-45 border border-current"
-                  style={{ color: marker.color === "purple" ? "#a855f7" : marker.color === "red" ? "#ef4444" : marker.color === "green" ? "#22c55e" : marker.color === "blue" ? "#3b82f6" : "#f59e0b" }}
+                  className="absolute top-[-30px] bottom-[-10px] w-0.5 z-30 pointer-events-none"
+                  style={{ left: `${playheadPct}%` }}
+                >
+                  {/* Glow line */}
+                  <div className="absolute inset-0 w-px bg-primary shadow-[0_0_8px_rgba(168,85,247,0.5)]" />
+                  {/* Head triangle / thumb grip */}
+                  {isMobile ? (
+                    <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 w-5 h-5 rounded-full bg-primary border-2 border-white/80 shadow-[0_0_8px_rgba(168,85,247,0.7)]" />
+                  ) : (
+                    <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[5px] border-r-[5px] border-t-[6px] border-l-transparent border-r-transparent border-t-primary drop-shadow-[0_0_4px_rgba(168,85,247,0.6)]" />
+                  )}
+                </div>
+              )}
+
+              {/* In/Out range highlight */}
+              {markIn !== null && markOut !== null && duration > 0 && markOut > markIn && (
+                <div
+                  className="absolute top-0 bottom-0 bg-purple-500/15 border-x border-purple-500/40 pointer-events-none z-10"
+                  style={{
+                    left: `${(markIn / duration) * 100}%`,
+                    width: `${((markOut - markIn) / duration) * 100}%`,
+                  }}
                 />
-              </button>
-            ))}
+              )}
+              {/* Mark-in line */}
+              {markIn !== null && duration > 0 && (
+                <div
+                  className="absolute top-0 bottom-0 w-0.5 bg-purple-400 z-20 pointer-events-none"
+                  style={{ left: `${(markIn / duration) * 100}%` }}
+                  title={`Mark In: ${formatTime(markIn)}`}
+                >
+                  <div className="absolute top-0 left-0 w-2 h-2 border-t-2 border-l-2 border-purple-400" />
+                </div>
+              )}
+              {/* Mark-out line */}
+              {markOut !== null && duration > 0 && (
+                <div
+                  className="absolute top-0 bottom-0 w-0.5 bg-purple-400 z-20 pointer-events-none"
+                  style={{ left: `${(markOut / duration) * 100}%` }}
+                  title={`Mark Out: ${formatTime(markOut)}`}
+                >
+                  <div className="absolute top-0 right-0 w-2 h-2 border-t-2 border-r-2 border-purple-400" />
+                </div>
+              )}
 
-            {/* Magnetic snap line */}
-            {snapLine !== null && duration > 0 && (
-              <div
-                className="absolute top-[-30px] bottom-[-10px] w-px bg-yellow-400/80 z-30 pointer-events-none shadow-[0_0_6px_rgba(250,204,21,0.5)]"
-                style={{ left: `${(snapLine / duration) * 100}%` }}
-              />
-            )}
+              {/* Timeline markers — colored diamonds, click to seek */}
+              {duration > 0 && timelineMarkers.map((marker) => (
+                <button
+                  key={marker.id}
+                  className="absolute top-0 z-25 -translate-x-1/2 flex flex-col items-center pointer-events-auto focus:outline-none"
+                  style={{ left: `${(marker.time / duration) * 100}%` }}
+                  title={marker.label ? `${marker.label} — ${formatTime(marker.time)}` : formatTime(marker.time)}
+                  aria-label={marker.label ? `Seek to ${marker.label} at ${formatTime(marker.time)}` : `Seek to ${formatTime(marker.time)}`}
+                  onClick={(e) => { e.stopPropagation(); setPendingSeek(marker.time); }}
+                >
+                  <div
+                    className="w-2.5 h-2.5 rotate-45 border border-current"
+                    style={{ color: marker.color === "purple" ? "#a855f7" : marker.color === "red" ? "#ef4444" : marker.color === "green" ? "#22c55e" : marker.color === "blue" ? "#3b82f6" : "#f59e0b" }}
+                  />
+                </button>
+              ))}
 
-            {/* Hover time indicator */}
-            {hoverTime !== null && duration > 0 && (
-              <div
-                className="absolute -top-7 z-40 px-1.5 py-0.5 rounded bg-foreground/90 text-background text-[9px] font-black pointer-events-none -translate-x-1/2 whitespace-nowrap"
-                style={{ left: hoverX }}
-              >
-                {formatTime(hoverTime)}
-              </div>
-            )}
-          </div>
+              {/* Magnetic snap line */}
+              {snapLine !== null && duration > 0 && (
+                <div
+                  className="absolute top-[-30px] bottom-[-10px] w-px bg-yellow-400/80 z-30 pointer-events-none shadow-[0_0_6px_rgba(250,204,21,0.5)]"
+                  style={{ left: `${(snapLine / duration) * 100}%` }}
+                />
+              )}
+
+              {/* Hover time indicator */}
+              {hoverTime !== null && duration > 0 && (
+                <div
+                  className="absolute -top-7 z-40 px-1.5 py-0.5 rounded bg-foreground/90 text-background text-[9px] font-black pointer-events-none -translate-x-1/2 whitespace-nowrap"
+                  style={{ left: hoverX }}
+                >
+                  {formatTime(hoverTime)}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 

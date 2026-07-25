@@ -61,6 +61,7 @@ function extractYtVideoId(url: string): string | null {
 
 export default function VideoCanvas() {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const dubAudioRef = useRef<HTMLAudioElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const gainNodeRef = useRef<GainNode | null>(null);
@@ -95,7 +96,56 @@ export default function VideoCanvas() {
     setVideoMetadata,
     compiledManifest,
     timelineRevision,
+    dubJob,
   } = useEditorStore();
+
+  const dubPreviewUrl =
+    dubJob.previewAudioUrl ||
+    (dubJob.muteSourceAudio && dubJob.dubAudioUri ? dubJob.dubAudioUri : null);
+  const dubActive =
+    Boolean(dubPreviewUrl) &&
+    (dubJob.status === "ready" || dubJob.status === "degraded") &&
+    dubJob.muteSourceAudio;
+
+  // Dub Video preview: mute original video audio and play synthesized track in sync
+  useEffect(() => {
+    const video = videoRef.current;
+    const dub = dubAudioRef.current;
+    if (!video) return;
+    if (dubActive && dubPreviewUrl && dub) {
+      video.muted = true;
+      if (dub.src !== dubPreviewUrl) {
+        dub.src = dubPreviewUrl;
+        dub.load();
+      }
+      const sync = () => {
+        if (Math.abs(dub.currentTime - video.currentTime) > 0.35) {
+          dub.currentTime = video.currentTime;
+        }
+      };
+      const onPlay = () => {
+        sync();
+        void dub.play().catch(() => { });
+      };
+      const onPause = () => {
+        dub.pause();
+      };
+      video.addEventListener("play", onPlay);
+      video.addEventListener("pause", onPause);
+      video.addEventListener("seeked", sync);
+      video.addEventListener("timeupdate", sync);
+      if (!video.paused) onPlay();
+      return () => {
+        video.removeEventListener("play", onPlay);
+        video.removeEventListener("pause", onPause);
+        video.removeEventListener("seeked", sync);
+        video.removeEventListener("timeupdate", sync);
+        dub.pause();
+        video.muted = isMuted;
+      };
+    }
+    video.muted = isMuted;
+  }, [dubActive, dubPreviewUrl, isMuted]);
 
   const { isReady, reframingData, detect } = useFaceTracker();
   const { executionOverlay, executionOverlayLabel } = useAIPanel();
@@ -290,7 +340,7 @@ export default function VideoCanvas() {
   useEffect(() => {
     if (!videoRef.current) return;
     if (isPlaying) {
-      videoRef.current.play().catch(() => {});
+      videoRef.current.play().catch(() => { });
       audioContextRef.current?.state === "suspended" && audioContextRef.current.resume();
     } else {
       videoRef.current.pause();
@@ -320,9 +370,9 @@ export default function VideoCanvas() {
     const el = containerRef.current;
     if (!el) return;
     if (!document.fullscreenElement) {
-      el.requestFullscreen?.().catch(() => {});
+      el.requestFullscreen?.().catch(() => { });
     } else {
-      document.exitFullscreen?.().catch(() => {});
+      document.exitFullscreen?.().catch(() => { });
     }
   }, []);
 
@@ -478,6 +528,7 @@ export default function VideoCanvas() {
               </div>
             ) : (
               <>
+                <audio ref={dubAudioRef} preload="auto" className="hidden" />
                 <video
                   ref={videoRef}
                   src={

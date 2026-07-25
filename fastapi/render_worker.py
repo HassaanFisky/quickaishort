@@ -263,6 +263,10 @@ def _build_job(
         filter_name=str(options.get("filter_name", "None")),
         transition_enabled=bool(options.get("transition_enabled", False)),
         voiceover_enabled=bool(options.get("voiceover_enabled", False)),
+        mute_source_audio=bool(options.get("mute_source_audio", False)),
+        dub_audio_uri=(
+            str(options["dub_audio_uri"]) if options.get("dub_audio_uri") else None
+        ),
         manifest_filter_complex=options.get("_manifest_filter_complex"),
         manifest_meta=options.get("render_manifest"),
     )

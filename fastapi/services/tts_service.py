@@ -20,28 +20,42 @@ class TTSService:
         self.eleven_api_key = os.getenv("ELEVENLABS_API_KEY")
         self.storage = get_storage_service()
 
-    def _get_cache_key(self, text: str, voice_id: str, provider: Provider) -> str:
-        hash_key = hashlib.md5(f"{provider}:{voice_id}:{text}".encode()).hexdigest()
+    def _get_cache_key(
+        self, text: str, voice_id: str, provider: Provider, speaking_rate: float
+    ) -> str:
+        rate_key = f"{speaking_rate:.2f}"
+        hash_key = hashlib.md5(
+            f"{provider}:{voice_id}:{rate_key}:{text}".encode()
+        ).hexdigest()
         return f"tts_cache/{hash_key}.mp3"
+
+    def _gs_uri(self, remote_path: str) -> str:
+        from services.db import get_gcs_bucket
+
+        try:
+            bucket = get_gcs_bucket()
+            return f"gs://{bucket.name}/{remote_path}"
+        except Exception:
+            return f"gs://{remote_path}"
 
     async def generate(
         self,
         text: str,
         voice_id: str = "en-US-Neural2-D",
         provider: Provider = "google",
+        speaking_rate: float = 1.0,
     ) -> Optional[str]:
-        """Generates audio from text. Returns gridfs:// URI."""
+        """Generate speech audio. Returns gs:// URI (GCS primary, ADR-002)."""
         if not text:
             return None
 
-        remote_path = self._get_cache_key(text, voice_id, provider)
+        rate = max(0.25, min(4.0, float(speaking_rate or 1.0)))
+        remote_path = self._get_cache_key(text, voice_id, provider, rate)
 
-        # Check GridFS cache
         if await self.storage.exists_async(remote_path, _bucket_name="uploads"):
-            logger.info(f"[TTS] Cache hit in GridFS for {voice_id}")
-            return f"gridfs://{remote_path}"
+            logger.info("[TTS] Cache hit for %s", voice_id)
+            return self._gs_uri(remote_path)
 
-        # If not in cache, generate and upload
         with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp:
             tmp_path = Path(tmp.name)
 
@@ -49,24 +63,33 @@ class TTSService:
             if provider == "elevenlabs" and self.eleven_api_key:
                 success_path = await self._generate_elevenlabs(text, voice_id, tmp_path)
             else:
-                success_path = await self._generate_google(text, voice_id, tmp_path)
+                success_path = await self._generate_google(
+                    text, voice_id, tmp_path, speaking_rate=rate
+                )
 
             if success_path:
-                # Upload to GridFS
-                gridfs_uri = await self.storage.upload_file_async(
+                gs_uri = await self.storage.upload_file_async(
                     tmp_path,
                     remote_path,
                     content_type="audio/mpeg",
                     _bucket_name="uploads",
                 )
-                return gridfs_uri
+                # Prefer explicit gs:// from storage; fall back to constructed URI
+                if isinstance(gs_uri, str) and gs_uri.startswith("gs://"):
+                    return gs_uri
+                return self._gs_uri(remote_path)
             return None
         finally:
             if tmp_path.exists():
                 os.remove(tmp_path)
 
     async def _generate_google(
-        self, text: str, voice_id: str, cache_path: Path
+        self,
+        text: str,
+        voice_id: str,
+        cache_path: Path,
+        *,
+        speaking_rate: float = 1.0,
     ) -> Optional[str]:
         if not self.google_api_key:
             logger.warning("GOOGLE_TTS_API_KEY not set")
@@ -76,7 +99,11 @@ class TTSService:
         payload = {
             "input": {"text": text[:4000]},
             "voice": {"languageCode": lang, "name": voice_id},
-            "audioConfig": {"audioEncoding": "MP3", "pitch": 0, "speakingRate": 1.0},
+            "audioConfig": {
+                "audioEncoding": "MP3",
+                "pitch": 0,
+                "speakingRate": speaking_rate,
+            },
         }
 
         try:
@@ -117,7 +144,7 @@ class TTSService:
 
         try:
             async with httpx.AsyncClient(timeout=60.0) as client:
-                resp = await client.post(url, json=payload, headers=headers)
+                resp = await client.post(url, headers=headers, json=payload)
                 resp.raise_for_status()
                 cache_path.write_bytes(resp.content)
                 return str(cache_path)

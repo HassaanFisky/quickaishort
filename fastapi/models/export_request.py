@@ -51,6 +51,9 @@ class ExportRequest(BaseModel):
     filter_name: str = "None"
     transition_enabled: bool = False
     voiceover_enabled: bool = False
+    # Dub Video bake — mute original speech + overlay synthesized track
+    mute_source_audio: bool = False
+    dub_audio_uri: Optional[str] = None
     # Phase 59: optional RenderManifest — validated on ingest, stored for future
     # render path use. render_worker.py is not changed by this field.
     render_manifest: Optional[RenderManifest] = Field(

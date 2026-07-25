@@ -32,17 +32,20 @@
 
 **Worker behavior:** If `options.render_manifest` present, attempt `compile_manifest_to_ffmpeg`; on failure, fall back / clear (`render_worker.py`).
 
-**Tests exist:** `fastapi/tests/test_render_manifest.py`, `test_manifest_renderer.py`.
+**Dub Video (ADR-014):** Export options `mute_source_audio` + `dub_audio_uri` are forwarded on `/api/process-video` into `RenderJob`. Optional Manifest fields `muteSourceAudio` / `dubAudioUri` mirror the same contract. Worker mutes source audio and overlays the GCS dub track.
+
+**Tests exist:** `fastapi/tests/test_render_manifest.py`, `test_manifest_renderer.py`, `test_dub_video.py`.
 
 **Studio rule:** New export features should extend Manifest, not invent parallel option bags.
 
 ---
 
-## Dual queue debt
+## Production dispatch (SoT)
 
 | Queue | Path | Status |
 |-------|------|--------|
-| RQ `render_queue` | Primary exports / ADK | Active |
+| Cloud Tasks `quickai-render` | Primary exports + `/tasks/dub` | Production |
+| RQ `render_queue` | Local/dev fallback only | Not production SoT |
 | Celery | `/api/v1/video/*` GridFS | Legacy — keep until deprecated |
 
 Do not add a third queue.
