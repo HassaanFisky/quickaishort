@@ -512,7 +512,7 @@ Do not claim a task is "done" until it passes every relevant item above.
 
 Keep this section updated as the project evolves.
 
-Last updated: 2026-07-23
+Last updated: 2026-07-25
 
 CURRENT PHASE: PRODUCTION LIVE — Submission Sprint + Studio Kernel dual-run
 
@@ -521,13 +521,13 @@ BLOCKED:
 - **Gemini prepayment credits depleted (429)** on project `99900313102` — founder must top up at https://ai.studio/projects before live demo / key rotate. Auth OK; generateContent fails.
 - Demo video + Devpost + Google for Startups form (challenge checklist).
 
-NOT BLOCKED (verified 2026-07-22):
+NOT BLOCKED (verified 2026-07-25):
 
-- API `/health` green (mongo/redis/adk/gcs)
-- Cloud Tasks `quickai-render` RUNNING; private renderer OIDC health and `/tasks/render` no-spend contract probe return 200
-- Renderer `quickai-worker`: `min=0`, request CPU, concurrency 1, max 3; unauthenticated request returns 403
+- API `/health` green (mongo/redis/adk/gcs); `/ready` ready; ingest policy route auth-gated 401
+- Cloud Tasks `quickai-render` RUNNING; private renderer OIDC; worker revision unchanged `00088-sig`
 - Studio Kernel flags on Vercel + Cloud Run
 - EP-001…008 code shipped; AI Editor credits fail-closed; ADK sidebar = Coming Soon blur only
+- **M3 ingest FSM live**: sole editor ingest path `useIngestLifecycle` (identify→validate→acquire_meta→projectize→analyze→ready|failed); commits `9c6ca78` + deploy-unblocker `2f7e18f`
 
 NEXT ACTIONS:
 
@@ -548,10 +548,10 @@ Studio Kernel: project document, MediaGraph suggestions, orchestrator, chat-prim
 
 LIVE SERVICES:
 
-- Backend API:    `https://quickai-api-y2cgnbsbxa-uc.a.run.app` (service: quickai-api, revision: 00103-725)
-- Private Renderer: `https://quickai-worker-y2cgnbsbxa-uc.a.run.app` (service: quickai-worker, revision: 00088-sig; IAM protected)
-- Frontend:       `https://www.quickaishort.online`
-- Health:         `{"status":"ok","mongo":true,"redis":true,"adk":true,"firestore_status":"connected","redis_status":"ready","agent_ready_state":"ready"}`
+- Backend API:    `https://quickai-api-y2cgnbsbxa-uc.a.run.app` (service: quickai-api, revision: `00109-57j`, image tag `2f7e18fa…`)
+- Private Renderer: `https://quickai-worker-y2cgnbsbxa-uc.a.run.app` (service: quickai-worker, revision: `00088-sig`; IAM protected; **not** redeployed for M3)
+- Frontend:       `https://www.quickaishort.online` (Vercel prod `dpl_5oZG8CsC6duHXiXAn49sgpt9MpN9` @ `2f7e18f`; ingest FSM from `9c6ca78`)
+- Health:         `{"status":"ok","mongo":true,"redis":true,"adk":true,"gcs":true,"firestore_status":"connected","redis_status":"ready","agent_ready_state":"ready"}`
 
 COMPLETED:
 
@@ -657,6 +657,7 @@ Read this file at the start of every session. When this file is updated, acknowl
 
 ## CHANGELOG
 
+- **2026-07-25:** M3 ingest FSM shipped to production (`9c6ca78`): sole Studio ingest path via `useIngestLifecycle`; FE Vercel + API `quickai-api-00109-57j`. Deploy unblocker (`2f7e18f`) committed missing `render_dispatch.py` + `google-cloud-tasks` so Cloud Build import smoke check passes. Worker left at `00088-sig` (no M3 worker surface). Gemini credits still depleted.
 - **2026-07-23:** Local orchestration/cost hardening (not deployed): Gemini-only Luna/visual/Terra profiles made explicit; Terra remains one strict JSON-repair attempt; rolling daily pool removed in favor of the fixed trusted-tier matrix; tenant cache moved to MD5 fingerprint + SHA-256 collision guard; Redis-backed Gemini 429 cooldown added; SDK quota retry fan-out disabled; ADK package and google-genai imports made request-lazy; all `sys.exit()` worker paths removed. Verified 167 backend tests. Production Gemini remains blocked by depleted prepayment credits.
 - **2026-07-22:** Cloud Tasks production cutover deployed: `quickai-render` durable queue; `quickai-worker` converted from public always-on RQ listener to private OIDC-only request renderer (`min=0`, request CPU, concurrency 1, max 3); API switched to named-task dispatch; Redis retained for status/runId/locks/dedupe. Live no-spend `/tasks/render` probes returned 200 and caught/fixed a latent non-manifest `time` shadowing crash; request-level DLQ fallback covers pre-render failures. API rev `00103-725`, renderer rev `00088-sig`; 163 backend tests pass.
 - **2026-07-22:** Local cost/reliability hardening baseline (subsequently deployed by the Cloud Tasks cutover above; daily admission superseded 2026-07-23): trusted tier + 3-video daily admission wired to active AI/render routes; exact-state Redis cache avoids duplicate model calls and credits; worker forces Free 720p/watermark across legacy, manifest, and production-plan renders; RQ Redis restart-loop and swallowed retry failures fixed; Gemini quota retries eliminated; unauthenticated paid Next.js analysis/STT paths retired and three unused Google client dependencies removed. Verified 155 backend tests, FFmpeg 720p watermark integration, TypeScript, ESLint, and Next.js production build.
