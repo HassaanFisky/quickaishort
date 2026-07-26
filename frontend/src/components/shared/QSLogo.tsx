@@ -4,11 +4,12 @@ import Image from "next/image";
 import { cn } from "@/lib/utils";
 
 /**
- * QSLogo — renders the OFFICIAL public brand image (no coded/SVG logo).
- *   variant="mark"     → the metallic QS mark only            (public/qs-logo.png)
- *   variant="full"     → mark + "Quick AI Shorts" wordmark
+ * QSLogo — official brand mark assets (no coded SVG glyph).
+ *   variant="mark"     → theme-aware mark only (no wordmark text in the PNG)
+ *   variant="full"     → mark + "QuickAI Short" wordmark (HTML text)
  *   variant="wordmark" → wordmark text only
- * The brand glyph is always the public PNG asset — never a hand-drawn SVG.
+ *
+ * Light theme uses qs-logo-mark-light.png so the mark does not fade on pale UI.
  */
 
 type Size = "sm" | "md" | "lg" | "xl";
@@ -31,18 +32,31 @@ const TEXT_PX: Record<Size, string> = {
 };
 
 function Mark({ pixelSize, animated }: { pixelSize: number; animated: boolean }) {
+  const common = cn(
+    "object-contain select-none",
+    animated && "transition-transform duration-300 hover:scale-110",
+  );
   return (
-    <Image
-      src="/qs-logo.png"
-      alt="Quick AI Shorts"
-      width={pixelSize}
-      height={pixelSize}
-      priority
-      className={cn(
-        "object-contain select-none",
-        animated && "transition-transform duration-300 hover:scale-110",
-      )}
-    />
+    <span className="relative inline-flex shrink-0" style={{ width: pixelSize, height: pixelSize }}>
+      {/* Dark / OLED — bright mark on black plate */}
+      <Image
+        src="/qs-logo-mark-dark.png"
+        alt="QuickAI Short"
+        width={pixelSize}
+        height={pixelSize}
+        priority
+        className={cn(common, "hidden dark:block")}
+      />
+      {/* Light — contrast-safe mark on pale plate */}
+      <Image
+        src="/qs-logo-mark-light.png"
+        alt="QuickAI Short"
+        width={pixelSize}
+        height={pixelSize}
+        priority
+        className={cn(common, "block dark:hidden")}
+      />
+    </span>
   );
 }
 
@@ -55,7 +69,7 @@ function Wordmark({ size }: { size: Size }) {
       )}
       style={{ letterSpacing: "-0.03em" }}
     >
-      <span className="text-foreground">Quick</span>{" "}
+      <span className="text-foreground">Quick</span>
       <span
         className="bg-clip-text text-transparent"
         style={{
@@ -65,7 +79,7 @@ function Wordmark({ size }: { size: Size }) {
       >
         AI
       </span>{" "}
-      <span className="text-foreground">Shorts</span>
+      <span className="text-foreground">Short</span>
     </span>
   );
 }

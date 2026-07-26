@@ -17,7 +17,6 @@ import {
   X,
   AlertCircle,
   Upload,
-  Wand2,
   PanelLeft,
   PanelRight,
   Download,
@@ -54,7 +53,6 @@ import { TimelineLoader } from "@/components/ui/TimelineLoader";
 import { LiquidThemeToggle } from "@/components/shared/LiquidThemeToggle";
 import { AIPanel } from "@/components/editor/AIPanel";
 import IngestSurface from "./IngestSurface";
-import VideoWorkspace from "./VideoWorkspace";
 import ExportDialog from "./ExportDialog";
 
 const EditorOnboardingTour = dynamic(
@@ -138,9 +136,9 @@ export default function EditorLayout() {
     if (!sessionStorage.getItem("titan_welcome_shown")) {
       sessionStorage.setItem("titan_welcome_shown", "1");
       setTimeout(() => {
-        toast("Welcome to QuickAI Studio", {
-          description: "Upload a video or paste a YouTube URL to start editing.",
-          duration: 5000,
+        toast("Welcome to the editor", {
+          description: "Paste a link or drop a video — then chat your edits in Studio Chat.",
+          duration: 4500,
         });
       }, 1000);
     }
@@ -150,7 +148,6 @@ export default function EditorLayout() {
 
   const [urlValid, setUrlValid] = useState<boolean | null>(null);
   const [youtubePreviewId, setYoutubePreviewId] = useState<string | null>(null);
-  const [centerMode, setCenterMode] = useState<"preview" | "effects">("preview");
   const [panelCollapsed, setPanelCollapsed] = useState(false);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const [showTour, setShowTour] = useState(false);
@@ -209,7 +206,7 @@ export default function EditorLayout() {
     if (sourceUrl && !hasShownShortcutsRef.current) {
       hasShownShortcutsRef.current = true;
       toast("Pro tip: Use keyboard shortcuts", {
-        description: "Shift+Alt+A for AI Editor · I/O to mark range · M for markers · ? for all shortcuts",
+        description: "Shift+Alt+A for Studio Chat · I/O to mark range · M for markers · ? for all shortcuts",
         duration: 8000,
       });
     }
@@ -515,24 +512,6 @@ export default function EditorLayout() {
               </button>
             </>
           )}
-          <button
-            onClick={() =>
-              setCenterMode(centerMode === "effects" ? "preview" : "effects")
-            }
-            title={centerMode === "effects" ? "Back to Preview" : "Open Workspace"}
-            aria-label={
-              centerMode === "effects" ? "Switch to Preview" : "Open Workspace"
-            }
-            className={cn(
-              "h-9 w-9 rounded-xl flex items-center justify-center border transition-all duration-200",
-              centerMode === "effects"
-                ? "bg-primary/20 border-primary/30 text-primary"
-                : "bg-card border-border text-fg-muted hover:text-foreground"
-            )}
-          >
-            <Wand2 size={15} />
-          </button>
-
           {isAdvancedMode && (
             <button
               onClick={() => setLocalEngineEnabled((v) => !v)}
@@ -575,8 +554,8 @@ export default function EditorLayout() {
 
           <button
             onClick={() => setAIPanelOpen(!aiPanelOpen)}
-            title={aiPanelOpen ? "Close AI Editor (Shift+Alt+A)" : "Open AI Editor (Shift+Alt+A)"}
-            aria-label={aiPanelOpen ? "Close AI Editor" : "Open AI Editor"}
+            title={aiPanelOpen ? "Close Studio Chat (Shift+Alt+A)" : "Open Studio Chat (Shift+Alt+A)"}
+            aria-label={aiPanelOpen ? "Close Studio Chat" : "Open Studio Chat"}
             aria-pressed={aiPanelOpen}
             className={cn(
               "h-9 w-9 rounded-xl flex items-center justify-center border transition-all duration-200",
@@ -742,7 +721,8 @@ export default function EditorLayout() {
                     <div className="relative">
                       <div className="absolute inset-0 bg-primary/10 blur-3xl rounded-full scale-150" />
                       <div className="relative w-20 h-20 rounded-2xl bg-card border border-border flex items-center justify-center shadow-lg">
-                        <Image src="/qs-logo.png" alt="" width={40} height={40} className="object-contain opacity-60" />
+                        <Image src="/qs-logo-mark-dark.png" alt="" width={40} height={40} className="object-contain opacity-80 hidden dark:block" />
+                        <Image src="/qs-logo-mark-light.png" alt="" width={40} height={40} className="object-contain opacity-90 block dark:hidden" />
                       </div>
                     </div>
                     <div className="max-w-sm">
@@ -761,7 +741,7 @@ export default function EditorLayout() {
                         <kbd className="px-1.5 py-0.5 rounded bg-foreground/5 border border-foreground/8 font-mono text-[9px]">Shift</kbd>
                         <kbd className="px-1.5 py-0.5 rounded bg-foreground/5 border border-foreground/8 font-mono text-[9px]">Alt</kbd>
                         <kbd className="px-1.5 py-0.5 rounded bg-foreground/5 border border-foreground/8 font-mono text-[9px]">A</kbd>
-                        <span>AI Editor</span>
+                        <span>Studio Chat</span>
                       </span>
                       <span className="w-px h-3 bg-foreground/10" />
                       <span className="flex items-center gap-1.5">
@@ -792,16 +772,6 @@ export default function EditorLayout() {
                         ))}
                       </div>
                     </div>
-                  </motion.div>
-                ) : centerMode === "effects" ? (
-                  <motion.div
-                    key="stage-effects"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="w-full h-full overflow-auto"
-                  >
-                    <VideoWorkspace />
                   </motion.div>
                 ) : (
                   <motion.div

@@ -763,7 +763,7 @@ export function AIPanel() {
         <div className="ai-header-left">
           {/* Gem badge */}
           <div className="ai-header-gem">✦</div>
-          <span className="ai-panel-title">QuickAI Editor</span>
+          <span className="ai-panel-title">Studio Chat</span>
         </div>
 
         <div className="ai-header-right">
@@ -790,7 +790,7 @@ export function AIPanel() {
           <button
             className="ai-close-btn"
             onClick={() => setAIPanelOpen(false)}
-            aria-label="Close QuickAI Editor"
+            aria-label="Close Studio Chat"
           >
             <X size={14} />
           </button>
@@ -1023,17 +1023,22 @@ export function AIPanel() {
         <div
           className="hidden lg:block h-full min-h-0 shrink-0 overflow-hidden transition-[width,margin-left,opacity,visibility] duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)]"
           style={{
-            width: aiPanelOpen ? "clamp(340px, 26vw, 420px)" : 0,
-            marginLeft: aiPanelOpen ? "1rem" : 0,
+            width: aiPanelOpen ? "clamp(380px, 30vw, 460px)" : 0,
+            marginLeft: aiPanelOpen ? "0.75rem" : 0,
             opacity: aiPanelOpen ? 1 : 0,
             visibility: aiPanelOpen ? "visible" : "hidden",
           }}
           aria-hidden={!aiPanelOpen}
         >
           <aside
-            className="ai-panel w-[clamp(340px,26vw,420px)]"
-            aria-label="QuickAI Editor"
+            className="ai-panel relative w-[clamp(380px,30vw,460px)]"
+            aria-label="Studio Chat"
           >
+            {/* Slim slide edge — docked sidebar cue, never covers the canvas */}
+            <div
+              aria-hidden
+              className="absolute left-0 top-0 bottom-0 w-1 rounded-l-3xl bg-gradient-to-b from-primary/40 via-primary/15 to-transparent pointer-events-none"
+            />
             {panelBody}
           </aside>
         </div>
