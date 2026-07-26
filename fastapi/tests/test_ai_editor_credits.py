@@ -247,9 +247,7 @@ async def test_command_cache_hit_refunds_credit(monkeypatch):
             side_effect=cached_command,
         ),
     ):
-        resp = await ai_editor_router.handle_editor_command(
-            _cmd_req(), user_id="u1"
-        )
+        resp = await ai_editor_router.handle_editor_command(_cmd_req(), user_id="u1")
     assert resp.cached is True
     deduct.assert_awaited_once_with("u1", 1)
     refund.assert_awaited_once_with("u1", 1)

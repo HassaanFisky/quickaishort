@@ -77,15 +77,12 @@ def _require_task_invocation(
     if not task_name:
         raise HTTPException(status_code=403, detail="Cloud Tasks request required.")
 
-    audience = (
-        os.environ.get("CLOUD_TASKS_OIDC_AUDIENCE", "").rstrip("/")
-        or os.environ.get("CLOUD_TASKS_RENDER_URL", "").rstrip("/")
-    )
+    audience = os.environ.get("CLOUD_TASKS_OIDC_AUDIENCE", "").rstrip(
+        "/"
+    ) or os.environ.get("CLOUD_TASKS_RENDER_URL", "").rstrip("/")
     if not audience:
         logger.error("renderer_oidc_audience_missing")
-        raise HTTPException(
-            status_code=503, detail="Renderer auth misconfigured."
-        )
+        raise HTTPException(status_code=503, detail="Renderer auth misconfigured.")
     if not authorization or not authorization.lower().startswith("bearer "):
         raise HTTPException(status_code=403, detail="Missing invoker token.")
 
@@ -217,9 +214,7 @@ async def health_ready() -> dict[str, object]:
 async def handle_render_task(
     payload: RenderTaskPayload,
     task_name: str | None = Header(default=None, alias="X-CloudTasks-TaskName"),
-    retry_count: str | None = Header(
-        default=None, alias="X-CloudTasks-TaskRetryCount"
-    ),
+    retry_count: str | None = Header(default=None, alias="X-CloudTasks-TaskRetryCount"),
     authorization: str | None = Header(default=None, alias="Authorization"),
 ) -> dict[str, object]:
     """Acknowledge only completed/terminal work; 5xx triggers bounded retry."""
@@ -280,9 +275,7 @@ async def handle_render_task(
 async def handle_dub_task(
     payload: dict,
     task_name: str | None = Header(default=None, alias="X-CloudTasks-TaskName"),
-    retry_count: str | None = Header(
-        default=None, alias="X-CloudTasks-TaskRetryCount"
-    ),
+    retry_count: str | None = Header(default=None, alias="X-CloudTasks-TaskRetryCount"),
     authorization: str | None = Header(default=None, alias="Authorization"),
 ) -> dict[str, object]:
     """Process Dub Video synthesize/align stages (Cloud Tasks → private worker)."""

@@ -2336,9 +2336,7 @@ async def run_director(
     except asyncio.TimeoutError:
         from services.credit_guard import refund_credits_best_effort
 
-        await refund_credits_best_effort(
-            user_id, 30, reason="timeout", route="direct"
-        )
+        await refund_credits_best_effort(user_id, 30, reason="timeout", route="direct")
         raise HTTPException(
             status_code=504, detail="Storyboard generation timed out after 120 seconds."
         )

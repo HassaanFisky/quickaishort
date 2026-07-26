@@ -96,7 +96,10 @@ async def process_editor_command(
             status_code=422, detail="AI returned invalid JSON. Please try again."
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail="AI editor temporarily unavailable. Please try again.")
+        raise HTTPException(
+            status_code=500,
+            detail="AI editor temporarily unavailable. Please try again.",
+        )
 
     raw_actions = parsed.get("actions") or []
     if not isinstance(raw_actions, list):

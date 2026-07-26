@@ -105,7 +105,9 @@ def fit_segment_audio(
             str(dest_mp3),
         ]
 
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=60, check=False)
+    result = subprocess.run(
+        cmd, capture_output=True, text=True, timeout=60, check=False
+    )
     if result.returncode != 0 or not dest_mp3.exists():
         logger.warning(
             "fit_segment_audio_failed code=%s stderr=%s",

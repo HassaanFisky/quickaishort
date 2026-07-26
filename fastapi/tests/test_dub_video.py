@@ -53,7 +53,9 @@ def test_fingerprint_stable_and_sensitive():
     c = DubJobCreateRequest(transcript=chunks, target_lang="fr", mode="full_dub")
     voice = resolve_voice_id("es")
     assert compute_fingerprint(a, voice) == compute_fingerprint(b, voice)
-    assert compute_fingerprint(a, voice) != compute_fingerprint(c, resolve_voice_id("fr"))
+    assert compute_fingerprint(a, voice) != compute_fingerprint(
+        c, resolve_voice_id("fr")
+    )
 
 
 def test_translation_cache_key_changes_with_lang():
@@ -146,9 +148,7 @@ async def test_tts_unavailable_degrades(monkeypatch):
     # Force TTS missing key
     fake_tts = MagicMock()
     fake_tts.google_api_key = None
-    monkeypatch.setattr(
-        "services.tts_service.get_tts_service", lambda: fake_tts
-    )
+    monkeypatch.setattr("services.tts_service.get_tts_service", lambda: fake_tts)
 
     req = DubJobCreateRequest(
         transcript=[DubTranscriptChunk(text="Hello", start=0, end=1)],

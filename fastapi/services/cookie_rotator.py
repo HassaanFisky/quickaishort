@@ -49,7 +49,11 @@ def invalidate_cookie_cache(reason: str = "") -> None:
 
 def _classify_cookie_error(stderr: str) -> str:
     low = (stderr or "").lower()
-    if "sign in" in low or "cookies are no longer valid" in low or "login required" in low:
+    if (
+        "sign in" in low
+        or "cookies are no longer valid" in low
+        or "login required" in low
+    ):
         return (
             "YouTube cookies expired or rejected. Update YOUTUBE_COOKIES on Cloud Run; "
             "acquisition will degrade to PoToken-only until refreshed."
