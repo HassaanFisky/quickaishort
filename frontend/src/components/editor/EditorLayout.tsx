@@ -82,9 +82,9 @@ export default function EditorLayout() {
     ingestUrl,
     ingestFile,
     retryAnalyze,
+    retryLastIngest,
     cancelUpload,
     cancelAnalyze,
-    lastFileRef,
   } = useIngestLifecycle({ runPipeline, cancelPipeline });
 
   // Sync transcript to AI panel context after pipeline completes
@@ -178,15 +178,16 @@ export default function EditorLayout() {
   // (transcription worker status), which never left "loading" after init.
   const isAnalysing = isProcessing;
 
-  // Collapse URL bar 1.5s after video loads (and ingest reached ready)
+  // Collapse import bar 1.5s after video loads (and ingest reached ready)
   useEffect(() => {
-    if (!sourceUrl || isAnalysing || (ingestStage !== "ready" && ingestStage !== "idle")) {
+    const hasMedia = Boolean(sourceUrl || sourceFile);
+    if (!hasMedia || isAnalysing || (ingestStage !== "ready" && ingestStage !== "idle")) {
       if (ingestStage !== "ready") setPanelCollapsed(false);
       return;
     }
     const t = setTimeout(() => setPanelCollapsed(true), 1500);
     return () => clearTimeout(t);
-  }, [sourceUrl, isAnalysing, ingestStage]);
+  }, [sourceUrl, sourceFile, isAnalysing, ingestStage]);
 
   // Keyboard shortcut hint — fires once after first video load
   useEffect(() => {
@@ -367,14 +368,12 @@ export default function EditorLayout() {
     onExpandPanel: () => setPanelCollapsed(false),
     onFileChosen: (f: File) => void ingestFile(f),
     onCancelUpload: cancelUpload,
-    onRetryUpload: () => {
-      if (lastFileRef.current) void ingestFile(lastFileRef.current);
-      else void ingestUrl(urlInput);
-    },
+    onRetryUpload: () => retryLastIngest(),
     onReplace: () => {
       setPanelCollapsed(false);
       useEditorStore.getState().resetIngestLifecycle();
     },
+    onDragHandled: () => setIsDraggingOver(false),
   };
 
   const handleDrop = (e: DragEvent<HTMLDivElement>) => {
@@ -570,9 +569,9 @@ export default function EditorLayout() {
         </div>
       </header>
 
-      {/* Error recovery banner — ingest FSM terminal failures */}
+      {/* Error recovery banner — loaded media only (empty uses inline IngestSurface error) */}
       <AnimatePresence>
-        {ingestStage === "failed" && ingestFailMessage && (
+        {ingestStage === "failed" && ingestFailMessage && (sourceUrl || sourceFile) && (
           <motion.div
             key="error-banner"
             initial={{ height: 0, opacity: 0 }}
@@ -591,10 +590,7 @@ export default function EditorLayout() {
                 <X size={13} />
               </button>
               <button
-                onClick={() => {
-                  if (lastFileRef.current) void ingestFile(lastFileRef.current);
-                  else void ingestUrl(urlInput);
-                }}
+                onClick={() => retryLastIngest()}
                 className="shrink-0 font-bold hover:text-red-300 transition-colors text-[10px] uppercase tracking-widest"
               >
                 Retry
@@ -623,8 +619,8 @@ export default function EditorLayout() {
 
           {/* Center — Stage */}
           <section className="relative flex flex-col items-center justify-center gap-4 min-h-0">
-            {/* Dock overlay only when media exists — never float chrome on empty canvas */}
-            {(Boolean(sourceUrl || sourceFile) || Boolean(youtubePreviewId) || isAnalysing) && (
+            {/* Dock only after media exists or analysis is running — URL preview stays in hero */}
+            {(Boolean(sourceUrl || sourceFile) || isAnalysing) && (
               <IngestSurface variant="dock" {...ingestSurfaceProps} />
             )}
             {/* Video stage */}
@@ -640,7 +636,7 @@ export default function EditorLayout() {
                     className="absolute inset-0 z-10 flex items-center justify-center"
                   >
                     {youtubePreviewId ? (
-                      <div className="relative w-full h-full flex items-center justify-center p-16">
+                      <div className="relative w-full h-full flex items-center justify-center p-4 sm:p-8 lg:p-16">
                         {/* Video stays fully visible at all times — status floats below, never covers */}
                         <YouTubePlayer videoId={youtubePreviewId} className="max-w-lg w-full" />
                         {/* Thin top progress shimmer — premium, non-blocking */}
@@ -675,31 +671,21 @@ export default function EditorLayout() {
                       </div>
                     )}
                   </motion.div>
-                ) : youtubePreviewId && !sourceUrl ? (
-                  <motion.div
-                    key="stage-youtube-preview"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="w-full h-full flex items-center justify-center p-16"
-                  >
-                    <YouTubePlayer videoId={youtubePreviewId} className="max-w-lg w-full" />
-                  </motion.div>
-                ) : !sourceUrl && !youtubePreviewId && !isAnalysing ? (
+                ) : !sourceUrl && !sourceFile && !isAnalysing ? (
                   <motion.div
                     key="stage-empty"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    className="w-full h-full flex flex-col items-center justify-center gap-6 text-center px-4 sm:px-8 py-8 overflow-y-auto"
+                    className="w-full h-full flex flex-col items-center justify-center gap-4 sm:gap-6 text-center px-4 sm:px-8 py-4 sm:py-8 overflow-y-auto"
                   >
                     {/* One composition: import IS the stage (center), not a top chrome strip */}
                     <IngestSurface variant="hero" {...ingestSurfaceProps} />
-                    <div className="w-full max-w-md px-2">
+                    <div className="w-full max-w-md px-2 hidden sm:block">
                       <p className="text-[10px] font-medium tracking-wide text-fg-subtle mb-2">
                         Or start from a template
                       </p>
-                      <div className="grid grid-cols-5 gap-1.5">
+                      <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
                         {PROJECT_TEMPLATES.map((tpl) => (
                           <button
                             key={tpl.id}
@@ -712,7 +698,7 @@ export default function EditorLayout() {
                                 duration: 3000,
                               });
                             }}
-                            className="flex flex-col items-center gap-1 px-1 py-2 rounded-xl bg-card/60 border border-border hover:border-primary/40 hover:bg-primary/5 transition-colors group"
+                            className="min-h-11 flex flex-col items-center gap-1 px-1 py-2 rounded-xl bg-card/60 border border-border hover:border-primary/40 hover:bg-primary/5 hover:-translate-y-0.5 active:scale-[0.98] transition-[transform,border-color,background-color] group"
                           >
                             <div
                               className={cn(
@@ -943,6 +929,7 @@ export default function EditorLayout() {
         <EditorOnboardingTour
           initialStep={tourStep}
           onFinished={() => setShowTour(false)}
+          onEnsureIngestVisible={() => setPanelCollapsed(false)}
         />
       )}
     </div>

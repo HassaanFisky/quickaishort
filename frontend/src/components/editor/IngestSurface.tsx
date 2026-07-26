@@ -1,6 +1,6 @@
 "use client";
 
-import type { ChangeEvent, DragEvent, KeyboardEvent } from "react";
+import type { ChangeEvent, DragEvent } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -56,6 +56,8 @@ export interface IngestSurfaceProps {
   onCancelUpload: () => void;
   onRetryUpload: () => void;
   onReplace: () => void;
+  /** Clears parent shell drag overlay when this surface owns the drop. */
+  onDragHandled?: () => void;
 }
 
 /**
@@ -84,6 +86,7 @@ export default function IngestSurface({
   onCancelUpload,
   onRetryUpload,
   onReplace,
+  onDragHandled,
 }: IngestSurfaceProps) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [policy, setPolicy] = useState<MediaIngestPolicy>(FALLBACK_INGEST_POLICY);
@@ -130,7 +133,22 @@ export default function IngestSurface({
     e.preventDefault();
     e.stopPropagation();
     setDragOver(false);
+    onDragHandled?.();
     handleFile(e.dataTransfer.files?.[0]);
+  };
+
+  const onSurfaceDragOver = (e: DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(true);
+    onDragHandled?.();
+  };
+
+  const onSurfaceDragLeave = (e: DragEvent) => {
+    e.stopPropagation();
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+      setDragOver(false);
+    }
   };
 
   const pasteClipboardFile = async () => {
@@ -169,6 +187,28 @@ export default function IngestSurface({
         ? "Finding clips…"
         : INGEST_STAGE_LABELS[ingestStage];
 
+  const canGenerate = urlValid === true && !!urlInput.trim() && !busy;
+  const isUploading =
+    ingestStage === "acquire_meta" && ingestUploadProgress != null;
+  const handleBusyCancel = () => {
+    if (isUploading) onCancelUpload();
+    else onCancelAnalyze();
+  };
+
+  const progressHint =
+    ingestStage === "acquire_meta"
+      ? "Uploading securely…"
+      : ingestStage === "projectize"
+        ? "Preparing your editor…"
+        : ingestStage === "analyze"
+          ? "Finding hooks…"
+          : stageLabel;
+
+  const collapsedTitle =
+    (videoTitle && videoTitle.trim()) ||
+    (urlInput.trim().slice(0, 50) || "") ||
+    "Video loaded";
+
   const fileInput = (
     <input
       ref={fileRef}
@@ -191,8 +231,11 @@ export default function IngestSurface({
           className="pointer-events-auto bg-card/95 backdrop-blur-sm border border-border rounded-full px-3.5 py-2 flex items-center gap-2.5 shadow-lg"
         >
           <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-          <span className="text-[11px] font-medium text-fg-muted truncate flex-1 min-w-0">
-            {videoTitle ?? urlInput.slice(0, 50) ?? "Video loaded"}
+          <span
+            data-tour-id="ingest.upload"
+            className="text-[11px] font-medium text-fg-muted truncate flex-1 min-w-0"
+          >
+            {collapsedTitle}
             {ingestFromCache ? " · cached" : ""}
           </span>
           <button
@@ -206,6 +249,7 @@ export default function IngestSurface({
             type="button"
             onClick={onExpandPanel}
             aria-label="Expand import bar"
+            data-tour-id="ingest.url"
             className="w-7 h-7 rounded-full flex items-center justify-center text-fg-subtle hover:text-primary hover:bg-foreground/5"
           >
             <ChevronDown className="w-3.5 h-3.5" />
@@ -231,9 +275,9 @@ export default function IngestSurface({
       <div className="flex items-center justify-between text-[11px] text-muted-foreground mb-1.5">
         <span className="inline-flex items-center gap-1.5">
           <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden />
-          {stageLabel}
+          {progressHint}
         </span>
-        {ingestStage === "acquire_meta" && ingestUploadProgress != null && (
+        {isUploading && (
           <span className="inline-flex items-center gap-2">
             <span className="tabular-nums">{ingestUploadProgress}%</span>
             <button
@@ -263,9 +307,6 @@ export default function IngestSurface({
           );
         })}
       </div>
-      <p className="text-[10px] text-muted-foreground text-center tabular-nums">
-        Step {Math.max(1, stageIdx + 1)} of {INGEST_PROGRESS_STEPS.length}
-      </p>
     </div>
   ) : null;
 
@@ -278,7 +319,14 @@ export default function IngestSurface({
       <span className="flex-1 text-left">{errMsg}</span>
       <button
         type="button"
-        onClick={onRetryUpload}
+        onClick={() => {
+          if (localError && ingestStage !== "failed") {
+            setLocalError(null);
+            pickFile();
+            return;
+          }
+          onRetryUpload();
+        }}
         className="inline-flex items-center gap-1 font-semibold shrink-0"
       >
         <RefreshCw className="w-3 h-3" />
@@ -287,40 +335,33 @@ export default function IngestSurface({
     </div>
   ) : null;
 
+  const cardBase =
+    "flex flex-col items-center justify-center gap-1.5 rounded-2xl border bg-card/60 border-border transition-[transform,border-color,background-color,box-shadow] hover:border-primary/40 hover:bg-primary/[0.05] hover:-translate-y-0.5 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0";
+
   const uploadCard = (
     <button
       type="button"
       data-tour-id="ingest.upload"
       onClick={pickFile}
       disabled={busy}
-      onKeyDown={(e: KeyboardEvent) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          pickFile();
-        }
-      }}
       className={cn(
-        "flex flex-col items-center justify-center gap-1.5 rounded-2xl border transition-colors",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
-        "disabled:opacity-50 disabled:cursor-not-allowed",
-        isHero
-          ? "min-h-[7.5rem] px-4 py-5 border-primary/40 bg-primary/[0.08] hover:border-primary/65 hover:bg-primary/[0.14]"
-          : "min-h-11 px-3 py-3 border-primary/35 bg-primary/[0.07] hover:border-primary/60 hover:bg-primary/[0.12]",
+        cardBase,
+        isHero ? "min-h-[7.5rem] px-4 py-5" : "min-h-11 px-3 py-3",
       )}
-      aria-label="Upload Video from your device"
+      aria-label="Upload video from your device"
       aria-describedby="ingest-format-hint"
     >
       <span
         className={cn(
           "inline-flex items-center gap-2 font-semibold text-foreground",
-          isHero ? "text-sm" : "text-[12px] font-bold",
+          isHero ? "text-sm" : "text-[12px]",
         )}
       >
         <Upload
           className={cn("text-primary", isHero ? "w-4 h-4" : "w-3.5 h-3.5")}
           aria-hidden
         />
-        Upload Video
+        Upload video
       </span>
       <span className={cn("text-muted-foreground", isHero ? "text-xs" : "text-[9px]")}>
         Click or drop a file
@@ -332,17 +373,19 @@ export default function IngestSurface({
     <div
       data-tour-id="ingest.url"
       className={cn(
-        "flex flex-col justify-center rounded-2xl border border-border bg-background",
+        "flex flex-col justify-center rounded-2xl border border-border bg-card/60 transition-[border-color,background-color]",
         isHero ? "min-h-[7.5rem] px-3 py-3" : "min-h-11 px-2 py-2",
+        urlValid === true && "border-emerald-500/35",
+        urlValid === false && "border-red-500/40",
       )}
     >
       <span
         className={cn(
           "font-medium text-muted-foreground px-1 mb-1.5",
-          isHero ? "text-[11px]" : "text-[9px] font-bold uppercase tracking-wider",
+          isHero ? "text-[11px]" : "text-[9px] tracking-wide",
         )}
       >
-        Paste YouTube URL
+        YouTube link
       </span>
       <div
         className={cn(
@@ -361,28 +404,39 @@ export default function IngestSurface({
           value={urlInput}
           onChange={onUrlChange}
           placeholder="youtube.com/watch?v=…"
+          readOnly={busy}
           className={cn(
             "flex-1 bg-transparent font-medium outline-none min-w-0",
             isHero ? "text-sm" : "text-[11px]",
+            busy && "opacity-70 cursor-default",
           )}
           aria-label="YouTube URL"
+          aria-invalid={urlValid === false}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && !busy) onAnalyze();
+            if (e.key === "Enter" && canGenerate) onAnalyze();
           }}
         />
       </div>
+      {urlValid === false && (
+        <p className="px-1 pt-1.5 text-[10px] text-red-300/90 text-left">
+          Use a YouTube link or direct video URL.
+        </p>
+      )}
     </div>
   );
+
+  const generateLabel =
+    urlValid === true ? "Import from YouTube" : "Paste a YouTube link";
 
   const actionsRow = (
     <div className={cn("flex items-center gap-2 w-full", !isHero && "px-0.5 pb-0.5")}>
       {busy ? (
         <button
           type="button"
-          onClick={onCancelAnalyze}
+          onClick={handleBusyCancel}
           className={cn(
             "flex-1 rounded-xl flex items-center justify-center gap-1.5 bg-red-500/10 border border-red-500/20 text-red-400 font-semibold",
-            isHero ? "h-11 text-sm" : "h-9 text-[11px] font-bold",
+            isHero ? "h-11 text-sm" : "h-9 text-[11px]",
           )}
         >
           <X className="w-3.5 h-3.5" />
@@ -393,11 +447,11 @@ export default function IngestSurface({
           variant="gradient"
           size="sm"
           onClick={onAnalyze}
-          disabled={!urlInput.trim() || busy}
+          disabled={!canGenerate}
           className="flex-1"
         >
           <Zap size={13} />
-          Generate
+          {generateLabel}
         </GlowButton>
       )}
       {hasSource && (
@@ -408,7 +462,7 @@ export default function IngestSurface({
             "rounded-xl border border-border text-muted-foreground hover:text-foreground",
             isHero
               ? "h-11 px-4 text-xs font-semibold"
-              : "h-9 px-3 text-[10px] font-bold uppercase tracking-wider",
+              : "h-9 px-3 text-[10px] font-semibold",
           )}
         >
           Replace
@@ -417,39 +471,51 @@ export default function IngestSurface({
     </div>
   );
 
+  const hintFooter = (
+    <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
+      <p id="ingest-format-hint" className="text-[11px] text-muted-foreground text-center">
+        {policy.examples_label}
+      </p>
+      {clipboardOk && (
+        <button
+          type="button"
+          onClick={() => void pasteClipboardFile()}
+          disabled={busy}
+          className="text-[11px] font-medium rounded-full px-3 py-1 border border-border text-muted-foreground hover:text-primary hover:border-primary/30 disabled:opacity-50"
+        >
+          Paste from clipboard
+        </button>
+      )}
+    </div>
+  );
+
   if (isHero) {
     return (
-      <div className="relative z-10 w-full max-w-md mx-auto px-4">
+      <div className="relative z-10 w-full max-w-md sm:max-w-lg mx-auto px-4">
         {fileInput}
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-          className={cn(
-            "flex flex-col items-center gap-4",
-            dragOver && "scale-[1.01]",
-          )}
-          onDragOver={(e) => {
-            e.preventDefault();
-            setDragOver(true);
-          }}
-          onDragLeave={() => setDragOver(false)}
+          className="flex flex-col items-center gap-4 sm:gap-5"
+          onDragOver={onSurfaceDragOver}
+          onDragLeave={onSurfaceDragLeave}
           onDrop={onDrop}
         >
-          <div className="text-center space-y-1.5">
-            <h2 className="text-xl sm:text-2xl font-semibold tracking-tight text-foreground">
+          <div className="text-center space-y-2">
+            <h2 className="text-2xl sm:text-[2rem] font-semibold tracking-tight text-foreground leading-tight">
               Import your video
             </h2>
-            <p className="text-sm text-muted-foreground leading-relaxed max-w-sm mx-auto">
-              Drop a file or paste a YouTube link to start editing.
+            <p className="text-sm text-fg-muted leading-relaxed max-w-[22rem] mx-auto">
+              Upload a video or paste a YouTube link. QuickAI will prepare your editor.
             </p>
           </div>
 
           <div
             className={cn(
-              "w-full rounded-3xl border border-dashed p-3 sm:p-4 transition-colors",
+              "w-full rounded-3xl border border-dashed p-3 sm:p-4 transition-[transform,border-color,background-color,box-shadow]",
               dragOver
-                ? "border-primary/60 bg-primary/[0.06]"
+                ? "border-primary/60 bg-primary/[0.08] ring-2 ring-primary/30 scale-[1.01] shadow-[0_0_40px_hsl(var(--primary)_/_0.16)]"
                 : "border-border/80 bg-card/40",
             )}
           >
@@ -459,24 +525,7 @@ export default function IngestSurface({
             </div>
           </div>
 
-          <p
-            id="ingest-format-hint"
-            className="text-[11px] text-muted-foreground text-center"
-          >
-            {policy.examples_label}
-            {clipboardOk ? " · Clipboard paste supported" : ""}
-          </p>
-
-          {clipboardOk && (
-            <button
-              type="button"
-              onClick={() => void pasteClipboardFile()}
-              disabled={busy}
-              className="text-[11px] font-medium text-muted-foreground hover:text-primary -mt-2"
-            >
-              Paste video from clipboard
-            </button>
-          )}
+          {hintFooter}
 
           <AnimatePresence>
             {youtubePreviewId && urlValid && !busy && (
@@ -502,7 +551,6 @@ export default function IngestSurface({
     );
   }
 
-  // Dock — replace / expand while a source exists (safe inset, never flush to edge)
   return (
     <div className="absolute top-3 left-1/2 -translate-x-1/2 z-40 w-full max-w-xl px-4">
       {fileInput}
@@ -514,11 +562,8 @@ export default function IngestSurface({
           "bg-card/95 backdrop-blur-sm border border-border rounded-2xl p-3 flex flex-col gap-2 shadow-xl",
           dragOver && "border-primary/50 bg-primary/[0.04]",
         )}
-        onDragOver={(e) => {
-          e.preventDefault();
-          setDragOver(true);
-        }}
-        onDragLeave={() => setDragOver(false)}
+        onDragOver={onSurfaceDragOver}
+        onDragLeave={onSurfaceDragLeave}
         onDrop={onDrop}
       >
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 px-0.5">
@@ -526,21 +571,7 @@ export default function IngestSurface({
           {urlCard}
         </div>
 
-        <p id="ingest-format-hint" className="px-1 text-[9px] text-muted-foreground text-center">
-          {policy.examples_label}
-          {clipboardOk ? " · Clipboard paste supported" : ""}
-        </p>
-
-        {clipboardOk && (
-          <button
-            type="button"
-            onClick={() => void pasteClipboardFile()}
-            disabled={busy}
-            className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground hover:text-primary self-center"
-          >
-            Paste video from clipboard
-          </button>
-        )}
+        {hintFooter}
 
         <AnimatePresence>
           {youtubePreviewId && urlValid && !busy && (
