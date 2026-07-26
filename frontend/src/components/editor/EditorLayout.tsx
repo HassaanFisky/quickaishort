@@ -243,24 +243,20 @@ export default function EditorLayout() {
   }, []);
 
   // Watchdog: 3-minute window covers first-time Whisper model download (~150 MB).
-  // cancelPipeline() now terminates the worker as well as aborting the audio-fetch
-  // controller, so no ghost clips arrive after the watchdog fires.
+  // Never force ingest "ready" without a transcript — that lied to chat/export.
   useEffect(() => {
     if (currentStage !== "transcribing") return;
     const watchdog = setTimeout(() => {
       if (useEditorStore.getState().currentStage === "transcribing") {
         cancelPipeline();
         setProcessing(false, "idle");
-        const st = useEditorStore.getState();
-        if (st.ingestStage === "analyze") {
-          st.setIngestStage("ready");
-        } else if (st.ingestStage !== "ready" && st.ingestStage !== "failed") {
-          st.setIngestStage("analyze");
-          st.setIngestStage("ready");
-        }
-        toast.info(
-          "Transcription is taking too long. Click Generate again — the AI model will be cached and load faster next time.",
-          { duration: 12_000 }
+        useEditorStore.getState().failIngest(
+          "timeout",
+          "Transcription timed out. Retry Generate — the model may already be cached.",
+        );
+        toast.warning(
+          "Transcription timed out. Retry Generate — the AI model may already be cached and load faster.",
+          { duration: 12_000 },
         );
       }
     }, 180_000);

@@ -28,6 +28,7 @@ export type IngestFailCode =
   | "invalid_url"
   | "meta_fetch_failed"
   | "cancelled"
+  | "timeout"
   | "unknown";
 
 const ALLOWED: Record<IngestStage, ReadonlySet<IngestStage>> = {

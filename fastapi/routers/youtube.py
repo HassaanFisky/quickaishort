@@ -189,7 +189,7 @@ async def create_clip(
 
         raise HTTPException(
             status_code=500,
-            detail=f"YouTube clip extraction failed. Upload your MP4 directly for instant processing. ({exc})",
+            detail="YouTube clip extraction failed. Upload an MP4 for instant processing.",
         )
 
     finally:

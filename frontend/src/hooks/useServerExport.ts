@@ -190,7 +190,23 @@ export function useServerExport({ userId }: UseServerExportArgs) {
         }
       });
       channel.bind("error", (data: { error?: string }) => {
-        finishFailure(data?.error ?? "Render failed");
+        const err = String(data?.error ?? "");
+        if (err.toLowerCase() === "cancelled") {
+          cleanup();
+          setIsExporting(false);
+          setExportProgress(0);
+          setActiveJobId(null);
+          toast.info("Export cancelled.");
+          return;
+        }
+        finishFailure(err || "Render failed");
+      });
+      channel.bind("cancelled", () => {
+        cleanup();
+        setIsExporting(false);
+        setExportProgress(0);
+        setActiveJobId(null);
+        toast.info("Export cancelled.");
       });
 
       // Belt-and-braces: also poll periodically. If Pusher delivers first, the

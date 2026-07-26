@@ -281,18 +281,32 @@ async def _route_pubsub(channel: str, payload: dict) -> None:
             CHANNEL_EXPORT_FAILED: "error",
         }[channel]
 
+        # User cancel is not a hard failure — keep project usable.
+        cancel_reason = (
+            str(payload.get("reason") or payload.get("error") or "").strip().lower()
+        )
+        if event == "error" and cancel_reason == "cancelled":
+            event = "cancelled"
+
         # Auto-update project status in DB if this belongs to a project
-        if event in ("complete", "error"):
+        if event in ("complete", "error", "cancelled"):
             try:
                 from datetime import datetime, timezone as _tz
 
-                status = "ready" if event == "complete" else "failed"
+                if event == "complete":
+                    status = "ready"
+                elif event == "cancelled":
+                    status = "cancelled"
+                else:
+                    status = "failed"
                 updates: dict = {
                     "status": status,
                     "updated_at": datetime.now(_tz.utc),
                 }
                 if event == "error":
                     updates["error"] = payload.get("error", "Unknown error")
+                elif event == "cancelled":
+                    updates["error"] = "cancelled"
 
                 def _update_project_by_job():
                     snaps = list(
@@ -802,9 +816,14 @@ async def stream_info(
     video_id = _require_youtube_url(url)
     result = await get_stream_manifests(video_id)
     if result.get("status") != "ready":
+        logger.warning(
+            "stream_info_unavailable video_id=%s err=%s",
+            video_id,
+            result.get("error"),
+        )
         raise HTTPException(
             status_code=503,
-            detail=f"Stream info unavailable: {result.get('error', 'unknown error')}",
+            detail="Stream info unavailable. Try again or upload an MP4.",
         )
     return result
 
@@ -2342,17 +2361,20 @@ async def run_director(
         )
 
 
+@limiter.limit("5/minute")
 @app.post("/api/create-video")
 async def create_video(
-    request: CreateVideoRequest, verified_user_id: str = Depends(get_verified_user_id)
+    request: Request,
+    body: CreateVideoRequest,
+    verified_user_id: str = Depends(get_verified_user_id),
 ):
     """
     Runs: ScriptAgent → PreFlight → RenderService (Background)
     """
-    user_id = verified_user_id or request.user_id
+    user_id = verified_user_id or body.user_id
     workload_id = hashlib.sha256(
         json.dumps(
-            {"script": request.script, "clip_paths": request.clip_paths},
+            {"script": body.script, "clip_paths": body.clip_paths},
             sort_keys=True,
             separators=(",", ":"),
         ).encode("utf-8")
@@ -2360,13 +2382,13 @@ async def create_video(
     await _admit_user_workload(
         user_id=user_id,
         workload_id=workload_id,
-        query=request.script,
+        query=body.script,
     )
     try:
         from agent.script_agent import ScriptAgent
 
         agent = ScriptAgent()
-        production_plan = await agent.run(request.script, request.clip_paths)
+        production_plan = await agent.run(body.script, body.clip_paths)
 
         job_id = f"gen-{uuid.uuid4().hex}"
 
@@ -2620,6 +2642,7 @@ async def adk_enhance(
         raise HTTPException(status_code=500, detail="Failed to enhance script")
 
 
+@limiter.limit("5/minute")
 @app.post("/api/adk/generate")
 async def adk_generate(
     request: Request,
@@ -2893,7 +2916,10 @@ async def get_presigned_upload_url(
         )
     except RuntimeError as exc:
         logger.error("presigned_url_failed user=%s: %s", verified_user_id, exc)
-        raise HTTPException(status_code=503, detail=str(exc))
+        raise HTTPException(
+            status_code=503,
+            detail="Upload service temporarily unavailable. Try again shortly.",
+        ) from exc
     except Exception as exc:
         logger.exception("presigned_url_unexpected user=%s: %s", verified_user_id, exc)
         raise HTTPException(status_code=500, detail="Could not generate upload URL")

@@ -494,5 +494,5 @@ async def predict(
         )
         raise HTTPException(
             status_code=500,
-            detail=f"PreFlight analysis failed: {str(e)[:100]}",
+            detail="PreFlight analysis failed. Please try again.",
         )
