@@ -9,7 +9,6 @@ import type { DragEvent, ChangeEvent } from "react";
 import dynamic from "next/dynamic";
 import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
-import Image from "next/image";
 import QSLogo from "@/components/shared/QSLogo";
 import {
   Zap,
@@ -132,16 +131,6 @@ export default function EditorLayout() {
 
   useEffect(() => {
     setIsAdvancedMode(new URLSearchParams(window.location.search).get("advanced") === "1");
-    // First-run welcome toast (once per browser session)
-    if (!sessionStorage.getItem("titan_welcome_shown")) {
-      sessionStorage.setItem("titan_welcome_shown", "1");
-      setTimeout(() => {
-        toast("Welcome to the editor", {
-          description: "Paste a link or drop a video — then chat your edits in Studio Chat.",
-          duration: 4500,
-        });
-      }, 1000);
-    }
   }, []);
 
   const [urlInput, setUrlInput] = useState("");
@@ -206,7 +195,7 @@ export default function EditorLayout() {
     if (sourceUrl && !hasShownShortcutsRef.current) {
       hasShownShortcutsRef.current = true;
       toast("Pro tip: Use keyboard shortcuts", {
-        description: "Shift+Alt+A for Studio Chat · I/O to mark range · M for markers · ? for all shortcuts",
+        description: "Shift+Alt+A for Chat · I/O to mark range · M for markers · ? for all shortcuts",
         duration: 8000,
       });
     }
@@ -426,12 +415,12 @@ export default function EditorLayout() {
           <span className="h-4 w-px bg-foreground/8 shrink-0" />
           <div
             className={cn(
-              "flex items-center gap-2 pl-2.5 pr-3 py-1.5 rounded-full border backdrop-blur-md transition-colors duration-300",
+              "flex items-center gap-2 pl-2.5 pr-3 py-1.5 rounded-full border transition-colors duration-300",
               ingestStage === "failed"
-                ? "border-red-400/25 bg-red-400/[0.06]"
+                ? "border-red-400/25 bg-red-400/[0.08]"
                 : isProcessing || (ingestStage !== "idle" && ingestStage !== "ready")
-                  ? "border-amber-400/25 bg-amber-400/[0.06]"
-                  : "border-emerald-400/25 bg-emerald-400/[0.06]"
+                  ? "border-amber-400/25 bg-amber-400/[0.08]"
+                  : "border-emerald-400/25 bg-emerald-400/[0.08]"
             )}
           >
             <span className="relative flex h-2 w-2 shrink-0">
@@ -554,8 +543,8 @@ export default function EditorLayout() {
 
           <button
             onClick={() => setAIPanelOpen(!aiPanelOpen)}
-            title={aiPanelOpen ? "Close Studio Chat (Shift+Alt+A)" : "Open Studio Chat (Shift+Alt+A)"}
-            aria-label={aiPanelOpen ? "Close Studio Chat" : "Open Studio Chat"}
+            title={aiPanelOpen ? "Close Chat (Shift+Alt+A)" : "Chat (Shift+Alt+A)"}
+            aria-label={aiPanelOpen ? "Close Chat" : "Open Chat"}
             aria-pressed={aiPanelOpen}
             className={cn(
               "h-9 w-9 rounded-xl flex items-center justify-center border transition-all duration-200",
@@ -674,7 +663,7 @@ export default function EditorLayout() {
                         </div>
                         {/* Floating glass status chip — bottom-center, never obscures the frame */}
                         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
-                          <div className="flex items-center gap-2.5 px-4 py-2 rounded-full bg-base/85 backdrop-blur-xl border border-border shadow-2xl">
+                          <div className="flex items-center gap-2.5 px-4 py-2 rounded-full bg-card/95 border border-border shadow-lg">
                             <Loader2 className="w-3.5 h-3.5 text-primary animate-spin shrink-0" />
                             <span className="text-[10px] font-black uppercase tracking-[0.18em] text-foreground whitespace-nowrap">
                               {currentStage === "transcribing"
@@ -716,17 +705,16 @@ export default function EditorLayout() {
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    className="w-full h-full flex flex-col items-center justify-center gap-6 text-center p-8"
+                    className="w-full h-full flex flex-col items-center justify-end gap-4 text-center px-8 pb-10 pt-24"
                   >
-                    <div className="relative">
-                      <div className="absolute inset-0 bg-primary/10 blur-3xl rounded-full scale-150" />
-                      <div className="relative w-20 h-20 rounded-2xl bg-card border border-border flex items-center justify-center shadow-lg">
-                        <Image src="/qs-logo-mark-dark.png" alt="" width={40} height={40} className="object-contain opacity-80 hidden dark:block" />
-                        <Image src="/qs-logo-mark-light.png" alt="" width={40} height={40} className="object-contain opacity-90 block dark:hidden" />
+                    {/* Hero sits lower so paste/drop input (IngestSurface) stays primary */}
+                    <div className="relative opacity-90">
+                      <div className="w-14 h-14 rounded-xl bg-card border border-border flex items-center justify-center shadow-md">
+                        <QSLogo variant="mark" size="md" />
                       </div>
                     </div>
                     <div className="max-w-sm">
-                      <h3 className="text-lg font-bold text-foreground mb-2 tracking-tight">
+                      <h3 className="text-base font-bold text-foreground mb-1.5 tracking-tight">
                         Ready to create
                       </h3>
                       <p className="text-sm text-muted-foreground leading-relaxed">
@@ -741,7 +729,7 @@ export default function EditorLayout() {
                         <kbd className="px-1.5 py-0.5 rounded bg-foreground/5 border border-foreground/8 font-mono text-[9px]">Shift</kbd>
                         <kbd className="px-1.5 py-0.5 rounded bg-foreground/5 border border-foreground/8 font-mono text-[9px]">Alt</kbd>
                         <kbd className="px-1.5 py-0.5 rounded bg-foreground/5 border border-foreground/8 font-mono text-[9px]">A</kbd>
-                        <span>Studio Chat</span>
+                        <span>Chat</span>
                       </span>
                       <span className="w-px h-3 bg-foreground/10" />
                       <span className="flex items-center gap-1.5">
@@ -798,7 +786,7 @@ export default function EditorLayout() {
           )}
         </main>
 
-        {/* AI Editor — docked right column on desktop, bottom sheet on mobile.
+        {/* Chat — docked right column on desktop, bottom sheet on mobile.
           Toggled via header Sparkles or Shift+Alt+A. */}
         <AIPanel />
       </div>
@@ -930,7 +918,7 @@ export default function EditorLayout() {
         <button
           onClick={() => setMobileInspectorOpen(true)}
           aria-label="Open clip inspector"
-          className="fixed bottom-[4.5rem] right-4 z-40 h-14 w-14 rounded-full bg-card/90 backdrop-blur-xl border border-border/50 shadow-[0_8px_32px_rgba(0,0,0,0.3)] flex items-center justify-center text-fg-muted hover:text-primary hover:border-primary/30 transition-colors touch-manipulation"
+          className="fixed bottom-[4.5rem] right-4 z-40 h-14 w-14 rounded-full bg-card border border-border/50 shadow-lg flex items-center justify-center text-fg-muted hover:text-primary hover:border-primary/30 transition-colors touch-manipulation"
         >
           <SlidersHorizontal size={18} />
         </button>

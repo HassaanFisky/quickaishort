@@ -9,8 +9,6 @@ from typing import Optional
 
 router = APIRouter(prefix="/api/admin/cookies", tags=["admin"])
 
-_UNSET = object()
-
 
 def _check_admin(secret: Optional[str]) -> None:
     admin_secret = os.getenv("ADMIN_SECRET")
@@ -33,8 +31,20 @@ async def cookie_status(
 async def cookie_validate(
     x_admin_secret: Optional[str] = Header(None, alias="X-Admin-Secret"),
 ):
-    """Force a live yt-dlp validation against the canary video (takes ~5s)."""
+    """Force a live yt-dlp validation against the canary video (takes ~5–20s)."""
     _check_admin(x_admin_secret)
-    from services.cookie_rotator import validate_cookies
+    from services.cookie_rotator import refresh_cookies_from_env
 
-    return validate_cookies()
+    return refresh_cookies_from_env()
+
+
+@router.post("/invalidate")
+async def cookie_invalidate(
+    x_admin_secret: Optional[str] = Header(None, alias="X-Admin-Secret"),
+):
+    """Drop in-process cookie health cache so the next status check re-validates."""
+    _check_admin(x_admin_secret)
+    from services.cookie_rotator import invalidate_cookie_cache
+
+    invalidate_cookie_cache("admin_invalidate")
+    return {"ok": True, "message": "Cookie validation cache cleared"}

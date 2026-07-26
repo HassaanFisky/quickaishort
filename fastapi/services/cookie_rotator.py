@@ -3,6 +3,9 @@
 Runs yt-dlp against a known-good public video to verify the current cookies
 are still accepted. Results are cached in-process for 1 hour so the hot path
 (inject_ydl_bypass) doesn't pay the subprocess cost on every request.
+
+Honest degrade: when cookies are missing or expired, callers should fall
+through to PoToken-only / Cobalt — never claim CAPTCHA bypass capability.
 """
 
 from __future__ import annotations
@@ -20,19 +23,67 @@ _CANARY_VIDEO_ID = "dQw4w9WgXcQ"
 _CANARY_URL = f"https://www.youtube.com/watch?v={_CANARY_VIDEO_ID}"
 
 _VALIDATION_CACHE_TTL = 3600  # 1 hour
+_VALIDATION_TIMEOUT_S = int(os.getenv("YOUTUBE_COOKIE_VALIDATE_TIMEOUT_S", "20"))
 
 _last_check_time: float = 0.0
 _last_check_valid: Optional[bool] = None
 _last_check_error: Optional[str] = None
 
 
+def cookies_configured() -> bool:
+    """True when YOUTUBE_COOKIES (inline or file path) is present in the env."""
+    raw = (os.getenv("YOUTUBE_COOKIES") or "").strip()
+    cookie_file = (os.getenv("YOUTUBE_COOKIE_FILE") or "").strip()
+    return bool(raw or cookie_file)
+
+
+def invalidate_cookie_cache(reason: str = "") -> None:
+    """Force the next get_cookie_status() call to re-validate (e.g. after 403)."""
+    global _last_check_time, _last_check_valid, _last_check_error
+    _last_check_time = 0.0
+    _last_check_valid = None
+    _last_check_error = reason or None
+    if reason:
+        logger.warning("youtube_cookie_cache_invalidated reason=%s", reason[:200])
+
+
+def _classify_cookie_error(stderr: str) -> str:
+    low = (stderr or "").lower()
+    if "sign in" in low or "cookies are no longer valid" in low or "login required" in low:
+        return (
+            "YouTube cookies expired or rejected. Update YOUTUBE_COOKIES on Cloud Run; "
+            "acquisition will degrade to PoToken-only until refreshed."
+        )
+    if "403" in low or "429" in low:
+        return (
+            "YouTube rate-limited or blocked this cookie session (403/429). "
+            "Retry later or rotate cookies; PoToken fallback may still work."
+        )
+    if "bot" in low or "confirm you're not a bot" in low:
+        return (
+            "YouTube bot-check triggered. Cookie refresh required — "
+            "no CAPTCHA solver is integrated; fail honestly."
+        )
+    if not stderr:
+        return "Cookie validation failed with no detail from yt-dlp."
+    return stderr[-400:]
+
+
 def validate_cookies() -> dict:
     """
     Run yt-dlp against the canary video with current cookies.
-    Returns {valid: bool, error: str|None}.
+    Returns {valid: bool, error: str|None, cookies_configured: bool}.
     Does NOT update the in-process cache — callers that want caching use
     get_cookie_status().
     """
+    configured = cookies_configured()
+    if not configured:
+        return {
+            "valid": False,
+            "error": "YOUTUBE_COOKIES not configured — PoToken-only / Cobalt degrade path.",
+            "cookies_configured": False,
+        }
+
     from app.utils.youtube_auth import inject_ydl_bypass
 
     ydl_opts = inject_ydl_bypass(
@@ -62,18 +113,34 @@ def validate_cookies() -> dict:
         result = subprocess.run(
             cmd,
             capture_output=True,
-            timeout=20,
+            timeout=_VALIDATION_TIMEOUT_S,
         )
         if result.returncode == 0:
-            return {"valid": True, "error": None}
+            return {"valid": True, "error": None, "cookies_configured": True}
         stderr = (result.stderr or b"").decode("utf-8", errors="replace")[-500:]
-        return {"valid": False, "error": stderr}
+        return {
+            "valid": False,
+            "error": _classify_cookie_error(stderr),
+            "cookies_configured": True,
+        }
     except subprocess.TimeoutExpired:
-        return {"valid": False, "error": "yt-dlp validation timed out after 20s"}
+        return {
+            "valid": False,
+            "error": f"yt-dlp validation timed out after {_VALIDATION_TIMEOUT_S}s",
+            "cookies_configured": True,
+        }
     except FileNotFoundError:
-        return {"valid": False, "error": "yt-dlp not found in PATH"}
+        return {
+            "valid": False,
+            "error": "yt-dlp not found in PATH",
+            "cookies_configured": True,
+        }
     except Exception as exc:
-        return {"valid": False, "error": str(exc)}
+        return {
+            "valid": False,
+            "error": str(exc),
+            "cookies_configured": True,
+        }
 
 
 def get_cookie_status() -> dict:
@@ -83,6 +150,7 @@ def get_cookie_status() -> dict:
     """
     global _last_check_time, _last_check_valid, _last_check_error
 
+    configured = cookies_configured()
     age = time.time() - _last_check_time
     if _last_check_valid is not None and age < _VALIDATION_CACHE_TTL:
         return {
@@ -91,6 +159,13 @@ def get_cookie_status() -> dict:
             "error": _last_check_error,
             "source": "env_var",
             "cache_age_s": int(age),
+            "cookies_configured": configured,
+            "degraded": not _last_check_valid,
+            "hint": (
+                None
+                if _last_check_valid
+                else "Cookies invalid/missing — acquisition uses PoToken-only fallback. No CAPTCHA solver."
+            ),
         }
 
     result = validate_cookies()
@@ -113,6 +188,13 @@ def get_cookie_status() -> dict:
         "error": _last_check_error,
         "source": "env_var",
         "cache_age_s": 0,
+        "cookies_configured": configured,
+        "degraded": not _last_check_valid,
+        "hint": (
+            None
+            if _last_check_valid
+            else "Cookies invalid/missing — acquisition uses PoToken-only fallback. No CAPTCHA solver."
+        ),
     }
 
 
@@ -121,6 +203,5 @@ def refresh_cookies_from_env() -> dict:
     Force a fresh validation against the current YOUTUBE_COOKIES env var.
     Useful after a Cloud Run env-var update takes effect on a new instance.
     """
-    global _last_check_time
-    _last_check_time = 0.0  # invalidate cache
+    invalidate_cookie_cache("refresh_from_env")
     return get_cookie_status()

@@ -763,7 +763,7 @@ export function AIPanel() {
         <div className="ai-header-left">
           {/* Gem badge */}
           <div className="ai-header-gem">✦</div>
-          <span className="ai-panel-title">Studio Chat</span>
+          <span className="ai-panel-title">Chat</span>
         </div>
 
         <div className="ai-header-right">
@@ -790,7 +790,7 @@ export function AIPanel() {
           <button
             className="ai-close-btn"
             onClick={() => setAIPanelOpen(false)}
-            aria-label="Close Studio Chat"
+            aria-label="Close Chat"
           >
             <X size={14} />
           </button>
@@ -1032,7 +1032,7 @@ export function AIPanel() {
         >
           <aside
             className="ai-panel relative w-[clamp(380px,30vw,460px)]"
-            aria-label="Studio Chat"
+            aria-label="Chat"
           >
             {/* Slim slide edge — docked sidebar cue, never covers the canvas */}
             <div

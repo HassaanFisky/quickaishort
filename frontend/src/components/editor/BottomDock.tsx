@@ -49,6 +49,7 @@ function TimelineClip({
   duration,
   isSelected,
   isMobile,
+  thumbnailUrl,
   onSelect,
   onContextMenu,
   onOpenInspector,
@@ -57,6 +58,7 @@ function TimelineClip({
   duration: number;
   isSelected: boolean;
   isMobile: boolean;
+  thumbnailUrl?: string | null;
   onSelect: () => void;
   onContextMenu: (point: { clientX: number; clientY: number }, clipId: string) => void;
   onOpenInspector: () => void;
@@ -181,13 +183,28 @@ function TimelineClip({
     <div
       ref={clipRef}
       className={cn(
-        "absolute top-0.5 bottom-0.5 rounded-md flex items-center transition-shadow select-none touch-manipulation",
+        "absolute top-0.5 bottom-0.5 rounded-md flex items-center transition-shadow select-none touch-manipulation overflow-hidden",
         isSelected
-          ? "bg-gradient-to-r from-primary/40 to-primary/20 border-2 border-primary shadow-[0_0_15px_hsl(var(--primary)/0.3)] z-10"
-          : "bg-foreground/10 border border-foreground/10 hover:bg-foreground/20",
+          ? "border-2 border-primary shadow-[0_0_15px_hsl(var(--primary)/0.3)] z-10"
+          : "border border-foreground/10 hover:brightness-110",
         isDragging && "opacity-80 scale-[1.02] z-50",
+        !thumbnailUrl && (isSelected
+          ? "bg-gradient-to-r from-primary/40 to-primary/20"
+          : "bg-foreground/10"),
       )}
-      style={{ left: `${left}%`, width: `${width}%`, minWidth: isMobile ? "60px" : undefined }}
+      style={{
+        left: `${left}%`,
+        width: `${width}%`,
+        minWidth: isMobile ? "60px" : undefined,
+        ...(thumbnailUrl
+          ? {
+              backgroundImage: `linear-gradient(to right, hsl(var(--background) / 0.35), hsl(var(--background) / 0.15)), url(${thumbnailUrl})`,
+              backgroundSize: "auto 100%",
+              backgroundRepeat: "repeat-x",
+              backgroundPosition: "left center",
+            }
+          : {}),
+      }}
       onMouseDown={(e) => handleMouseDown(e, "move")}
       onContextMenu={(e) => { e.preventDefault(); onContextMenu(e, clip.id); }}
     >
@@ -275,6 +292,7 @@ export default function BottomDock() {
     timelineMarkers,
     addTimelineMarker,
     videoElementRef,
+    thumbnailUrl,
   } = useEditorStore();
 
   const { activeTool, setActiveTool, timelineZoom, setTimelineZoom, snapLine } = useUIStore();
@@ -865,6 +883,16 @@ export default function BottomDock() {
                 "w-full rounded-lg bg-foreground/5 border border-foreground/5 relative overflow-visible cursor-crosshair",
                 isMobile ? "h-12" : "h-8",
               )}
+              style={
+                thumbnailUrl && duration > 0
+                  ? {
+                      backgroundImage: `linear-gradient(hsl(var(--background) / 0.55), hsl(var(--background) / 0.55)), url(${thumbnailUrl})`,
+                      backgroundSize: "auto 100%",
+                      backgroundRepeat: "repeat-x",
+                      backgroundPosition: "left center",
+                    }
+                  : undefined
+              }
             >
               {isProcessing ? (
                 /* Pulsing skeleton while pipeline is running */
@@ -889,6 +917,7 @@ export default function BottomDock() {
                     duration={duration}
                     isSelected={clip.id === selectedClipId}
                     isMobile={isMobile}
+                    thumbnailUrl={thumbnailUrl}
                     onSelect={() => selectClip(clip.id)}
                     onContextMenu={handleClipContextMenu}
                     onOpenInspector={handleOpenInspector}

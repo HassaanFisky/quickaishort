@@ -11,7 +11,7 @@ const FIXED_SHORTCUTS = [
   { label: "Play / Pause", chips: ["K"] },
   { label: "Forward 10s", chips: ["L"] },
   { label: "Show Shortcuts", chips: ["?"] },
-  { label: "Toggle Studio Chat", chips: ["Shift", "Alt", "A"] },
+  { label: "Toggle Chat", chips: ["Shift", "Alt", "A"] },
 ];
 
 interface Props {

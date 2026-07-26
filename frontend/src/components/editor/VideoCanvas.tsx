@@ -94,6 +94,7 @@ export default function VideoCanvas() {
     setYtVideoId,
     setClipRange,
     setVideoMetadata,
+    selectClip,
     compiledManifest,
     timelineRevision,
     dubJob,
@@ -389,6 +390,30 @@ export default function VideoCanvas() {
     [currentTime, duration, setCurrentTime]
   );
 
+  const multiClip = suggestions.length > 1;
+  const goAdjacentClip = useCallback(
+    (dir: -1 | 1) => {
+      if (suggestions.length < 2) return;
+      const idx = selectedClipId
+        ? suggestions.findIndex((c) => c.id === selectedClipId)
+        : -1;
+      const nextIdx =
+        idx < 0
+          ? dir === 1
+            ? 0
+            : suggestions.length - 1
+          : Math.max(0, Math.min(suggestions.length - 1, idx + dir));
+      const clip = suggestions[nextIdx];
+      if (!clip) return;
+      selectClip(clip.id);
+      if (videoRef.current) {
+        videoRef.current.currentTime = clip.start;
+        setCurrentTime(clip.start);
+      }
+    },
+    [suggestions, selectedClipId, selectClip, setCurrentTime]
+  );
+
   // Keyboard navigation — j/k/l only.
   // Space, ArrowLeft, ArrowRight are owned by EditorPage via shortcutsStore
   // to avoid double-firing on the same keypress.
@@ -402,9 +427,9 @@ export default function VideoCanvas() {
         target.contentEditable === "true"
       ) return;
       switch (e.key) {
-        case "j": e.preventDefault(); skip(-10); break;
+        case "j": e.preventDefault(); skip(-5); break;
         case "k": e.preventDefault(); togglePlay(); break;
-        case "l": e.preventDefault(); skip(10); break;
+        case "l": e.preventDefault(); skip(5); break;
       }
     };
     document.addEventListener("keydown", handler);
@@ -648,14 +673,14 @@ export default function VideoCanvas() {
 
         {/* Hover overlay — center play/skip buttons */}
         {sourceUrl && !localYtId && !isBuffering && !videoError && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none group-hover:pointer-events-auto">
-            <div className="flex items-center gap-3">
+          <div className="absolute inset-0 flex items-center justify-center bg-black/25 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none group-hover:pointer-events-auto">
+            <div className="flex items-center gap-2">
               <button
-                onClick={() => skip(-10)}
-                aria-label="Skip back 10 seconds"
-                className="w-10 h-10 rounded-full bg-black/60 border border-border flex items-center justify-center text-white hover:bg-black/80 transition-colors"
+                onClick={() => skip(-5)}
+                aria-label="Skip back 5 seconds"
+                className="h-10 min-w-10 px-2 rounded-full bg-black/65 border border-white/15 flex items-center justify-center text-white text-[11px] font-bold hover:bg-black/80 transition-colors"
               >
-                <SkipBack className="w-4 h-4" />
+                −5s
               </button>
               <button
                 onClick={togglePlay}
@@ -669,11 +694,11 @@ export default function VideoCanvas() {
                 )}
               </button>
               <button
-                onClick={() => skip(10)}
-                aria-label="Skip forward 10 seconds"
-                className="w-10 h-10 rounded-full bg-black/60 border border-border flex items-center justify-center text-white hover:bg-black/80 transition-colors"
+                onClick={() => skip(5)}
+                aria-label="Skip forward 5 seconds"
+                className="h-10 min-w-10 px-2 rounded-full bg-black/65 border border-white/15 flex items-center justify-center text-white text-[11px] font-bold hover:bg-black/80 transition-colors"
               >
-                <SkipForward className="w-4 h-4" />
+                +5s
               </button>
             </div>
           </div>
@@ -692,10 +717,22 @@ export default function VideoCanvas() {
             {isPlaying ? <Pause size={15} /> : <Play size={15} />}
           </button>
 
-          {/* Skip back */}
-          <button className="ctrl-btn" onClick={() => skip(-10)} aria-label="Skip back 10 seconds">
-            <SkipBack size={14} />
+          {/* Skip back 5s — always when video loaded */}
+          <button className="ctrl-btn ctrl-skip" onClick={() => skip(-5)} aria-label="Skip back 5 seconds">
+            −5s
           </button>
+
+          {/* Prev clip — only when multiple clips exist */}
+          {multiClip && (
+            <button
+              className="ctrl-btn"
+              onClick={() => goAdjacentClip(-1)}
+              aria-label="Previous clip"
+              title="Previous clip"
+            >
+              <SkipBack size={14} />
+            </button>
+          )}
 
           {/* Seek track */}
           <div className="seek-track">
@@ -711,9 +748,21 @@ export default function VideoCanvas() {
             />
           </div>
 
-          {/* Skip forward */}
-          <button className="ctrl-btn" onClick={() => skip(10)} aria-label="Skip forward 10 seconds">
-            <SkipForward size={14} />
+          {/* Next clip — only when multiple clips exist */}
+          {multiClip && (
+            <button
+              className="ctrl-btn"
+              onClick={() => goAdjacentClip(1)}
+              aria-label="Next clip"
+              title="Next clip"
+            >
+              <SkipForward size={14} />
+            </button>
+          )}
+
+          {/* Skip forward 5s */}
+          <button className="ctrl-btn ctrl-skip" onClick={() => skip(5)} aria-label="Skip forward 5 seconds">
+            +5s
           </button>
 
           {/* Timecode */}

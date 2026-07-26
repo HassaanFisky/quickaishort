@@ -4,12 +4,12 @@ import Image from "next/image";
 import { cn } from "@/lib/utils";
 
 /**
- * QSLogo — official brand mark assets (no coded SVG glyph).
- *   variant="mark"     → theme-aware mark only (no wordmark text in the PNG)
+ * QSLogo — official brand mark from /qs-logo.png (sole mark source).
+ *   variant="mark"     → mark only
  *   variant="full"     → mark + "QuickAI Short" wordmark (HTML text)
  *   variant="wordmark" → wordmark text only
  *
- * Light theme uses qs-logo-mark-light.png so the mark does not fade on pale UI.
+ * Light theme: soft drop-shadow for contrast on pale surfaces (no alternate AI marks).
  */
 
 type Size = "sm" | "md" | "lg" | "xl";
@@ -32,29 +32,21 @@ const TEXT_PX: Record<Size, string> = {
 };
 
 function Mark({ pixelSize, animated }: { pixelSize: number; animated: boolean }) {
-  const common = cn(
-    "object-contain select-none",
-    animated && "transition-transform duration-300 hover:scale-110",
-  );
   return (
-    <span className="relative inline-flex shrink-0" style={{ width: pixelSize, height: pixelSize }}>
-      {/* Dark / OLED — bright mark on black plate */}
+    <span
+      className={cn(
+        "relative inline-flex shrink-0 qs-logo-mark",
+        animated && "transition-transform duration-300 hover:scale-110",
+      )}
+      style={{ width: pixelSize, height: pixelSize }}
+    >
       <Image
-        src="/qs-logo-mark-dark.png"
+        src="/qs-logo.png"
         alt="QuickAI Short"
         width={pixelSize}
         height={pixelSize}
         priority
-        className={cn(common, "hidden dark:block")}
-      />
-      {/* Light — contrast-safe mark on pale plate */}
-      <Image
-        src="/qs-logo-mark-light.png"
-        alt="QuickAI Short"
-        width={pixelSize}
-        height={pixelSize}
-        priority
-        className={cn(common, "block dark:hidden")}
+        className="object-contain select-none"
       />
     </span>
   );

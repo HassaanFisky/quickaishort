@@ -32,6 +32,36 @@ _TIER_TIMEOUT_S = int(os.getenv("VIDEO_ACQUISITION_TIER_TIMEOUT_S", "90"))
 _CACHE_TTL_S = 3600  # 1 hour
 _CACHE_KEY_PREFIX = "acquisition:"
 _YT_403_RE = r"HTTP Error 403|HTTP Error 429|Sign in to confirm"
+_YT_COOKIE_FAIL_RE = (
+    r"Sign in to confirm|cookies? (are )?no longer valid|login required|"
+    r"confirm you.?re not a bot|HTTP Error 403|HTTP Error 429"
+)
+
+
+def _looks_like_cookie_failure(err: str) -> bool:
+    import re
+
+    return bool(re.search(_YT_COOKIE_FAIL_RE, err or "", re.IGNORECASE))
+
+
+def _humanize_acquisition_failure(video_id: str, failed_tiers: list[dict]) -> str:
+    """Honest, actionable error for operators / upstream UI — no CAPTCHA claims."""
+    errs = " | ".join(str(t.get("error", "")) for t in failed_tiers)
+    if _looks_like_cookie_failure(errs):
+        return (
+            f"YouTube blocked download for {video_id}: cookies expired or rate-limited. "
+            "Refresh YOUTUBE_COOKIES (admin /api/admin/cookies/validate). "
+            "PoToken-only was already tried — no CAPTCHA solver is integrated."
+        )
+    if any("timed out" in str(t.get("error", "")).lower() for t in failed_tiers):
+        return (
+            f"YouTube acquisition timed out for {video_id} after "
+            f"{_TIER_TIMEOUT_S}s per tier. Retry later or shorten the clip range."
+        )
+    if not failed_tiers:
+        return f"Acquisition failed for video {video_id} with no tier detail."
+    last = str(failed_tiers[-1].get("error", ""))[:220]
+    return f"All {len(failed_tiers)} acquisition tiers failed for video {video_id}. Last: {last}"
 
 
 def _cache_key(video_id: str, start_sec: float, end_sec: float) -> str:
@@ -401,6 +431,13 @@ def acquire_video(
                     elapsed,
                     err_msg,
                 )
+            if tier_num in (0, 1) and _looks_like_cookie_failure(err_msg):
+                try:
+                    from services.cookie_rotator import invalidate_cookie_cache
+
+                    invalidate_cookie_cache(f"tier_{tier_num}:{err_msg[:120]}")
+                except Exception:
+                    pass
             failed_tiers.append(
                 {"tier": tier_num, "error": err_msg, "elapsed_s": round(elapsed, 2)}
             )
@@ -409,7 +446,7 @@ def acquire_video(
         "status": "error",
         "video_id": video_id,
         "failed_tiers": failed_tiers,
-        "error": f"All {len(failed_tiers)} acquisition tiers failed for video {video_id}",
+        "error": _humanize_acquisition_failure(video_id, failed_tiers),
     }
 
 
@@ -424,6 +461,7 @@ async def get_stream_manifests(video_id: str) -> dict:
         {"status": "ready", "video_id": str, "title": str, "duration": float,
          "thumbnail": str, "formats": [...]}
     """
+    import re
     import yt_dlp
     from app.utils.youtube_auth import inject_ydl_bypass
     from services.proxy_rotator import ProxyPoolExhausted, acquire, release
@@ -448,7 +486,7 @@ async def get_stream_manifests(video_id: str) -> dict:
                 None,
                 lambda: yt_dlp.YoutubeDL(base_opts).extract_info(url, download=False),
             ),
-            timeout=45.0,
+            timeout=float(os.getenv("VIDEO_MANIFEST_TIMEOUT_S", "45")),
         )
 
         formats = [
@@ -482,12 +520,34 @@ async def get_stream_manifests(video_id: str) -> dict:
     except Exception as exc:
         if proxy:
             release(proxy, success=False)
+        err = str(exc)[:200]
         logger.warning(
             "get_stream_manifests_failed video_id=%s error=%s",
             video_id,
-            str(exc)[:200],
+            err,
         )
-        return {"status": "error", "video_id": video_id, "error": str(exc)[:200]}
+        if _looks_like_cookie_failure(err):
+            try:
+                from services.cookie_rotator import invalidate_cookie_cache
+
+                invalidate_cookie_cache(f"manifest:{err[:120]}")
+            except Exception:
+                pass
+            return {
+                "status": "error",
+                "video_id": video_id,
+                "error": (
+                    "YouTube cookies expired or rate-limited while probing stream. "
+                    "Refresh cookies via admin; PoToken degrade may still work for download."
+                ),
+            }
+        if re.search(r"timed?\s*out|Timeout", err, re.IGNORECASE):
+            return {
+                "status": "error",
+                "video_id": video_id,
+                "error": "YouTube stream probe timed out. Retry in a moment.",
+            }
+        return {"status": "error", "video_id": video_id, "error": err}
 
 
 async def analyze_video_metadata_with_ai(metadata: dict) -> dict:

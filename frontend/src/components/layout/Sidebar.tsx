@@ -57,24 +57,24 @@ export default function Sidebar() {
   return (
     <aside
       className={cn(
-        "fixed top-0 left-0 z-40 hidden md:flex h-screen flex-col border-r border-white/[0.05] backdrop-blur-xl bg-[hsl(var(--bg-base))]/80",
+        "fixed top-0 left-0 z-40 hidden md:flex h-screen flex-col border-r border-border/60 bg-[hsl(var(--bg-base))]",
         "transition-all duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)]",
         isSidebarCollapsed ? "w-16" : "w-[232px]",
       )}
     >
       {/* Logo */}
-      <div className={cn("border-b border-white/[0.05] flex items-center", isSidebarCollapsed ? "px-3 py-5 justify-center" : "px-5 py-5")}>
+      <div className={cn("border-b border-border/60 flex items-center", isSidebarCollapsed ? "px-3 py-5 justify-center" : "px-5 py-5")}>
         <Link
           href="/"
           className="inline-flex items-center rounded-lg focus-visible:outline-none focus-visible:[box-shadow:0_0_0_2px_#020203,_0_0_0_4px_rgba(168,85,247,0.6)]"
           aria-label="QuickAI Short — home"
         >
           <Image
-            src="/qs-logo-optimized.png"
+            src="/qs-logo.png"
             alt="QuickAI Short"
             width={28}
             height={28}
-            className="rounded-md shrink-0"
+            className="rounded-md shrink-0 qs-logo-mark"
             priority
           />
           {!isSidebarCollapsed && (

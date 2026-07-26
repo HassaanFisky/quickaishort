@@ -193,7 +193,7 @@ export function shortcutLabel(id: UiShortcutId): string {
 export const LOCKED_SHORTCUTS = {
   palette:      { combo: "Shift+Alt+P", mac: "Cmd+Shift+P", label: "Command Palette" },
   brollDrawer:  { combo: "Shift+Alt+B", mac: "Cmd+Shift+B", label: "B-Roll Drawer" },
-  aiChat: { combo: "Shift+Alt+A", mac: "Cmd+Shift+A", label: "Studio Chat" },
+  aiChat: { combo: "Shift+Alt+A", mac: "Cmd+Shift+A", label: "Chat" },
 } as const;
 
 /** Default editor shortcuts */
