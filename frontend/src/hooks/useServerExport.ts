@@ -402,7 +402,7 @@ export function useServerExport({ userId }: UseServerExportArgs) {
       }
       try {
         await cancelExportJob(jobId);
-        toast.success("Export cancelled — credits refunded if unused.");
+        toast.success("Export cancelled.");
       } catch (err: unknown) {
         if (axios.isAxiosError(err)) {
           toast.error(
