@@ -1,0 +1,51 @@
+---
+description: Permanent silent craft OS for QuickAI — principles internalized; apply never lecture; no visual identity imitation
+alwaysApply: true
+---
+# Quality Craft OS (Permanent — This Project Only)
+
+**Status:** Fully internalized. Default decision system for this entire project (every present and future feature, screen, workflow, component, interaction, animation, AI behavior, architecture, and engineering decision). Always active. Never ask whether to apply it again — only stop if the founder explicitly disables this rule.
+
+## Operating Mode
+
+- Default internal decision process only. Do not discuss, restate, or name this framework unless the founder explicitly asks.
+- Deliver the final production-quality solution directly. Surface trade-offs/alternatives only when they materially improve the outcome; otherwise decide autonomously and continue.
+- Never recreate that brand’s visual identity, layouts, colors, or icons.
+- Evaluate approaches internally; ship the strongest long-term UX + engineering + a11y + maintainability + production-ready option. Never choose ease of build over quality.
+- Every element/motion must earn its place (communicate, guide, or feedback — else remove).
+- Responsive (desktop / laptop / tablet / mobile), accessibility, performance, reliability, and product-wide consistency are first-class and mandatory.
+- Design and engineering are one system.
+- No commits, Git history, GitHub workflows, PRs, or repo process changes unless explicitly requested.
+
+## Decision Pillars
+
+1. **Purpose** — Features cost time, attention, trust. Prefer what not to build. Serve ingest → chat → preview → export.
+2. **Agency** — User in control; undo easy; confirm only destructive actions.
+3. **Responsibility** — Ask late/least for data; AI harm anticipated; fail closed on spend; honest degradation.
+4. **Familiarity** — Same look = same behavior; consistent placement; reuse this product’s patterns.
+5. **Flexibility** — Context, ability, skill; progressive disclosure; personalize when one layout fails all.
+6. **Simplicity** — Remove friction, not capability. Strong hierarchy. Concise copy. Add context when it clarifies.
+7. **Craft** — Alignment, fluid feedback, no jank, solid states. Rushed UI kills trust in output.
+8. **Delight** — Target emotion: confident control. Result of getting 1–7 right — not decoration.
+
+## Pre-Ship Gate
+
+Purpose clear? Problem real? Simpler/faster/clearer possible? Less effort? More natural, trustworthy, accessible, consistent? Does motion earn its place?
+
+Reject decoration over clarity. Reject impressiveness over long-term UX.
+
+## Interaction, A11y, AI
+
+- Acknowledge instantly; progress if >~300ms. Loading / empty / error / success are first-class.
+- Prevent errors; one clear recovery step. Reduced-motion respected. Gestures need visible alternatives. Comfortable targets + spacing.
+- Not color-only meaning; contrast + text scale; keyboard/assistive discoverable; no critical auto-dismiss timers.
+- AI: one task per call; staged complex work; direct prompts; trusted instructions ≠ user input; structured output; availability + honest fallback; preview/confirm when harm risk exists.
+
+## QuickAI Constraints
+
+- Hydro-Glass tokens stay; raise craft inside them. Content (preview/timeline/export) over chrome. Chat = editing workflow.
+- Cost, security, and reliability gates still bind — craft never excuses spend or risk.
+
+## Optimization Order
+
+Human experience → speed → simplicity → accessibility → reliability → consistency → scalability → maintainability → performance → production readiness.

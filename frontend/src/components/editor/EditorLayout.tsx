@@ -348,6 +348,35 @@ export default function EditorLayout() {
     cancelAnalyze();
   };
 
+  const ingestSurfaceProps = {
+    urlInput,
+    urlValid,
+    youtubePreviewId,
+    isAnalysing,
+    panelCollapsed,
+    currentStage,
+    ingestStage,
+    videoTitle: storeVideoMetadata?.title,
+    hasSource: Boolean(sourceUrl || sourceFile),
+    ingestUploadProgress,
+    ingestError: ingestFailMessage,
+    ingestFromCache,
+    onUrlChange: handleUrlChange,
+    onAnalyze: () => void ingestUrl(urlInput),
+    onCancelAnalyze: handleCancel,
+    onExpandPanel: () => setPanelCollapsed(false),
+    onFileChosen: (f: File) => void ingestFile(f),
+    onCancelUpload: cancelUpload,
+    onRetryUpload: () => {
+      if (lastFileRef.current) void ingestFile(lastFileRef.current);
+      else void ingestUrl(urlInput);
+    },
+    onReplace: () => {
+      setPanelCollapsed(false);
+      useEditorStore.getState().resetIngestLifecycle();
+    },
+  };
+
   const handleDrop = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
@@ -594,34 +623,10 @@ export default function EditorLayout() {
 
           {/* Center — Stage */}
           <section className="relative flex flex-col items-center justify-center gap-4 min-h-0">
-            <IngestSurface
-              urlInput={urlInput}
-              urlValid={urlValid}
-              youtubePreviewId={youtubePreviewId}
-              isAnalysing={isAnalysing}
-              panelCollapsed={panelCollapsed}
-              currentStage={currentStage}
-              ingestStage={ingestStage}
-              videoTitle={storeVideoMetadata?.title}
-              hasSource={Boolean(sourceUrl || sourceFile)}
-              ingestUploadProgress={ingestUploadProgress}
-              ingestError={ingestFailMessage}
-              ingestFromCache={ingestFromCache}
-              onUrlChange={handleUrlChange}
-              onAnalyze={() => void ingestUrl(urlInput)}
-              onCancelAnalyze={handleCancel}
-              onExpandPanel={() => setPanelCollapsed(false)}
-              onFileChosen={(f) => void ingestFile(f)}
-              onCancelUpload={cancelUpload}
-              onRetryUpload={() => {
-                if (lastFileRef.current) void ingestFile(lastFileRef.current);
-                else void ingestUrl(urlInput);
-              }}
-              onReplace={() => {
-                setPanelCollapsed(false);
-                useEditorStore.getState().resetIngestLifecycle();
-              }}
-            />
+            {/* Dock overlay only when media exists — never float chrome on empty canvas */}
+            {(Boolean(sourceUrl || sourceFile) || Boolean(youtubePreviewId) || isAnalysing) && (
+              <IngestSurface variant="dock" {...ingestSurfaceProps} />
+            )}
             {/* Video stage */}
             <div className="editor-stage-bg w-full h-full flex items-center justify-center rounded-2xl overflow-hidden border border-border relative">
               <AnimatePresence mode="wait">
@@ -686,57 +691,42 @@ export default function EditorLayout() {
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    className="w-full h-full flex flex-col items-center justify-end gap-4 text-center px-8 pb-10 pt-24"
+                    className="w-full h-full flex flex-col items-center justify-center gap-6 text-center px-4 sm:px-8 py-8 overflow-y-auto"
                   >
-                    {/* Hero sits lower so paste/drop input (IngestSurface) stays primary */}
-                    <div className="relative opacity-90">
-                      <div className="w-14 h-14 rounded-xl bg-card border border-border flex items-center justify-center shadow-md">
-                        <QSLogo variant="mark" size="md" />
-                      </div>
-                    </div>
-                    <div className="max-w-sm">
-                      <h3 className="text-base font-bold text-foreground mb-1.5 tracking-tight">
-                        Ready to create
-                      </h3>
-                      <p className="text-sm text-muted-foreground leading-relaxed">
-                        Paste a YouTube URL, drop a video file, or enter any direct video link.
-                        <span className="text-[10px] text-fg-subtle mt-1 block">
-                          Supports MP4, WebM, MOV · YouTube · Direct URLs
-                        </span>
+                    {/* One composition: import IS the stage (center), not a top chrome strip */}
+                    <IngestSurface variant="hero" {...ingestSurfaceProps} />
+                    <div className="w-full max-w-md px-2">
+                      <p className="text-[10px] font-medium tracking-wide text-fg-subtle mb-2">
+                        Or start from a template
                       </p>
-                    </div>
-                    <div className="flex items-center gap-3 text-[10px] text-fg-subtle">
-                      <span className="flex items-center gap-1.5">
-                        <kbd className="px-1.5 py-0.5 rounded bg-foreground/5 border border-foreground/8 font-mono text-[9px]">Shift</kbd>
-                        <kbd className="px-1.5 py-0.5 rounded bg-foreground/5 border border-foreground/8 font-mono text-[9px]">Alt</kbd>
-                        <kbd className="px-1.5 py-0.5 rounded bg-foreground/5 border border-foreground/8 font-mono text-[9px]">A</kbd>
-                        <span>Chat</span>
-                      </span>
-                      <span className="w-px h-3 bg-foreground/10" />
-                      <span className="flex items-center gap-1.5">
-                        <kbd className="px-1.5 py-0.5 rounded bg-foreground/5 border border-foreground/8 font-mono text-[9px]">?</kbd>
-                        <span>Shortcuts</span>
-                      </span>
-                    </div>
-                    {/* Template selector — quick-start presets */}
-                    <div className="w-full max-w-sm">
-                      <p className="text-[9px] font-black uppercase tracking-widest text-fg-subtle mb-2">Start from a template</p>
                       <div className="grid grid-cols-5 gap-1.5">
                         {PROJECT_TEMPLATES.map((tpl) => (
                           <button
                             key={tpl.id}
+                            type="button"
                             onClick={() => {
                               const ar = tpl.aspectRatio === "16:9" ? "9:16" : tpl.aspectRatio;
                               setExportSetting("aspectRatio", ar as "9:16" | "1:1");
-                              toast(`Template: ${tpl.label}`, { description: `Aspect ratio set to ${tpl.aspectRatio} · max ${tpl.maxDuration}s`, duration: 3000 });
+                              toast(`Template: ${tpl.label}`, {
+                                description: `Aspect ratio set to ${tpl.aspectRatio} · max ${tpl.maxDuration}s`,
+                                duration: 3000,
+                              });
                             }}
-                            className="flex flex-col items-center gap-1 px-1 py-2 rounded-xl bg-card border border-border hover:border-primary/40 hover:bg-primary/5 transition-colors group"
+                            className="flex flex-col items-center gap-1 px-1 py-2 rounded-xl bg-card/60 border border-border hover:border-primary/40 hover:bg-primary/5 transition-colors group"
                           >
-                            <div className={cn(
-                              "rounded border border-foreground/10 bg-foreground/5 group-hover:border-primary/30 transition-colors",
-                              tpl.aspectRatio === "9:16" ? "w-3 h-5" : tpl.aspectRatio === "1:1" ? "w-4 h-4" : "w-5 h-3"
-                            )} />
-                            <span className="text-[8px] font-bold text-fg-subtle group-hover:text-primary transition-colors leading-tight text-center">{tpl.label.replace(" ", "\n")}</span>
+                            <div
+                              className={cn(
+                                "rounded border border-foreground/10 bg-foreground/5 group-hover:border-primary/30 transition-colors",
+                                tpl.aspectRatio === "9:16"
+                                  ? "w-3 h-5"
+                                  : tpl.aspectRatio === "1:1"
+                                    ? "w-4 h-4"
+                                    : "w-5 h-3",
+                              )}
+                            />
+                            <span className="text-[8px] font-semibold text-fg-subtle group-hover:text-primary transition-colors leading-tight text-center">
+                              {tpl.label.replace(" ", "\n")}
+                            </span>
                           </button>
                         ))}
                       </div>
