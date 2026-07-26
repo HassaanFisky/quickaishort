@@ -2,11 +2,13 @@
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Send, Mic, MicOff, Sparkles, Zap } from "lucide-react";
+import { X, Send, Mic, MicOff, Sparkles, Zap, GripHorizontal } from "lucide-react";
 import { useEditorStore, type EditorAction } from "@/stores/editorStore";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { useSwipeGesture } from "@/hooks/useTouchGestures";
 import {
   type EditorStateContext,
-  sendEditorCommand,
+  streamEditorCommand,
   type CanonicalEditorAction,
 } from "@/lib/gemini-editor";
 import { useSession } from "next-auth/react";
@@ -26,6 +28,8 @@ import {
   ensureStudioProject,
   isStudioProjectKernelEnabled,
 } from "@/lib/studio/projectKernel";
+import { DubPanel } from "@/components/editor/DubPanel";
+import { useUIStore } from "@/stores/uiStore";
 
 /** Debounce edge facet upserts — transcript/silence/clips churn must not spam Firestore. */
 const FACET_REFRESH_DEBOUNCE_MS = 400;
@@ -62,7 +66,7 @@ function MessageText({ text }: { text: string }) {
     <p className="msg-text">
       {parts.map((p, i) =>
         p.startsWith("**") ? (
-          <strong key={i} className="font-semibold text-white/95">{p.slice(2, -2)}</strong>
+          <strong key={i} className="font-semibold text-foreground">{p.slice(2, -2)}</strong>
         ) : (
           <React.Fragment key={i}>{p}</React.Fragment>
         ),
@@ -122,6 +126,9 @@ export function AIPanel() {
   const [interimText, setInterimText] = useState("");
   const [suggestions, setSuggestions] = useState<SuggestionIntent[]>([]);
   const [suggestionsLoaded, setSuggestionsLoaded] = useState(false);
+  const [followUpChips, setFollowUpChips] = useState<string[]>([]);
+  const activeTool = useUIStore((s) => s.activeTool);
+  const setActiveTool = useUIStore((s) => s.setActiveTool);
   const mediaGraphIdRef = useRef<string | null>(null);
   const mediaGraphRevisionRef = useRef<number>(-1);
   const boundRunIdRef = useRef<string | null>(null);
@@ -140,6 +147,17 @@ export function AIPanel() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const commandHistoryRef = useRef<string[]>([]);
   const historyIndexRef = useRef(-1);
+
+  // Desktop (lg+) = docked right column in the editor layout flow;
+  // below lg = swipe-down-dismissable bottom sheet.
+  const isDesktop = useMediaQuery("(min-width: 1024px)");
+  const sheetRef = useRef<HTMLDivElement | null>(null);
+  useSwipeGesture(sheetRef, {
+    enabled: !isDesktop && aiPanelOpen,
+    onSwipe: (direction, distance) => {
+      if (direction === "down" && distance > 60) setAIPanelOpen(false);
+    },
+  });
 
   // Build editor state snapshot for every Gemini call
   const editorState = useMemo((): EditorStateContext => {
@@ -497,17 +515,31 @@ export function AIPanel() {
 
       addAIMessage({ role: "user", content: trimmed });
       setAIThinking(true);
+      setFollowUpChips([]);
 
       try {
         const userTier = session?.user?.isPro || (session?.user as any)?.isPremium ? "pro" : "free";
-        const result = await sendEditorCommand({
-          command: trimmed,
-          user_tier: userTier,
-          project_context: {
-            clip_count: editorState.clipCount,
-            duration: editorState.videoDuration,
+        const result = await streamEditorCommand(
+          {
+            command: trimmed,
+            user_tier: userTier,
+            history: historySnapshot.slice(-12),
+            project_context: {
+              clip_count: editorState.clipCount,
+              duration: editorState.videoDuration,
+            },
           },
-        });
+          () => {
+            /* SSE payload handled when stream resolves to structured result */
+          },
+          () => {
+            /* onDone — thinking cleared after full apply below */
+          },
+        );
+
+        if (!result) {
+          throw new Error("Empty AI response");
+        }
 
         // Server normalizes legacy {tool,params} → canonical {type} (EP-001).
         // Drop any non-canonical wire shape rather than client-side dialect translation.
@@ -588,17 +620,20 @@ export function AIPanel() {
                 ).length;
                 receipt =
                   accepted > 0
-                    ? ` · Kernel r${head.revision} (${accepted} ack)`
+                    ? ` · Saved to project (r${head.revision})`
                     : executed?.status === "failed"
-                      ? " · Preview applied; Kernel rejected — re-apply before export"
-                      : " · Preview applied; Kernel steps skipped";
+                      ? " · Preview only — project save rejected"
+                      : " · Preview only — project steps skipped";
+              } else {
+                receipt = " · Preview applied";
               }
             }
           } catch {
             // Honesty: local preview may have applied; server authority did not ack
-            receipt =
-              " · Preview applied; Kernel sync failed — re-sync before export";
+            receipt = " · Preview applied — project sync failed, re-sync before export";
           }
+        } else if (dispatchActions.length > 0) {
+          receipt = " · Preview applied";
         }
 
         addAIMessage({
@@ -606,23 +641,54 @@ export function AIPanel() {
           content: `${result.feedback || result.message || "Done."}${receipt}`,
           actions: dispatchActions,
         });
+
+        const nextChips = (result.suggestions || [])
+          .map((s) => String(s).trim())
+          .filter(Boolean)
+          .slice(0, 3);
+        setFollowUpChips(nextChips);
+
+        // Refresh grounded rail after a successful turn.
+        setSuggestionsLoaded(false);
       } catch (err: unknown) {
         const errMsg = err instanceof Error ? err.message : String(err);
-        const status = axios.isAxiosError(err) ? err.response?.status : undefined;
+        const status = axios.isAxiosError(err)
+          ? err.response?.status
+          : err &&
+            typeof err === "object" &&
+            "status" in err &&
+            typeof (err as { status: unknown }).status === "number"
+            ? (err as { status: number }).status
+            : undefined;
         const detail =
           axios.isAxiosError(err) && err.response?.data?.detail
             ? String(err.response.data.detail)
             : "";
 
-        let displayMsg = "Request failed — please try again.";
+        let displayMsg = "Couldn't complete that — try again.";
         if (status === 402 || /insufficient credits|402/i.test(`${errMsg} ${detail}`)) {
           displayMsg =
-            detail || "Insufficient credits. Upgrade to Pro to continue.";
+            detail || "You're out of credits. Upgrade to Pro to keep editing with AI.";
         } else if (status === 503 || /credit service unavailable/i.test(`${errMsg} ${detail}`)) {
           displayMsg =
-            detail || "Credit service unavailable. Try again shortly.";
-        } else if (/api[_\s]?key|not configured|401|403/i.test(errMsg)) {
-          displayMsg = "Gemini API key not configured on this server.";
+            detail || "Billing check is briefly unavailable. Try again in a moment.";
+        } else if (
+          status === 401 ||
+          /\(401\)|unauthorized|invalid or expired token|missing authorization/i.test(
+            `${errMsg} ${detail}`,
+          )
+        ) {
+          displayMsg =
+            "Sign in to continue — your timeline is still here.";
+        } else if (
+          status === 403 ||
+          /\(403\)|forbidden|permission/i.test(`${errMsg} ${detail}`)
+        ) {
+          displayMsg =
+            detail || "This action isn't available on your plan.";
+        } else if (/api[_\s]?key|not configured/i.test(`${errMsg} ${detail}`)) {
+          displayMsg =
+            "AI editing isn't available right now. Try again later.";
         } else if (
           status === 429 ||
           /rate.?limit|quota|429|RESOURCE_EXHAUSTED|prepayment|credits? depleted/i.test(
@@ -630,11 +696,11 @@ export function AIPanel() {
           )
         ) {
           displayMsg =
-            "AI quota unavailable right now (credits or rate limit). Retry after credits are restored — edits you already made stay on the timeline.";
+            "AI is busy right now. Your edits stay on the timeline — try again shortly.";
         } else if (/network|fetch|failed to fetch/i.test(errMsg)) {
-          displayMsg = "Connection lost — check your internet.";
+          displayMsg = "Connection lost — check your internet and retry.";
         } else if (/400|invalid argument/i.test(errMsg)) {
-          displayMsg = "Invalid request — try rephrasing.";
+          displayMsg = "Couldn't understand that — try rephrasing.";
         } else if (detail) {
           displayMsg = detail;
         } else if (errMsg && errMsg !== "Request failed") {
@@ -688,247 +754,321 @@ export function AIPanel() {
 
   const isVideoLoaded = !!videoMetadata;
 
-  return (
-    <AnimatePresence>
-      {aiPanelOpen && (
-        <motion.aside
-          drag
-          dragMomentum={false}
-          dragConstraints={{ top: -400, bottom: 200, left: -600, right: 600 }}
-          className="fixed bottom-5 z-50 flex flex-col cursor-grab active:cursor-grabbing"
-          style={{ left: "calc(50% - min(260px, 46vw))", width: "min(520px, 92vw)", maxHeight: "55vh" }}
-          initial={{ y: 40, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          exit={{ y: 40, opacity: 0 }}
-          transition={{ type: "spring", damping: 28, stiffness: 260 }}
-        >
-          <div className="flex flex-col h-full rounded-2xl overflow-hidden border border-white/[0.08] bg-[#111116]/95 backdrop-blur-2xl shadow-[0_24px_64px_rgba(0,0,0,0.7),0_0_0_1px_rgba(168,85,247,0.1)]">
-            {/* ── Header ──────────────────────────────────────────────── */}
-            <div className="ai-panel-header">
-              <div className="ai-header-left">
-                {/* Gem badge */}
-                <div className="ai-header-gem">✦</div>
-                <span className="ai-panel-title">QuickAI Editor</span>
-              </div>
+  // Shared chat body — rendered in exactly one housing at a time
+  // (desktop docked column XOR mobile bottom sheet).
+  const panelBody = (
+    <>
+      {/* ── Header ──────────────────────────────────────────────── */}
+      <div className="ai-panel-header">
+        <div className="ai-header-left">
+          {/* Gem badge */}
+          <div className="ai-header-gem">✦</div>
+          <span className="ai-panel-title">QuickAI Editor</span>
+        </div>
 
-              <div className="ai-header-right">
-                {/* Status dot */}
-                <span
-                  className={cn(
-                    "w-1.5 h-1.5 rounded-full shrink-0",
-                    isAIThinking
-                      ? "bg-amber-400 animate-pulse"
-                      : isVideoLoaded
-                        ? "bg-emerald-400"
-                        : "bg-white/20"
-                  )}
-                />
-                {aiMessages.length > 0 && (
-                  <button
-                    onClick={() => useEditorStore.setState({ aiMessages: [] })}
-                    className="text-[9px] text-white/30 hover:text-white/70 transition-colors uppercase tracking-wider px-1"
-                    aria-label="Clear conversation"
-                  >
-                    Clear
-                  </button>
-                )}
-                <button
-                  className="ai-close-btn"
-                  onClick={() => setAIPanelOpen(false)}
-                  aria-label="Close QuickAI Editor"
-                >
-                  <X size={14} />
-                </button>
-              </div>
-            </div>
+        <div className="ai-header-right">
+          {/* Status dot */}
+          <span
+            className={cn(
+              "w-1.5 h-1.5 rounded-full shrink-0",
+              isAIThinking
+                ? "bg-amber-400 animate-pulse"
+                : isVideoLoaded
+                  ? "bg-emerald-400"
+                  : "bg-fg-subtle/40"
+            )}
+          />
+          {aiMessages.length > 0 && (
+            <button
+              onClick={() => useEditorStore.setState({ aiMessages: [] })}
+              className="text-[9px] text-fg-subtle hover:text-fg-muted transition-colors uppercase tracking-wider px-1"
+              aria-label="Clear conversation"
+            >
+              Clear
+            </button>
+          )}
+          <button
+            className="ai-close-btn"
+            onClick={() => setAIPanelOpen(false)}
+            aria-label="Close QuickAI Editor"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      </div>
 
-            {/* ── Context strip ─────────────────────────────────────── */}
-            <div className="px-4 py-2 flex items-center gap-2 border-b border-white/[0.05] bg-white/[0.02] shrink-0">
-              <Zap className="w-3 h-3 text-accent-p shrink-0" />
-              <span className="text-[10px] text-white/40 font-medium truncate">
-                {isVideoLoaded
-                  ? videoMetadata!.title.length > 48
-                    ? videoMetadata!.title.slice(0, 48) + "…"
-                    : videoMetadata!.title
-                  : "No video loaded — upload a file or paste a YouTube URL"}
+      {activeTool === "dub" && (
+        <div className="border-b border-border/60 px-3 py-3 bg-card/40 shrink-0">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-fg-muted">
+              Dub Video
+            </span>
+            <button
+              type="button"
+              aria-label="Close Dub Video"
+              className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground"
+              onClick={() => setActiveTool(null)}
+            >
+              Close
+            </button>
+          </div>
+          <DubPanel />
+        </div>
+      )}
+
+      {/* ── Context strip ─────────────────────────────────────── */}
+      <div className="px-4 py-2 flex items-center gap-2 border-b border-border bg-muted/30 shrink-0">
+        <Zap className="w-3 h-3 text-accent-p shrink-0" />
+        <span className="text-[10px] text-fg-muted font-medium truncate">
+          {isVideoLoaded
+            ? videoMetadata!.title.length > 48
+              ? videoMetadata!.title.slice(0, 48) + "…"
+              : videoMetadata!.title
+            : "No video loaded — upload a file or paste a YouTube URL"}
+        </span>
+      </div>
+
+      {/* ── Active edit state (only shown when something is non-default) ── */}
+      {(() => {
+        const tags: string[] = [];
+        if (editorState.filter !== "None") tags.push(editorState.filter);
+        if (editorState.audioBoost !== 85 && editorState.audioBoost !== 100) tags.push(`Audio ${editorState.audioBoost}%`);
+        if (editorState.playbackSpeed !== 100) tags.push(`${editorState.playbackSpeed}% speed`);
+        if (editorState.captionCount > 0) tags.push(`${editorState.captionCount} caption${editorState.captionCount > 1 ? "s" : ""}`);
+        if (editorState.transitionEnabled) tags.push("Transitions");
+        if (tags.length === 0) return null;
+        return (
+          <div className="flex flex-wrap gap-1.5 px-3.5 py-2 border-b border-border bg-muted/20 shrink-0">
+            <span className="text-[8px] font-black uppercase tracking-[0.2em] text-fg-subtle self-center">Active</span>
+            {tags.map((t) => (
+              <span key={t} className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-muted border border-border text-fg-muted">
+                {t}
               </span>
-            </div>
+            ))}
+          </div>
+        );
+      })()}
 
-            {/* ── Active edit state (only shown when something is non-default) ── */}
-            {(() => {
-              const tags: string[] = [];
-              if (editorState.filter !== "None") tags.push(editorState.filter);
-              if (editorState.audioBoost !== 85 && editorState.audioBoost !== 100) tags.push(`Audio ${editorState.audioBoost}%`);
-              if (editorState.playbackSpeed !== 100) tags.push(`${editorState.playbackSpeed}% speed`);
-              if (editorState.captionCount > 0) tags.push(`${editorState.captionCount} caption${editorState.captionCount > 1 ? "s" : ""}`);
-              if (editorState.transitionEnabled) tags.push("Transitions");
-              if (tags.length === 0) return null;
-              return (
-                <div className="flex flex-wrap gap-1.5 px-3.5 py-2 border-b border-white/[0.05] bg-white/[0.015] shrink-0">
-                  <span className="text-[8px] font-black uppercase tracking-[0.2em] text-white/20 self-center">Active</span>
-                  {tags.map((t) => (
-                    <span key={t} className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-white/[0.06] border border-white/[0.08] text-white/50">
-                      {t}
-                    </span>
+      {/* ── Messages ────────────────────────────────────────────── */}
+      <div className="ai-messages">
+
+        {/* Empty state */}
+        {aiMessages.length === 0 && (
+          <div className="ai-empty-state">
+            <div className="w-12 h-12 rounded-2xl bg-muted border border-border flex items-center justify-center mb-1">
+              <Sparkles className="w-5 h-5 text-accent-p/60" />
+            </div>
+            <p className="text-[12px] font-semibold text-fg-muted">
+              {isVideoLoaded ? "Tell me what to edit" : "Load a video first"}
+            </p>
+            <p className="text-[10px] text-fg-subtle max-w-[200px]">
+              {isVideoLoaded
+                ? "I'll apply your edits directly to the timeline"
+                : "Upload a video or paste a YouTube URL to get started"}
+            </p>
+          </div>
+        )}
+
+        {/* Messages */}
+        {aiMessages.map((msg) => (
+          <motion.div
+            key={msg.id}
+            className={`ai-msg ai-msg-${msg.role}`}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.18, ease: "easeOut" }}
+          >
+            {msg.role === "assistant" && (
+              <div className="msg-gem-badge">✦</div>
+            )}
+            <div className="msg-content">
+              {msg.role === "assistant" ? (
+                <StreamingText text={msg.content} />
+              ) : (
+                <MessageText text={msg.content} />
+              )}
+              {msg.actions && msg.actions.length > 0 && (
+                <div className="action-tags">
+                  {msg.actions.map((a, i) => (
+                    <ActionTag key={i} type={a.type} index={i} />
                   ))}
                 </div>
-              );
-            })()}
-
-            {/* ── Messages ────────────────────────────────────────────── */}
-            <div className="ai-messages">
-
-              {/* Empty state */}
-              {aiMessages.length === 0 && (
-                <div className="ai-empty-state">
-                  <div className="w-12 h-12 rounded-2xl bg-white/[0.04] border border-white/[0.07] flex items-center justify-center mb-1">
-                    <Sparkles className="w-5 h-5 text-accent-p/60" />
-                  </div>
-                  <p className="text-[12px] font-semibold text-white/30">
-                    {isVideoLoaded ? "Tell me what to edit" : "Load a video first"}
-                  </p>
-                  <p className="text-[10px] text-white/15 max-w-[200px]">
-                    {isVideoLoaded
-                      ? "I'll apply your edits directly to the timeline"
-                      : "Upload a video or paste a YouTube URL to get started"}
-                  </p>
-                </div>
               )}
-
-              {/* Messages */}
-              {aiMessages.map((msg) => (
-                <motion.div
-                  key={msg.id}
-                  className={`ai-msg ai-msg-${msg.role}`}
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.18, ease: "easeOut" }}
-                >
-                  {msg.role === "assistant" && (
-                    <div className="msg-gem-badge">✦</div>
-                  )}
-                  <div className="msg-content">
-                    {msg.role === "assistant" ? (
-                      <StreamingText text={msg.content} />
-                    ) : (
-                      <MessageText text={msg.content} />
-                    )}
-                    {msg.actions && msg.actions.length > 0 && (
-                      <div className="action-tags">
-                        {msg.actions.map((a, i) => (
-                          <ActionTag key={i} type={a.type} index={i} />
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </motion.div>
-              ))}
-
-              {/* Thinking indicator */}
-              {isAIThinking && (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="ai-msg ai-msg-assistant"
-                >
-                  <ThinkingBubble />
-                </motion.div>
-              )}
-
-              <div ref={messagesEndRef} />
             </div>
+          </motion.div>
+        ))}
 
-            {/* ── Suggestion chips (EP-003 grounded only) ─────────── */}
-            {suggestions.length > 0 && (
-              <div className="suggestions-rail" data-tour-id="ai.suggestions">
-                {suggestions.map((s) =>
-                  s.interactive ? (
-                    <button
-                      key={s.suggestion_id}
-                      className="suggestion-chip"
-                      title={s.evidence.summary}
-                      onClick={() => void applyGroundedSuggestion(s)}
-                      disabled={isAIThinking}
-                    >
-                      {s.label}
-                    </button>
-                  ) : (
-                    <span
-                      key={s.suggestion_id}
-                      className="suggestion-chip opacity-60 cursor-default pointer-events-none"
-                      title={s.evidence.summary}
-                      aria-disabled="true"
-                    >
-                      {s.label}
-                    </span>
-                  ),
-                )}
-              </div>
-            )}
+        {/* Thinking indicator */}
+        {isAIThinking && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="ai-msg ai-msg-assistant"
+          >
+            <ThinkingBubble />
+          </motion.div>
+        )}
 
-            {/* ── Input area ───────────────────────────────────────── */}
-            <div className="ai-input-area">
-              {interimText && (
-                <div className="interim-text">{interimText}</div>
-              )}
+        <div ref={messagesEndRef} />
+      </div>
 
-              <div className="input-row">
-                <textarea
-                  ref={textareaRef}
-                  data-tour-id="ai.chat"
-                  className="ai-textarea"
-                  placeholder={
-                    !isVideoLoaded
-                      ? "Load a video to start editing…"
-                      : isRecording
-                        ? "Listening…"
-                        : "Tell me what to edit… (Enter to send)"
-                  }
-                  value={inputText}
-                  onChange={handleInput}
-                  onKeyDown={handleKeyDown}
-                  rows={1}
-                  disabled={isAIThinking || !isVideoLoaded}
-                />
-
-                <button
-                  className={`voice-btn ${isRecording ? "voice-btn-active" : ""}`}
-                  onClick={toggleVoice}
-                  disabled={!isVideoLoaded}
-                  aria-label={isRecording ? "Stop recording" : "Voice input"}
-                  title={isRecording ? "Stop voice input" : "Voice input"}
-                >
-                  {isRecording ? <MicOff size={14} /> : <Mic size={14} />}
-                </button>
-
-                <button
-                  className="send-btn"
-                  onClick={() => sendMessage(inputText)}
-                  disabled={isAIThinking || !inputText.trim() || !isVideoLoaded}
-                  aria-label="Send"
-                  title="Send (Enter)"
-                >
-                  <Send size={13} />
-                </button>
-              </div>
-
-              {voiceError && <p className="voice-error">{voiceError}</p>}
-
-              {/* Keyboard hint */}
-              <div className="flex items-center justify-between px-0.5">
-                <span className="text-[9px] text-white/15">
-                  Enter to send · Shift+Enter for new line
-                </span>
-                <span className="text-[9px] text-white/15 flex items-center gap-1">
-                  <kbd className="px-1 py-0.5 rounded bg-white/[0.06] font-mono text-[9px]">Ctrl</kbd>
-                  <kbd className="px-1 py-0.5 rounded bg-white/[0.06] font-mono text-[9px]">K</kbd>
-                  to open
-                </span>
-              </div>
-            </div>
-          </div>
-        </motion.aside>
+      {/* ── Suggestion chips (grounded + post-reply follow-ups) ─────────── */}
+      {(suggestions.length > 0 || followUpChips.length > 0) && (
+        <div className="suggestions-rail" data-tour-id="ai.suggestions">
+          {followUpChips.map((chip) => (
+            <button
+              key={`follow-${chip}`}
+              className="suggestion-chip"
+              type="button"
+              onClick={() => void sendMessage(chip)}
+              disabled={isAIThinking}
+            >
+              {chip}
+            </button>
+          ))}
+          {suggestions.map((s) =>
+            s.interactive ? (
+              <button
+                key={s.suggestion_id}
+                className="suggestion-chip"
+                title={s.evidence.summary}
+                onClick={() => void applyGroundedSuggestion(s)}
+                disabled={isAIThinking}
+              >
+                {s.label}
+              </button>
+            ) : (
+              <span
+                key={s.suggestion_id}
+                className="suggestion-chip opacity-60 cursor-default pointer-events-none"
+                title={s.evidence.summary}
+                aria-disabled="true"
+              >
+                {s.label}
+              </span>
+            ),
+          )}
+        </div>
       )}
-    </AnimatePresence>
+
+      {/* ── Input area ───────────────────────────────────────── */}
+      <div className="ai-input-area">
+        {interimText && (
+          <div className="interim-text">{interimText}</div>
+        )}
+
+        <div className="input-row">
+          <textarea
+            ref={textareaRef}
+            data-tour-id="ai.chat"
+            className="ai-textarea"
+            placeholder={
+              !isVideoLoaded
+                ? "Load a video to start editing…"
+                : isRecording
+                  ? "Listening…"
+                  : "Tell me what to edit… (Enter to send)"
+            }
+            value={inputText}
+            onChange={handleInput}
+            onKeyDown={handleKeyDown}
+            rows={1}
+            disabled={isAIThinking || !isVideoLoaded}
+          />
+
+          <button
+            className={`voice-btn ${isRecording ? "voice-btn-active" : ""}`}
+            onClick={toggleVoice}
+            disabled={!isVideoLoaded}
+            aria-label={isRecording ? "Stop recording" : "Voice input"}
+            title={isRecording ? "Stop voice input" : "Voice input"}
+          >
+            {isRecording ? <MicOff size={14} /> : <Mic size={14} />}
+          </button>
+
+          <button
+            className="send-btn"
+            onClick={() => sendMessage(inputText)}
+            disabled={isAIThinking || !inputText.trim() || !isVideoLoaded}
+            aria-label="Send"
+            title="Send (Enter)"
+          >
+            <Send size={13} />
+          </button>
+        </div>
+
+        {voiceError && <p className="voice-error">{voiceError}</p>}
+
+        {/* Keyboard hint */}
+        <div className="flex items-center justify-between px-0.5">
+          <span className="text-[9px] text-fg-subtle">
+            Enter to send · Shift+Enter for new line
+          </span>
+          <span className="text-[9px] text-fg-subtle flex items-center gap-1">
+            <kbd className="px-1 py-0.5 rounded bg-muted font-mono text-[9px]">Shift</kbd>
+            <kbd className="px-1 py-0.5 rounded bg-muted font-mono text-[9px]">Alt</kbd>
+            <kbd className="px-1 py-0.5 rounded bg-muted font-mono text-[9px]">A</kbd>
+            to toggle
+          </span>
+        </div>
+      </div>
+    </>
+  );
+
+  return (
+    <>
+      {/* Desktop (lg+) — docked right column; part of the layout flow so the
+          canvas resizes when it opens and the video is never covered. */}
+      {isDesktop && (
+        <div
+          className="hidden lg:block h-full min-h-0 shrink-0 overflow-hidden transition-[width,margin-left,opacity,visibility] duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)]"
+          style={{
+            width: aiPanelOpen ? "clamp(340px, 26vw, 420px)" : 0,
+            marginLeft: aiPanelOpen ? "1rem" : 0,
+            opacity: aiPanelOpen ? 1 : 0,
+            visibility: aiPanelOpen ? "visible" : "hidden",
+          }}
+          aria-hidden={!aiPanelOpen}
+        >
+          <aside
+            className="ai-panel w-[clamp(340px,26vw,420px)]"
+            aria-label="QuickAI Editor"
+          >
+            {panelBody}
+          </aside>
+        </div>
+      )}
+
+      {/* Mobile/tablet (<lg) — swipe-down-dismissable bottom sheet */}
+      <AnimatePresence>
+        {!isDesktop && aiPanelOpen && (
+          <>
+            <motion.div
+              key="ai-sheet-backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 bg-black/60 z-40"
+              onClick={() => setAIPanelOpen(false)}
+            />
+            <motion.div
+              key="ai-sheet"
+              ref={sheetRef}
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 30, stiffness: 300 }}
+              className="fixed left-0 right-0 bottom-0 z-50 h-[75vh] max-h-[75vh] bg-card border-t border-border rounded-t-3xl flex flex-col overflow-hidden touch-pan-y"
+            >
+              <div className="flex flex-col items-center pt-2.5 pb-1 shrink-0">
+                <GripHorizontal size={16} className="text-foreground/20" aria-hidden="true" />
+              </div>
+              {panelBody}
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+    </>
   );
 }

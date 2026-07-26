@@ -7,6 +7,8 @@
 export type UiShortcutId =
   | "toggleCommandPalette"
   | "toggleBRollDrawer"
+  | "toggleStudioChat"
+  /** @deprecated alias — use toggleStudioChat */
   | "toggleFloatingChat"
   // ─── Phase 4b: timeline tool shortcuts (fire only when timeline focused) ──
   | "toolPointer"
@@ -80,6 +82,15 @@ export const SHORTCUTS: Record<UiShortcutId, UiShortcut> = {
     label: "Shift+Alt+B",
     macLabel: "⌘⇧B",
   },
+  toggleStudioChat: {
+    id: "toggleStudioChat",
+    key: "a",
+    shift: true,
+    alt: true,
+    label: "Shift+Alt+A",
+    macLabel: "⌘⇧A",
+  },
+  /** @deprecated — same binding as toggleStudioChat */
   toggleFloatingChat: {
     id: "toggleFloatingChat",
     key: "a",
@@ -182,7 +193,7 @@ export function shortcutLabel(id: UiShortcutId): string {
 export const LOCKED_SHORTCUTS = {
   palette:      { combo: "Shift+Alt+P", mac: "Cmd+Shift+P", label: "Command Palette" },
   brollDrawer:  { combo: "Shift+Alt+B", mac: "Cmd+Shift+B", label: "B-Roll Drawer" },
-  floatingChat: { combo: "Shift+Alt+A", mac: "Cmd+Shift+A", label: "AI Chat" },
+  aiChat: { combo: "Shift+Alt+A", mac: "Cmd+Shift+A", label: "Studio Chat" },
 } as const;
 
 /** Default editor shortcuts */
@@ -211,7 +222,7 @@ export const SHORTCUT_MAP = [
   { key: "Ctrl+Shift+Z", label: "Redo" },
   { key: "←/→",          label: "Skip 1s" },
   { key: "Shift+←/→",   label: "Skip 5s" },
-  { key: "Ctrl+K",       label: "AI Editor" },
+  { key: "Shift+Alt+A",  label: "AI Editor" },
   { key: "Shift+Alt+F",  label: "Pre-Flight" },
   { key: "Shift+Alt+E",  label: "Export" },
   { key: "?",            label: "Shortcut Overlay" },

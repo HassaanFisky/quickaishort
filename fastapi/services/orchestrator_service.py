@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import threading
 from datetime import datetime, timezone
 from typing import Any, Literal, Optional, Protocol, Union
@@ -100,6 +101,63 @@ class InMemoryPlanStore:
             return p.model_copy(deep=True) if p else None
 
 
+# Cross-instance durable plans (Cloud Run). Same sync ABI as InMemory —
+# OrchestratorService already offloads put/get via asyncio.to_thread.
+_PLAN_REDIS_TTL_SEC = int(os.environ.get("ORCH_PLAN_TTL_SEC", "7200"))
+_PLAN_REDIS_KEY_PREFIX = "studio:orch:plan:"
+
+
+class RedisPlanStore:
+    """Redis-backed PlanStore — JSON blob + TTL (FinOps: no always-on DB)."""
+
+    def __init__(
+        self,
+        redis_client: Any = None,
+        *,
+        ttl_sec: int = _PLAN_REDIS_TTL_SEC,
+        key_prefix: str = _PLAN_REDIS_KEY_PREFIX,
+    ) -> None:
+        self._ttl = max(60, int(ttl_sec))
+        self._prefix = key_prefix
+        self._redis = redis_client
+
+    def _client(self) -> Any:
+        if self._redis is not None:
+            return self._redis
+        from services.queue_service import redis_conn
+
+        return redis_conn
+
+    def _key(self, plan_id: str) -> str:
+        return f"{self._prefix}{plan_id}"
+
+    def put(self, plan: Plan) -> None:
+        payload = plan.model_dump_json()
+        self._client().setex(self._key(plan.plan_id), self._ttl, payload)
+
+    def get(self, plan_id: str) -> Optional[Plan]:
+        raw = self._client().get(self._key(plan_id))
+        if raw is None:
+            return None
+        if isinstance(raw, (bytes, bytearray)):
+            raw = raw.decode("utf-8")
+        return Plan.model_validate_json(raw)
+
+
+def _default_plan_store() -> PlanStore:
+    """Production default = Redis; fall back to memory if Redis import fails."""
+    try:
+        from services.queue_service import redis_conn
+
+        if redis_conn is None:
+            logger.warning("orchestrator_plan_store_fallback reason=redis_conn_none")
+            return InMemoryPlanStore()
+        return RedisPlanStore(redis_client=redis_conn)
+    except Exception as exc:  # noqa: BLE001 — boot resilience
+        logger.warning("orchestrator_plan_store_fallback reason=%s", exc)
+        return InMemoryPlanStore()
+
+
 def _now() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -127,7 +185,7 @@ class OrchestratorService:
         store: Optional[PlanStore] = None,
         kernel: Optional[ProjectKernel] = None,
     ) -> None:
-        self.store: PlanStore = store or InMemoryPlanStore()
+        self.store: PlanStore = store or _default_plan_store()
         self.kernel = kernel
 
     def _kernel(self) -> ProjectKernel:
@@ -358,5 +416,6 @@ def reset_orchestrator_for_tests(
     from services.project_kernel import reset_project_kernel_for_tests
 
     k = kernel or reset_project_kernel_for_tests(InMemoryProjectStore())
+    # Tests always get InMemory unless an explicit store is injected.
     _orch = OrchestratorService(store=store or InMemoryPlanStore(), kernel=k)
     return _orch

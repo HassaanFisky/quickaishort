@@ -7,9 +7,12 @@ import bcrypt from "bcryptjs";
 import { triggerWelcomeEmail } from "@/lib/email";
 
 import crypto from "crypto";
-import { SignJWT } from "jose";
+import {
+  mintBackendToken,
+  SESSION_MAX_AGE,
+} from "@/lib/auth/mintBackendToken";
 
-export const SESSION_MAX_AGE = 30 * 24 * 60 * 60; // 30 days
+export { SESSION_MAX_AGE };
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -149,19 +152,14 @@ export const authOptions: NextAuthOptions = {
       // Mint a compact HS256 JWT that FastAPI verifies with NEXTAUTH_SECRET.
       // next-auth/jwt encode() produces encrypted JWE — incompatible with PyJWT HS256.
       try {
-        const secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET!);
         const subject = String(token.id ?? token.sub ?? "");
-        if (subject && secret.length > 0) {
-          session.backendToken = await new SignJWT({
-            id: token.id,
+        if (subject) {
+          const minted = await mintBackendToken({
+            id: subject,
             email: token.email,
             isPro: token.isPro ?? false,
-          })
-            .setProtectedHeader({ alg: "HS256" })
-            .setSubject(subject)
-            .setIssuedAt()
-            .setExpirationTime(`${SESSION_MAX_AGE}s`)
-            .sign(secret);
+          });
+          if (minted) session.backendToken = minted;
         }
       } catch {
         // Sign failure is non-fatal; API calls will receive 401 until resolved

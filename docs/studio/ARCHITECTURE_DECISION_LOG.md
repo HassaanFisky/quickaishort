@@ -18,8 +18,11 @@ Living index. Full ADRs live under `docs/studio/adrs/`.
 | ADR-012 | Bake from Kernel Snapshot | Accepted | EP-006 |
 | ADR-013 | Editor Ingest Parity + Onboarding + ADK CS | **Accepted** | EP-008 + ADK≠Ads correction implemented |
 | ADR-014 | Dub Video Pipeline | **Accepted** | Translate + TTS + mute/replace export |
+| ADR-015 | Studio Genius OS | **Accepted** | Chat-native Phase 1; Luna/Terra profiles; FC = Phase 2 |
 
 ## Latest binding change
+
+2026-07-26: **ADR-015 Studio Genius OS** accepted — Redis orchestrator plans; multi-turn + stream chat; universal suggestion copy; docked Dub; real ADD_SFX preview; movie-length dub deferred; UI brand = QuickAI only.
 
 2026-07-25: **ADR-014 Dub Video** accepted — staged translate/TTS/align pipeline; EN-source Whisper; Google TTS; Cloud Tasks `/tasks/dub`; captions-only fallback.
 

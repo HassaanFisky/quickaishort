@@ -512,31 +512,33 @@ Do not claim a task is "done" until it passes every relevant item above.
 
 Keep this section updated as the project evolves.
 
-Last updated: 2026-07-25
+Last updated: 2026-07-26
 
-CURRENT PHASE: PRODUCTION LIVE — Submission Sprint + Studio Kernel dual-run + Dub Video code
+CURRENT PHASE: PRODUCTION LIVE — Submission Sprint + Studio Kernel dual-run + Dub Video + Studio Genius OS Phase 1
 
 BLOCKED:
 
 - **Gemini prepayment credits depleted (429)** on project `99900313102` — founder must top up at https://ai.studio/projects before live demo / key rotate. Auth OK; generateContent fails.
-- **Dub Video live smoke** blocked on Gemini credits + `GOOGLE_TTS_API_KEY` on API/worker (code shipped; voice degrades to captions-only without key).
+- **Dub Video live smoke** blocked on Gemini credits (+ TTS key confirm).
 - Demo video + Devpost + Google for Startups form (challenge checklist).
 
-NOT BLOCKED (verified 2026-07-25):
+NOT BLOCKED (verified 2026-07-26):
 
 - API `/health` green (mongo/redis/adk/gcs); `/ready` ready; ingest policy route auth-gated 401
-- Cloud Tasks `quickai-render` RUNNING; private renderer OIDC; worker revision unchanged `00088-sig`
+- Cloud Tasks `quickai-render` RUNNING; private renderer OIDC
 - Studio Kernel flags on Vercel + Cloud Run
 - EP-001…008 code shipped; AI Editor credits fail-closed; ADK sidebar = Coming Soon blur only
 - **M3 ingest FSM live**: sole editor ingest path `useIngestLifecycle`
-- **Dub Video (ADR-014) code complete**: `DUB_VIDEO` + `TRANSLATE_CAPTIONS` registry; `/api/studio/v1/dub`; `/tasks/dub`; mute+replace export; FE DubPanel; 8 unit tests + tsc + pnpm build green. Deploy + live smoke pending founder secrets.
+- **Dub Video (ADR-014) code complete**
+- **Studio Genius OS Phase 1 (ADR-015)**: Redis Orchestrator PlanStore; multi-turn + stream chat; universal suggestion copy; docked Dub; real ADD_SFX Web Audio preview; FC = Phase 2
 
 NEXT ACTIONS:
 
 1. Founder: top up Gemini credits → verify generateContent 200
-2. Record 3-minute demo (live pipeline, not mock)
-3. Submit Devpost + Google for Startups form (Pre-seed)
-4. Optional: PEXELS_API_KEY + GOOGLE_TTS_API_KEY on Cloud Run when ADK workspace UI ships (today: Coming Soon)
+2. Deploy ADR-015 API + FE
+3. Record 3-minute demo (live pipeline, not mock)
+4. Submit Devpost + Google for Startups form (Pre-seed)
+5. Phase 2: ADR-006 native FunctionDeclaration
 
 CURRENT FRAMING:
 Product today: **QuickAI Short** — conversational AI video editing (ingest → chat → preview → export).
@@ -659,6 +661,7 @@ Read this file at the start of every session. When this file is updated, acknowl
 
 ## CHANGELOG
 
+- **2026-07-26:** **Studio Genius OS Phase 1 (ADR-015)** — Redis durable Orchestrator PlanStore; multi-turn `history` + stream chat path; universal MediaGraph suggestion copy; Dub docked in Studio chat (floating sheet removed); real `ADD_SFX` Web Audio preview + registry emit; registry sync script byte-identical; movie-length dub deferred; ADR-006 FC = Phase 2. Verified: 34 targeted pytest, `tsc --noEmit`.
 - **2026-07-25:** **Dub Video (ADR-014)** implemented: staged translate (Gemini) → Google TTS → align → preview → export mute+replace; capabilities `DUB_VIDEO`/`TRANSLATE_CAPTIONS`; `/api/studio/v1/dub` + worker `/tasks/dub`; FE DubPanel + chat chip; EN-source only; TTS fail → explicit degraded captions. Verified: 8 dub tests, registry sync, `tsc --noEmit`, `pnpm build`. Live smoke blocked on Gemini credits + TTS key.
 - **2026-07-25:** M3 ingest FSM shipped to production (`9c6ca78`): sole Studio ingest path via `useIngestLifecycle`; FE Vercel + API `quickai-api-00109-57j`. Deploy unblocker (`2f7e18f`) committed missing `render_dispatch.py` + `google-cloud-tasks` so Cloud Build import smoke check passes. Worker left at `00088-sig` (no M3 worker surface). Gemini credits still depleted.
 - **2026-07-23:** Local orchestration/cost hardening (not deployed): Gemini-only Luna/visual/Terra profiles made explicit; Terra remains one strict JSON-repair attempt; rolling daily pool removed in favor of the fixed trusted-tier matrix; tenant cache moved to MD5 fingerprint + SHA-256 collision guard; Redis-backed Gemini 429 cooldown added; SDK quota retry fan-out disabled; ADK package and google-genai imports made request-lazy; all `sys.exit()` worker paths removed. Verified 167 backend tests. Production Gemini remains blocked by depleted prepayment credits.

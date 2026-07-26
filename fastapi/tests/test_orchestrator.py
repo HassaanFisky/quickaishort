@@ -148,3 +148,100 @@ async def test_seek_skipped_as_non_event(orch):
     )
     assert executed.steps[0].status == "skipped"
     assert executed.status == "completed"
+
+
+class _FakeRedisPlan:
+    """Minimal sync Redis stand-in for RedisPlanStore unit tests."""
+
+    def __init__(self) -> None:
+        self.data: dict[str, str] = {}
+        self.ttls: dict[str, int] = {}
+
+    def setex(self, key: str, ttl: int, value: str) -> bool:
+        self.data[key] = value
+        self.ttls[key] = int(ttl)
+        return True
+
+    def get(self, key: str):
+        return self.data.get(key)
+
+
+@pytest.mark.asyncio
+async def test_redis_plan_store_roundtrip_and_owner_isolation(orch):
+    from services.orchestrator_service import RedisPlanStore, reset_orchestrator_for_tests
+    from services.project_kernel import InMemoryProjectStore, reset_project_kernel_for_tests
+
+    fake = _FakeRedisPlan()
+    kernel = reset_project_kernel_for_tests(InMemoryProjectStore())
+    service = reset_orchestrator_for_tests(
+        store=RedisPlanStore(redis_client=fake, ttl_sec=120),
+        kernel=kernel,
+    )
+    plan = await service.create_plan(
+        "u1",
+        CreatePlanRequest(
+            source="suggestion",
+            structured=StructuredIntent(
+                capability_id="TOGGLE_CAPTIONS",
+                params={"enabled": True},
+            ),
+        ),
+    )
+    assert plan.plan_id in "".join(fake.data.keys()) or any(
+        plan.plan_id in k for k in fake.data
+    )
+    assert all(ttl == 120 for ttl in fake.ttls.values())
+
+    loaded = await service.get_plan(plan.plan_id, "u1")
+    assert loaded is not None
+    assert loaded.plan_id == plan.plan_id
+    assert loaded.steps[0].capability_id == "TOGGLE_CAPTIONS"
+
+    assert await service.get_plan(plan.plan_id, "other-user") is None
+
+
+@pytest.mark.asyncio
+async def test_redis_plan_execute_survives_fresh_service():
+    """Simulate multi-instance: create on store A, execute via new service same Redis."""
+    from services.orchestrator_service import (
+        RedisPlanStore,
+        OrchestratorService,
+        reset_orchestrator_for_tests,
+    )
+    from services.project_kernel import InMemoryProjectStore, reset_project_kernel_for_tests
+
+    fake = _FakeRedisPlan()
+    store = RedisPlanStore(redis_client=fake, ttl_sec=600)
+    kernel = reset_project_kernel_for_tests(InMemoryProjectStore())
+    creator = reset_orchestrator_for_tests(store=store, kernel=kernel)
+
+    head = await kernel.create_project(
+        "u1",
+        CreateStudioProjectRequest(title="T", proposed_manifest=_manifest(10)),
+    )
+    plan = await creator.create_plan(
+        "u1",
+        CreatePlanRequest(
+            source="suggestion",
+            project_id=head.project_id,
+            structured=StructuredIntent(
+                capability_id="TOGGLE_CAPTIONS",
+                params={"enabled": True},
+            ),
+        ),
+    )
+
+    # New OrchestratorService instance, same Redis — Cloud Run multi-instance shape
+    executor = OrchestratorService(store=store, kernel=kernel)
+    executed = await executor.execute_plan(
+        "u1",
+        ExecutePlanRequest(
+            plan_id=plan.plan_id,
+            project_id=head.project_id,
+            base_revision=0,
+            base_snapshot_hash=head.snapshot_hash,
+            proposed_manifest=_manifest(10),
+        ),
+    )
+    assert executed.status == "completed"
+    assert executed.steps[0].status == "accepted"

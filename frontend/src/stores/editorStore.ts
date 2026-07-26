@@ -234,6 +234,15 @@ export interface AIMessage {
   actions?: EditorAction[];
 }
 
+/** Client-preview SFX marker (Phase 1 — Web Audio; bake later). */
+export interface SfxClip {
+  id: string;
+  sfxId: string;
+  startSec: number;
+  volume: number;
+  durationMs: number;
+}
+
 const DEFAULT_FRAME_FILTERS: FrameFilter = {
   brightness: 1,
   contrast: 1,
@@ -595,6 +604,12 @@ interface EditorState {
   captionsEnabled: boolean;
   selectedClipId: string | null;
 
+  // Client-side SFX markers (preview via Web Audio)
+  sfxClips: SfxClip[];
+  addSfxClip: (clip: Omit<SfxClip, "id">) => void;
+  removeSfxClip: (id: string) => void;
+  clearSfxClips: () => void;
+
   // Dub Video preview / export artifact binding
   dubJob: DubJobState;
   setDubJob: (patch: Partial<DubJobState> | DubJobState) => void;
@@ -820,6 +835,17 @@ export const useEditorStore = create<EditorState>()(
       waveformPeaks: null,
       captionsEnabled: true,
       selectedClipId: null,
+      sfxClips: [],
+      addSfxClip: (clip) =>
+        set((s) => ({
+          sfxClips: [
+            ...s.sfxClips,
+            { ...clip, id: `sfx-${crypto.randomUUID()}` },
+          ].slice(-40),
+        })),
+      removeSfxClip: (id) =>
+        set((s) => ({ sfxClips: s.sfxClips.filter((c) => c.id !== id) })),
+      clearSfxClips: () => set({ sfxClips: [] }),
       dubJob: { ...DEFAULT_DUB_JOB },
       setDubJob: (patch) =>
         set((s) => ({
@@ -1738,8 +1764,23 @@ export const useEditorStore = create<EditorState>()(
             // ─── Phase 10: Voiceover / SFX / Transitions ───────────────────
             case "ADD_VOICEOVER":
               break;
-            case "ADD_SFX":
+            case "ADD_SFX": {
+              const sfxId = String(action.payload?.sfx_id ?? "impact-thud");
+              const startSec = Number(action.payload?.start_sec ?? store.currentTime ?? 0);
+              const volume = Number(action.payload?.volume ?? 1);
+              void import("@/lib/sfx/sfxLibrary").then(({ getSfxEntry, playSfx }) => {
+                const entry = getSfxEntry(sfxId);
+                if (!entry) return;
+                useEditorStore.getState().addSfxClip({
+                  sfxId,
+                  startSec: Number.isFinite(startSec) ? Math.max(0, startSec) : 0,
+                  volume: Number.isFinite(volume) ? Math.max(0, Math.min(2, volume)) : 1,
+                  durationMs: entry.durationMs,
+                });
+                void playSfx(sfxId, volume);
+              });
               break;
+            }
             case "SET_TRANSITION":
               break;
             case "DUB_VIDEO":
@@ -2093,6 +2134,7 @@ export const useEditorStore = create<EditorState>()(
           waveformPeaks: null,
           videoAnalysis: null,
           selectedClipId: null,
+          sfxClips: [],
           canvasElements: [],
           elements: [],
           selectedElementId: null,
@@ -2146,6 +2188,7 @@ export const useEditorStore = create<EditorState>()(
           waveformPeaks: null,
           captionsEnabled: true,
           selectedClipId: null,
+          sfxClips: [],
           canvasElements: [],
           elements: [],
           selectedElementId: null,
@@ -2172,6 +2215,7 @@ export const useEditorStore = create<EditorState>()(
           tracks: createDefaultTracks(),
           timelineRevision: 0,
           compiledManifest: null,
+          dubJob: { ...DEFAULT_DUB_JOB },
         }),
 
       setAiSuggestions: (patch) =>

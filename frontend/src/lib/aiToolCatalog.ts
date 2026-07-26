@@ -1217,9 +1217,13 @@ export const AI_TOOL_CATALOG: AiTool[] = [
     keywords: ["sfx", "sound", "effect", "impact", "whoosh", "audio"],
     execMode: "direct",
     isEnabled: () => true,
-    buildActions: () => [{
+    buildActions: (s) => [{
       type: "ADD_SFX",
-      payload: { sfx_id: "impact-thud", start_sec: 0, volume: 1.0 },
+      payload: {
+        sfx_id: "impact-thud",
+        start_sec: typeof s.currentTime === "number" ? s.currentTime : 0,
+        volume: 1.0,
+      },
     }],
   },
   {

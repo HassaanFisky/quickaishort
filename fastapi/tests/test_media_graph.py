@@ -48,7 +48,11 @@ async def test_transcript_suggests_captions(svc):
     caps = [r for r in rows if r.capability_id == "TOGGLE_CAPTIONS"]
     assert len(caps) == 1
     assert caps[0].interactive is True
+    assert caps[0].label == "Add subtitles"
     assert "transcript" in caps[0].evidence.facet_keys
+    dub = [r for r in rows if r.capability_id == "DUB_VIDEO"]
+    assert len(dub) == 1
+    assert dub[0].label == "Dub into another language"
 
 
 @pytest.mark.asyncio
@@ -72,6 +76,7 @@ async def test_silence_suggests_remove(svc):
     assert rows is not None
     sil = [r for r in rows if r.capability_id == "REMOVE_SILENCES"]
     assert len(sil) == 1
+    assert sil[0].label == "Cut dead air"
     assert sil[0].params["min_silence_sec"] == 0.6
 
 

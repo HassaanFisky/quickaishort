@@ -607,7 +607,10 @@ export default function BottomDock() {
         icon: Languages,
         label: "Dub",
         toolId: "dub",
-        action: () => setActiveTool("dub"),
+        action: () => {
+          setActiveTool("dub");
+          useEditorStore.getState().setAIPanelOpen(true);
+        },
         tooltip: "Dub Video — Translate voice + subtitles",
       },
     ];

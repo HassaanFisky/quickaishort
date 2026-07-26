@@ -4,7 +4,6 @@ import EditorLayout from "@/components/editor/EditorLayout";
 import { useAnalysis } from "@/hooks/useAnalysis";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useEditorStore } from "@/stores/editorStore";
-import { useAIPanel } from "@/stores/aiPanelStore";
 import { useShortcutsStore, matchEvent } from "@/stores/shortcutsStore";
 import { TelemetryDock } from "@/components/editor/TelemetryDock";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
@@ -171,12 +170,10 @@ export default function EditorPage() {
         setShortcutOverlayOpen((v) => !v);
         return;
       }
-      // Shift+Alt+P (or Cmd+Shift+P on Mac) — open AI panel Tools tab
+      // Shift+Alt+P — focus Studio chat (no dead tools-mode tab).
       if (matchShortcut(e, "toggleCommandPalette")) {
         e.preventDefault();
         useEditorStore.getState().setAIPanelOpen(true);
-        useAIPanel.getState().setOpen(true);
-        useAIPanel.getState().setAiPanelMode("tools");
         return;
       }
       // Shift+Alt+B (or Cmd+Shift+B on Mac) — open B-roll library drawer
@@ -185,8 +182,8 @@ export default function EditorPage() {
         useEditorStore.getState().setBRollDrawerOpen(true);
         return;
       }
-      // Shift+Alt+A (or Cmd+Shift+A on Mac) — toggle AI editor panel
-      if (matchShortcut(e, "toggleFloatingChat")) {
+      // Shift+Alt+A — toggle docked Studio chat
+      if (matchShortcut(e, "toggleStudioChat") || matchShortcut(e, "toggleFloatingChat")) {
         e.preventDefault();
         const current = useEditorStore.getState().aiPanelOpen;
         useEditorStore.getState().setAIPanelOpen(!current);
@@ -202,8 +199,8 @@ export default function EditorPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("welcome") !== "1") return;
-    toast.success("Welcome to QuickAI Short Pro", {
-      description: "Elite Viral Intelligence, unlimited Pre-Flight runs, and priority processing are now unlocked.",
+    toast.success("Welcome to QuickAI Short", {
+      description: "Pro unlocked — Deep Analysis, 4K export, unlimited clip suggestions, and priority processing are now active.",
       duration: 6000,
     });
     params.delete("welcome");

@@ -1,6 +1,6 @@
 # Studio Roadmap (Execution)
 
-**Last updated:** 2026-07-25 (Master Audit + M3 ingest FSM live)
+**Last updated:** 2026-07-26 (ADR-015 Studio Genius OS Phase 1)
 
 ## Complete — current cycle
 
@@ -15,6 +15,8 @@
 | Heuristic invent suggestions → 410 | ✅ |
 | Cloud Tasks render dispatch + private `min=0` worker | ✅ Live |
 | Admin gate fail-closed + ADK generate credits fail-closed | ✅ (2026-07-25 audit) |
+| Dub Video (ADR-014) shorts path | ✅ Code complete |
+| Studio Genius OS Phase 1 (ADR-015) | ✅ Redis plans + multi-turn/stream + SFX preview + docked Dub |
 
 ## Production render plane (SoT)
 
@@ -59,7 +61,8 @@
 | `GOOGLE_TTS_API_KEY` on API + worker | **Founder** — required for full Dub Video voice |
 | Demo / Devpost / Google form | **Founder** |
 | Dub Video live smoke (translate+TTS+export) | After Gemini + TTS secrets |
-| ADR-006 native Gemini tool-loop depth | Optional EP |
+| ADR-006 native Gemini FunctionDeclaration (tool-loop) | Phase 2 after ADR-015 |
+| Movie-length (1–2hr) dub EP | Deferred — not ADR-014 shorts |
 | Multiplayer | **Founder** (EP-007) |
 | Legacy Projects / GridFS delete | **Founder** |
 

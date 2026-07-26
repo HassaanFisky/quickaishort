@@ -1965,8 +1965,8 @@
     {
       "id": "ADD_SFX",
       "version": 1,
-      "title": "Add Sfx",
-      "description": "Studio capability ADD_SFX.",
+      "title": "Add Sound Effect",
+      "description": "Place a catalog sound effect on the timeline for preview playback.",
       "tags": [
         "audio"
       ],
@@ -1979,12 +1979,32 @@
       "idempotent": false,
       "parallel_safe": false,
       "requires_facets": [],
-      "orchestrator_emit": false,
-      "runtime_status": "partial",
+      "orchestrator_emit": true,
+      "runtime_status": "wired",
       "compensating_hint": "undo_event",
       "aliases": [],
       "param_schema": {
-        "type": "object"
+        "type": "object",
+        "required": ["sfx_id"],
+        "properties": {
+          "sfx_id": {
+            "type": "string",
+            "enum": [
+              "impact-thud",
+              "impact-boom",
+              "whoosh-fast",
+              "whoosh-slow",
+              "glitch-digital",
+              "glitch-stutter",
+              "ambient-hum",
+              "transition-swipe",
+              "ui-click",
+              "ui-pop"
+            ]
+          },
+          "start_sec": { "type": "number", "minimum": 0 },
+          "volume": { "type": "number", "minimum": 0, "maximum": 2 }
+        }
       }
     },
     {

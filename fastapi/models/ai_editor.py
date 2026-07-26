@@ -991,6 +991,9 @@ class EditorCommandRequest(BaseModel):
     user_tier: Optional[str] = "free"
     project_context: Optional[dict] = None
     stream: Optional[bool] = False
+    # Multi-turn chat (last N turns). Bound size in router before Gemini.
+    history: Optional[List[dict[str, str]]] = None
+    workload_id: Optional[str] = None
 
 
 class EditorCommandResponse(BaseModel):
@@ -1011,3 +1014,5 @@ class EditorCommandResponse(BaseModel):
     message: Optional[str] = None
     suggestions: List[str] = Field(default_factory=list)
     status: Optional[str] = None
+    # Honest preview vs Kernel ack — FE may append UX copy
+    kernel_ack_required: bool = False

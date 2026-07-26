@@ -174,16 +174,32 @@ async def _execute_via_dual_router(
     user_tier: str,
     project_context: Optional[dict[str, Any]] = None,
     editor_state: AIEditorCurrentState | None = None,
+    history: Optional[list[dict[str, str]]] = None,
 ) -> EditorCommandResponse:
     """Call DualModelRouter.execute and map to the FE Action Intent schema."""
 
     _ = user_tier  # trusted tier already resolved by caller; kept for test hooks
     dual = importlib.import_module("agent.router")
+    context: dict[str, Any] = dict(project_context or {})
+    # Bound conversation history (token / cost control).
+    if history:
+        trimmed: list[dict[str, str]] = []
+        for turn in history[-12:]:
+            if not isinstance(turn, dict):
+                continue
+            role = str(turn.get("role") or "").strip().lower()
+            content = str(turn.get("content") or "").strip()
+            if role not in {"user", "assistant"} or not content:
+                continue
+            trimmed.append({"role": role, "content": content[:800]})
+        if trimmed:
+            context["conversation_history"] = trimmed
+
     request = dual.LogicRouteRequest(
         user_id=user_id,
         workload_id=workload_id or "unscoped",
         query=command,
-        context=project_context or {},
+        context=context,
         # Daily/static ceiling already enforced by `_admit_editor_command`.
         reserve_daily_video=False,
     )
@@ -425,6 +441,7 @@ async def handle_editor_command(
         workload_id=request.workload_id,
         user_tier=tier.value,
         project_context=request.project_context,
+        history=request.history,
     )
 
 
@@ -475,6 +492,7 @@ async def handle_editor_command_stream(
                 workload_id=request.workload_id,
                 user_tier=tier.value,
                 project_context=request.project_context,
+                history=request.history,
             )
             yield f"data: {result.model_dump_json()}\n\n"
         except HTTPException as exc:

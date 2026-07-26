@@ -1,4 +1,8 @@
 import type { VideoAnalysis, VideoMetadata, ExportSettings } from "@/stores/editorStore";
+import {
+  authenticatedFetch,
+  throwIfNotOk,
+} from "@/lib/authenticatedFetch";
 
 // ─── Editor state snapshot (context for command payloads) ─────────────────────
 
@@ -74,101 +78,92 @@ export interface EditorCommandResponse {
   status?: string
 }
 
+export interface ChatHistoryTurn {
+  role: "user" | "assistant"
+  content: string
+}
+
 export interface EditorCommandRequest {
   command: string
   user_tier?: "free" | "pro"
   project_context?: Record<string, unknown>
   stream?: boolean
+  /** Prior Studio chat turns (bounded server-side). */
+  history?: ChatHistoryTurn[]
+  workload_id?: string
 }
 
 // Main function — send command, get back tool actions
 export async function sendEditorCommand(
   request: EditorCommandRequest
 ): Promise<EditorCommandResponse> {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
-
-  if (typeof window !== "undefined") {
-    try {
-      const { getSession } = await import("next-auth/react");
-      const session = await getSession();
-      if (session?.backendToken) {
-        headers["Authorization"] = `Bearer ${session.backendToken}`;
-      }
-      if (session?.user?.id) {
-        headers["X-User-Id"] = session.user.id;
-      }
-    } catch { }
-  }
-
-  const response = await fetch(`${API_BASE}/api/ai-editor/command`, {
+  const response = await authenticatedFetch(`${API_BASE}/api/ai-editor/command`, {
     method: "POST",
-    headers,
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(request),
-  })
+  });
 
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    const detail =
-      typeof error.detail === "string"
-        ? error.detail
-        : `AI Editor error: ${response.status}`;
-    throw new Error(`${detail} (${response.status})`);
-  }
-
-  return response.json()
+  await throwIfNotOk(response);
+  return response.json();
 }
 
-// Streaming version — for real-time typing effect
+/** Streaming path — SSE may emit one JSON plan event (current backend). */
 export async function streamEditorCommand(
   request: EditorCommandRequest,
   onChunk: (chunk: string) => void,
   onDone: () => void
-): Promise<void> {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
+): Promise<EditorCommandResponse | null> {
+  const response = await authenticatedFetch(
+    `${API_BASE}/api/ai-editor/command/stream`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...request, stream: true }),
+    },
+  );
 
-  if (typeof window !== "undefined") {
-    try {
-      const { getSession } = await import("next-auth/react");
-      const session = await getSession();
-      if (session?.backendToken) {
-        headers["Authorization"] = `Bearer ${session.backendToken}`;
-      }
-      if (session?.user?.id) {
-        headers["X-User-Id"] = session.user.id;
-      }
-    } catch { }
+  if (!response.ok) {
+    await throwIfNotOk(response);
   }
+  if (!response.body) throw new Error("No response body");
 
-  const response = await fetch(`${API_BASE}/api/ai-editor/command/stream`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({ ...request, stream: true }),
-  })
-
-  if (!response.ok) throw new Error(`Stream error: ${response.status}`)
-  if (!response.body) throw new Error("No response body")
-
-  const reader = response.body.getReader()
-  const decoder = new TextDecoder()
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let assembled = "";
+  let parsed: EditorCommandResponse | null = null;
 
   while (true) {
-    const { done, value } = await reader.read()
-    if (done) {
-      onDone()
-      break
-    }
-    const chunk = decoder.decode(value)
-    const lines = chunk.split("\n")
+    const { done, value } = await reader.read();
+    if (done) break;
+    const chunk = decoder.decode(value, { stream: true });
+    const lines = chunk.split("\n");
     for (const line of lines) {
-      if (line.startsWith("data: ")) {
-        onChunk(line.replace("data: ", ""))
+      if (!line.startsWith("data: ")) continue;
+      const payload = line.slice(6).trim();
+      if (!payload) continue;
+      onChunk(payload);
+      try {
+        const obj = JSON.parse(payload) as EditorCommandResponse & { error?: string };
+        if (obj.error) {
+          throw new Error(obj.error);
+        }
+        parsed = obj;
+        if (typeof obj.feedback === "string") {
+          assembled = obj.feedback;
+        } else if (typeof obj.message === "string") {
+          assembled = obj.message;
+        }
+      } catch (err) {
+        if (err instanceof SyntaxError) {
+          assembled += payload;
+          continue;
+        }
+        throw err;
       }
     }
   }
+  onDone();
+  return parsed;
 }
 
 // Health check
@@ -180,4 +175,3 @@ export async function checkAIEditorHealth(): Promise<{
   const response = await fetch(`${API_BASE}/api/ai-editor/health`)
   return response.json()
 }
-

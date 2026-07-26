@@ -119,7 +119,7 @@ def derive_suggestions(graph: MediaGraph) -> list[SuggestionIntent]:
         out.append(
             SuggestionIntent(
                 suggestion_id="skel-analyzing",
-                label="Analyzing media… suggestions appear when understanding is ready",
+                label="QuickAI is reading your video…",
                 capability_id=None,
                 intent_kind="informational",
                 params={},
@@ -156,7 +156,7 @@ def derive_suggestions(graph: MediaGraph) -> list[SuggestionIntent]:
             out.append(
                 SuggestionIntent(
                     suggestion_id="sug-add-captions",
-                    label="Add captions from transcript",
+                    label="Add subtitles",
                     capability_id="TOGGLE_CAPTIONS",
                     intent_kind="capability",
                     params={"enabled": True},
@@ -171,7 +171,7 @@ def derive_suggestions(graph: MediaGraph) -> list[SuggestionIntent]:
         out.append(
             SuggestionIntent(
                 suggestion_id="sug-dub-video",
-                label="Dub Video — translate voice + subtitles",
+                label="Dub into another language",
                 capability_id="DUB_VIDEO",
                 intent_kind="capability",
                 params={"mode": "full_dub", "target_lang": "es"},
@@ -195,7 +195,7 @@ def derive_suggestions(graph: MediaGraph) -> list[SuggestionIntent]:
             out.append(
                 SuggestionIntent(
                     suggestion_id="sug-remove-silences",
-                    label=f"Remove {len(long_ones)} silence gap(s)",
+                    label="Cut dead air",
                     capability_id="REMOVE_SILENCES",
                     intent_kind="capability",
                     params={
@@ -221,7 +221,7 @@ def derive_suggestions(graph: MediaGraph) -> list[SuggestionIntent]:
             out.append(
                 SuggestionIntent(
                     suggestion_id="sug-viral-trim",
-                    label=f"Jump to top viral moment (score {int(float(top.get('score', 0)))})",
+                    label="Jump to best moment",
                     capability_id="SEEK",
                     intent_kind="capability",
                     params={"time": float(top.get("start", 0))},
@@ -242,7 +242,7 @@ def derive_suggestions(graph: MediaGraph) -> list[SuggestionIntent]:
             out.append(
                 SuggestionIntent(
                     suggestion_id="sug-detect-viral",
-                    label="Detect viral moments in this long video",
+                    label="Find highlights",
                     capability_id="DETECT_VIRAL_MOMENTS",
                     intent_kind="capability",
                     params={},
@@ -259,7 +259,7 @@ def derive_suggestions(graph: MediaGraph) -> list[SuggestionIntent]:
         out.append(
             SuggestionIntent(
                 suggestion_id="skel-partial",
-                label="Media partially understood — keep editing or wait for deeper analysis",
+                label="Keep editing — more suggestions unlock as analysis finishes",
                 capability_id=None,
                 intent_kind="informational",
                 params={},
