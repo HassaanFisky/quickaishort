@@ -21,34 +21,22 @@ _NEXTAUTH_SECRET = os.getenv("NEXTAUTH_SECRET", "")
 _ALGORITHM = "HS256"
 
 
-def get_verified_user_id(
-    authorization: str = Header(default=""),
-) -> str:
-    """FastAPI dependency. Returns verified user_id or raises 401.
-
-    Usage in endpoint:
-        user_id: str = Depends(get_verified_user_id)
-    """
+def verify_access_token(token: str) -> str:
+    """Decode a raw NextAuth JWT and return user_id, or raise HTTPException."""
     if not _NEXTAUTH_SECRET:
         logger.error("NEXTAUTH_SECRET is not set. Rejecting request.")
         raise HTTPException(
             status_code=503,
             detail="Authentication service misconfigured. Contact support.",
         )
-
-    token = ""
-    if authorization.lower().startswith("bearer "):
-        token = authorization[7:].strip()
-
-    if not token:
+    if not token or not str(token).strip():
         raise HTTPException(
             status_code=401,
             detail="Missing authorization token.",
         )
-
     try:
         payload = _jwt.decode(
-            token,
+            str(token).strip(),
             _NEXTAUTH_SECRET,
             algorithms=[_ALGORITHM],
             leeway=30,
@@ -57,6 +45,22 @@ def get_verified_user_id(
         if not user_id:
             raise HTTPException(status_code=401, detail="Token missing user identity.")
         return str(user_id)
+    except HTTPException:
+        raise
     except _jwt.PyJWTError as exc:
         logger.warning("JWT verification failed: %s", exc)
         raise HTTPException(status_code=401, detail="Invalid or expired token.")
+
+
+def get_verified_user_id(
+    authorization: str = Header(default=""),
+) -> str:
+    """FastAPI dependency. Returns verified user_id or raises 401.
+
+    Usage in endpoint:
+        user_id: str = Depends(get_verified_user_id)
+    """
+    token = ""
+    if authorization.lower().startswith("bearer "):
+        token = authorization[7:].strip()
+    return verify_access_token(token)

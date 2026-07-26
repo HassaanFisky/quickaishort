@@ -4,12 +4,14 @@ import React, { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { playBladeSlice } from "@/lib/introSound";
+import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
 
 /**
  * CinematicIntro Component
  * Replicates the premium intro from intro.html using React and Framer Motion.
  */
 export const CinematicIntro = ({ onComplete }: { onComplete: () => void }) => {
+  const reduceMotion = usePrefersReducedMotion();
   const [phase, setPhase] = useState<"entry" | "hold" | "sweep" | "end">("entry");
   const logoWrapRef = useRef<HTMLDivElement>(null);
   const textWrapRef = useRef<HTMLDivElement>(null);
@@ -20,6 +22,13 @@ export const CinematicIntro = ({ onComplete }: { onComplete: () => void }) => {
   const T_SWEEP = 1300;
 
   useEffect(() => {
+    if (!reduceMotion) return;
+    const timer = setTimeout(() => onComplete(), 80);
+    return () => clearTimeout(timer);
+  }, [reduceMotion, onComplete]);
+
+  useEffect(() => {
+    if (reduceMotion) return;
     // Phase transitions
     if (phase === "entry") {
       const timer = setTimeout(() => setPhase("hold"), T_ENTRY);
@@ -37,7 +46,7 @@ export const CinematicIntro = ({ onComplete }: { onComplete: () => void }) => {
       const timer = setTimeout(() => onComplete(), 500);
       return () => clearTimeout(timer);
     }
-  }, [phase, onComplete]);
+  }, [phase, onComplete, reduceMotion]);
 
   // Handle the text wipe effect during sweep
   useEffect(() => {
@@ -64,7 +73,7 @@ export const CinematicIntro = ({ onComplete }: { onComplete: () => void }) => {
       {/* Cinematic Background Blobs */}
       <div className="absolute inset-0 pointer-events-none">
         <motion.div
-          animate={{ 
+          animate={{
             translate: ["0% 0%", "5% 5%"],
             scale: [1, 1.1]
           }}
@@ -72,7 +81,7 @@ export const CinematicIntro = ({ onComplete }: { onComplete: () => void }) => {
           className="absolute -top-[10%] -left-[10%] w-[50vw] h-[50vw] bg-[#a855f7] rounded-full blur-[140px] opacity-15"
         />
         <motion.div
-          animate={{ 
+          animate={{
             translate: ["0% 0%", "-5% -5%"],
             scale: [1, 1.1]
           }}
@@ -88,20 +97,20 @@ export const CinematicIntro = ({ onComplete }: { onComplete: () => void }) => {
           initial={{ opacity: 0, x: -40, y: 40 }}
           animate={
             phase === "entry" ? { opacity: 1, x: 0, y: 0 } :
-            phase === "sweep" ? { x: "100vw" } :
-            phase === "end" ? { x: "100vw", opacity: 0 } :
-            { opacity: 1, x: 0, y: 0 }
+              phase === "sweep" ? { x: "100vw" } :
+                phase === "end" ? { x: "100vw", opacity: 0 } :
+                  { opacity: 1, x: 0, y: 0 }
           }
           transition={{
             opacity: { duration: phase === "end" ? 0.5 : T_ENTRY / 1000 },
-            x: { 
+            x: {
               duration: phase === "sweep" ? T_SWEEP / 1000 : phase === "end" ? 0 : T_ENTRY / 1000,
               ease: phase === "sweep" ? [0.16, 1, 0.3, 1] : "easeOut"
             },
             y: { duration: T_ENTRY / 1000, ease: "easeOut" }
           }}
           className="absolute z-20 flex items-center justify-center"
-          style={{ 
+          style={{
             left: phase === "entry" || phase === "hold" ? "-130px" : undefined,
             filter: "drop-shadow(0 0 10px rgba(168, 85, 247, 0.15))"
           }}
@@ -138,9 +147,9 @@ export const CinematicIntro = ({ onComplete }: { onComplete: () => void }) => {
           <motion.div
             ref={textWrapRef}
             initial={{ opacity: 0, scale: 0.98 }}
-            animate={{ 
+            animate={{
               opacity: phase === "entry" || phase === "hold" || phase === "sweep" ? 1 : 0,
-              scale: phase === "entry" ? 1 : 1 
+              scale: phase === "entry" ? 1 : 1
             }}
             transition={{ duration: T_ENTRY / 1000 }}
             className="text-[clamp(2.2rem,5vw,5.5rem)] font-black tracking-tight uppercase whitespace-nowrap bg-clip-text text-transparent bg-gradient-to-r from-[#3b82f6] via-[#a855f7] to-[#ec4899]"

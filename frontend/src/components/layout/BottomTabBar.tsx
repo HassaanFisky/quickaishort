@@ -18,6 +18,8 @@ interface TabItem {
   href: string;
   label: string;
   icon: LucideIcon;
+  /** Announced label for screen readers when UI label is shortened. */
+  ariaLabel?: string;
 }
 
 // Mirrors Sidebar.tsx NAV_ITEMS for desktop/mobile navigation parity.
@@ -25,20 +27,33 @@ interface TabItem {
 const TABS: TabItem[] = [
   { href: "/dashboard", label: "Home", icon: LayoutGrid },
   { href: "/editor", label: "Editor", icon: Scissors },
-  { href: "/adk", label: "ADK", icon: Bot },
+  {
+    href: "/adk",
+    label: "Soon",
+    icon: Bot,
+    ariaLabel: "ADK Studio — Coming Soon",
+  },
   { href: "/history", label: "Library", icon: HistoryIcon },
   { href: "/settings", label: "Profile", icon: SettingsIcon },
 ];
 
 // Routes where the tab bar should never render, even if the session is authenticated.
+// /editor hides the bar so timeline + chat sheets don't fight global chrome.
 const HIDDEN_PATHS = new Set<string>(["/signin", "/signup"]);
+
+function isEditorPath(pathname: string | null): boolean {
+  if (!pathname) return false;
+  return pathname === "/editor" || pathname.startsWith("/editor/");
+}
 
 export function BottomTabBar() {
   const pathname = usePathname();
   const { status } = useSession();
 
   const shouldRender =
-    status === "authenticated" && !HIDDEN_PATHS.has(pathname ?? "");
+    status === "authenticated" &&
+    !HIDDEN_PATHS.has(pathname ?? "") &&
+    !isEditorPath(pathname);
 
   // Toggle a body class so the global CSS rule reserves matching bottom padding
   // on <main> while the bar is mounted. This prevents the fixed bar from
@@ -60,7 +75,7 @@ export function BottomTabBar() {
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
       <ul role="list" className="flex h-14">
-        {TABS.map(({ href, label, icon: Icon }) => {
+        {TABS.map(({ href, label, icon: Icon, ariaLabel }) => {
           const active =
             pathname === href ||
             (href !== "/" && pathname?.startsWith(`${href}/`));
@@ -69,7 +84,7 @@ export function BottomTabBar() {
               <Link
                 href={href}
                 aria-current={active ? "page" : undefined}
-                aria-label={label}
+                aria-label={ariaLabel ?? label}
                 className={cn(
                   "relative flex h-full w-full flex-col items-center justify-center gap-1 text-[11px] font-medium",
                   "transition-colors active:opacity-70",

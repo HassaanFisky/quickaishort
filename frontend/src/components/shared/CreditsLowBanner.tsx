@@ -11,7 +11,7 @@ export function CreditsLowBanner({ credits }: CreditsLowBannerProps) {
     ? "You're out of credits."
     : `You have ${credits} ${credits === 1 ? "credit" : "credits"} left.`;
   const body = isExhausted
-    ? "Upgrade to Pro to keep creating, or wait for your free credits to refresh."
+    ? "Upgrade to Pro to keep creating — Free tier credits are limited."
     : "Upgrade to Pro for more headroom on Pre-Flight and exports.";
 
   return (

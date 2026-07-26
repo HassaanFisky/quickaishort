@@ -941,6 +941,7 @@ class AIEditorResponse(BaseModel):
     model: Optional[str]
     clamped: list[str]
     dropped: list[str]
+    cached: bool = False
 
 
 class ToolName(str, Enum):
@@ -1014,5 +1015,7 @@ class EditorCommandResponse(BaseModel):
     message: Optional[str] = None
     suggestions: List[str] = Field(default_factory=list)
     status: Optional[str] = None
+    # True when DualModelRouter served an exact-state cache hit (no Gemini spend).
+    cached: bool = False
     # Honest preview vs Kernel ack — FE may append UX copy
     kernel_ack_required: bool = False

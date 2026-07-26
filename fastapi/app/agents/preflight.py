@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import uuid
 from typing import Literal, Optional, Any
 
@@ -418,6 +419,21 @@ async def predict(
     a weighted virality consensus score and actionable recommendations for
     frame adjustments and cut boundaries.
     """
+
+    # Production fail-closed: ~7 Gemini calls, zero credits, bypasses DualModelRouter.
+    if os.getenv("ENVIRONMENT", "").strip().lower() == "production":
+        if os.getenv("ENABLE_LEGACY_V1_PREFLIGHT", "").strip().lower() not in (
+            "1",
+            "true",
+            "yes",
+        ):
+            raise HTTPException(
+                status_code=410,
+                detail=(
+                    "Legacy PreFlight predict is retired. "
+                    "Use POST /api/preflight (credited) instead."
+                ),
+            )
 
     request_id = str(uuid.uuid4())[:8]
 

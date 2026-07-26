@@ -119,7 +119,10 @@ export default function EditorLayout() {
         sessionStorage.setItem(
           "qai:dub-intent",
           JSON.stringify({
-            targetLang: detail.targetLang ?? "es",
+            targetLang:
+              detail.targetLang ||
+              window.localStorage.getItem("qai:dub-last-lang") ||
+              "es",
             mode: detail.mode ?? "full_dub",
           }),
         );

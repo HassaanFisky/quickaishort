@@ -3,7 +3,7 @@ import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 
 export const metadata: Metadata = {
-  title: "Terms of Service — Quick AI Shorts",
+  title: "Terms of Service — QuickAI Short",
   description: "The rules, regulations, and guidelines for using QuickAI Short.",
 };
 
@@ -25,7 +25,7 @@ export default function TermsPage() {
           <section>
             <h2 className="text-foreground font-semibold mb-2">Use of the service</h2>
             <p>
-              You may use Quick AI Shorts for lawful creation of short-form video
+              You may use QuickAI Short for lawful creation of short-form video
               content from sources you own or have rights to use. You retain full
               ownership of clips you produce.
             </p>

@@ -144,6 +144,54 @@ async def deduct_credits(user_id: str, amount: int) -> bool:
     return True
 
 
+async def refund_credits(user_id: str, amount: int) -> bool:
+    """Return credits after a failed or cache-hit AI turn (never goes unbounded)."""
+    if not user_id or user_id == "anonymous" or amount <= 0:
+        return False
+    if not is_ready():
+        return False
+
+    def _do() -> dict[str, Any] | None:
+        db = get_db()
+        doc_ref = db.collection(COLLECTION).document(user_id)
+
+        @firestore.transactional
+        def _txn(transaction: firestore.Transaction) -> dict[str, Any] | None:
+            snap = doc_ref.get(transaction=transaction)
+            if not snap.exists:
+                return None
+            data = snap.to_dict() or {}
+            balance = int(data.get("credits_balance", 0) or 0)
+            new_balance = balance + amount
+            transaction.update(
+                doc_ref,
+                {
+                    "credits_balance": new_balance,
+                    "updated_at": datetime.now(timezone.utc),
+                },
+            )
+            return {**data, "credits_balance": new_balance}
+
+        return _txn(db.transaction())
+
+    doc = await asyncio.to_thread(_do)
+    if doc is None:
+        logger.warning("credit_refund_failed user_id=%s amount=%d", user_id, amount)
+        return False
+
+    payload = _serialize(doc, user_id)
+    try:
+        await async_redis_conn.delete(f"stats:{user_id}")
+    except Exception:
+        pass
+    try:
+        await emit_stats_updated(user_id, payload)
+    except Exception:
+        pass
+    logger.info("credit_refunded user_id=%s amount=%d", user_id, amount)
+    return True
+
+
 async def get_user_stats(user_id: str) -> dict[str, Any]:
     if not is_ready():
         return _empty(user_id)

@@ -172,3 +172,40 @@ def test_registry_contains_dub_capabilities():
     assert caps is not None
     assert dub["runtime_status"] == "wired"
     assert dub["orchestrator_emit"] is False
+
+
+@pytest.mark.asyncio
+async def test_dub_cache_hit_skips_credit_charge(monkeypatch):
+    """Reused ready/degraded jobs must not deduct credits."""
+    from routers import dub_router
+    from models.dub import DubJobStatus
+
+    ready = DubJobStatus(
+        job_id="cached1",
+        user_id="u-cache",
+        status="ready",
+        mode="captions_only",
+        target_lang="es",
+        voice_id="es-ES-Standard-A",
+        progress=100,
+        message="Ready",
+        fingerprint="fp-test",
+        cache_hit=True,
+        created_at=1.0,
+        updated_at=1.0,
+    )
+    deduct = AsyncMock(return_value=True)
+    dispatch = AsyncMock()
+    monkeypatch.setattr(dub_router, "create_job", AsyncMock(return_value=ready))
+    monkeypatch.setattr(dub_router, "dispatch_dub_processing", dispatch)
+    monkeypatch.setattr("services.stats_service.deduct_credits", deduct)
+
+    req = DubJobCreateRequest(
+        transcript=[DubTranscriptChunk(text="Hello", start=0, end=1)],
+        target_lang="es",
+        mode="captions_only",
+    )
+    out = await dub_router.start_dub_job(req, verified_user_id="u-cache")
+    assert out.cache_hit is True
+    deduct.assert_not_awaited()
+    dispatch.assert_not_awaited()

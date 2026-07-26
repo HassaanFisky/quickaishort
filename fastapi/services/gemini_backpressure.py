@@ -93,6 +93,52 @@ class RedisGeminiBackpressure:
         self._hard_quota_delay_seconds = hard_quota_delay_seconds
         self._clock = clock
 
+    async def snapshot(self) -> dict[str, object]:
+        """Read-only circuit state for health/UX — never raises on Redis issues."""
+
+        for block_key, label in (
+            (_HARD_BLOCK_KEY, "hard_quota"),
+            (_TRANSIENT_BLOCK_KEY, "transient"),
+        ):
+            try:
+                raw = await self._redis.get(block_key)
+            except Exception:
+                return {
+                    "blocked": None,
+                    "kind": None,
+                    "retry_after_seconds": None,
+                    "state": "unavailable",
+                }
+            if raw is None:
+                continue
+            try:
+                cooldown = GeminiCooldown.model_validate_json(
+                    _decode_redis_value(raw),
+                    strict=True,
+                )
+            except Exception:
+                return {
+                    "blocked": None,
+                    "kind": None,
+                    "retry_after_seconds": None,
+                    "state": "invalid",
+                }
+            remaining = cooldown.blocked_until_epoch - int(self._clock())
+            if remaining <= 0:
+                continue
+            return {
+                "blocked": True,
+                "kind": label,
+                "retry_after_seconds": remaining,
+                "state": "cooling_down",
+            }
+        return {
+            "blocked": False,
+            "kind": None,
+            "retry_after_seconds": None,
+            "state": "open",
+        }
+
     async def check(self) -> None:
         """Reject during an active cooldown without calling Gemini."""
 
@@ -168,11 +214,14 @@ class RedisGeminiBackpressure:
         return GeminiBackpressureError(cooldown)
 
     async def clear_after_success(self) -> None:
-        """Best-effort reset after a confirmed provider success."""
+        """Clear transient throttle after success — never wipe hard quota circuit.
+
+        Hard-quota (depleted credits / billing) must stay until TTL expires so one
+        lucky success on another instance cannot reopen a thundering herd of 429s.
+        """
 
         try:
             await self._redis.delete(
-                _HARD_BLOCK_KEY,
                 _TRANSIENT_BLOCK_KEY,
                 _FAILURE_KEY,
             )

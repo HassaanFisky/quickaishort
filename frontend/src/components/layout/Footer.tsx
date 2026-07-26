@@ -4,6 +4,8 @@ import QSLogo from "@/components/shared/QSLogo";
 const LINKS = [
   { href: "/editor",        label: "Editor"   },
   { href: "/#features",     label: "Features" },
+  { href: "/pricing",       label: "Pricing"  },
+  { href: "/about",         label: "About"    },
   { href: "/privacy",       label: "Privacy"  },
   { href: "/terms",         label: "Terms"    },
   { href: "/refund-policy", label: "Refunds"  },

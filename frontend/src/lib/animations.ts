@@ -1,18 +1,59 @@
-import { Variants, Transition } from "framer-motion";
+import type {
+  TargetAndTransition,
+  Transition,
+  VariantLabels,
+  Variants,
+} from "framer-motion";
+
+type MotionTarget = boolean | TargetAndTransition | VariantLabels;
+
+/**
+ * Framer Motion props that collapse to an instant fade (or no transform)
+ * when the user prefers reduced motion.
+ */
+export function motionProps(
+  reduce: boolean | null | undefined,
+  full: {
+    initial?: MotionTarget;
+    animate?: TargetAndTransition | VariantLabels;
+    exit?: TargetAndTransition | VariantLabels;
+    transition?: Transition;
+  },
+): {
+  initial: MotionTarget;
+  animate: TargetAndTransition | VariantLabels;
+  exit?: TargetAndTransition | VariantLabels;
+  transition: Transition;
+} {
+  if (reduce) {
+    return {
+      initial: false,
+      animate: { opacity: 1 },
+      exit: { opacity: 0 },
+      transition: { duration: 0.01 },
+    };
+  }
+  return {
+    initial: full.initial ?? { opacity: 0 },
+    animate: full.animate ?? { opacity: 1 },
+    exit: full.exit,
+    transition: full.transition ?? { duration: 0.2 },
+  };
+}
 
 // ── Spring presets ────────────────────────────────────────────────────────────
 export const spring = {
-  snappy:  { type: "spring", stiffness: 400, damping: 30 } as Transition,
-  smooth:  { type: "spring", stiffness: 280, damping: 32 } as Transition,
-  gentle:  { type: "spring", stiffness: 180, damping: 28 } as Transition,
-  bouncy:  { type: "spring", stiffness: 340, damping: 22 } as Transition,
+  snappy: { type: "spring", stiffness: 400, damping: 30 } as Transition,
+  smooth: { type: "spring", stiffness: 280, damping: 32 } as Transition,
+  gentle: { type: "spring", stiffness: 180, damping: 28 } as Transition,
+  bouncy: { type: "spring", stiffness: 340, damping: 22 } as Transition,
 } as const;
 
 // ── Easing curves (mirrors CSS tokens) ───────────────────────────────────────
 export const ease = {
   outSoft: [0.22, 1, 0.36, 1] as [number, number, number, number],
-  inSoft:  [0.64, 0, 0.78, 0] as [number, number, number, number],
-  fluid:   [0.34, 1.56, 0.64, 1] as [number, number, number, number],
+  inSoft: [0.64, 0, 0.78, 0] as [number, number, number, number],
+  fluid: [0.34, 1.56, 0.64, 1] as [number, number, number, number],
 } as const;
 
 // ── Stagger containers ────────────────────────────────────────────────────────
@@ -120,31 +161,31 @@ export const modalVariants: Variants = {
 export const backdropVariants: Variants = {
   hidden: { opacity: 0 },
   visible: { opacity: 1, transition: { duration: 0.2 } },
-  exit:   { opacity: 0, transition: { duration: 0.16 } },
+  exit: { opacity: 0, transition: { duration: 0.16 } },
 };
 
 // ── Side panel / drawer ───────────────────────────────────────────────────────
 export const panelRightVariants: Variants = {
-  hidden:  { opacity: 0, x: "100%" },
+  hidden: { opacity: 0, x: "100%" },
   visible: { opacity: 1, x: 0, transition: { ...spring.smooth } },
-  exit:    { opacity: 0, x: "100%", transition: { duration: 0.2, ease: ease.inSoft } },
+  exit: { opacity: 0, x: "100%", transition: { duration: 0.2, ease: ease.inSoft } },
 };
 
 export const panelLeftVariants: Variants = {
-  hidden:  { opacity: 0, x: "-100%" },
+  hidden: { opacity: 0, x: "-100%" },
   visible: { opacity: 1, x: 0, transition: { ...spring.smooth } },
-  exit:    { opacity: 0, x: "-100%", transition: { duration: 0.2, ease: ease.inSoft } },
+  exit: { opacity: 0, x: "-100%", transition: { duration: 0.2, ease: ease.inSoft } },
 };
 
 export const panelBottomVariants: Variants = {
-  hidden:  { opacity: 0, y: "100%" },
+  hidden: { opacity: 0, y: "100%" },
   visible: { opacity: 1, y: 0, transition: { ...spring.smooth } },
-  exit:    { opacity: 0, y: "100%", transition: { duration: 0.2, ease: ease.inSoft } },
+  exit: { opacity: 0, y: "100%", transition: { duration: 0.2, ease: ease.inSoft } },
 };
 
 // ── Score / viral orb ─────────────────────────────────────────────────────────
 export const scoreRevealVariants: Variants = {
-  hidden:  { opacity: 0, scale: 0.7, y: 8 },
+  hidden: { opacity: 0, scale: 0.7, y: 8 },
   visible: {
     opacity: 1,
     scale: 1,
@@ -169,7 +210,7 @@ export const cardVariants: Variants = {
 
 // ── Tooltip / popover ─────────────────────────────────────────────────────────
 export const tooltipVariants: Variants = {
-  hidden:  { opacity: 0, scale: 0.94, y: 4 },
+  hidden: { opacity: 0, scale: 0.94, y: 4 },
   visible: { opacity: 1, scale: 1, y: 0, transition: { duration: 0.14, ease: ease.outSoft } },
-  exit:    { opacity: 0, scale: 0.96, transition: { duration: 0.1 } },
+  exit: { opacity: 0, scale: 0.96, transition: { duration: 0.1 } },
 };

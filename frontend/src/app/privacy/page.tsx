@@ -3,7 +3,7 @@ import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy — Quick AI Shorts",
+  title: "Privacy Policy — QuickAI Short",
   description: "How we collect, use, and protect your data at QuickAI Short.",
 };
 
@@ -26,8 +26,11 @@ export default function PrivacyPage() {
             <h2 className="text-foreground font-semibold mb-2">What we collect</h2>
             <p>
               Account email and Google profile name when you sign in. Project
-              metadata you create (titles, timestamps, viral scores). No raw video
-              data leaves your browser unless you explicitly export it.
+              metadata you create (titles, timestamps, viral scores). Previews
+              and transcription run locally in your browser; when you upload
+              media or request a final server export, that video is processed
+              and stored on our servers (Google Cloud Storage and Cloud Run) to
+              render your file.
             </p>
           </section>
           <section>
@@ -40,7 +43,7 @@ export default function PrivacyPage() {
           <section>
             <h2 className="text-foreground font-semibold mb-2">Contact</h2>
             <p>
-              Questions: hassaan@quickaishort.online
+              Questions: support@quickaishort.online
             </p>
           </section>
         </div>

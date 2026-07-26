@@ -148,7 +148,7 @@ function DashboardEmptyState() {
       <EmptyState
         icon={FolderOpen}
         title="No exports yet"
-        body="Drop a YouTube URL into the editor to start your first viral sequence. AI-powered editing, 100+ features, export in seconds."
+        body="Paste a YouTube link into the editor and let the AI find your best clips."
         actionLabel="Create First Project"
         actionHref="/editor"
         actionIcon={<Plus className="w-5 h-5" aria-hidden="true" />}

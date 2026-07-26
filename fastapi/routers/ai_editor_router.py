@@ -50,14 +50,22 @@ router = APIRouter(tags=["AI Editor"])
 
 def _credits_soft_fail_allowed() -> bool:
     """Opt-in soft-fail for local/dev only. Production must stay fail-closed."""
-    return os.getenv("CREDITS_SOFT_FAIL", "").strip().lower() in ("1", "true", "yes")
+    if os.getenv("CREDITS_SOFT_FAIL", "").strip().lower() not in ("1", "true", "yes"):
+        return False
+    if os.getenv("ENVIRONMENT", "").strip().lower() == "production":
+        logger.error(
+            "CREDITS_SOFT_FAIL is set but ENVIRONMENT=production — soft-fail blocked"
+        )
+        return False
+    return True
 
 
-async def _require_ai_editor_credit(user_id: str, *, route: str) -> None:
-    """Deduct 1 credit before any Gemini spend.
+async def _require_ai_editor_credit(user_id: str, *, route: str) -> bool:
+    """Deduct 1 credit before Gemini spend. Returns True when a charge was taken.
 
     Matches pipeline_router fail-closed policy: stats outage → 503, not free AI.
-    Set CREDITS_SOFT_FAIL=true only for non-prod debugging.
+    Set CREDITS_SOFT_FAIL=true only for non-prod debugging (returns False = no charge).
+    Callers must refund on cache hit, policy block, or failure after a True return.
     """
     try:
         from services.stats_service import deduct_credits
@@ -68,6 +76,7 @@ async def _require_ai_editor_credit(user_id: str, *, route: str) -> None:
                 status_code=402,
                 detail="Insufficient credits. Upgrade to Pro to continue.",
             )
+        return True
     except HTTPException:
         raise
     except Exception as exc:
@@ -78,7 +87,7 @@ async def _require_ai_editor_credit(user_id: str, *, route: str) -> None:
                 user_id,
                 exc,
             )
-            return
+            return False
         logger.error(
             "%s: credit deduction failed for %s: %s",
             route,
@@ -90,6 +99,39 @@ async def _require_ai_editor_credit(user_id: str, *, route: str) -> None:
             status_code=503,
             detail="Credit service unavailable. Try again shortly.",
         ) from exc
+
+
+async def _refund_ai_editor_credit(user_id: str, *, route: str) -> None:
+    """Best-effort refund — never raises to the client path."""
+    try:
+        from services.stats_service import refund_credits
+
+        ok = await refund_credits(user_id, 1)
+        if not ok:
+            logger.error(
+                "%s: credit refund failed user=%s (manual reconcile may be needed)",
+                route,
+                user_id,
+            )
+    except Exception as exc:
+        logger.error(
+            "%s: credit refund error user=%s: %s",
+            route,
+            user_id,
+            exc,
+            exc_info=True,
+        )
+
+
+def _should_refund_editor_command(response: EditorCommandResponse) -> bool:
+    """Refund when no billable model work occurred or the turn was blocked."""
+    if response.cached:
+        return True
+    if response.status == "blocked":
+        return True
+    if response.intent in {"UPGRADE_PRO", "RETRY_LATER"}:
+        return True
+    return False
 
 
 async def _admit_editor_command(
@@ -260,6 +302,7 @@ async def _execute_via_dual_router(
         message=message,
         suggestions=suggestions,
         status=status,
+        cached=bool(result.cached),
     )
 
 
@@ -324,6 +367,7 @@ async def _execute_ai_edit_via_dual_router(
         model=None if used_mock else command.model_used,
         clamped=command.clamped,
         dropped=command.dropped,
+        cached=bool(command.cached),
     )
 
 
@@ -366,30 +410,43 @@ async def ai_edit(
     if not evaluation.decision.allowed:
         raise_resource_ceiling(evaluation.decision)
 
+    charged = False
     try:
         if not is_mock_ai_mode():
             ensure_agent_ready("ai_editor_agent", strict=False)
-            await _require_ai_editor_credit(user_id, route="ai_edit")
+            charged = await _require_ai_editor_credit(user_id, route="ai_edit")
         response = await _execute_ai_edit_via_dual_router(
             user_id=user_id,
             body=body,
             user_tier=tier.value,
         )
+        if charged and response.cached:
+            await _refund_ai_editor_credit(user_id, route="ai_edit")
     except HTTPException:
+        if charged:
+            await _refund_ai_editor_credit(user_id, route="ai_edit")
         raise
     except TimeoutError:
+        if charged:
+            await _refund_ai_editor_credit(user_id, route="ai_edit")
         raise HTTPException(
             status_code=504, detail="AI editor timed out. Try a shorter prompt."
         )
     except GeminiBackpressureError as exc:
+        if charged:
+            await _refund_ai_editor_credit(user_id, route="ai_edit")
         raise HTTPException(
             status_code=429,
             detail=str(exc),
             headers={"Retry-After": str(exc.cooldown.retry_after_seconds)},
         ) from exc
     except GeminiBackpressureUnavailable as exc:
+        if charged:
+            await _refund_ai_editor_credit(user_id, route="ai_edit")
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except Exception as exc:
+        if charged:
+            await _refund_ai_editor_credit(user_id, route="ai_edit")
         logger.error(
             "ai_edit: engine error for user=%s: %s", user_id, exc, exc_info=True
         )
@@ -431,18 +488,30 @@ async def handle_editor_command(
     if not evaluation.decision.allowed:
         return _blocked_command_response(evaluation)
 
+    charged = False
     if not is_mock_ai_mode():
         ensure_agent_ready("ai_editor_agent", strict=False)
-        await _require_ai_editor_credit(user_id, route="handle_editor_command")
+        charged = await _require_ai_editor_credit(
+            user_id, route="handle_editor_command"
+        )
 
-    return await _execute_via_dual_router(
-        user_id=user_id,
-        command=request.command,
-        workload_id=request.workload_id,
-        user_tier=tier.value,
-        project_context=request.project_context,
-        history=request.history,
-    )
+    try:
+        response = await _execute_via_dual_router(
+            user_id=user_id,
+            command=request.command,
+            workload_id=request.workload_id,
+            user_tier=tier.value,
+            project_context=request.project_context,
+            history=request.history,
+        )
+    except Exception:
+        if charged:
+            await _refund_ai_editor_credit(user_id, route="handle_editor_command")
+        raise
+
+    if charged and _should_refund_editor_command(response):
+        await _refund_ai_editor_credit(user_id, route="handle_editor_command")
+    return response
 
 
 @router.post("/api/ai-editor/edit", response_model=EditorCommandResponse)
@@ -480,12 +549,16 @@ async def handle_editor_command_stream(
     if not evaluation.decision.allowed:
         raise_resource_ceiling(evaluation.decision)
 
+    charged = False
     if not is_mock_ai_mode():
         ensure_agent_ready("ai_editor_agent", strict=False)
-        await _require_ai_editor_credit(user_id, route="handle_editor_command_stream")
+        charged = await _require_ai_editor_credit(
+            user_id, route="handle_editor_command_stream"
+        )
 
     async def guarded_stream():
         try:
+            yield 'data: {"stage":"planning","message":"Planning your edit…"}\n\n'
             result = await _execute_via_dual_router(
                 user_id=user_id,
                 command=request.command,
@@ -494,10 +567,31 @@ async def handle_editor_command_stream(
                 project_context=request.project_context,
                 history=request.history,
             )
+            if charged and _should_refund_editor_command(result):
+                await _refund_ai_editor_credit(
+                    user_id, route="handle_editor_command_stream"
+                )
+            yield 'data: {"stage":"applying","message":"Applying edits…"}\n\n'
             yield f"data: {result.model_dump_json()}\n\n"
         except HTTPException as exc:
+            if charged:
+                await _refund_ai_editor_credit(
+                    user_id, route="handle_editor_command_stream"
+                )
             detail = exc.detail if isinstance(exc.detail, str) else str(exc.detail)
             yield f'data: {{"error": {detail!r}, "status": {exc.status_code}}}\n\n'
+        except Exception as exc:
+            if charged:
+                await _refund_ai_editor_credit(
+                    user_id, route="handle_editor_command_stream"
+                )
+            logger.error(
+                "handle_editor_command_stream failed user=%s: %s",
+                user_id,
+                exc,
+                exc_info=True,
+            )
+            yield 'data: {"error": "AI editor encountered an internal error.", "status": 500}\n\n'
 
     return StreamingResponse(
         guarded_stream(),
@@ -507,13 +601,44 @@ async def handle_editor_command_stream(
 
 @router.get("/api/ai-editor/health")
 async def health_check_ai():
-    """Check if AI editor is connected and working."""
+    """Honest AI readiness — key presence + Gemini circuit state."""
     api_key = os.getenv("GEMINI_API_KEY")
+    mock = is_mock_ai_mode()
+    circuit: dict[str, object] = {
+        "blocked": False,
+        "kind": None,
+        "retry_after_seconds": None,
+        "state": "unknown",
+    }
+    try:
+        from services.gemini_backpressure import get_gemini_backpressure
+
+        circuit = await get_gemini_backpressure().snapshot()
+    except Exception:
+        circuit = {
+            "blocked": None,
+            "kind": None,
+            "retry_after_seconds": None,
+            "state": "unavailable",
+        }
+
+    if mock:
+        status = "ok"
+    elif not api_key:
+        status = "missing_api_key"
+    elif circuit.get("blocked") is True:
+        status = "deferred"
+    elif circuit.get("state") in {"unavailable", "invalid"}:
+        status = "degraded"
+    else:
+        status = "ok"
+
     return {
-        "status": "ok" if api_key or is_mock_ai_mode() else "missing_api_key",
-        "mock_ai_mode": is_mock_ai_mode(),
+        "status": status,
+        "mock_ai_mode": mock,
         "primary_model": os.getenv("GEMINI_PRIMARY_MODEL", "gemini-2.5-flash"),
         "free_model": os.getenv("GEMINI_FREE_MODEL", "gemini-2.5-flash-lite"),
+        "gemini_circuit": circuit,
     }
 
 

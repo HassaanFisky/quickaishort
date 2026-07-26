@@ -555,6 +555,7 @@ export default function RightPanel() {
 
   const {
     exportClip,
+    cancelExport,
     isExporting,
     exportProgress,
     exportDone,
@@ -1457,6 +1458,13 @@ export default function RightPanel() {
                         <p className="text-[11px] text-muted-foreground leading-relaxed">
                           Usually under a minute — feel free to keep editing.
                         </p>
+                        <button
+                          type="button"
+                          onClick={() => void cancelExport()}
+                          className="w-full h-9 rounded-xl border border-border bg-secondary/40 text-[12px] font-semibold text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                        >
+                          Cancel export
+                        </button>
                       </motion.div>
                     ) : (
                       <motion.div

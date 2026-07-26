@@ -103,6 +103,37 @@ def is_cancelled(job_id: str) -> bool:
     return bool(_redis().get(_CANCEL_KEY.format(job_id)))
 
 
+async def _notify_dub(job: DubJobStatus) -> None:
+    """Best-effort Pusher/WS fan-out for Dub stage changes."""
+    try:
+        from services.realtime import emit_dub_event
+
+        if job.status in {"ready", "degraded"}:
+            event = "complete"
+        elif job.status in {"failed", "cancelled"}:
+            event = "error"
+        else:
+            event = "progress"
+        await emit_dub_event(
+            job.user_id,
+            job.job_id,
+            event,
+            {
+                "status": job.status,
+                "progress": job.progress,
+                "message": job.message,
+                "error": job.error,
+                "fallback_reason": job.fallback_reason,
+                "preview_audio_url": job.preview_audio_url,
+                "mute_source_audio": job.mute_source_audio,
+                "mode": job.mode,
+                "target_lang": job.target_lang,
+            },
+        )
+    except Exception as exc:
+        logger.debug("dub_emit_failed job=%s err=%s", job.job_id, exc)
+
+
 def _update(
     job: DubJobStatus,
     *,
@@ -122,6 +153,11 @@ def _update(
     data["updated_at"] = time.time()
     updated = DubJobStatus.model_validate(data)
     save_job(updated)
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(_notify_dub(updated))
+    except RuntimeError:
+        pass
     return updated
 
 

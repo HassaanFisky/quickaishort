@@ -174,7 +174,8 @@ def derive_suggestions(graph: MediaGraph) -> list[SuggestionIntent]:
                 label="Dub into another language",
                 capability_id="DUB_VIDEO",
                 intent_kind="capability",
-                params={"mode": "full_dub", "target_lang": "es"},
+                # Language chosen in DubPanel (last-used / user pick) — avoid surprise default.
+                params={"mode": "full_dub"},
                 evidence=SuggestionEvidence(
                     facet_keys=["transcript"],
                     summary=f"Transcript ready ({chunk_count} chunks) — can dub to another language",

@@ -88,15 +88,15 @@ async def process_editor_command(
             prompt,
             model=model_config.model_name,
             json_mode=True,
-            max_attempts=5,
+            max_attempts=3,
         )
         parsed = _parse_gemini_json(raw)
     except json.JSONDecodeError as e:
         raise HTTPException(
-            status_code=422, detail=f"AI returned invalid JSON: {str(e)}"
+            status_code=422, detail="AI returned invalid JSON. Please try again."
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Gemini API error: {str(e)}")
+        raise HTTPException(status_code=500, detail="AI editor temporarily unavailable. Please try again.")
 
     raw_actions = parsed.get("actions") or []
     if not isinstance(raw_actions, list):
@@ -165,7 +165,7 @@ async def stream_editor_command(
     raw = await call_gemini_text(
         prompt,
         model=model_config.model_name,
-        max_attempts=5,
+        max_attempts=3,
     )
     yield f"data: {raw}\n\n"
 

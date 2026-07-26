@@ -6,12 +6,16 @@
  *
  * Upstream contract: fastapi/routers/ai_editor_router.py
  * Credits, sanitisation, mock mode all enforced server-side.
+ *
+ * Auth: mints a compact HS256 backendToken — never forward the raw
+ * NextAuth session cookie (encrypted JWE; FastAPI PyJWT rejects it).
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { getToken } from "next-auth/jwt";
 import { authOptions } from "@/lib/auth/options";
+import { mintBackendToken } from "@/lib/auth/mintBackendToken";
 
 const BACKEND_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -22,12 +26,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Extract raw NextAuth JWT from cookie — same pattern as /api/shorts/create
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
-  const rawCookie =
-    req.cookies.get("__Secure-next-auth.session-token")?.value ||
-    req.cookies.get("next-auth.session-token")?.value ||
-    "";
+  const userId = String(token?.id ?? token?.sub ?? session.user.id ?? "");
+  const backendToken =
+    session.backendToken ??
+    (await mintBackendToken({
+      id: userId,
+      email: (token?.email as string | undefined) ?? session.user.email,
+      isPro: Boolean(token?.isPro ?? session.user.isPro),
+    }));
+
+  if (!backendToken) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
   let body: unknown;
   try {
@@ -38,9 +49,9 @@ export async function POST(req: NextRequest) {
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
+    Authorization: `Bearer ${backendToken}`,
   };
-  if (rawCookie) headers["Authorization"] = `Bearer ${rawCookie}`;
-  if (token?.sub) headers["X-User-Id"] = token.sub;
+  if (userId) headers["X-User-Id"] = userId;
 
   const xff =
     req.headers.get("x-forwarded-for") ||

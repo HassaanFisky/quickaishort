@@ -96,6 +96,8 @@ export function useIngestLifecycle(opts: {
   const { runPipeline, cancelPipeline } = opts;
   const uploadAbortRef = useRef<AbortController | null>(null);
   const lastFileRef = useRef<File | null>(null);
+  /** Bumps on every new ingest — stale async completions must no-op. */
+  const ingestGenRef = useRef(0);
   const { setVideoContext } = useAIPanel();
 
   const {
@@ -112,9 +114,12 @@ export function useIngestLifecycle(opts: {
   } = useEditorStore();
 
   const beginIngest = useCallback(() => {
+    ingestGenRef.current += 1;
+    uploadAbortRef.current?.abort();
+    cancelPipeline();
     resetIngestLifecycle();
     setIngestStage("identify");
-  }, [resetIngestLifecycle, setIngestStage]);
+  }, [cancelPipeline, resetIngestLifecycle, setIngestStage]);
 
   const cancelUpload = useCallback(() => {
     uploadAbortRef.current?.abort();
@@ -163,6 +168,7 @@ export function useIngestLifecycle(opts: {
       }
 
       beginIngest();
+      const gen = ingestGenRef.current;
       setIngestMeta({ sourceKind: null, fromCache: false, uploadProgress: null });
 
       const ytId = parseYouTubeId(url);
@@ -186,6 +192,7 @@ export function useIngestLifecycle(opts: {
         toast.info("Fetching video details…");
         try {
           const info = await getVideoInfo(url);
+          if (gen !== ingestGenRef.current) return;
           if (info.code === "YOUTUBE_FETCH_FAILED") {
             failIngest(
               "meta_fetch_failed",
@@ -231,6 +238,7 @@ export function useIngestLifecycle(opts: {
           });
 
           await projectizeAfterMeta(info.title ?? "YouTube Video");
+          if (gen !== ingestGenRef.current) return;
           persistUrlSession({
             url,
             fingerprint,
@@ -239,10 +247,12 @@ export function useIngestLifecycle(opts: {
           });
 
           if (await applyCachedArtifact(fingerprint)) return;
+          if (gen !== ingestGenRef.current) return;
 
           setIngestStage("analyze");
           void runPipeline();
         } catch (error: unknown) {
+          if (gen !== ingestGenRef.current) return;
           let errMsg = "Could not load this video. Try another link.";
           if (error && typeof error === "object" && "isAxiosError" in error) {
             const axErr = error as {
@@ -261,9 +271,11 @@ export function useIngestLifecycle(opts: {
               });
               return;
             } else if (axErr.response) {
-              errMsg =
-                axErr.response.data?.detail ||
-                `Server error ${axErr.response.status}`;
+              const { formatApiDetail } = await import("@/lib/authenticatedFetch");
+              errMsg = formatApiDetail(
+                axErr.response.data?.detail,
+                axErr.response.status,
+              );
             }
           } else if (error instanceof Error) {
             errMsg = error.message || errMsg;
@@ -317,6 +329,7 @@ export function useIngestLifecycle(opts: {
     async (file: File) => {
       lastFileRef.current = file;
       beginIngest();
+      const gen = ingestGenRef.current;
       setIngestMeta({
         sourceKind: "file",
         fromCache: false,
@@ -326,6 +339,7 @@ export function useIngestLifecycle(opts: {
 
       setIngestStage("validate");
       const policy = await fetchIngestPolicy().catch(() => FALLBACK_INGEST_POLICY);
+      if (gen !== ingestGenRef.current) return;
       const v = validateFileAgainstPolicy(file, policy);
       if (!v.ok) {
         failIngest(
@@ -354,15 +368,20 @@ export function useIngestLifecycle(opts: {
           file.name,
           file.type || "video/mp4",
         );
+        if (gen !== ingestGenRef.current) return;
         await uploadFileToGcs(
           presigned_url,
           file,
           file.type || "video/mp4",
-          (pct) => setIngestMeta({ uploadProgress: pct }),
+          (pct) => {
+            if (gen === ingestGenRef.current) setIngestMeta({ uploadProgress: pct });
+          },
           ac.signal,
         );
+        if (gen !== ingestGenRef.current) return;
         setSourceGcsPath(gcs_path);
       } catch (err) {
+        if (gen !== ingestGenRef.current) return;
         if (err instanceof DOMException && err.name === "AbortError") {
           failIngest("cancelled", "Upload cancelled.");
           return;
@@ -374,11 +393,14 @@ export function useIngestLifecycle(opts: {
         }
       }
 
+      if (gen !== ingestGenRef.current) return;
       const fingerprint = fingerprintFile(file);
       setIngestMeta({ fingerprint, uploadProgress: null });
       await projectizeAfterMeta(file.name || "Upload");
+      if (gen !== ingestGenRef.current) return;
 
       if (await applyCachedArtifact(fingerprint)) return;
+      if (gen !== ingestGenRef.current) return;
 
       setIngestStage("analyze");
       void runPipeline();

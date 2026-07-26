@@ -26,11 +26,17 @@ export function ShortcutOverlay({ isOpen, onClose }: Props) {
 
   useEffect(() => {
     if (!isOpen) return;
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    const panel = document.getElementById("shortcut-overlay-panel");
+    panel?.querySelector<HTMLElement>("button")?.focus();
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
+    return () => {
+      window.removeEventListener("keydown", handler);
+      previouslyFocused?.focus?.();
+    };
   }, [isOpen, onClose]);
 
   return (
@@ -44,8 +50,13 @@ export function ShortcutOverlay({ isOpen, onClose }: Props) {
           transition={{ duration: 0.15 }}
           className="fixed inset-0 bg-black/70 z-[200] flex items-center justify-center p-6"
           onClick={onClose}
+          role="presentation"
         >
           <motion.div
+            id="shortcut-overlay-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="shortcut-overlay-title"
             initial={{ scale: 0.95, y: 10, opacity: 0 }}
             animate={{ scale: 1, y: 0, opacity: 1 }}
             exit={{ scale: 0.95, y: 10, opacity: 0 }}
@@ -56,12 +67,16 @@ export function ShortcutOverlay({ isOpen, onClose }: Props) {
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-border">
               <div className="flex items-center gap-2.5">
-                <Keyboard className="w-4 h-4 text-primary" />
-                <span className="text-[11px] font-black uppercase tracking-[0.2em] text-foreground">
+                <Keyboard className="w-4 h-4 text-primary" aria-hidden="true" />
+                <span
+                  id="shortcut-overlay-title"
+                  className="text-[11px] font-black uppercase tracking-[0.2em] text-foreground"
+                >
                   Keyboard Shortcuts
                 </span>
               </div>
               <button
+                type="button"
                 onClick={onClose}
                 aria-label="Close shortcuts"
                 className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-foreground/10 transition-colors"

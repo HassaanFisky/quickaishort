@@ -3,16 +3,12 @@ import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 
 export const metadata: Metadata = {
-  title: "Refund Policy — Quick AI Shorts",
+  title: "Refund Policy — QuickAI Short",
   description: "Our fair and transparent refund policy for QuickAI Short digital services.",
 };
 
 export default function RefundPolicyPage() {
-  const lastUpdated = new Date().toLocaleDateString('en-US', {
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric'
-  });
+  const lastUpdated = "July 24, 2026";
 
   return (
     <div className="min-h-screen flex flex-col selection:bg-indigo-500/30">

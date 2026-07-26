@@ -227,6 +227,71 @@ async def test_free_4k_command_returns_upgrade_without_credit(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_command_cache_hit_refunds_credit(monkeypatch):
+    monkeypatch.setattr(ai_editor_router, "is_mock_ai_mode", lambda: False)
+
+    async def cached_command(**kwargs):
+        return ai_editor_router.EditorCommandResponse(
+            **{**_command_ok(), "cached": True}
+        )
+
+    deduct = AsyncMock(return_value=True)
+    refund = AsyncMock(return_value=True)
+    with (
+        patch("routers.ai_editor_router.ensure_agent_ready"),
+        patch("services.stats_service.deduct_credits", deduct),
+        patch("services.stats_service.refund_credits", refund),
+        patch(
+            "routers.ai_editor_router._execute_via_dual_router",
+            new_callable=AsyncMock,
+            side_effect=cached_command,
+        ),
+    ):
+        resp = await ai_editor_router.handle_editor_command(
+            _cmd_req(), user_id="u1"
+        )
+    assert resp.cached is True
+    deduct.assert_awaited_once_with("u1", 1)
+    refund.assert_awaited_once_with("u1", 1)
+
+
+@pytest.mark.asyncio
+async def test_command_failure_after_deduct_refunds(monkeypatch):
+    monkeypatch.setattr(ai_editor_router, "is_mock_ai_mode", lambda: False)
+    deduct = AsyncMock(return_value=True)
+    refund = AsyncMock(return_value=True)
+    with (
+        patch("routers.ai_editor_router.ensure_agent_ready"),
+        patch("services.stats_service.deduct_credits", deduct),
+        patch("services.stats_service.refund_credits", refund),
+        patch(
+            "routers.ai_editor_router._execute_via_dual_router",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("gemini down"),
+        ),
+    ):
+        with pytest.raises(RuntimeError):
+            await ai_editor_router.handle_editor_command(_cmd_req(), user_id="u1")
+    deduct.assert_awaited_once_with("u1", 1)
+    refund.assert_awaited_once_with("u1", 1)
+
+
+@pytest.mark.asyncio
+async def test_command_success_keeps_charge(monkeypatch):
+    monkeypatch.setattr(ai_editor_router, "is_mock_ai_mode", lambda: False)
+    deduct = AsyncMock(return_value=True)
+    refund = AsyncMock(return_value=True)
+    with (
+        patch("routers.ai_editor_router.ensure_agent_ready"),
+        patch("services.stats_service.deduct_credits", deduct),
+        patch("services.stats_service.refund_credits", refund),
+    ):
+        await ai_editor_router.handle_editor_command(_cmd_req(), user_id="u1")
+    deduct.assert_awaited_once_with("u1", 1)
+    refund.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_command_ignores_client_tier_and_uses_trusted_tier(monkeypatch):
     captured: dict[str, str] = {}
 

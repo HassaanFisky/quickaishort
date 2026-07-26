@@ -55,7 +55,7 @@ export default function SignUpPage() {
       });
 
       if (signInRes?.error) {
-        setError("Account created â€” please sign in.");
+        setError("Account created — please sign in.");
         setLoading(false);
       } else {
         router.push("/dashboard");

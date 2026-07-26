@@ -6,9 +6,13 @@ import { X, Send, Mic, MicOff, Sparkles, Zap, GripHorizontal } from "lucide-reac
 import { useEditorStore, type EditorAction } from "@/stores/editorStore";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useSwipeGesture } from "@/hooks/useTouchGestures";
+import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
+import { motionProps } from "@/lib/animations";
+import { EmptyState } from "@/components/shared/EmptyState";
 import {
   type EditorStateContext,
   streamEditorCommand,
+  buildProjectContextForCommand,
   type CanonicalEditorAction,
 } from "@/lib/gemini-editor";
 import { useSession } from "next-auth/react";
@@ -49,13 +53,25 @@ function ActionTag({ type, index }: { type: string; index: number }) {
   );
 }
 
-function ThinkingBubble() {
+function ThinkingBubble({ stageLabel }: { stageLabel?: string }) {
   return (
-    <div className="flex items-end gap-2">
-      <div className="msg-gem-badge">✦</div>
-      <div className="thinking-dots">
-        <span /><span /><span />
+    <div
+      className="flex flex-col gap-1"
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+    >
+      <div className="flex items-end gap-2">
+        <div className="msg-gem-badge" aria-hidden>
+          ✦
+        </div>
+        <div className="thinking-dots" aria-hidden>
+          <span /><span /><span />
+        </div>
       </div>
+      <p className="text-12 text-muted-foreground pl-8">
+        {stageLabel?.trim() || "Working on your edit…"}
+      </p>
     </div>
   );
 }
@@ -120,6 +136,7 @@ export function AIPanel() {
     silenceSegments,
     duration,
     runId,
+    currentTime,
   } = useEditorStore();
 
   const [inputText, setInputText] = useState("");
@@ -127,6 +144,7 @@ export function AIPanel() {
   const [suggestions, setSuggestions] = useState<SuggestionIntent[]>([]);
   const [suggestionsLoaded, setSuggestionsLoaded] = useState(false);
   const [followUpChips, setFollowUpChips] = useState<string[]>([]);
+  const [thinkingStage, setThinkingStage] = useState("Working on your edit…");
   const activeTool = useUIStore((s) => s.activeTool);
   const setActiveTool = useUIStore((s) => s.setActiveTool);
   const mediaGraphIdRef = useRef<string | null>(null);
@@ -151,6 +169,7 @@ export function AIPanel() {
   // Desktop (lg+) = docked right column in the editor layout flow;
   // below lg = swipe-down-dismissable bottom sheet.
   const isDesktop = useMediaQuery("(min-width: 1024px)");
+  const reduceMotion = usePrefersReducedMotion();
   const sheetRef = useRef<HTMLDivElement | null>(null);
   useSwipeGesture(sheetRef, {
     enabled: !isDesktop && aiPanelOpen,
@@ -158,6 +177,15 @@ export function AIPanel() {
       if (direction === "down" && distance > 60) setAIPanelOpen(false);
     },
   });
+
+  useEffect(() => {
+    if (isDesktop || !aiPanelOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setAIPanelOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isDesktop, aiPanelOpen, setAIPanelOpen]);
 
   // Build editor state snapshot for every Gemini call
   const editorState = useMemo((): EditorStateContext => {
@@ -458,17 +486,37 @@ export function AIPanel() {
           useEditorStore.getState().studioProjectId &&
           plan?.plan_id
         ) {
-          useEditorStore.getState().rebuildRenderManifest();
-          const st = useEditorStore.getState();
-          if (st.compiledManifest) {
-            await axios.post(`${API_URL}/api/studio/v1/orchestrator/execute`, {
-              plan_id: plan.plan_id,
-              project_id: st.studioProjectId,
-              base_revision: st.studioAckedRevision,
-              base_snapshot_hash: st.studioSnapshotHash,
-              proposed_manifest: st.compiledManifest,
+          try {
+            useEditorStore.getState().rebuildRenderManifest();
+            const st = useEditorStore.getState();
+            if (st.compiledManifest) {
+              await axios.post(`${API_URL}/api/studio/v1/orchestrator/execute`, {
+                plan_id: plan.plan_id,
+                project_id: st.studioProjectId,
+                base_revision: st.studioAckedRevision,
+                base_snapshot_hash: st.studioSnapshotHash,
+                proposed_manifest: st.compiledManifest,
+              });
+            }
+          } catch (syncErr: unknown) {
+            const { formatApiDetail } = await import("@/lib/authenticatedFetch");
+            const detail = axios.isAxiosError(syncErr)
+              ? formatApiDetail(
+                  syncErr.response?.data?.detail,
+                  syncErr.response?.status ?? 500,
+                )
+              : "";
+            addAIMessage({
+              role: "assistant",
+              content:
+                step?.capability_id
+                  ? `Edit applied in the editor. Cloud sync failed${detail ? `: ${detail}` : ""} — timeline stays updated.`
+                  : detail || "Cloud sync failed — try again.",
+              actions: step
+                ? [{ type: step.capability_id, payload: step.params ?? {} }]
+                : [],
             });
-            // Refresh ack revision from head is best-effort via execute response
+            return;
           }
         }
 
@@ -480,10 +528,11 @@ export function AIPanel() {
             : [],
         });
       } catch (err: unknown) {
-        const msg =
-          axios.isAxiosError(err) && err.response?.data?.detail
-            ? String(err.response.data.detail)
-            : "Could not apply grounded suggestion — try typing the edit.";
+        const { formatApiDetail } = await import("@/lib/authenticatedFetch");
+        const msg = axios.isAxiosError(err)
+          ? formatApiDetail(err.response?.data?.detail, err.response?.status ?? 500) ||
+            "Could not apply grounded suggestion — try typing the edit."
+          : "Could not apply grounded suggestion — try typing the edit.";
         addAIMessage({ role: "assistant", content: msg, actions: [] });
       } finally {
         setAIThinking(false);
@@ -514,26 +563,40 @@ export function AIPanel() {
       }));
 
       addAIMessage({ role: "user", content: trimmed });
+      setThinkingStage("Planning your edit…");
       setAIThinking(true);
       setFollowUpChips([]);
 
       try {
         const userTier = session?.user?.isPro || (session?.user as any)?.isPremium ? "pro" : "free";
+        const project_context = buildProjectContextForCommand({
+          editorState,
+          selectedClipId,
+          currentTime,
+          aspectRatio: exportSettings.aspectRatio,
+          runId,
+          transcript,
+          captions,
+          videoAnalysis,
+        });
         const result = await streamEditorCommand(
           {
             command: trimmed,
             user_tier: userTier,
             history: historySnapshot.slice(-12),
-            project_context: {
-              clip_count: editorState.clipCount,
-              duration: editorState.videoDuration,
-            },
+            project_context,
+            workload_id: runId || undefined,
           },
           () => {
             /* SSE payload handled when stream resolves to structured result */
           },
           () => {
             /* onDone — thinking cleared after full apply below */
+          },
+          (stage) => {
+            if (stage.message) setThinkingStage(stage.message);
+            else if (stage.stage === "planning") setThinkingStage("Planning your edit…");
+            else if (stage.stage === "applying") setThinkingStage("Applying edits…");
           },
         );
 
@@ -630,10 +693,11 @@ export function AIPanel() {
             }
           } catch {
             // Honesty: local preview may have applied; server authority did not ack
-            receipt = " · Preview applied — project sync failed, re-sync before export";
+            receipt =
+              " · Preview only — project sync failed; export may not include this edit until you retry";
           }
         } else if (dispatchActions.length > 0) {
-          receipt = " · Preview applied";
+          receipt = " · Preview applied (not yet saved to project)";
         }
 
         addAIMessage({
@@ -819,7 +883,7 @@ export function AIPanel() {
       {/* ── Context strip ─────────────────────────────────────── */}
       <div className="px-4 py-2 flex items-center gap-2 border-b border-border bg-muted/30 shrink-0">
         <Zap className="w-3 h-3 text-accent-p shrink-0" />
-        <span className="text-[10px] text-fg-muted font-medium truncate">
+        <span className="text-12 text-fg-muted font-medium truncate">
           {isVideoLoaded
             ? videoMetadata!.title.length > 48
               ? videoMetadata!.title.slice(0, 48) + "…"
@@ -839,9 +903,9 @@ export function AIPanel() {
         if (tags.length === 0) return null;
         return (
           <div className="flex flex-wrap gap-1.5 px-3.5 py-2 border-b border-border bg-muted/20 shrink-0">
-            <span className="text-[8px] font-black uppercase tracking-[0.2em] text-fg-subtle self-center">Active</span>
+            <span className="text-12 font-black uppercase tracking-[0.12em] text-fg-subtle self-center">Active</span>
             {tags.map((t) => (
-              <span key={t} className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-muted border border-border text-fg-muted">
+              <span key={t} className="text-12 font-bold px-2 py-0.5 rounded-full bg-muted border border-border text-fg-muted">
                 {t}
               </span>
             ))}
@@ -854,19 +918,17 @@ export function AIPanel() {
 
         {/* Empty state */}
         {aiMessages.length === 0 && (
-          <div className="ai-empty-state">
-            <div className="w-12 h-12 rounded-2xl bg-muted border border-border flex items-center justify-center mb-1">
-              <Sparkles className="w-5 h-5 text-accent-p/60" />
-            </div>
-            <p className="text-[12px] font-semibold text-fg-muted">
-              {isVideoLoaded ? "Tell me what to edit" : "Load a video first"}
-            </p>
-            <p className="text-[10px] text-fg-subtle max-w-[200px]">
-              {isVideoLoaded
-                ? "I'll apply your edits directly to the timeline"
-                : "Upload a video or paste a YouTube URL to get started"}
-            </p>
-          </div>
+          <EmptyState
+            icon={Sparkles}
+            title={isVideoLoaded ? "Tell me what to edit" : "Load a video first"}
+            body={
+              isVideoLoaded
+                ? "I'll apply your edits directly to the timeline."
+                : "Upload a video or paste a YouTube URL to get started."
+            }
+            size="md"
+            className="border-0 bg-transparent py-10 px-4"
+          />
         )}
 
         {/* Messages */}
@@ -905,7 +967,7 @@ export function AIPanel() {
             animate={{ opacity: 1 }}
             className="ai-msg ai-msg-assistant"
           >
-            <ThinkingBubble />
+            <ThinkingBubble stageLabel={thinkingStage} />
           </motion.div>
         )}
 
@@ -1001,13 +1063,13 @@ export function AIPanel() {
 
         {/* Keyboard hint */}
         <div className="flex items-center justify-between px-0.5">
-          <span className="text-[9px] text-fg-subtle">
+          <span className="text-12 text-fg-subtle">
             Enter to send · Shift+Enter for new line
           </span>
-          <span className="text-[9px] text-fg-subtle flex items-center gap-1">
-            <kbd className="px-1 py-0.5 rounded bg-muted font-mono text-[9px]">Shift</kbd>
-            <kbd className="px-1 py-0.5 rounded bg-muted font-mono text-[9px]">Alt</kbd>
-            <kbd className="px-1 py-0.5 rounded bg-muted font-mono text-[9px]">A</kbd>
+          <span className="text-12 text-fg-subtle flex items-center gap-1">
+            <kbd className="px-1 py-0.5 rounded bg-muted font-mono text-12">Shift</kbd>
+            <kbd className="px-1 py-0.5 rounded bg-muted font-mono text-12">Alt</kbd>
+            <kbd className="px-1 py-0.5 rounded bg-muted font-mono text-12">A</kbd>
             to toggle
           </span>
         </div>
@@ -1050,20 +1112,28 @@ export function AIPanel() {
           <>
             <motion.div
               key="ai-sheet-backdrop"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
+              {...motionProps(reduceMotion, {
+                initial: { opacity: 0 },
+                animate: { opacity: 1 },
+                exit: { opacity: 0 },
+                transition: { duration: 0.2 },
+              })}
               className="fixed inset-0 bg-black/60 z-40"
               onClick={() => setAIPanelOpen(false)}
+              aria-hidden
             />
             <motion.div
               key="ai-sheet"
               ref={sheetRef}
-              initial={{ y: "100%" }}
-              animate={{ y: 0 }}
-              exit={{ y: "100%" }}
-              transition={{ type: "spring", damping: 30, stiffness: 300 }}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Chat"
+              {...motionProps(reduceMotion, {
+                initial: { y: "100%" },
+                animate: { y: 0 },
+                exit: { y: "100%" },
+                transition: { type: "spring", damping: 30, stiffness: 300 },
+              })}
               className="fixed left-0 right-0 bottom-0 z-50 h-[75vh] max-h-[75vh] bg-card border-t border-border rounded-t-3xl flex flex-col overflow-hidden touch-pan-y"
             >
               <div className="flex flex-col items-center pt-2.5 pb-1 shrink-0">

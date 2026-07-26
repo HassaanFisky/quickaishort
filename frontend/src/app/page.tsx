@@ -6,22 +6,26 @@ import Image from "next/image";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import { CinematicIntro } from "@/components/layout/CinematicIntro";
-import { motion, useScroll, useTransform, useSpring, AnimatePresence, useInView } from "framer-motion";
+import { motion, useScroll, useTransform, useSpring, AnimatePresence } from "framer-motion";
+import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
+import { motionProps } from "@/lib/animations";
 import {
   Sparkles,
   Users,
   Target,
-  Check,
   ArrowRight,
-  Play,
   Brain,
-  Star,
-  ChevronRight,
   Zap,
-  BarChart,
   Video,
   Mic,
-  Layers
+  Layers,
+  Coffee,
+  Trophy,
+  Cpu,
+  Clapperboard,
+  Newspaper,
+  Bot,
+  Cloud
 } from "lucide-react";
 import { GlowButton } from "@/components/ui/GlowButton";
 import { cn } from "@/lib/utils";
@@ -31,7 +35,7 @@ import { useAnimatedCounter } from "@/hooks/useAnimatedCounter";
 const PERSONAS = [
   {
     id: "genz",
-    emoji: "⚡",
+    icon: Zap,
     title: "Gen Z",
     description: "Trend-driven, high BS-detector, short attention span.",
     color: "from-pink-500 to-rose-500",
@@ -41,19 +45,8 @@ const PERSONAS = [
     reason: "Hook lands in first 1.2s. Pacing matches feed scroll behavior.",
   },
   {
-    id: "tech",
-    emoji: "🖥️",
-    title: "The Techie",
-    description: "Values efficiency, technical depth, and clean aesthetics.",
-    color: "from-blue-500 to-cyan-500",
-    borderColor: "border-blue-500/30",
-    verdict: "WATCHES",
-    hook: "moderate",
-    reason: "Good signal-to-noise. Loses them at the 18s explanation.",
-  },
-  {
     id: "millennial",
-    emoji: "💼",
+    icon: Coffee,
     title: "Millennial",
     description: "Aspirational, value-driven, prefers depth over flash.",
     color: "from-orange-500 to-yellow-500",
@@ -63,8 +56,8 @@ const PERSONAS = [
     reason: "Relatable framing but the CTA feels rushed.",
   },
   {
-    id: "skeptic",
-    emoji: "🏆",
+    id: "sports",
+    icon: Trophy,
     title: "Sports Fan",
     description: "High energy, competitive, hooks on stakes and outcomes.",
     color: "from-emerald-500 to-teal-500",
@@ -73,86 +66,118 @@ const PERSONAS = [
     hook: "weak",
     reason: "No stakes in the first 3s. Missing the competitive hook.",
   },
+  {
+    id: "tech",
+    icon: Cpu,
+    title: "The Techie",
+    description: "Values efficiency, technical depth, and clean aesthetics.",
+    color: "from-blue-500 to-cyan-500",
+    borderColor: "border-blue-500/30",
+    verdict: "WATCHES",
+    hook: "moderate",
+    reason: "Good signal-to-noise. Loses them at the 18s explanation.",
+  },
+  {
+    id: "entertainment",
+    icon: Clapperboard,
+    title: "Entertainment",
+    description: "Story-first, emotion-driven, rewards personality and payoff.",
+    color: "from-purple-500 to-fuchsia-500",
+    borderColor: "border-purple-500/30",
+    verdict: "WATCHES",
+    hook: "strong",
+    reason: "Clear setup-payoff arc. Personality carries the mid-section.",
+  },
+  {
+    id: "news",
+    icon: Newspaper,
+    title: "News Watcher",
+    description: "Fact-focused, skeptical of hype, wants the point up front.",
+    color: "from-sky-500 to-indigo-500",
+    borderColor: "border-sky-500/30",
+    verdict: "SCROLLS",
+    hook: "weak",
+    reason: "Headline buried at 8s. Lead with the key fact, not the setup.",
+  },
 ];
 
 const FEATURES = [
   {
-    icon: Users,
-    title: "4 Audience Personas",
-    body: "Test your hook against diverse AI personas simulating real viewers.",
-    className: "md:col-span-2",
-  },
-  {
-    icon: Target,
-    title: "Consensus Score",
-    body: "Get a clear 0-100 score predicting viral potential before you post.",
-    className: "md:col-span-1",
-  },
-  {
-    icon: Sparkles,
-    title: "Actionable Feedback",
-    body: "Receive line-by-line critiques on pacing, hook, and retention.",
-    className: "md:col-span-1",
-  },
-  {
-    icon: BarChart,
-    title: "Drop-off Mapping",
-    body: "See exactly where viewers tune out and why, powered by Gemini 2.5 Flash.",
+    icon: Mic,
+    title: "Edit by conversation",
+    body: "Tell the AI what to cut, caption, or reframe — it applies real timeline edits, not vague suggestions.",
     className: "md:col-span-2",
   },
   {
     icon: Video,
-    title: "AI Video Editor",
-    body: "Full non-linear editor with canvas, captions, B-roll, and AI-powered scene composition — all in the browser.",
-    className: "md:col-span-2",
-  },
-  {
-    icon: Mic,
-    title: "Edit by Voice or Text",
-    body: "Tell the AI to trim silences, add a caption, or reframe the shot — it executes in one command.",
+    title: "Live preview",
+    body: "See every change on a 9:16 canvas before you commit — timeline stays the visualization, chat stays the control.",
     className: "md:col-span-1",
   },
   {
     icon: Layers,
-    title: "Timeline + Canvas",
-    body: "Multi-track timeline with keyframe animations, transitions, and real-time 9:16 preview for Shorts.",
+    title: "Ingest → export",
+    body: "Paste a YouTube link or upload a file. Transcribe in-browser. Export via cloud render when you’re ready.",
+    className: "md:col-span-1",
+  },
+  {
+    icon: Sparkles,
+    title: "Grounded suggestions",
+    body: "Chips above chat come from your media — trim, captions, dub, and more — not invented fluff.",
+    className: "md:col-span-2",
+  },
+  {
+    icon: Users,
+    title: "Pre-Flight skill",
+    body: "Optional audience simulation with six personas — a capability when you want validation, not the whole product.",
+    className: "md:col-span-2",
+  },
+  {
+    icon: Target,
+    title: "Cloud export",
+    body: "Server-side FFmpeg render to your library — Free 720p with watermark; Pro unlocks higher quality.",
     className: "md:col-span-1",
   },
 ];
 
-const TESTIMONIALS = [
+const STACK = [
   {
-    quote: "Pre-Flight caught that my hook was weak for Gen Z before I wasted 48 hours of reach. Literal game changer.",
-    name: "Marcus T.",
-    role: "1.2M Sub Creator",
-    score: 94,
+    icon: Sparkles,
+    title: "QuickAI editing brain",
+    body: "Natural-language commands become structured timeline actions — trim, captions, reframes, and more.",
   },
   {
-    quote: "I went from 12% average retention to 67% in 3 weeks just by listening to the persona panel. Nothing else changed.",
-    name: "Priya N.",
-    role: "Lifestyle & Wellness",
-    score: 88,
+    icon: Bot,
+    title: "Optional Pre-Flight",
+    body: "When you want validation, a multi-agent audience panel can score hook and retention before you post.",
   },
   {
-    quote: "The Skeptic persona saved me from posting the most cringe thumbnail I've ever made. Worth every penny.",
-    name: "Jake R.",
-    role: "Sports Analyst",
-    score: 71,
+    icon: Mic,
+    title: "Browser-side Whisper",
+    body: "Transcription runs as WebAssembly in your tab — captions without waiting on a separate upload pipeline.",
+  },
+  {
+    icon: Cloud,
+    title: "Cloud rendering",
+    body: "Final exports render on Cloud Run with FFmpeg and land in your export history, ready to download.",
   },
 ];
 
 export default function LandingPage() {
   const [showIntro, setShowIntro] = useState(false);
   const [hasCheckedSession, setHasCheckedSession] = useState(false);
+  const reduceMotion = usePrefersReducedMotion();
 
   useEffect(() => {
     const seen = sessionStorage.getItem("introSeen");
-    if (!seen) {
+    if (!seen && !reduceMotion) {
       setShowIntro(true);
+      sessionStorage.setItem("introSeen", "true");
+    } else if (!seen) {
       sessionStorage.setItem("introSeen", "true");
     }
     setHasCheckedSession(true);
-  }, []);
+  }, [reduceMotion]);
 
   const { scrollYProgress } = useScroll();
   const opacity = useTransform(scrollYProgress, [0, 0.2], [1, 0]);
@@ -199,14 +224,14 @@ export default function LandingPage() {
                 className="flex flex-col items-center"
               >
                 <motion.h1 variants={itemVariants} className="text-5xl md:text-7xl lg:text-[5.5rem] font-black leading-[1.05] tracking-tighter mb-6 text-center">
-                  Your next viral clip{" "}
+                  Edit video{" "}
                   <br className="hidden md:block" />
-                  <span className="brand-gradient-text">starts here.</span>
+                  <span className="brand-gradient-text">by conversation.</span>
                 </motion.h1>
 
                 <motion.p variants={itemVariants} className="text-lg md:text-xl text-muted-foreground mb-10 max-w-xl leading-relaxed text-center">
-                  Paste a link. Tell the AI what to edit. Export a short that&apos;s already
-                  been validated by 6 audience personas — before you post.
+                  Paste a link or upload a file. Tell QuickAI what to cut, caption, or reframe.
+                  Preview live — then export a short when it feels right.
                 </motion.p>
 
                 <motion.div variants={itemVariants} className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
@@ -221,21 +246,20 @@ export default function LandingPage() {
                 </motion.div>
               </motion.div>
             </div>
-            
+
             {/* Social Proof Ticker — alive, edge-faded, GPU-accelerated */}
             <div className="absolute bottom-10 w-full marquee-mask overflow-hidden">
               <div className="flex items-center gap-10 marquee-track px-4">
                 {[...Array(3)].map((_, i) => (
                   <React.Fragment key={i}>
                     {[
-                      "Your hook. 6 AI judges. One verdict.",
-                      "Stop guessing. Start scoring.",
-                      "Edit like you think. AI does the rest.",
-                      "12% retention → 67% in 3 weeks.",
-                      "Pre-flight your short. Skip the regret.",
-                      "Built for viral. Tested by AI.",
-                      "Your clip. Your call. AI's vote.",
-                      "One link. One short. Six verdicts.",
+                      "Paste a link. Talk to the editor.",
+                      "Chat is the workflow. Timeline is the proof.",
+                      "Trim. Caption. Reframe. Export.",
+                      "AI applies the edit — you stay in control.",
+                      "Upload or YouTube. Same clear path.",
+                      "Preview first. Export when ready.",
+                      "Optional Pre-Flight when you want a second opinion.",
                     ].map((text, j) => (
                       <span
                         key={`${text}-${i}-${j}`}
@@ -265,10 +289,11 @@ export default function LandingPage() {
                 className="text-center mb-20"
               >
                 <h2 className="text-4xl md:text-5xl font-black mb-4 tracking-tight">
-                  The 3-Step <span className="brand-gradient-text">Pre-Flight</span> Pipeline
+                  From link to short{" "}
+                  <span className="brand-gradient-text">in one flow</span>
                 </h2>
                 <p className="text-lg text-muted-foreground max-w-xl mx-auto">
-                  From raw YouTube link to a validated, high-retention short in seconds.
+                  Ingest → chat → preview → export. Conversation drives the edit; you approve what ships.
                 </p>
               </motion.div>
 
@@ -276,20 +301,21 @@ export default function LandingPage() {
                 <div className="hidden md:block absolute top-[52px] left-[20%] right-[20%] h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent -z-10" />
 
                 {[
-                  { step: "01", icon: Video, title: "Paste URL", desc: "Drop any YouTube link. We instantly extract and process the video." },
-                  { step: "02", icon: Brain, title: "AI Analyzes", desc: "A panel of 6 AI personas watches the clip, grading hook and retention." },
-                  { step: "03", icon: Target, title: "Get Viral Clips", desc: "Receive actionable edits or export the proven clip immediately." }
+                  { step: "01", icon: Video, title: "Ingest", desc: "Paste a YouTube URL or upload a file. We prepare the project and transcript." },
+                  { step: "02", icon: Brain, title: "Chat to edit", desc: "Say what you want — trim silence, add captions, reframe — AI applies real edits." },
+                  { step: "03", icon: Target, title: "Preview & export", desc: "Watch the result live, then render a short to your library when you’re ready." }
                 ].map((item, i) => (
                   <motion.div
                     key={item.step}
-                    initial={{ opacity: 0, y: 24 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true, margin: "-60px" }}
-                    transition={{ ...spring.smooth, delay: i * 0.1 }}
+                    {...motionProps(reduceMotion, {
+                      initial: { opacity: 0, y: 24 },
+                      animate: { opacity: 1, y: 0 },
+                      transition: { ...spring.smooth, delay: i * 0.1 },
+                    })}
                     className="flex flex-col items-center text-center group"
                   >
                     <motion.div
-                      whileHover={{ scale: 1.08, transition: spring.snappy }}
+                      whileHover={reduceMotion ? undefined : { scale: 1.08, transition: spring.snappy }}
                       className="w-[104px] h-[104px] rounded-2xl nano-glass flex items-center justify-center mb-6 relative border border-white/8 group-hover:border-primary/40"
                     >
                       <div className="absolute inset-0 bg-primary/10 rounded-2xl blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
@@ -307,7 +333,7 @@ export default function LandingPage() {
           </section>
 
           {/* BENTO GRID FEATURES */}
-          <section className="py-32 px-6">
+          <section id="features" className="py-32 px-6">
             <div className="max-w-5xl mx-auto">
               <motion.div
                 initial={{ opacity: 0, y: 16 }}
@@ -316,8 +342,8 @@ export default function LandingPage() {
                 transition={{ ...spring.smooth }}
                 className="text-center mb-16"
               >
-                <h2 className="text-4xl md:text-5xl font-black tracking-tight mb-4">Everything you need to go viral</h2>
-                <p className="text-muted-foreground text-lg max-w-md mx-auto">One tool. Every insight.</p>
+                <h2 className="text-4xl md:text-5xl font-black tracking-tight mb-4">Everything you need to ship a short</h2>
+                <p className="text-muted-foreground text-lg max-w-md mx-auto">One editor. Conversation in, polished clip out.</p>
               </motion.div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {FEATURES.map((feature, i) => (
@@ -362,13 +388,13 @@ export default function LandingPage() {
                 transition={{ ...spring.smooth }}
                 className="text-center mb-16"
               >
-                <h2 className="text-4xl md:text-5xl font-black mb-4 tracking-tight">The AI Persona Panel</h2>
+                <h2 className="text-4xl md:text-5xl font-black mb-4 tracking-tight">Optional Pre-Flight skill</h2>
                 <p className="text-lg text-muted-foreground max-w-xl mx-auto">
-                  Test your content against simulated audiences before you post.
+                  When you want a second opinion, simulate six audience lenses — without making validation the whole product.
                 </p>
               </motion.div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {PERSONAS.map((persona, i) => (
                   <motion.div
                     key={persona.id}
@@ -388,18 +414,18 @@ export default function LandingPage() {
                     {/* Verdict badge */}
                     <div className="flex items-center justify-between mb-4">
                       <div className={cn(
-                        "w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br text-xl shadow-md shrink-0",
+                        "w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br shadow-md shrink-0",
                         persona.color
                       )}>
-                        {persona.emoji}
+                        <persona.icon className="w-5 h-5 text-white" aria-hidden="true" />
                       </div>
                       <span className={cn(
                         "text-[9px] font-black uppercase tracking-[0.12em] px-2 py-1 rounded-full border",
                         persona.verdict === "WATCHES"
                           ? "text-emerald-400 border-emerald-500/30 bg-emerald-500/10"
                           : persona.verdict === "SCROLLS"
-                          ? "text-red-400 border-red-500/30 bg-red-500/10"
-                          : "text-amber-400 border-amber-500/30 bg-amber-500/10"
+                            ? "text-red-400 border-red-500/30 bg-red-500/10"
+                            : "text-amber-400 border-amber-500/30 bg-amber-500/10"
                       )}>
                         {persona.verdict}
                       </span>
@@ -421,8 +447,8 @@ export default function LandingPage() {
                         <div className={cn(
                           "h-full rounded-full bg-gradient-to-r transition-all",
                           persona.hook === "strong" ? "w-[85%] from-emerald-500 to-teal-400" :
-                          persona.hook === "moderate" ? "w-[55%] from-amber-500 to-yellow-400" :
-                          "w-[25%] from-red-500 to-orange-400"
+                            persona.hook === "moderate" ? "w-[55%] from-amber-500 to-yellow-400" :
+                              "w-[25%] from-red-500 to-orange-400"
                         )} />
                       </div>
                     </div>
@@ -436,7 +462,7 @@ export default function LandingPage() {
             </div>
           </section>
 
-          {/* TESTIMONIALS */}
+          {/* PRODUCT TRUTH — THE STACK */}
           <section className="py-32 px-6 border-y ghost-border">
             <div className="max-w-5xl mx-auto">
               <motion.div
@@ -446,39 +472,29 @@ export default function LandingPage() {
                 transition={{ ...spring.smooth }}
                 className="text-center mb-16"
               >
-                <h2 className="text-4xl md:text-5xl font-black mb-4 tracking-tight">Creators who stopped guessing</h2>
+                <h2 className="text-4xl md:text-5xl font-black mb-4 tracking-tight">What actually runs</h2>
+                <p className="text-lg text-muted-foreground max-w-xl mx-auto">
+                  Clear pieces for editing, transcription, optional validation, and cloud export — no mystery workflow.
+                </p>
               </motion.div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {TESTIMONIALS.map((t, i) => (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {STACK.map((item, i) => (
                   <motion.div
-                    key={t.name}
+                    key={item.title}
                     initial={{ opacity: 0, y: 20 }}
                     whileInView={{ opacity: 1, y: 0 }}
-                    whileHover={{ y: -5, transition: spring.smooth }}
+                    whileHover={{ y: -4, transition: spring.smooth }}
                     viewport={{ once: true, margin: "-40px" }}
-                    transition={{ ...spring.smooth, delay: i * 0.1 }}
-                    className="p-7 rounded-2xl nano-glass border border-white/5 flex flex-col gap-5 relative cursor-pointer"
+                    transition={{ ...spring.smooth, delay: i * 0.08 }}
+                    className="p-7 rounded-2xl nano-glass border border-white/5 flex flex-col gap-4 relative overflow-hidden"
                   >
-                    <div className="flex items-center gap-0.5">
-                      {[...Array(5)].map((_, j) => (
-                        <Star key={j} className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-                      ))}
+                    <div className="absolute -top-12 -right-12 w-32 h-32 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
+                    <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center">
+                      <item.icon className="w-5 h-5 text-primary" aria-hidden="true" />
                     </div>
-                    <p className="text-sm font-medium text-foreground/85 leading-relaxed flex-1">&ldquo;{t.quote}&rdquo;</p>
-                    <div className="flex items-center justify-between pt-4 border-t border-white/5">
-                      <div>
-                        <p className="text-sm font-black">{t.name}</p>
-                        <p className="text-xs text-muted-foreground font-medium">{t.role}</p>
-                      </div>
-                      <div className="flex flex-col items-end gap-0.5">
-                        <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">Pre-Flight</span>
-                        <span className={cn(
-                          "text-2xl font-black font-mono",
-                          t.score >= 90 ? "score-viral" :
-                          t.score >= 71 ? "score-strong" :
-                          t.score >= 41 ? "score-moderate" : "score-weak"
-                        )}>{t.score}</span>
-                      </div>
+                    <div>
+                      <h3 className="text-lg font-black tracking-tight mb-1.5">{item.title}</h3>
+                      <p className="text-sm text-muted-foreground leading-relaxed">{item.body}</p>
                     </div>
                   </motion.div>
                 ))}
@@ -500,15 +516,15 @@ export default function LandingPage() {
                   <div className="absolute inset-0 -z-10 bg-gradient-to-tr from-primary/15 via-transparent to-[#ec4899]/10" />
                   <div className="absolute -bottom-20 left-1/2 -translate-x-1/2 w-[400px] h-[200px] bg-primary/20 blur-[80px] -z-10 rounded-full" />
                   <h2 className="text-4xl md:text-6xl font-black mb-6 tracking-tight leading-[1.1]">
-                    Stop publishing<br />
-                    <span className="brand-gradient-text">in the dark.</span>
+                    Your next short<br />
+                    <span className="brand-gradient-text">starts with a sentence.</span>
                   </h2>
                   <p className="text-base text-muted-foreground mb-10 max-w-sm mx-auto leading-relaxed">
-                    Test your content before you post. Get actionable AI feedback to guarantee your next viral hit.
+                    Open the editor, bring a clip, and tell QuickAI what to do. Preview live — export when it feels right.
                   </p>
                   <GlowButton size="lg" variant="gradient" className="h-14 px-10 rounded-2xl text-base font-bold" asChild>
                     <Link href="/editor">
-                      Run Your First Pre-Flight <ArrowRight className="ml-2.5 w-5 h-5" />
+                      Start Creating <ArrowRight className="ml-2.5 w-5 h-5" />
                     </Link>
                   </GlowButton>
                 </div>

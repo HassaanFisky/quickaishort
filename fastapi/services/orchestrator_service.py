@@ -145,15 +145,24 @@ class RedisPlanStore:
 
 
 def _default_plan_store() -> PlanStore:
-    """Production default = Redis; fall back to memory if Redis import fails."""
+    """Production default = Redis; memory fallback only outside production."""
+    import os
+
+    is_prod = os.getenv("ENVIRONMENT", "").strip().lower() == "production"
     try:
         from services.queue_service import redis_conn
 
         if redis_conn is None:
-            logger.warning("orchestrator_plan_store_fallback reason=redis_conn_none")
-            return InMemoryPlanStore()
+            raise RuntimeError("redis_conn_none")
+        redis_conn.ping()
         return RedisPlanStore(redis_client=redis_conn)
-    except Exception as exc:  # noqa: BLE001 — boot resilience
+    except Exception as exc:  # noqa: BLE001
+        if is_prod:
+            logger.error(
+                "orchestrator_plan_store_unavailable reason=%s — fail-closed",
+                exc,
+            )
+            raise RuntimeError("orchestrator_plan_store_unavailable") from exc
         logger.warning("orchestrator_plan_store_fallback reason=%s", exc)
         return InMemoryPlanStore()
 
@@ -242,39 +251,13 @@ class OrchestratorService:
             await asyncio.to_thread(self.store.put, plan)
             return plan
 
+        # Free-text LLM planning is DualModelRouter-only (/api/ai-editor/*) with
+        # credit gates. Orchestrator accepts structured intents/steps only —
+        # never an unguarded legacy ai_editor_engine call.
         text = (body.intent_text or "").strip()
-        if not text:
-            plan.status = "failed"
-            plan.message = "intent_required"
-            await asyncio.to_thread(self.store.put, plan)
-            return plan
-
-        from services.ai_editor_engine import process_editor_command
-
-        result = await process_editor_command(
-            command=text,
-            user_tier=body.user_tier,
-            project_context=body.project_context,
-        )
-        actions = result.get("actions") or []
-        steps: list[PlanStep] = []
-        for a in actions:
-            mapped = _action_to_capability(a)
-            if not mapped:
-                continue
-            cid, params = mapped
-            if get_capability(cid) is None:
-                continue
-            if not is_emit_allowed(cid):
-                continue
-            steps.append(
-                PlanStep(step_id=uuid4().hex, capability_id=cid, params=params)
-            )
-        plan.steps = steps
-        plan.message = result.get("message") or None
-        if not steps:
-            plan.status = "failed"
-            plan.message = plan.message or "no_emit_allowed_steps"
+        plan.status = "failed"
+        plan.message = "structured_steps_required" if text else "intent_required"
+        plan.steps = []
         await asyncio.to_thread(self.store.put, plan)
         return plan
 
@@ -294,6 +277,38 @@ class OrchestratorService:
             plan.updated_at = _now()
             await asyncio.to_thread(self.store.put, plan)
             return plan
+
+        # Idempotent execute lock — concurrent POSTs must not double-apply mutations.
+        # Production fails closed if Redis cannot grant the lock (PlanStore also needs Redis).
+        # Non-prod fails open so local/tests with InMemoryPlanStore still execute.
+        lock_key = f"orch:exec:{plan.plan_id}"
+        try:
+            import os
+
+            from services.queue_service import redis_conn
+
+            acquired = bool(redis_conn.set(lock_key, "1", nx=True, ex=180))
+            if not acquired:
+                fresh = await self.get_plan(body.plan_id, user_id)
+                if fresh is not None:
+                    return fresh
+                raise KeyError("plan_execute_in_progress")
+        except KeyError:
+            raise
+        except Exception as exc:
+            is_prod = os.getenv("ENVIRONMENT", "").strip().lower() == "production"
+            if is_prod:
+                logger.error(
+                    "orchestrator_execute_lock_unavailable plan_id=%s err=%s — fail-closed",
+                    plan.plan_id,
+                    exc,
+                )
+                raise RuntimeError("orchestrator_execute_lock_unavailable") from exc
+            logger.warning(
+                "orchestrator_execute_lock_unavailable plan_id=%s err=%s — proceeding",
+                plan.plan_id,
+                exc,
+            )
 
         plan.status = "executing"
         plan.project_id = body.project_id
