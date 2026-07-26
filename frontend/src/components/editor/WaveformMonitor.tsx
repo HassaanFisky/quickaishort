@@ -86,7 +86,7 @@ export default function WaveformMonitor({ className }: { className?: string }) {
 
   return (
     <div className={cn("flex flex-col gap-1", className)}>
-      <div className="relative rounded-lg overflow-hidden bg-[#0a0a0a] border border-border">
+      <div className="relative rounded-lg overflow-hidden bg-base border border-border">
         <canvas ref={scratchRef} className="hidden" aria-hidden="true" />
         <canvas
           ref={canvasRef}
@@ -97,7 +97,7 @@ export default function WaveformMonitor({ className }: { className?: string }) {
         />
         <div className="absolute inset-y-0 left-1 flex flex-col justify-between pointer-events-none py-px">
           {["100", "75", "50", "25", "0"].map((v) => (
-            <span key={v} className="text-[7px] font-mono text-white/25 leading-none">
+            <span key={v} className="text-[7px] font-mono text-fg-subtle/60 leading-none">
               {v}
             </span>
           ))}

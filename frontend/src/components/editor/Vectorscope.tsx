@@ -111,7 +111,7 @@ export default function Vectorscope({ className }: { className?: string }) {
   return (
     <div className={cn("flex-shrink-0", className)}>
       <div
-        className="relative rounded-full overflow-hidden bg-[#0a0a0a] border border-border"
+        className="relative rounded-full overflow-hidden bg-base border border-border"
         style={{ width: SIZE, height: SIZE }}
       >
         <canvas ref={scratchRef} className="hidden" aria-hidden="true" />

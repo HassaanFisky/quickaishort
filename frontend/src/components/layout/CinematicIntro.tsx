@@ -108,7 +108,7 @@ export const CinematicIntro = ({ onComplete }: { onComplete: () => void }) => {
         >
           <div className="relative">
             <Image
-              src="/qs-logo-optimized.png"
+              src="/qs-logo.png"
               alt="Logo"
               width={120}
               height={120}
@@ -145,7 +145,7 @@ export const CinematicIntro = ({ onComplete }: { onComplete: () => void }) => {
             transition={{ duration: T_ENTRY / 1000 }}
             className="text-[clamp(2.2rem,5vw,5.5rem)] font-black tracking-tight uppercase whitespace-nowrap bg-clip-text text-transparent bg-gradient-to-r from-[#3b82f6] via-[#a855f7] to-[#ec4899]"
           >
-            QUICK AI SHORTS
+            QUICKAI SHORT
           </motion.div>
         </div>
       </div>

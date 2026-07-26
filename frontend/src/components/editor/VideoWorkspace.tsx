@@ -643,7 +643,7 @@ export default function VideoWorkspace() {
           )}
 
           {workerLoadSlow && !workerLoadError && !workerReady && (
-            <p className={styles.hint} style={{ color: "var(--color-warning, #f59e0b)" }}>
+            <p className={styles.hint} style={{ color: "var(--status-warning, #f59e0b)" }}>
               Loading slowly — CDN may be throttled. Switch to Preview mode and use
               {" "}<strong>Save Your Short</strong> in the Inspector panel for server-side rendering.
             </p>

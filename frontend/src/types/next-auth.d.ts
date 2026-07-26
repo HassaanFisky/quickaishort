@@ -21,7 +21,7 @@ declare module "next-auth" {
   }
 
   interface UserSettings {
-    theme: "light" | "dark" | "system" | "crystal" | "neon" | "magma" | "nano";
+    theme: "light" | "dark" | "oled" | "system";
     defaultAspectRatio: "9:16" | "1:1";
     defaultQuality: "low" | "medium" | "high";
     captionPreset: string;

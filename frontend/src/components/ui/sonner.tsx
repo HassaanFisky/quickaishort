@@ -12,10 +12,13 @@ import { Toaster as Sonner, type ToasterProps } from "sonner"
 
 const Toaster = ({ ...props }: ToasterProps) => {
   const { theme = "system" } = useTheme()
+  // Sonner only accepts light | dark | system — map OLED into the dark family.
+  const sonnerTheme: ToasterProps["theme"] =
+    theme === "oled" ? "dark" : (theme as ToasterProps["theme"])
 
   return (
     <Sonner
-      theme={theme as ToasterProps["theme"]}
+      theme={sonnerTheme}
       className="toaster group"
       icons={{
         success: <CircleCheckIcon className="size-4" />,
