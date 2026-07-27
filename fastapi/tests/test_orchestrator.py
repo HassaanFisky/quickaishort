@@ -168,8 +168,14 @@ class _FakeRedisPlan:
 
 @pytest.mark.asyncio
 async def test_redis_plan_store_roundtrip_and_owner_isolation(orch):
-    from services.orchestrator_service import RedisPlanStore, reset_orchestrator_for_tests
-    from services.project_kernel import InMemoryProjectStore, reset_project_kernel_for_tests
+    from services.orchestrator_service import (
+        RedisPlanStore,
+        reset_orchestrator_for_tests,
+    )
+    from services.project_kernel import (
+        InMemoryProjectStore,
+        reset_project_kernel_for_tests,
+    )
 
     fake = _FakeRedisPlan()
     kernel = reset_project_kernel_for_tests(InMemoryProjectStore())
@@ -208,7 +214,10 @@ async def test_redis_plan_execute_survives_fresh_service():
         OrchestratorService,
         reset_orchestrator_for_tests,
     )
-    from services.project_kernel import InMemoryProjectStore, reset_project_kernel_for_tests
+    from services.project_kernel import (
+        InMemoryProjectStore,
+        reset_project_kernel_for_tests,
+    )
 
     fake = _FakeRedisPlan()
     store = RedisPlanStore(redis_client=fake, ttl_sec=600)

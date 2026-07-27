@@ -166,9 +166,7 @@ async def health_ready() -> dict[str, object]:
 async def handle_render_task(
     payload: RenderTaskPayload,
     task_name: str | None = Header(default=None, alias="X-CloudTasks-TaskName"),
-    retry_count: str | None = Header(
-        default=None, alias="X-CloudTasks-TaskRetryCount"
-    ),
+    retry_count: str | None = Header(default=None, alias="X-CloudTasks-TaskRetryCount"),
 ) -> dict[str, object]:
     """Acknowledge only completed/terminal work; 5xx triggers bounded retry."""
 
@@ -229,9 +227,7 @@ async def handle_render_task(
 async def handle_dub_task(
     payload: dict,
     task_name: str | None = Header(default=None, alias="X-CloudTasks-TaskName"),
-    retry_count: str | None = Header(
-        default=None, alias="X-CloudTasks-TaskRetryCount"
-    ),
+    retry_count: str | None = Header(default=None, alias="X-CloudTasks-TaskRetryCount"),
 ) -> dict[str, object]:
     """Process Dub Video synthesize/align stages (Cloud Tasks → private worker)."""
 

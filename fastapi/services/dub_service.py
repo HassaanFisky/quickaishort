@@ -24,7 +24,11 @@ from models.dub import (
     DubStage,
     DubTaskPayload,
 )
-from services.dub_align import concat_segment_files, fit_segment_audio, mark_timing_adjusted
+from services.dub_align import (
+    concat_segment_files,
+    fit_segment_audio,
+    mark_timing_adjusted,
+)
 from services.dub_translate import (
     segments_to_srt,
     translate_segments,
@@ -46,9 +50,7 @@ def credit_cost_for_mode(mode: DubMode) -> int:
     return DUB_CREDIT_FULL
 
 
-def compute_fingerprint(
-    req: DubJobCreateRequest, voice_id: str
-) -> str:
+def compute_fingerprint(req: DubJobCreateRequest, voice_id: str) -> str:
     payload = {
         "chunks": [
             {"t": c.text, "s": round(c.start, 3), "e": round(c.end, 3)}
@@ -163,9 +165,9 @@ async def _signed_get_url(remote_path: str) -> Optional[str]:
         )
         auth_req = google.auth.transport.requests.Request()
         await asyncio.to_thread(credentials.refresh, auth_req)
-        sa_email: str = getattr(credentials, "service_account_email", "") or os.environ.get(
-            "GOOGLE_SERVICE_ACCOUNT_EMAIL", ""
-        )
+        sa_email: str = getattr(
+            credentials, "service_account_email", ""
+        ) or os.environ.get("GOOGLE_SERVICE_ACCOUNT_EMAIL", "")
         if not sa_email:
             return None
         url = await asyncio.to_thread(
@@ -183,9 +185,7 @@ async def _signed_get_url(remote_path: str) -> Optional[str]:
         return None
 
 
-async def create_job(
-    req: DubJobCreateRequest, user_id: str
-) -> DubJobStatus:
+async def create_job(req: DubJobCreateRequest, user_id: str) -> DubJobStatus:
     voice_id = resolve_voice_id(req.target_lang, req.voice_id)
     fingerprint = compute_fingerprint(req, voice_id)
 
@@ -240,7 +240,9 @@ def load_request(job_id: str) -> Optional[DubJobCreateRequest]:
         return None
 
 
-async def run_translate_stage(job: DubJobStatus, req: DubJobCreateRequest) -> DubJobStatus:
+async def run_translate_stage(
+    job: DubJobStatus, req: DubJobCreateRequest
+) -> DubJobStatus:
     if is_cancelled(job.job_id):
         return _update(job, status="cancelled", message="Cancelled", progress=100)
 
@@ -303,7 +305,9 @@ async def run_synthesize_and_align(job: DubJobStatus) -> DubJobStatus:
     try:
         for i, seg in enumerate(job.segments):
             if is_cancelled(job.job_id):
-                return _update(job, status="cancelled", message="Cancelled", progress=100)
+                return _update(
+                    job, status="cancelled", message="Cancelled", progress=100
+                )
 
             uri = await tts.generate(
                 seg.translated_text,
@@ -355,9 +359,11 @@ async def run_synthesize_and_align(job: DubJobStatus) -> DubJobStatus:
                 message="Voice unavailable — subtitles ready",
                 fallback_reason="tts_partial_failure",
                 mute_source_audio=False,
-                segments=mark_timing_adjusted(job.segments, fitted_flags)
-                if fitted_flags
-                else job.segments,
+                segments=(
+                    mark_timing_adjusted(job.segments, fitted_flags)
+                    if fitted_flags
+                    else job.segments
+                ),
             )
 
         job = _update(job, status="aligning", progress=88, message="Aligning timing")
@@ -414,7 +420,11 @@ async def process_dub_job(job_id: str) -> DubJobStatus:
     req = load_request(job_id)
     if req is None:
         return _update(
-            job, status="failed", progress=100, message="Missing request", error="request_missing"
+            job,
+            status="failed",
+            progress=100,
+            message="Missing request",
+            error="request_missing",
         )
 
     try:

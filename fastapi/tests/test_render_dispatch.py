@@ -99,12 +99,8 @@ def cloud_tasks_env(monkeypatch):
     monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "project-1")
     monkeypatch.setenv("CLOUD_TASKS_LOCATION", "us-central1")
     monkeypatch.setenv("CLOUD_TASKS_QUEUE", "quickai-render")
-    monkeypatch.setenv(
-        "CLOUD_TASKS_RENDER_URL", "https://renderer.example.run.app"
-    )
-    monkeypatch.setenv(
-        "CLOUD_TASKS_OIDC_AUDIENCE", "https://renderer.example.run.app"
-    )
+    monkeypatch.setenv("CLOUD_TASKS_RENDER_URL", "https://renderer.example.run.app")
+    monkeypatch.setenv("CLOUD_TASKS_OIDC_AUDIENCE", "https://renderer.example.run.app")
     monkeypatch.setenv(
         "CLOUD_TASKS_INVOKER_SERVICE_ACCOUNT",
         "renderer-invoker@project-1.iam.gserviceaccount.com",
@@ -144,10 +140,7 @@ async def test_cloud_task_has_named_id_oidc_and_bounded_deadline(
     task = fake_client.request.task
     assert re.search(r"/tasks/render-job-1-[0-9a-f]{12}$", task.name)
     assert task.http_request.url == "https://renderer.example.run.app/tasks/render"
-    assert (
-        task.http_request.oidc_token.audience
-        == "https://renderer.example.run.app"
-    )
+    assert task.http_request.oidc_token.audience == "https://renderer.example.run.app"
     assert task.dispatch_deadline.seconds == 900
     assert json.loads(task.http_request.body)["job_id"] == "job-1"
     assert fake_redis.hashes["render:meta:job-1"]["status"] == "queued"

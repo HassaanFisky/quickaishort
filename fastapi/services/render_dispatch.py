@@ -10,7 +10,7 @@ import os
 import re
 import time
 from functools import lru_cache
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from google.api_core.exceptions import AlreadyExists
 from google.cloud import tasks_v2
@@ -24,6 +24,9 @@ from services.queue_service import (
     redis_conn,
     render_queue,
 )
+
+if TYPE_CHECKING:
+    from models.dub import DubTaskPayload
 
 logger = logging.getLogger(__name__)
 
@@ -122,7 +125,9 @@ def _task_id(job_id: str, suffix: str | None = None) -> str:
     return task_id[:500]
 
 
-def _record_dispatch(payload: RenderTaskPayload, receipt: RenderDispatchReceipt) -> None:
+def _record_dispatch(
+    payload: RenderTaskPayload, receipt: RenderDispatchReceipt
+) -> None:
     """Persist status/recovery metadata without overwriting terminal outcomes."""
 
     now = time.time()
@@ -293,9 +298,7 @@ async def dispatch_render_task(
         elif mode == "rq":
             receipt = await asyncio.to_thread(_enqueue_rq, payload)
         else:
-            raise RenderDispatchUnavailable(
-                f"Unsupported RENDER_DISPATCH_MODE: {mode}"
-            )
+            raise RenderDispatchUnavailable(f"Unsupported RENDER_DISPATCH_MODE: {mode}")
     except RenderDispatchUnavailable:
         raise
     except Exception as exc:
@@ -324,7 +327,7 @@ async def dispatch_render_task(
     return receipt
 
 
-def _enqueue_dub_cloud_task(payload: "DubTaskPayload") -> RenderDispatchReceipt:
+def _enqueue_dub_cloud_task(payload: DubTaskPayload) -> RenderDispatchReceipt:
     from models.dub import DubTaskPayload as _DubTaskPayload
 
     assert isinstance(payload, _DubTaskPayload)
@@ -370,7 +373,7 @@ def _enqueue_dub_cloud_task(payload: "DubTaskPayload") -> RenderDispatchReceipt:
         )
 
 
-async def dispatch_dub_task(payload: "DubTaskPayload") -> RenderDispatchReceipt:
+async def dispatch_dub_task(payload: DubTaskPayload) -> RenderDispatchReceipt:
     """Enqueue Dub Video synthesize/align work on the private request renderer."""
 
     receipt = await asyncio.to_thread(_enqueue_dub_cloud_task, payload)

@@ -435,9 +435,7 @@ async def ai_edit(
     except GeminiBackpressureUnavailable as exc:
         if charged:
             await _refund_ai_editor_credit(user_id, route="ai_edit")
-        raise http_error(
-            503, AiEditorErrorKind.UNAVAILABLE, str(exc)
-        ) from exc
+        raise http_error(503, AiEditorErrorKind.UNAVAILABLE, str(exc)) from exc
     except Exception as exc:
         if charged:
             await _refund_ai_editor_credit(user_id, route="ai_edit")
@@ -616,9 +614,7 @@ async def handle_editor_command_stream(
                 await _refund_ai_editor_credit(
                     user_id, route="handle_editor_command_stream"
                 )
-            logger.error(
-                "stream editor error user=%s: %s", user_id, exc, exc_info=True
-            )
+            logger.error("stream editor error user=%s: %s", user_id, exc, exc_info=True)
             yield sse_error_event(
                 kind=AiEditorErrorKind.UNKNOWN,
                 message="AI editor encountered an internal error.",

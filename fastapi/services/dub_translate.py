@@ -16,9 +16,7 @@ logger = logging.getLogger(__name__)
 _JSON_FENCE = re.compile(r"```(?:json)?\s*([\s\S]*?)```", re.IGNORECASE)
 
 
-def translation_cache_key(
-    chunks: list[DubTranscriptChunk], target_lang: str
-) -> str:
+def translation_cache_key(chunks: list[DubTranscriptChunk], target_lang: str) -> str:
     payload = json.dumps(
         [{"t": c.text, "s": round(c.start, 3), "e": round(c.end, 3)} for c in chunks],
         ensure_ascii=False,

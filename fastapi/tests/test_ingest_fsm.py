@@ -87,4 +87,3 @@ def test_no_orphan_stages_in_transition_map() -> None:
     for targets in ALLOWED_TRANSITIONS.values():
         for t in targets:
             assert t in INGEST_STAGES
-

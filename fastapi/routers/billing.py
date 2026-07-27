@@ -152,15 +152,14 @@ async def _grant_pro(user_id: str, subscription_id: str) -> None:
             updates: dict = {
                 "is_pro": True,
                 "is_premium": True,
-                "paddle_subscription_id": subscription_id or data.get(
-                    "paddle_subscription_id"
-                ),
+                "paddle_subscription_id": subscription_id
+                or data.get("paddle_subscription_id"),
                 "updated_at": datetime.now(timezone.utc),
             }
             if not already_granted:
-                updates["credits_balance"] = int(
-                    data.get("credits_balance", 0)
-                ) + PRO_MONTHLY_CREDITS
+                updates["credits_balance"] = (
+                    int(data.get("credits_balance", 0)) + PRO_MONTHLY_CREDITS
+                )
             stats_ref.update(updates)
             outcome = "credited" if not already_granted else "flags_only"
         else:

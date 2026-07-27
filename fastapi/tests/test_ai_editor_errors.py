@@ -8,7 +8,11 @@ from services.ai_editor_errors import (
     from_backpressure,
     sse_error_event,
 )
-from services.gemini_backpressure import Gemini429Kind, GeminiBackpressureError, GeminiCooldown
+from services.gemini_backpressure import (
+    Gemini429Kind,
+    GeminiBackpressureError,
+    GeminiCooldown,
+)
 
 
 def test_error_detail_includes_kind_and_retry():
