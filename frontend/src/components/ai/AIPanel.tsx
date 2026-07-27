@@ -24,7 +24,7 @@ interface AIPanelProps {
   embedded?: boolean;
 }
 
-export function AIPanel({ embedded = false }: AIPanelProps) {
+export function DashboardFaqPanel({ embedded = false }: AIPanelProps) {
   const { isOpen, setOpen, videoContext, messages, addMessage } = useAIPanel();
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);

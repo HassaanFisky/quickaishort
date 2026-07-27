@@ -3,6 +3,31 @@ import {
   authenticatedFetch,
   throwIfNotOk,
 } from "@/lib/authenticatedFetch";
+import { mapAiEditorError } from "@/lib/aiEditorErrors";
+
+export class AiEditorCommandError extends Error {
+  readonly status?: number;
+  readonly kind?: string;
+  readonly retryAfterSeconds?: number;
+  readonly body?: unknown;
+
+  constructor(
+    message: string,
+    opts?: {
+      status?: number;
+      kind?: string;
+      retryAfterSeconds?: number;
+      body?: unknown;
+    },
+  ) {
+    super(message);
+    this.name = "AiEditorCommandError";
+    this.status = opts?.status;
+    this.kind = opts?.kind;
+    this.retryAfterSeconds = opts?.retryAfterSeconds;
+    this.body = opts?.body;
+  }
+}
 
 // ─── Editor state snapshot (context for command payloads) ─────────────────────
 
@@ -143,9 +168,26 @@ export async function streamEditorCommand(
       if (!payload) continue;
       onChunk(payload);
       try {
-        const obj = JSON.parse(payload) as EditorCommandResponse & { error?: string };
+        const obj = JSON.parse(payload) as EditorCommandResponse & {
+          error?: string;
+          kind?: string;
+          status?: number | string;
+          retry_after?: number;
+        };
         if (obj.error) {
-          throw new Error(obj.error);
+          const mapped = mapAiEditorError({
+            status: typeof obj.status === "number" ? obj.status : 429,
+            message: obj.error,
+            kind: obj.kind,
+            retryAfterSeconds: obj.retry_after,
+            body: { detail: obj },
+          });
+          throw new AiEditorCommandError(mapped.message, {
+            status: mapped.status,
+            kind: mapped.kind,
+            retryAfterSeconds: mapped.retryAfterSeconds,
+            body: obj,
+          });
         }
         parsed = obj;
         if (typeof obj.feedback === "string") {

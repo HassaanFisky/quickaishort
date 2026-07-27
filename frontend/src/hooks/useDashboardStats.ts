@@ -115,28 +115,41 @@ function openWebSocket(
     return;
   }
   const wsBase = API_URL.replace(/^http/, "ws");
-  try {
-    const socket = new WebSocket(`${wsBase}/ws/stats/${encodeURIComponent(userId)}`);
-    wsRef.current = socket;
-    socket.onopen = () => {
-      if (alive()) setTransport("websocket");
-    };
-    socket.onmessage = (event) => {
-      if (!alive()) return;
-      try {
-        const parsed = JSON.parse(event.data);
-        if (parsed?.event === "stats-updated" && parsed.payload) {
-          apply(parsed.payload as Partial<UserStats>);
-        }
-      } catch (err) {
-        if (process.env.NODE_ENV !== "production") console.warn("WS message parse failed", err);
+  void (async () => {
+    try {
+      const { getSession } = await import("next-auth/react");
+      const session = await getSession();
+      const token = session?.backendToken;
+      if (!token) {
+        if (alive()) setTransport("rest");
+        return;
       }
-    };
-    socket.onerror = () => {
+      const socket = new WebSocket(
+        `${wsBase}/ws/stats/${encodeURIComponent(userId)}?token=${encodeURIComponent(token)}`,
+      );
+      wsRef.current = socket;
+      socket.onopen = () => {
+        if (alive()) setTransport("websocket");
+      };
+      socket.onmessage = (event) => {
+        if (!alive()) return;
+        try {
+          const parsed = JSON.parse(event.data);
+          if (parsed?.event === "stats-updated" && parsed.payload) {
+            apply(parsed.payload as Partial<UserStats>);
+          }
+        } catch (err) {
+          if (process.env.NODE_ENV !== "production")
+            console.warn("WS message parse failed", err);
+        }
+      };
+      socket.onerror = () => {
+        if (alive()) setTransport("rest");
+      };
+    } catch (err) {
+      if (process.env.NODE_ENV !== "production")
+        console.warn("WebSocket open failed", err);
       if (alive()) setTransport("rest");
-    };
-  } catch (err) {
-    if (process.env.NODE_ENV !== "production") console.warn("WebSocket open failed", err);
-    if (alive()) setTransport("rest");
-  }
+    }
+  })();
 }

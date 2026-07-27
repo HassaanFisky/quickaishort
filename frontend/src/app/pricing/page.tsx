@@ -25,12 +25,16 @@ const FAQS = [
     link: { href: "/refund-policy", label: "Read the refund policy" },
   },
   {
-    q: "Do you offer team plans?",
-    a: "The Agency tier (5 seats, batch processing, API access) is coming soon — join the waitlist by contacting support.",
+    q: "Do Free credits refresh every month?",
+    a: "No. Free accounts get 100 starter credits once. Credits do not auto-refresh. Upgrade to Pro for a monthly credit grant on successful billing events.",
   },
   {
-    q: "Does Pro work on mobile?",
-    a: "Yes. The editor is touch-optimized for phones and tablets, and Pro features (Elite Viral Intelligence, Pre-Flight, unlimited suggestions) work the same on every device.",
+    q: "What are the Free plan limits?",
+    a: "Free exports are capped at 720p with a mandatory “Made with QuickAI” watermark, 3 AI video workloads per UTC day, and a 500 MB projected storage boundary. Chat edits cost 1 credit; exports cost 20.",
+  },
+  {
+    q: "Do you offer team plans?",
+    a: "The Agency tier (seats, batch, API) is Coming Soon — not sellable yet. Contact support to join the waitlist.",
   },
 ];
 
@@ -43,14 +47,16 @@ const PLANS = [
     name: "Free",
     price: "$0",
     period: "forever",
-    description: "Full browser-side AI engine. No credit card required.",
+    description: "Conversation-first editing with clear limits. No credit card.",
     features: [
-      "Professional local processing",
-      "Content transcription (Standard)",
-      "AI clip detection (5 clips/video)",
-      "9:16 auto-reframe",
-      "Browser preview export (MediaRecorder)",
-      "Face tracking",
+      "Chat-primary Studio editor",
+      "Browser transcription + clip detection",
+      "3 AI video workloads / day (UTC)",
+      "100 starter credits (no auto-refresh)",
+      "Export up to 720p",
+      "Mandatory “Made with QuickAI” watermark",
+      "500 MB projected storage boundary",
+      "1 credit / AI chat · 20 credits / export",
     ],
     cta: "Start Free",
     href: "/editor",
@@ -62,16 +68,16 @@ const PLANS = [
     name: "Pro",
     price: "$29",
     period: "per month",
-    description: "Powered by Gemini 2.5 Flash. Elite viral intelligence.",
+    description: "Unlock resolution, watermark removal, and unlimited daily AI workloads.",
     features: [
       "Everything in Free",
-      "Elite Viral Intelligence scoring",
-      "Unlimited clip suggestions",
-      "Whisper Large model",
-      "Export history & cloud sync",
-      "Priority processing queue",
-      "Caption style presets",
-      "Watermark removal",
+      "Exports up to 4K — no watermark",
+      "Unlimited daily AI video workloads",
+      "+100 credits on each paid Pro grant",
+      "Deep analysis / Pre-Flight (50 credits)",
+      "Dub Video (15–40 credits)",
+      "Cloud export history via GCS",
+      "Priority: honest usage meter in Studio",
     ],
     cta: "Upgrade to Pro",
     href: "#",
@@ -83,14 +89,14 @@ const PLANS = [
     name: "Agency",
     price: "$49",
     period: "per month",
-    description: "For teams producing shorts at scale.",
+    description: "Teams & API — Coming Soon (not available for purchase).",
     features: [
-      "Everything in Pro",
-      "5 team seats",
-      "Batch processing",
-      "API access",
-      "Custom branding",
-      "Dedicated support",
+      "Everything in Pro (when shipped)",
+      "5 team seats — Coming Soon",
+      "Batch processing — Coming Soon",
+      "API access — Coming Soon",
+      "Custom branding — Coming Soon",
+      "Dedicated support — Coming Soon",
     ],
     cta: "Coming Soon",
     href: "#",
@@ -212,7 +218,8 @@ export default function PricingPage() {
               SHIP MORE.<br />SPEND LESS.
             </h1>
             <p className="text-muted-foreground text-xl max-w-2xl mx-auto">
-              Start free with full local AI processing. Upgrade for Gemini-powered viral intelligence.
+              Clear limits. No dark patterns. Free is honest 720p with watermark —
+              Pro removes the ceiling.
             </p>
           </motion.div>
 

@@ -127,35 +127,51 @@ async def _ensure_indexes() -> None:
 
 
 async def _grant_pro(user_id: str, subscription_id: str) -> None:
-    """Set is_pro=True, is_premium=True, add PRO_MONTHLY_CREDITS, record subscription ID."""
+    """Set is_pro=True, is_premium=True; credit once per subscription_id."""
     if not is_ready():
         logger.error("paddle_grant_pro: DB not ready for user %s", user_id)
         return
 
-    def _do():
+    def _do() -> str:
         db = get_db()
+        # Subscription-scoped credit grant ledger (created+activated must not double +100).
+        grant_ref = None
+        if subscription_id:
+            grant_ref = db.collection("paddle_subscription_grants").document(
+                subscription_id
+            )
+            grant_snap = grant_ref.get()
+            already_granted = grant_snap.exists
+        else:
+            already_granted = False
+
         stats_ref = db.collection("UserStats").document(user_id)
         snap = stats_ref.get()
         if snap.exists:
             data = snap.to_dict() or {}
-            new_balance = data.get("credits_balance", 0) + PRO_MONTHLY_CREDITS
-            stats_ref.update(
-                {
-                    "is_pro": True,
-                    "is_premium": True,
-                    "paddle_subscription_id": subscription_id,
-                    "credits_balance": new_balance,
-                    "updated_at": datetime.now(timezone.utc),
-                }
-            )
+            updates: dict = {
+                "is_pro": True,
+                "is_premium": True,
+                "paddle_subscription_id": subscription_id or data.get(
+                    "paddle_subscription_id"
+                ),
+                "updated_at": datetime.now(timezone.utc),
+            }
+            if not already_granted:
+                updates["credits_balance"] = int(
+                    data.get("credits_balance", 0)
+                ) + PRO_MONTHLY_CREDITS
+            stats_ref.update(updates)
+            outcome = "credited" if not already_granted else "flags_only"
         else:
+            balance = 0 if already_granted else PRO_MONTHLY_CREDITS
             stats_ref.set(
                 {
                     "user_id": user_id,
                     "is_pro": True,
                     "is_premium": True,
                     "paddle_subscription_id": subscription_id,
-                    "credits_balance": PRO_MONTHLY_CREDITS,
+                    "credits_balance": balance,
                     "total_projects": 0,
                     "total_duration_processed": 0.0,
                     "export_count": 0,
@@ -164,8 +180,19 @@ async def _grant_pro(user_id: str, subscription_id: str) -> None:
                     "updated_at": datetime.now(timezone.utc),
                 }
             )
+            outcome = "credited" if not already_granted else "flags_only"
 
-        # Sync billing flags to users collection for frontend session reads.
+        if grant_ref is not None and not already_granted:
+            grant_ref.set(
+                {
+                    "subscription_id": subscription_id,
+                    "user_id": user_id,
+                    "credits_granted": PRO_MONTHLY_CREDITS,
+                    "granted_at": datetime.now(timezone.utc),
+                }
+            )
+
+        # Sync billing flags to Firestore users (session hydration helper).
         try:
             db.collection("users").document(user_id).set(
                 {
@@ -178,8 +205,15 @@ async def _grant_pro(user_id: str, subscription_id: str) -> None:
         except Exception as exc:
             logger.warning("paddle_grant_pro: users sync failed: %s", exc)
 
-    await asyncio.to_thread(_do)
-    logger.info("paddle_grant_pro user=%s sub=%s", user_id, subscription_id)
+        return outcome
+
+    outcome = await asyncio.to_thread(_do)
+    logger.info(
+        "paddle_grant_pro user=%s sub=%s outcome=%s",
+        user_id,
+        subscription_id,
+        outcome,
+    )
 
     try:
         from services.stats_service import invalidate_premium_cache

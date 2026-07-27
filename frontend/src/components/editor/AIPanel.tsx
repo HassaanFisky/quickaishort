@@ -10,7 +10,9 @@ import {
   type EditorStateContext,
   streamEditorCommand,
   type CanonicalEditorAction,
+  AiEditorCommandError,
 } from "@/lib/gemini-editor";
+import { mapAiEditorError } from "@/lib/aiEditorErrors";
 import { useSession } from "next-auth/react";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
 import { cn } from "@/lib/utils";
@@ -23,13 +25,15 @@ import {
   type SuggestionIntent,
 } from "@/lib/studio/mediaGraph";
 import axios from "axios";
-import { API_URL } from "@/lib/api";
+import { API_URL, getStats } from "@/lib/api";
 import {
   ensureStudioProject,
   isStudioProjectKernelEnabled,
 } from "@/lib/studio/projectKernel";
 import { DubPanel } from "@/components/editor/DubPanel";
 import { useUIStore } from "@/stores/uiStore";
+import Link from "next/link";
+import { AuthenticatedFetchError } from "@/lib/authenticatedFetch";
 
 /** Debounce edge facet upserts — transcript/silence/clips churn must not spam Firestore. */
 const FACET_REFRESH_DEBOUNCE_MS = 400;
@@ -97,6 +101,10 @@ function canonicalToDispatchEnvelope(action: CanonicalEditorAction): EditorActio
 
 export function AIPanel() {
   const { data: session } = useSession();
+  const [creditBalance, setCreditBalance] = useState<number | null>(null);
+  const [kernelSyncState, setKernelSyncState] = useState<
+    "idle" | "saved" | "preview" | "sync_failed"
+  >("idle");
   const {
     aiPanelOpen,
     setAIPanelOpen,
@@ -141,7 +149,29 @@ export function AIPanel() {
     mediaGraphRevisionRef.current = -1;
     setSuggestionsLoaded(false);
     setSuggestions([]);
+    setKernelSyncState("idle");
   }, [runId]);
+
+  // Editor credit chip — Firestore SoT via /api/stats (once per session user).
+  useEffect(() => {
+    const userId = session?.user?.id;
+    if (!userId) {
+      setCreditBalance(null);
+      return;
+    }
+    let cancelled = false;
+    getStats(userId)
+      .then((stats) => {
+        if (!cancelled) setCreditBalance(stats.credits_balance);
+      })
+      .catch(() => {
+        if (!cancelled) setCreditBalance(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.user?.id]);
+
   const [recentActions, setRecentActions] = useState<string[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -315,10 +345,24 @@ export function AIPanel() {
         if (
           !cancelled &&
           boundRunIdRef.current === effectRunId &&
-          mediaGraphIdRef.current === graph.graph_id &&
-          grounded.length > 0
+          mediaGraphIdRef.current === graph.graph_id
         ) {
-          setSuggestions(grounded);
+          if (grounded.length > 0) {
+            setSuggestions(grounded);
+          } else {
+            setSuggestions([
+              {
+                suggestion_id: "skel-empty",
+                label: "Suggestions unavailable — type an edit command",
+                capability_id: null,
+                intent_kind: "informational",
+                params: {},
+                evidence: { facet_keys: [], summary: "No grounded suggestions yet" },
+                confidence: 0,
+                interactive: false,
+              },
+            ]);
+          }
         }
       } catch {
         if (!cancelled && boundRunIdRef.current === effectRunId) {
@@ -572,6 +616,7 @@ export function AIPanel() {
             if (!isStudioProjectKernelEnabled()) {
               // Defensive: never touch Kernel store fields if flag flipped off in tests
               receipt = " · Preview only (Kernel disabled)";
+              setKernelSyncState("preview");
             } else {
               const projectId = await ensureStudioProject({
                 title: videoMetadata?.title ?? "Studio Project",
@@ -618,22 +663,29 @@ export function AIPanel() {
                 const accepted = (executed?.steps ?? []).filter(
                   (s: { status?: string }) => s.status === "accepted",
                 ).length;
-                receipt =
-                  accepted > 0
-                    ? ` · Saved to project (r${head.revision})`
-                    : executed?.status === "failed"
-                      ? " · Preview only — project save rejected"
-                      : " · Preview only — project steps skipped";
+                if (accepted > 0) {
+                  receipt = ` · Saved to project (r${head.revision})`;
+                  setKernelSyncState("saved");
+                } else if (executed?.status === "failed") {
+                  receipt = " · Preview only — project save rejected";
+                  setKernelSyncState("preview");
+                } else {
+                  receipt = " · Preview only — project steps skipped";
+                  setKernelSyncState("preview");
+                }
               } else {
                 receipt = " · Preview applied";
+                setKernelSyncState("preview");
               }
             }
           } catch {
             // Honesty: local preview may have applied; server authority did not ack
             receipt = " · Preview applied — project sync failed, re-sync before export";
+            setKernelSyncState("sync_failed");
           }
         } else if (dispatchActions.length > 0) {
           receipt = " · Preview applied";
+          setKernelSyncState("preview");
         }
 
         addAIMessage({
@@ -650,64 +702,58 @@ export function AIPanel() {
 
         // Refresh grounded rail after a successful turn.
         setSuggestionsLoaded(false);
+        if (session?.user?.id) {
+          getStats(session.user.id)
+            .then((stats) => setCreditBalance(stats.credits_balance))
+            .catch(() => undefined);
+        }
       } catch (err: unknown) {
         const errMsg = err instanceof Error ? err.message : String(err);
-        const status = axios.isAxiosError(err)
-          ? err.response?.status
-          : err &&
-            typeof err === "object" &&
-            "status" in err &&
-            typeof (err as { status: unknown }).status === "number"
-            ? (err as { status: number }).status
+        const status =
+          err instanceof AiEditorCommandError
+            ? err.status
+            : err instanceof AuthenticatedFetchError
+              ? err.status
+              : axios.isAxiosError(err)
+                ? err.response?.status
+                : err &&
+                    typeof err === "object" &&
+                    "status" in err &&
+                    typeof (err as { status: unknown }).status === "number"
+                  ? (err as { status: number }).status
+                  : undefined;
+        const body =
+          err instanceof AiEditorCommandError
+            ? err.body
+            : err instanceof AuthenticatedFetchError
+              ? err.body
+              : axios.isAxiosError(err)
+                ? err.response?.data
+                : undefined;
+        const kind =
+          err instanceof AiEditorCommandError ? err.kind : undefined;
+        const retryAfter =
+          err instanceof AiEditorCommandError
+            ? err.retryAfterSeconds
             : undefined;
-        const detail =
-          axios.isAxiosError(err) && err.response?.data?.detail
-            ? String(err.response.data.detail)
-            : "";
+        const mapped = mapAiEditorError({
+          status,
+          message: errMsg,
+          kind,
+          retryAfterSeconds: retryAfter,
+          body,
+        });
 
-        let displayMsg = "Couldn't complete that — try again.";
-        if (status === 402 || /insufficient credits|402/i.test(`${errMsg} ${detail}`)) {
-          displayMsg =
-            detail || "You're out of credits. Upgrade to Pro to keep editing with AI.";
-        } else if (status === 503 || /credit service unavailable/i.test(`${errMsg} ${detail}`)) {
-          displayMsg =
-            detail || "Billing check is briefly unavailable. Try again in a moment.";
-        } else if (
-          status === 401 ||
-          /\(401\)|unauthorized|invalid or expired token|missing authorization/i.test(
-            `${errMsg} ${detail}`,
-          )
-        ) {
-          displayMsg =
-            "Sign in to continue — your timeline is still here.";
-        } else if (
-          status === 403 ||
-          /\(403\)|forbidden|permission/i.test(`${errMsg} ${detail}`)
-        ) {
-          displayMsg =
-            detail || "This action isn't available on your plan.";
-        } else if (/api[_\s]?key|not configured/i.test(`${errMsg} ${detail}`)) {
-          displayMsg =
-            "AI editing isn't available right now. Try again later.";
-        } else if (
-          status === 429 ||
-          /rate.?limit|quota|429|RESOURCE_EXHAUSTED|prepayment|credits? depleted/i.test(
-            `${errMsg} ${detail}`,
-          )
-        ) {
-          displayMsg =
-            "AI is busy right now. Your edits stay on the timeline — try again shortly.";
-        } else if (/network|fetch|failed to fetch/i.test(errMsg)) {
-          displayMsg = "Connection lost — check your internet and retry.";
-        } else if (/400|invalid argument/i.test(errMsg)) {
-          displayMsg = "Couldn't understand that — try rephrasing.";
-        } else if (detail) {
-          displayMsg = detail;
-        } else if (errMsg && errMsg !== "Request failed") {
-          displayMsg = errMsg;
+        addAIMessage({
+          role: "assistant",
+          content: mapped.message,
+          actions: [],
+        });
+        if (mapped.kind === "credits" && session?.user?.id) {
+          getStats(session.user.id)
+            .then((stats) => setCreditBalance(stats.credits_balance))
+            .catch(() => setCreditBalance(0));
         }
-
-        addAIMessage({ role: "assistant", content: displayMsg, actions: [] });
       } finally {
         setAIThinking(false);
       }
@@ -767,6 +813,35 @@ export function AIPanel() {
         </div>
 
         <div className="ai-header-right">
+          {creditBalance !== null && (
+            <Link
+              href="/pricing"
+              className={cn(
+                "text-[10px] font-semibold tabular-nums px-1.5 py-0.5 rounded-md border transition-colors",
+                creditBalance <= 0
+                  ? "border-amber-500/40 text-amber-300 bg-amber-500/10"
+                  : "border-border text-fg-muted hover:text-foreground",
+              )}
+              title="Credits remaining"
+            >
+              {creditBalance} cr
+            </Link>
+          )}
+          {kernelSyncState === "saved" && (
+            <span className="text-[9px] uppercase tracking-wider text-emerald-400/90">
+              Saved
+            </span>
+          )}
+          {kernelSyncState === "preview" && (
+            <span className="text-[9px] uppercase tracking-wider text-amber-300/90">
+              Preview
+            </span>
+          )}
+          {kernelSyncState === "sync_failed" && (
+            <span className="text-[9px] uppercase tracking-wider text-rose-300/90">
+              Re-sync
+            </span>
+          )}
           {/* Status dot */}
           <span
             className={cn(

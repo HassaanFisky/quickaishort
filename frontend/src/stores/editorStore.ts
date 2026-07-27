@@ -538,6 +538,8 @@ interface EditorState {
   sourceUrl: string | null;
   thumbnailUrl: string | null;
   sourceGcsPath: string | null;
+  /** True when file upload to GCS failed — server export must not pretend cloud media exists. */
+  cloudUploadFailed: boolean;
 
   // YouTube IFrame clip selection (Tier-3/4 flow).
   // Set when user marks a clip range in the IFrame player.
@@ -688,6 +690,7 @@ interface EditorState {
   setYtVideoId: (id: string | null) => void;
   setClipRange: (startTime: number, endTime: number) => void;
   setSourceGcsPath: (path: string | null) => void;
+  setCloudUploadFailed: (failed: boolean) => void;
   updateClip: (id: string, updates: Partial<Clip>) => void;
   rippleTrim: (clipId: string, edge: "in" | "out", deltaSec: number) => void;
   rollingTrim: (clipId: string, neighborId: string, edge: "in" | "out", deltaSec: number) => void;
@@ -799,6 +802,7 @@ export const useEditorStore = create<EditorState>()(
       sourceUrl: null,
       thumbnailUrl: null,
       sourceGcsPath: null,
+      cloudUploadFailed: false,
       ytVideoId: null,
       clipStartTime: 0,
       clipEndTime: 0,
@@ -934,6 +938,8 @@ export const useEditorStore = create<EditorState>()(
           sourceFile: file,
           sourceUrl: url || URL.createObjectURL(file),
           currentStage: "loading",
+          sourceGcsPath: null,
+          cloudUploadFailed: false,
           // O6: isolate the new video — drop derived data from any prior run.
           runId: genRunId(),
           studioProjectId: null,
@@ -1075,7 +1081,13 @@ export const useEditorStore = create<EditorState>()(
       selectClip: (id) => set({ selectedClipId: id }),
       setYtVideoId: (id) => set({ ytVideoId: id }),
       setClipRange: (startTime, endTime) => set({ clipStartTime: startTime, clipEndTime: endTime }),
-      setSourceGcsPath: (path) => set({ sourceGcsPath: path }),
+      setSourceGcsPath: (path) =>
+        set(
+          path
+            ? { sourceGcsPath: path, cloudUploadFailed: false }
+            : { sourceGcsPath: null },
+        ),
+      setCloudUploadFailed: (failed) => set({ cloudUploadFailed: failed }),
 
       updateClip: (id, updates) =>
         set((state) => ({
@@ -1724,18 +1736,25 @@ export const useEditorStore = create<EditorState>()(
               store.setClipColor(null);
               break;
             case "SET_CLIP_GAIN":
-              // Stored in clipColorState for display; actual AudioParam update
-              // is handled by MixGraph in the audio layer
-              break;
             case "SET_MASTER_GAIN":
-              break;
             case "ENABLE_DENOISE":
-              break;
             case "ENABLE_LIMITER":
-              break;
             case "ADD_FADE_IN":
-              break;
             case "ADD_FADE_OUT":
+            case "SET_KEYFRAME":
+            case "DELETE_KEYFRAME":
+            case "CLEAR_KEYFRAMES":
+            case "SAVE_PROJECT":
+            case "LOAD_PROJECT":
+            case "AUTO_REFRAME":
+            case "ADD_VOICEOVER":
+              if (typeof window !== "undefined") {
+                window.dispatchEvent(
+                  new CustomEvent("qai:ai-tool-refused", {
+                    detail: { type: action.type, reason: "not_implemented_in_preview" },
+                  }),
+                );
+              }
               break;
             case "ADD_RECT_MASK":
             case "ADD_ELLIPSE_MASK":
@@ -1746,24 +1765,7 @@ export const useEditorStore = create<EditorState>()(
             case "CLEAR_MASKS":
               store.setMaskEnabled(false);
               break;
-            // ─── Phase 7: Motion keyframes ─────────────────────────────────
-            case "SET_KEYFRAME":
-              break;
-            case "DELETE_KEYFRAME":
-              break;
-            case "CLEAR_KEYFRAMES":
-              break;
-            // ─── Phase 8: Project file ─────────────────────────────────────
-            case "SAVE_PROJECT":
-              break;
-            case "LOAD_PROJECT":
-              break;
-            // ─── Phase 9: Auto-reframe ──────────────────────────────────────
-            case "AUTO_REFRAME":
-              break;
-            // ─── Phase 10: Voiceover / SFX / Transitions ───────────────────
-            case "ADD_VOICEOVER":
-              break;
+            // ─── Phase 10: SFX / Transitions / Dub ─────────────────────────
             case "ADD_SFX": {
               const sfxId = String(action.payload?.sfx_id ?? "impact-thud");
               const startSec = Number(action.payload?.start_sec ?? store.currentTime ?? 0);
@@ -1989,6 +1991,19 @@ export const useEditorStore = create<EditorState>()(
             case "SET_SPLIT_SCREEN":
               store.setSplitScreenPreset((action.payload.preset_id as string) || null);
               break;
+            default: {
+              if (typeof window !== "undefined") {
+                window.dispatchEvent(
+                  new CustomEvent("qai:ai-tool-refused", {
+                    detail: {
+                      type: action.type,
+                      reason: "unhandled_capability",
+                    },
+                  }),
+                );
+              }
+              break;
+            }
           }
         });
       },
@@ -2164,6 +2179,7 @@ export const useEditorStore = create<EditorState>()(
           sourceUrl: null,
           thumbnailUrl: null,
           sourceGcsPath: null,
+      cloudUploadFailed: false,
           runId: genRunId(),
           studioProjectId: null,
           studioAckedRevision: 0,

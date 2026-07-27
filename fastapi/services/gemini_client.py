@@ -73,6 +73,7 @@ async def call_gemini(
     *,
     model: str | None = None,
     generation_config: dict[str, Any] | None = None,
+    tools: list[Any] | None = None,
     max_attempts: int = 3,
 ) -> Any:
     """Call Gemini with Redis cooldown and bounded transport-only retries."""
@@ -104,8 +105,14 @@ async def call_gemini(
 
     # Convert dict config to types.GenerateContentConfig if provided
     config = None
-    if generation_config:
-        config = get_genai_types().GenerateContentConfig(**generation_config)
+    cfg: dict[str, Any] = dict(generation_config or {})
+    # Strip None values and non-config keys (tools passed separately below).
+    cfg.pop("tools", None)
+    cfg = {k: v for k, v in cfg.items() if v is not None}
+    if tools:
+        cfg["tools"] = tools
+    if cfg:
+        config = get_genai_types().GenerateContentConfig(**cfg)
 
     async def _attempt() -> Any:
         # Note: new SDK uses .aio for async calls

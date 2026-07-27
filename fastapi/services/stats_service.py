@@ -144,6 +144,57 @@ async def deduct_credits(user_id: str, amount: int) -> bool:
     return True
 
 
+async def reserve_credits(user_id: str, amount: int) -> bool:
+    """Alias for deduct — reserved until commit/refund on the request path."""
+    return await deduct_credits(user_id, amount)
+
+
+async def refund_credits(user_id: str, amount: int) -> bool:
+    """Return previously reserved credits after a hard AI failure."""
+    if not user_id or user_id == "anonymous" or amount <= 0:
+        return False
+    if not is_ready():
+        return False
+
+    def _do() -> dict[str, Any] | None:
+        db = get_db()
+        doc_ref = db.collection(COLLECTION).document(user_id)
+
+        @firestore.transactional
+        def _txn(transaction: firestore.Transaction) -> dict[str, Any] | None:
+            snap = doc_ref.get(transaction=transaction)
+            if not snap.exists:
+                return None
+            data = snap.to_dict() or {}
+            new_balance = int(data.get("credits_balance", 0)) + int(amount)
+            transaction.update(
+                doc_ref,
+                {
+                    "credits_balance": new_balance,
+                    "updated_at": datetime.now(timezone.utc),
+                },
+            )
+            return {**data, "credits_balance": new_balance}
+
+        return _txn(db.transaction())
+
+    doc = await asyncio.to_thread(_do)
+    if doc is None:
+        logger.warning("credit_refund_failed user_id=%s amount=%d", user_id, amount)
+        return False
+
+    payload = _serialize(doc, user_id)
+    try:
+        await async_redis_conn.delete(f"stats:{user_id}")
+    except Exception:
+        pass
+    try:
+        await emit_stats_updated(user_id, payload)
+    except Exception:
+        pass
+    return True
+
+
 async def get_user_stats(user_id: str) -> dict[str, Any]:
     if not is_ready():
         return _empty(user_id)
@@ -184,7 +235,7 @@ async def is_user_premium(user_id: str) -> bool:
         logger.warning("Redis premium cache read failed: %s", _err)
 
     stats = await get_user_stats(user_id)
-    is_premium = stats.get("is_premium", False)
+    is_premium = bool(stats.get("is_premium") or stats.get("is_pro"))
     try:
         await async_redis_conn.setex(cache_key, 300, b"1" if is_premium else b"0")
     except Exception as _err:
@@ -241,7 +292,8 @@ def _serialize(doc: dict[str, Any] | None, user_id: str) -> dict[str, Any]:
         total_duration_processed=float(doc.get("total_duration_processed", 0.0)),
         export_count=int(doc.get("export_count", 0)),
         ai_runs=int(doc.get("ai_runs", 0)),
-        is_premium=bool(doc.get("is_premium", False)),
-        is_pro=bool(doc.get("is_pro", False)),
+        is_premium=bool(doc.get("is_premium", False) or doc.get("is_pro", False)),
+        is_pro=bool(doc.get("is_pro", False) or doc.get("is_premium", False)),
+        paddle_subscription_id=doc.get("paddle_subscription_id"),
         updated_at=doc.get("updated_at") or datetime.now(timezone.utc),
     ).model_dump(mode="json")

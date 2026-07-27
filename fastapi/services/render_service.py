@@ -184,6 +184,7 @@ class WatermarkConfig:
     image_path: Optional[Path] = (
         None  # PNG on disk; if None and enabled, drawtext fallback
     )
+    text: str = "Made with QuickAI"
 
 
 @dataclass
@@ -223,6 +224,8 @@ class RenderJob:
     dub_audio_uri: Optional[str] = None
     manifest_filter_complex: Optional[str] = None
     manifest_meta: Optional[dict] = None
+    output_width: Optional[int] = None
+    output_height: Optional[int] = None
 
 
 @dataclass
@@ -469,8 +472,9 @@ class RenderService:
                 y="main_h-overlay_h-20",
             )
         elif job.watermark.enabled:
+            wm_text = (job.watermark.text or "Made with QuickAI").replace(":", "\\:")
             video = video.drawtext(
-                text="QuickAI",
+                text=wm_text,
                 fontsize=48,
                 fontcolor="white@0.8",
                 x="w-tw-40",
@@ -576,7 +580,12 @@ class RenderService:
         return output
 
     def _apply_aspect_ratio(self, video, job: RenderJob):
+        out_w = int(job.output_width) if job.output_width else None
+        out_h = int(job.output_height) if job.output_height else None
+
         if job.aspect_ratio == "9:16":
+            tw = out_w or 1080
+            th = out_h or 1920
             if job.reframing is not None:
                 cx = job.reframing.center_x
                 w_expr = "ih*(9/16)"
@@ -584,14 +593,20 @@ class RenderService:
                 video = video.filter("crop", w_expr, "ih", x_expr, 0)
             else:
                 video = video.filter(
-                    "scale", 1080, 1920, force_original_aspect_ratio="increase"
-                ).filter("crop", 1080, 1920)
-            return video.filter("scale", 1080, 1920)
+                    "scale", tw, th, force_original_aspect_ratio="increase"
+                ).filter("crop", tw, th)
+            return video.filter("scale", tw, th)
 
         if job.aspect_ratio == "1:1":
+            side = out_w or out_h or 1080
             return video.filter(
-                "scale", 1080, 1080, force_original_aspect_ratio="increase"
-            ).filter("crop", 1080, 1080)
+                "scale", side, side, force_original_aspect_ratio="increase"
+            ).filter("crop", side, side)
+
+        if out_w and out_h:
+            return video.filter(
+                "scale", out_w, out_h, force_original_aspect_ratio="increase"
+            ).filter("crop", out_w, out_h)
 
         return video
 

@@ -368,7 +368,10 @@ export function useIngestLifecycle(opts: {
           return;
         }
         const msg = err instanceof Error ? err.message : "Upload failed";
-        toast.warning("Cloud upload failed — continuing with local preview.");
+        useEditorStore.getState().setCloudUploadFailed(true);
+        toast.warning(
+          "Cloud upload failed — local preview only. Fix upload before server export.",
+        );
         if (process.env.NODE_ENV !== "production") {
           console.warn("[ingest] GCS upload soft-fail:", msg);
         }

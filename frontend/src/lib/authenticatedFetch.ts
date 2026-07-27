@@ -118,10 +118,15 @@ export async function throwIfNotOk(response: Response): Promise<void> {
   if (response.ok) return;
 
   const error = await response.json().catch(() => ({}));
-  const detail =
-    typeof (error as { detail?: unknown }).detail === "string"
-      ? (error as { detail: string }).detail
-      : `Request failed: ${response.status}`;
+  const rawDetail = (error as { detail?: unknown }).detail;
+  let detail = `Request failed: ${response.status}`;
+  if (typeof rawDetail === "string") {
+    detail = rawDetail;
+  } else if (rawDetail && typeof rawDetail === "object") {
+    const d = rawDetail as { message?: unknown; detail?: unknown };
+    if (typeof d.message === "string") detail = d.message;
+    else if (typeof d.detail === "string") detail = d.detail;
+  }
 
   throw new AuthenticatedFetchError(
     `${detail} (${response.status})`,

@@ -11,7 +11,6 @@ import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
 import QSLogo from "@/components/shared/QSLogo";
 import {
-  Zap,
   Sparkles,
   X,
   AlertCircle,
@@ -105,7 +104,6 @@ export default function EditorLayout() {
   }, [storeTranscript, storeVideoMetadata, setVideoContext]);
 
   const [exportOpen, setExportOpen] = useState(false);
-  const [localEngineEnabled, setLocalEngineEnabled] = useState(false);
   const [isAdvancedMode, setIsAdvancedMode] = useState(false);
   const hasShownShortcutsRef = useRef(false);
   useEffect(() => {
@@ -248,15 +246,14 @@ export default function EditorLayout() {
       if (useEditorStore.getState().currentStage === "transcribing") {
         cancelPipeline();
         setProcessing(false, "idle");
-        const st = useEditorStore.getState();
-        if (st.ingestStage === "analyze") {
-          st.setIngestStage("ready");
-        } else if (st.ingestStage !== "ready" && st.ingestStage !== "failed") {
-          st.setIngestStage("analyze");
-          st.setIngestStage("ready");
-        }
+        useEditorStore
+          .getState()
+          .failIngest(
+            "analysis_failed",
+            "Transcription timed out. Retry analysis — the Whisper model caches after first download.",
+          );
         toast.info(
-          "Transcription is taking too long. Click Generate again — the AI model will be cached and load faster next time.",
+          "Transcription timed out. Tap Retry analysis — the model caches after the first download.",
           { duration: 12_000 }
         );
       }
@@ -500,22 +497,6 @@ export default function EditorLayout() {
                 <PanelRight size={15} />
               </button>
             </>
-          )}
-          {isAdvancedMode && (
-            <button
-              onClick={() => setLocalEngineEnabled((v) => !v)}
-              title={localEngineEnabled ? "Local engine ON — click to disable" : "Use local engine (beta)"}
-              aria-label="Toggle local FFmpeg.wasm decode engine"
-              className={cn(
-                "h-9 px-2 rounded-xl flex items-center gap-1 text-[10px] font-bold border transition-all duration-200",
-                localEngineEnabled
-                  ? "bg-amber-500/15 border-amber-500/40 text-amber-400 hover:bg-amber-500/25"
-                  : "bg-card border-border text-fg-muted hover:text-foreground"
-              )}
-            >
-              <Zap size={11} />
-              {localEngineEnabled ? "Local On" : "Local Off"}
-            </button>
           )}
 
           <button

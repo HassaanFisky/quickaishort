@@ -25,7 +25,7 @@ interface TabItem {
 const TABS: TabItem[] = [
   { href: "/dashboard", label: "Home", icon: LayoutGrid },
   { href: "/editor", label: "Editor", icon: Scissors },
-  { href: "/adk", label: "ADK", icon: Bot },
+  { href: "/adk", label: "Soon", icon: Bot },
   { href: "/history", label: "Library", icon: HistoryIcon },
   { href: "/settings", label: "Profile", icon: SettingsIcon },
 ];

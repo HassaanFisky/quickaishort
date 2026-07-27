@@ -598,6 +598,7 @@ async def _admit_user_workload(
     workload_id: str,
     query: str,
     deep_analysis: bool = False,
+    projected_storage_bytes: int | None = None,
 ) -> LimitEvaluation:
     """Fail-closed plan ceiling BEFORE any agent import or Gemini spend.
 
@@ -612,6 +613,7 @@ async def _admit_user_workload(
             workload_id=workload_id,
             deep_analysis=deep_analysis,
             reserve_daily_video=True,
+            projected_storage_bytes=projected_storage_bytes,
         ),
     )
     if not evaluation.decision.allowed:
@@ -912,10 +914,14 @@ async def export_video(
             detail="Export duration exceeds maximum limit of 180 seconds.",
         )
 
+    # Rough projected storage: ~1 MB/sec of export + existing usage ceiling check.
+    # Free 500 MB boundary is only enforced when a projection is supplied.
+    projected_storage = max(1, int((request.end_sec - request.start_sec) * 1_000_000))
     await _admit_user_workload(
         user_id=user_id,
         workload_id=request.videoId,
         query="video export",
+        projected_storage_bytes=projected_storage,
     )
     if not await deduct_credits(user_id, 20):
         raise HTTPException(
@@ -1394,7 +1400,20 @@ async def stats_endpoint(
 
 
 @app.websocket("/ws/stats/{user_id}")
-async def stats_ws(websocket: WebSocket, user_id: str):
+async def stats_ws(websocket: WebSocket, user_id: str, token: str = ""):
+    """Authenticated stats stream — JWT via ?token= (browsers cannot set WS headers)."""
+    from services.auth import verify_bearer_token
+    from fastapi import HTTPException as _HTTPException
+
+    try:
+        verified = verify_bearer_token(token or "")
+    except _HTTPException:
+        await websocket.close(code=4401)
+        return
+    if verified != user_id:
+        await websocket.close(code=4403)
+        return
+
     await ws_manager.connect(user_id, websocket)
     try:
         initial = await get_user_stats(user_id)

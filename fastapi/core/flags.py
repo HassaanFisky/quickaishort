@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 # Canonical default — production core setup never enables mocks unless env
 # explicitly opts in, and never inside ENVIRONMENT=production.
 MOCK_AI_MODE: bool = False
+STUDIO_NATIVE_TOOLS: bool = False
 
 _TRUE_VALUES = frozenset({"1", "true", "yes", "on"})
 
@@ -40,3 +41,13 @@ def is_mock_ai_mode() -> bool:
         )
         return False
     return True
+
+
+def is_studio_native_tools() -> bool:
+    """ADR-006 native FunctionDeclaration tool-loop — default OFF until canary.
+
+    Set STUDIO_NATIVE_TOOLS=1 to enable. Production canary only; prompt-JSON
+    Luna path remains the default when this returns False.
+    """
+
+    return _env_flag("STUDIO_NATIVE_TOOLS", default=STUDIO_NATIVE_TOOLS)
