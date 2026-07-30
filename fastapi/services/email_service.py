@@ -100,9 +100,7 @@ async def _send_resend(to_email: str, subject: str, html: str) -> dict[str, Any]
 
     domain = os.environ.get("IMPROVMX_DOMAIN", "quickaishort.online").strip()
     alias = os.environ.get("IMPROVMX_FROM_ALIAS", "noreply").strip() or "noreply"
-    from_addr = (
-        os.environ.get("RESEND_FROM_EMAIL", "").strip() or f"{alias}@{domain}"
-    )
+    from_addr = os.environ.get("RESEND_FROM_EMAIL", "").strip() or f"{alias}@{domain}"
     reply_to = (
         os.environ.get("IMPROVMX_REPLY_TO", "").strip()
         or os.environ.get("SUPPORT_EMAIL", "").strip()
@@ -130,7 +128,11 @@ async def _send_resend(to_email: str, subject: str, html: str) -> dict[str, Any]
         body = response.json() if response.content else {}
         if response.status_code >= 400:
             detail = body.get("message") or body.get("name") or response.text[:300]
-            return {"success": False, "error": str(detail), "status_code": response.status_code}
+            return {
+                "success": False,
+                "error": str(detail),
+                "status_code": response.status_code,
+            }
         return {"success": True, "id": body.get("id"), "provider": "resend"}
     except Exception as exc:
         return {"success": False, "error": str(exc)}
@@ -141,7 +143,8 @@ async def email_provider_status() -> dict[str, Any]:
     return {
         "improvmx_configured": improvmx_configured(),
         "resend_configured": _resend_configured(),
-        "from_alias": os.environ.get("IMPROVMX_FROM_ALIAS", "noreply").strip() or "noreply",
+        "from_alias": os.environ.get("IMPROVMX_FROM_ALIAS", "noreply").strip()
+        or "noreply",
         "domain": os.environ.get("IMPROVMX_DOMAIN", "quickaishort.online").strip(),
         "support_email": os.environ.get("SUPPORT_EMAIL", "contact@quickaishort.online"),
         "note": (

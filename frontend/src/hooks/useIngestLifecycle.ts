@@ -35,6 +35,10 @@ import {
 import { useEditorStore } from "@/stores/editorStore";
 import { useAIPanel } from "@/stores/aiPanelStore";
 
+export type LastIngestAttempt =
+  | { kind: "file"; file: File }
+  | { kind: "url"; url: string };
+
 async function projectizeAfterMeta(title: string): Promise<void> {
   const store = useEditorStore.getState();
   store.setIngestStage("projectize");
@@ -68,9 +72,12 @@ function persistUrlSession(opts: {
   });
 }
 
-async function applyCachedArtifact(fingerprint: string): Promise<boolean> {
+async function applyCachedArtifact(
+  fingerprint: string,
+  isLive: () => boolean = () => true,
+): Promise<boolean> {
   const cached = await loadIngestArtifact(fingerprint);
-  if (!cached) return false;
+  if (!cached || !isLive()) return false;
   const store = useEditorStore.getState();
   store.setIngestMeta({ fromCache: true, fingerprint });
   store.setTranscript(cached.transcript);
@@ -96,6 +103,9 @@ export function useIngestLifecycle(opts: {
   const { runPipeline, cancelPipeline } = opts;
   const uploadAbortRef = useRef<AbortController | null>(null);
   const lastFileRef = useRef<File | null>(null);
+  const lastAttemptRef = useRef<LastIngestAttempt | null>(null);
+  /** Bumped on every new ingest / cancel so stale awaits cannot mutate store. */
+  const ingestGenRef = useRef(0);
   const { setVideoContext } = useAIPanel();
 
   const {
@@ -116,11 +126,19 @@ export function useIngestLifecycle(opts: {
     setIngestStage("identify");
   }, [resetIngestLifecycle, setIngestStage]);
 
+  const bumpGen = useCallback(() => {
+    ingestGenRef.current += 1;
+    return ingestGenRef.current;
+  }, []);
+
+  const isCurrent = useCallback((gen: number) => gen === ingestGenRef.current, []);
+
   const cancelUpload = useCallback(() => {
+    bumpGen();
     uploadAbortRef.current?.abort();
     cancelPipeline();
     failIngest("cancelled", "Ingest cancelled.");
-  }, [cancelPipeline, failIngest]);
+  }, [bumpGen, cancelPipeline, failIngest]);
 
   /** Re-run analyze only — requires media already loaded (LeftPanel retry, etc.). */
   const retryAnalyze = useCallback(() => {
@@ -162,7 +180,11 @@ export function useIngestLifecycle(opts: {
         return;
       }
 
+      lastFileRef.current = null;
+      lastAttemptRef.current = { kind: "url", url };
+      const gen = bumpGen();
       beginIngest();
+      if (!isCurrent(gen)) return;
       setIngestMeta({ sourceKind: null, fromCache: false, uploadProgress: null });
 
       const ytId = parseYouTubeId(url);
@@ -186,6 +208,7 @@ export function useIngestLifecycle(opts: {
         toast.info("Fetching video details…");
         try {
           const info = await getVideoInfo(url);
+          if (!isCurrent(gen)) return;
           if (info.code === "YOUTUBE_FETCH_FAILED") {
             failIngest(
               "meta_fetch_failed",
@@ -231,6 +254,7 @@ export function useIngestLifecycle(opts: {
           });
 
           await projectizeAfterMeta(info.title ?? "YouTube Video");
+          if (!isCurrent(gen)) return;
           persistUrlSession({
             url,
             fingerprint,
@@ -238,11 +262,13 @@ export function useIngestLifecycle(opts: {
             title: info.title,
           });
 
-          if (await applyCachedArtifact(fingerprint)) return;
+          if (await applyCachedArtifact(fingerprint, () => isCurrent(gen))) return;
+          if (!isCurrent(gen)) return;
 
           setIngestStage("analyze");
           void runPipeline();
         } catch (error: unknown) {
+          if (!isCurrent(gen)) return;
           let errMsg = "Could not load this video. Try another link.";
           if (error && typeof error === "object" && "isAxiosError" in error) {
             const axErr = error as {
@@ -289,19 +315,23 @@ export function useIngestLifecycle(opts: {
       setSourceUrl(url);
       trackEvent({ name: "video_loaded", props: { source: "upload", durationSec: 0 } });
       await projectizeAfterMeta(url.split("/").pop() ?? "Video");
+      if (!isCurrent(gen)) return;
       persistUrlSession({
         url,
         fingerprint,
         kind: "direct_url",
         title: url.split("/").pop(),
       });
-      if (await applyCachedArtifact(fingerprint)) return;
+      if (await applyCachedArtifact(fingerprint, () => isCurrent(gen))) return;
+      if (!isCurrent(gen)) return;
       setIngestStage("analyze");
       void runPipeline();
     },
     [
       beginIngest,
+      bumpGen,
       failIngest,
+      isCurrent,
       runPipeline,
       setIngestMeta,
       setIngestStage,
@@ -316,7 +346,10 @@ export function useIngestLifecycle(opts: {
   const ingestFile = useCallback(
     async (file: File) => {
       lastFileRef.current = file;
+      lastAttemptRef.current = { kind: "file", file };
+      const gen = bumpGen();
       beginIngest();
+      if (!isCurrent(gen)) return;
       setIngestMeta({
         sourceKind: "file",
         fromCache: false,
@@ -326,6 +359,7 @@ export function useIngestLifecycle(opts: {
 
       setIngestStage("validate");
       const policy = await fetchIngestPolicy().catch(() => FALLBACK_INGEST_POLICY);
+      if (!isCurrent(gen)) return;
       const v = validateFileAgainstPolicy(file, policy);
       if (!v.ok) {
         failIngest(
@@ -354,15 +388,20 @@ export function useIngestLifecycle(opts: {
           file.name,
           file.type || "video/mp4",
         );
+        if (!isCurrent(gen)) return;
         await uploadFileToGcs(
           presigned_url,
           file,
           file.type || "video/mp4",
-          (pct) => setIngestMeta({ uploadProgress: pct }),
+          (pct) => {
+            if (isCurrent(gen)) setIngestMeta({ uploadProgress: pct });
+          },
           ac.signal,
         );
+        if (!isCurrent(gen)) return;
         setSourceGcsPath(gcs_path);
       } catch (err) {
+        if (!isCurrent(gen)) return;
         if (err instanceof DOMException && err.name === "AbortError") {
           failIngest("cancelled", "Upload cancelled.");
           return;
@@ -377,18 +416,23 @@ export function useIngestLifecycle(opts: {
         }
       }
 
+      if (!isCurrent(gen)) return;
       const fingerprint = fingerprintFile(file);
       setIngestMeta({ fingerprint, uploadProgress: null });
       await projectizeAfterMeta(file.name || "Upload");
+      if (!isCurrent(gen)) return;
 
-      if (await applyCachedArtifact(fingerprint)) return;
+      if (await applyCachedArtifact(fingerprint, () => isCurrent(gen))) return;
+      if (!isCurrent(gen)) return;
 
       setIngestStage("analyze");
       void runPipeline();
     },
     [
       beginIngest,
+      bumpGen,
       failIngest,
+      isCurrent,
       runPipeline,
       setIngestMeta,
       setIngestStage,
@@ -398,18 +442,35 @@ export function useIngestLifecycle(opts: {
   );
 
   const cancelAnalyze = useCallback(() => {
+    bumpGen();
+    uploadAbortRef.current?.abort();
     cancelPipeline();
     failIngest("cancelled", "Processing cancelled.");
     toast.info("Processing cancelled.");
-  }, [cancelPipeline, failIngest]);
+  }, [bumpGen, cancelPipeline, failIngest]);
+
+  const retryLastIngest = useCallback(() => {
+    const attempt = lastAttemptRef.current;
+    if (attempt?.kind === "file") {
+      void ingestFile(attempt.file);
+      return;
+    }
+    if (attempt?.kind === "url") {
+      void ingestUrl(attempt.url);
+      return;
+    }
+    toast.error("Nothing to retry — import a video first.");
+  }, [ingestFile, ingestUrl]);
 
   return {
     ingestUrl,
     ingestFile,
     retryAnalyze,
+    retryLastIngest,
     cancelUpload,
     cancelAnalyze,
     lastFileRef,
+    lastAttemptRef,
     uploadAbortRef,
   };
 }
