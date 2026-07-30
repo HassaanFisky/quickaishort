@@ -106,7 +106,11 @@ async def send_email(
             logger.warning(
                 "improvmx_send_failed status=%s detail=%s", response.status_code, detail
             )
-            return {"success": False, "error": str(detail), "status_code": response.status_code}
+            return {
+                "success": False,
+                "error": str(detail),
+                "status_code": response.status_code,
+            }
         return body if isinstance(body, dict) else {"success": True, "raw": body}
     except Exception as exc:
         logger.warning("improvmx_send_exception err=%s", exc)
