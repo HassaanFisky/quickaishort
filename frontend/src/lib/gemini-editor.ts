@@ -118,6 +118,133 @@ export interface EditorCommandRequest {
   workload_id?: string
 }
 
+const MAX_TRANSCRIPT_CHUNKS = 40
+const MAX_CAPTION_CHUNKS = 24
+const MAX_TEXT_CHARS = 160
+
+type TranscriptLike = {
+  text?: string
+  start?: number
+  end?: number
+  startTime?: number
+  endTime?: number
+} | null
+
+type CaptionLike = {
+  text?: string
+  start?: number
+  end?: number
+}
+
+/**
+ * Bounded project_context for DualModelRouter / sanitiser.
+ * Prefer rich keys the backend already reads; never dump unbounded transcript.
+ */
+export function buildProjectContextForCommand(input: {
+  editorState: EditorStateContext
+  selectedClipId: string | null
+  currentTime?: number
+  aspectRatio?: string
+  runId?: string | null
+  transcript?: TranscriptLike | { chunks?: TranscriptLike[] } | Array<TranscriptLike>
+  captions?: CaptionLike[]
+  videoAnalysis?: VideoAnalysis | null
+}): Record<string, unknown> {
+  const { editorState } = input
+  const duration = editorState.videoDuration || 0
+
+  const rawChunks: TranscriptLike[] = (() => {
+    const t = input.transcript
+    if (!t) return []
+    if (Array.isArray(t)) return t
+    if (typeof t === "object" && Array.isArray((t as { chunks?: unknown }).chunks)) {
+      return (t as { chunks: TranscriptLike[] }).chunks
+    }
+    if (typeof t === "object" && typeof (t as { text?: string }).text === "string") {
+      return [t as TranscriptLike]
+    }
+    return []
+  })()
+
+  const fromAnalysis = (input.videoAnalysis?.transcript ?? []).map((c) => ({
+    text: c.text,
+    start: c.startTime,
+    end: c.endTime,
+  }))
+
+  const source = (rawChunks.length > 0 ? rawChunks : fromAnalysis).slice(
+    0,
+    MAX_TRANSCRIPT_CHUNKS,
+  )
+  const transcript = source
+    .map((c) => {
+      if (!c) return null
+      const text = String(c.text ?? "").trim().slice(0, MAX_TEXT_CHARS)
+      if (!text) return null
+      const row = c as {
+        start?: number
+        end?: number
+        startTime?: number
+        endTime?: number
+      }
+      return {
+        text,
+        start: Number(row.start ?? row.startTime ?? 0),
+        end: Number(row.end ?? row.endTime ?? 0),
+      }
+    })
+    .filter(Boolean)
+
+  const captions = (input.captions ?? [])
+    .slice(0, MAX_CAPTION_CHUNKS)
+    .map((c) => ({
+      text: String(c.text ?? "").trim().slice(0, MAX_TEXT_CHARS),
+      start: Number(c.start ?? 0),
+      end: Number(c.end ?? 0),
+    }))
+    .filter((c) => c.text)
+
+  return {
+    clip_count: editorState.clipCount,
+    duration,
+    videoDuration: duration,
+    currentTime: Number(input.currentTime ?? 0),
+    selectedClipId: input.selectedClipId,
+    elementCount: editorState.clipCount,
+    captionCount: editorState.captionCount,
+    captionsEnabled: editorState.captionsEnabled,
+    aspectRatio: input.aspectRatio || "9:16",
+    visualFilter: editorState.filter || "None",
+    audioBoost: editorState.audioBoost,
+    playbackSpeed: editorState.playbackSpeed,
+    clipIndex: editorState.clipIndex,
+    clipStart: editorState.clipStart,
+    clipEnd: editorState.clipEnd,
+    markIn: editorState.markIn,
+    markOut: editorState.markOut,
+    recentActions: editorState.recentActions.slice(-8),
+    transcript,
+    captions,
+    run_id: input.runId || undefined,
+  }
+}
+
+export type StreamStageEvent = {
+  stage: string
+  message?: string
+}
+
+function isStageEvent(obj: unknown): obj is StreamStageEvent {
+  return (
+    !!obj &&
+    typeof obj === "object" &&
+    "stage" in obj &&
+    typeof (obj as { stage: unknown }).stage === "string" &&
+    !("intent" in (obj as object)) &&
+    !("actions" in (obj as object))
+  )
+}
+
 // Main function — send command, get back tool actions
 export async function sendEditorCommand(
   request: EditorCommandRequest
@@ -132,11 +259,12 @@ export async function sendEditorCommand(
   return response.json();
 }
 
-/** Streaming path — SSE may emit one JSON plan event (current backend). */
+/** Streaming path — stage events then one JSON plan (honest progress). */
 export async function streamEditorCommand(
   request: EditorCommandRequest,
   onChunk: (chunk: string) => void,
-  onDone: () => void
+  onDone: () => void,
+  onStage?: (stage: StreamStageEvent) => void,
 ): Promise<EditorCommandResponse | null> {
   const response = await authenticatedFetch(
     `${API_BASE}/api/ai-editor/command/stream`,
@@ -189,11 +317,22 @@ export async function streamEditorCommand(
             body: obj,
           });
         }
-        parsed = obj;
-        if (typeof obj.feedback === "string") {
-          assembled = obj.feedback;
-        } else if (typeof obj.message === "string") {
-          assembled = obj.message;
+        if (isStageEvent(obj)) {
+          onStage?.(obj);
+          continue;
+        }
+        // Final plan events always carry intent/actions/feedback.
+        if (
+          typeof obj.intent === "string" ||
+          Array.isArray(obj.actions) ||
+          typeof obj.feedback === "string"
+        ) {
+          parsed = obj;
+          if (typeof obj.feedback === "string") {
+            assembled = obj.feedback;
+          } else if (typeof obj.message === "string") {
+            assembled = obj.message;
+          }
         }
       } catch (err) {
         if (err instanceof SyntaxError) {

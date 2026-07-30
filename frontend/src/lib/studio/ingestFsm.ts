@@ -29,6 +29,7 @@ export type IngestFailCode =
   | "meta_fetch_failed"
   | "analysis_failed"
   | "cancelled"
+  | "timeout"
   | "unknown";
 
 const ALLOWED: Record<IngestStage, ReadonlySet<IngestStage>> = {

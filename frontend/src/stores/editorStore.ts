@@ -1789,10 +1789,15 @@ export const useEditorStore = create<EditorState>()(
             case "TRANSLATE_CAPTIONS":
               // Heavy path is owned by useDubVideo / DubPanel (not instant client mutate).
               if (typeof window !== "undefined") {
+                const lastLang =
+                  (typeof action.payload?.target_lang === "string" &&
+                    action.payload.target_lang) ||
+                  window.localStorage.getItem("qai:dub-last-lang") ||
+                  "es";
                 window.dispatchEvent(
                   new CustomEvent("qai:dub-video", {
                     detail: {
-                      targetLang: action.payload?.target_lang ?? "es",
+                      targetLang: lastLang,
                       mode:
                         action.type === "TRANSLATE_CAPTIONS"
                           ? "captions_only"

@@ -181,6 +181,10 @@ export async function getExportStatus(
   return data;
 }
 
+export async function cancelExportJob(jobId: string): Promise<void> {
+  await axios.delete(`${API_URL}/api/render/${jobId}`);
+}
+
 export async function getStats(userId: string): Promise<UserStats> {
   const { data } = await axios.get<UserStats>(`${API_URL}/api/stats`, {
     params: { user_id: userId },

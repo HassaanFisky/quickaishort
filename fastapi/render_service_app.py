@@ -61,6 +61,54 @@ def _attempt_number(retry_count: str | None) -> int:
         return 1
 
 
+def _require_task_invocation(
+    *,
+    task_name: str | None,
+    authorization: str | None,
+) -> None:
+    """Defense-in-depth beyond Cloud Run IAM: require Cloud Tasks headers + OIDC.
+
+    Non-production skips OIDC so local curl/RQ still works. Production fails closed
+    if audience is unset or the bearer token is missing/invalid.
+    """
+
+    if os.environ.get("ENVIRONMENT", "").strip().lower() != "production":
+        return
+    if not task_name:
+        raise HTTPException(status_code=403, detail="Cloud Tasks request required.")
+
+    audience = os.environ.get("CLOUD_TASKS_OIDC_AUDIENCE", "").rstrip(
+        "/"
+    ) or os.environ.get("CLOUD_TASKS_RENDER_URL", "").rstrip("/")
+    if not audience:
+        logger.error("renderer_oidc_audience_missing")
+        raise HTTPException(status_code=503, detail="Renderer auth misconfigured.")
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(status_code=403, detail="Missing invoker token.")
+
+    token = authorization.split(" ", 1)[1].strip()
+    try:
+        from google.auth.transport import requests as google_requests
+        from google.oauth2 import id_token
+
+        claims = id_token.verify_oauth2_token(
+            token,
+            google_requests.Request(),
+            audience=audience,
+        )
+    except Exception as exc:
+        logger.warning("renderer_oidc_verify_failed err=%s", exc)
+        raise HTTPException(status_code=403, detail="Invalid invoker token.") from exc
+
+    expected_sa = os.environ.get("CLOUD_TASKS_INVOKER_SERVICE_ACCOUNT", "").strip()
+    email = str(claims.get("email") or "")
+    if expected_sa and email and email != expected_sa:
+        logger.warning(
+            "renderer_oidc_sa_mismatch got=%s expected=%s", email, expected_sa
+        )
+        raise HTTPException(status_code=403, detail="Invoker identity mismatch.")
+
+
 async def _execute_render(
     payload: RenderTaskPayload,
     *,
@@ -167,11 +215,11 @@ async def handle_render_task(
     payload: RenderTaskPayload,
     task_name: str | None = Header(default=None, alias="X-CloudTasks-TaskName"),
     retry_count: str | None = Header(default=None, alias="X-CloudTasks-TaskRetryCount"),
+    authorization: str | None = Header(default=None, alias="Authorization"),
 ) -> dict[str, object]:
     """Acknowledge only completed/terminal work; 5xx triggers bounded retry."""
 
-    if os.environ.get("ENVIRONMENT", "").lower() == "production" and not task_name:
-        raise HTTPException(status_code=403, detail="Cloud Tasks request required.")
+    _require_task_invocation(task_name=task_name, authorization=authorization)
 
     attempt = _attempt_number(retry_count)
     try:
@@ -228,11 +276,11 @@ async def handle_dub_task(
     payload: dict,
     task_name: str | None = Header(default=None, alias="X-CloudTasks-TaskName"),
     retry_count: str | None = Header(default=None, alias="X-CloudTasks-TaskRetryCount"),
+    authorization: str | None = Header(default=None, alias="Authorization"),
 ) -> dict[str, object]:
     """Process Dub Video synthesize/align stages (Cloud Tasks → private worker)."""
 
-    if os.environ.get("ENVIRONMENT", "").lower() == "production" and not task_name:
-        raise HTTPException(status_code=403, detail="Cloud Tasks request required.")
+    _require_task_invocation(task_name=task_name, authorization=authorization)
 
     from models.dub import DubTaskPayload
     from services.dub_service import process_dub_job

@@ -67,3 +67,35 @@ async def test_body_userid_ignored_uses_jwt():
             await run_pipeline(_req(userId="spoofed"), verified_user_id="jwt-user")
         assert ei.value.status_code == 402
         deduct.assert_awaited_once_with("jwt-user", 20)
+
+
+@pytest.mark.asyncio
+async def test_analysis_failure_refunds_credits():
+    refund = AsyncMock(return_value=True)
+
+    class _Boom(Exception):
+        pass
+
+    with (
+        patch("routers.pipeline_router.is_overloaded", return_value=False),
+        patch(
+            "services.stats_service.deduct_credits",
+            new_callable=AsyncMock,
+            return_value=True,
+        ),
+        patch("routers.pipeline_router._set_pipeline"),
+        patch(
+            "routers.pipeline_router.refund_credits_best_effort",
+            refund,
+        ),
+        patch(
+            "agent.run_viral_pipeline",
+            new_callable=AsyncMock,
+            side_effect=_Boom("gemini down"),
+        ),
+    ):
+        with pytest.raises(HTTPException) as ei:
+            await run_pipeline(_req(), verified_user_id="jwt-user")
+        assert ei.value.status_code == 500
+        refund.assert_awaited()
+        assert refund.await_args.kwargs.get("reason") == "analysis_failed"

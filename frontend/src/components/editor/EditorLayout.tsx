@@ -117,7 +117,10 @@ export default function EditorLayout() {
         sessionStorage.setItem(
           "qai:dub-intent",
           JSON.stringify({
-            targetLang: detail.targetLang ?? "es",
+            targetLang:
+              detail.targetLang ||
+              window.localStorage.getItem("qai:dub-last-lang") ||
+              "es",
             mode: detail.mode ?? "full_dub",
           }),
         );
@@ -239,23 +242,20 @@ export default function EditorLayout() {
   }, []);
 
   // Watchdog: 3-minute window covers first-time Whisper model download (~150 MB).
-  // cancelPipeline() now terminates the worker as well as aborting the audio-fetch
-  // controller, so no ghost clips arrive after the watchdog fires.
+  // Never force ingest "ready" without a transcript — that lied to chat/export.
   useEffect(() => {
     if (currentStage !== "transcribing") return;
     const watchdog = setTimeout(() => {
       if (useEditorStore.getState().currentStage === "transcribing") {
         cancelPipeline();
         setProcessing(false, "idle");
-        useEditorStore
-          .getState()
-          .failIngest(
-            "analysis_failed",
-            "Transcription timed out. Retry analysis — the Whisper model caches after first download.",
-          );
-        toast.info(
-          "Transcription timed out. Tap Retry analysis — the model caches after the first download.",
-          { duration: 12_000 }
+        useEditorStore.getState().failIngest(
+          "timeout",
+          "Transcription timed out. Retry Generate — the model may already be cached.",
+        );
+        toast.warning(
+          "Transcription timed out. Retry Generate — the AI model may already be cached and load faster.",
+          { duration: 12_000 },
         );
       }
     }, 180_000);

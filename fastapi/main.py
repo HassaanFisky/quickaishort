@@ -281,18 +281,32 @@ async def _route_pubsub(channel: str, payload: dict) -> None:
             CHANNEL_EXPORT_FAILED: "error",
         }[channel]
 
+        # User cancel is not a hard failure — keep project usable.
+        cancel_reason = (
+            str(payload.get("reason") or payload.get("error") or "").strip().lower()
+        )
+        if event == "error" and cancel_reason == "cancelled":
+            event = "cancelled"
+
         # Auto-update project status in DB if this belongs to a project
-        if event in ("complete", "error"):
+        if event in ("complete", "error", "cancelled"):
             try:
                 from datetime import datetime, timezone as _tz
 
-                status = "ready" if event == "complete" else "failed"
+                if event == "complete":
+                    status = "ready"
+                elif event == "cancelled":
+                    status = "cancelled"
+                else:
+                    status = "failed"
                 updates: dict = {
                     "status": status,
                     "updated_at": datetime.now(_tz.utc),
                 }
                 if event == "error":
                     updates["error"] = payload.get("error", "Unknown error")
+                elif event == "cancelled":
+                    updates["error"] = "cancelled"
 
                 def _update_project_by_job():
                     snaps = list(
@@ -468,6 +482,14 @@ def get_real_ip(request: Request) -> str:
 limiter = Limiter(key_func=get_real_ip, default_limits=["200/minute"])
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+try:
+    from slowapi.middleware import SlowAPIMiddleware
+
+    app.add_middleware(SlowAPIMiddleware)
+except Exception:  # pragma: no cover — package always present in prod image
+    import logging as _log
+
+    _log.getLogger(__name__).error("SlowAPIMiddleware unavailable — rate limits inert")
 
 allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "")
 origins = [
@@ -643,25 +665,30 @@ def health_check():
     """
     firestore_ok = db_is_ready()
     redis_ok = False
+    pending_depth = -1
     try:
         redis_conn.ping()
         redis_ok = True
+        from services.queue_service import pending_render_depth
+
+        pending_depth = pending_render_depth()
     except Exception:
         pass
 
+    storage_probe = "init_ok" if firestore_ok else "init_failed"
     return {
         "status": "ok",
         # Legacy boolean field kept for backward compatibility with external monitors.
         "mongo": firestore_ok,
         "redis": redis_ok,
         "adk": _ADK_AVAILABLE,
-        # GCS is the single storage source of truth for uploads/exports. It shares
-        # one init path with Firestore in services/db.py, so this mirrors that flag:
-        # if the service-account credentials are missing/bad, init fails and gcs=false.
+        # GCS init shares db.py with Firestore; this is NOT a live bucket I/O probe.
         "gcs": firestore_ok,
         # Detailed v2 fields.
         "firestore_status": "connected" if firestore_ok else "disconnected",
-        "storage_status": "connected" if firestore_ok else "disconnected",
+        "storage_status": storage_probe,
+        "storage_probe": storage_probe,
+        "pending_renders": pending_depth,
         "redis_status": "ready" if redis_ok else "unreachable",
         "agent_ready_state": "ready" if _ADK_AVAILABLE else "unavailable",
         "build_sha": os.getenv("BUILD_SHA", "dev"),
@@ -696,7 +723,10 @@ def readiness_check():
 
 
 @app.get("/metrics")
-def prometheus_metrics():
+def prometheus_metrics(
+    x_admin_secret: Optional[str] = Header(None, alias="X-Admin-Secret"),
+):
+    _require_admin(x_admin_secret)
     """
     Prometheus-compatible metrics endpoint.
 
@@ -788,9 +818,14 @@ async def stream_info(
     video_id = _require_youtube_url(url)
     result = await get_stream_manifests(video_id)
     if result.get("status") != "ready":
+        logger.warning(
+            "stream_info_unavailable video_id=%s err=%s",
+            video_id,
+            result.get("error"),
+        )
         raise HTTPException(
             status_code=503,
-            detail=f"Stream info unavailable: {result.get('error', 'unknown error')}",
+            detail="Stream info unavailable. Try again or upload an MP4.",
         )
     return result
 
@@ -806,17 +841,17 @@ async def analyze_video(
     verified_user_id: str = Depends(get_verified_user_id),
 ):
     user_id = verified_user_id or body.userId or "anonymous"
+    charged = False
     try:
         await _admit_user_workload(
             user_id=user_id,
             workload_id=body.videoId,
             query="viral video analysis",
         )
-        if not await deduct_credits(user_id, 10):
-            raise HTTPException(
-                status_code=402,
-                detail="Insufficient credits. Please upgrade your plan to continue.",
-            )
+        from services.credit_guard import require_credits, refund_credits_best_effort
+
+        await require_credits(user_id, 10, route="analyze")
+        charged = True
 
         agent = _load_agent_module("agent.viral_agent").get_viral_agent()
         transcript_text = " ".join(c.text for c in body.transcript)
@@ -837,10 +872,28 @@ async def analyze_video(
             "status": "success",
         }
     except HTTPException:
+        if charged:
+            from services.credit_guard import refund_credits_best_effort
+
+            await refund_credits_best_effort(
+                user_id, 10, reason="http_error", route="analyze"
+            )
         raise
     except (GeminiBackpressureError, GeminiBackpressureUnavailable):
+        if charged:
+            from services.credit_guard import refund_credits_best_effort
+
+            await refund_credits_best_effort(
+                user_id, 10, reason="gemini_backpressure", route="analyze"
+            )
         raise
     except Exception as exc:
+        if charged:
+            from services.credit_guard import refund_credits_best_effort
+
+            await refund_credits_best_effort(
+                user_id, 10, reason="analysis_failed", route="analyze"
+            )
         logger.exception("/api/analyze failed: %s", exc)
         raise HTTPException(
             status_code=500, detail="Analysis failed. Please try again."
@@ -923,11 +976,9 @@ async def export_video(
         query="video export",
         projected_storage_bytes=projected_storage,
     )
-    if not await deduct_credits(user_id, 20):
-        raise HTTPException(
-            status_code=402,
-            detail="Insufficient credits. Please upgrade your plan to continue.",
-        )
+    from services.credit_guard import require_credits, refund_credits_best_effort
+
+    await require_credits(user_id, 20, route="process-video")
 
     job_id = uuid.uuid4().hex
 
@@ -1001,7 +1052,21 @@ async def export_video(
         )
     except Exception as exc:
         logger.exception("Failed to enqueue export %s: %s", job_id, exc)
-        raise HTTPException(status_code=503, detail=f"Queue error: {exc}")
+        await refund_credits_best_effort(
+            user_id, 20, reason="dispatch_failed", route="process-video"
+        )
+        raise HTTPException(
+            status_code=503,
+            detail="Render queue unavailable. Credits were not charged — try again.",
+        ) from exc
+
+    try:
+        redis_conn.hset(
+            f"render:meta:{job_id}",
+            mapping={"credits_charged": "20"},
+        )
+    except Exception as exc:
+        logger.warning("render_credits_stamp_failed job_id=%s err=%s", job_id, exc)
 
     return {
         "status": "queued",
@@ -1037,14 +1102,17 @@ async def export_status(
         "dead": "failed",
         "cancelled": "canceled",
         "superseded": "canceled",
-        "duplicate": "started",
+        # Duplicate means another worker already owns the upload — terminal for FE.
+        "duplicate": "failed",
     }
     status = status_map.get(internal_status, "unknown")
     response: dict = {"status": status, "job_id": job_id}
     if status == "finished":
         response["download_url"] = _build_download_url(job_id, verified_user_id)
     elif status == "failed":
-        response["error"] = meta.get("error", "failed")
+        response["error"] = meta.get("error") or (
+            "duplicate_job" if internal_status == "duplicate" else "failed"
+        )
     return response
 
 
@@ -1120,7 +1188,32 @@ async def cancel_render(
     except Exception as exc:
         logger.warning("cancel_render_publish_failed job_id=%s error=%s", job_id, exc)
 
-    return {"status": "cancelled", "job_id": job_id, "rq_cancelled": rq_cancelled}
+    # Refund only when work was not delivered and we have not refunded already.
+    refunded = False
+    prior_status = (meta.get("status") or "").strip().lower()
+    if prior_status != "success":
+        try:
+            charged_raw = meta.get("credits_charged") or "0"
+            charged = int(float(charged_raw))
+        except (TypeError, ValueError):
+            charged = 0
+        if charged > 0:
+            from services.credit_guard import claim_once, refund_credits_best_effort
+
+            if claim_once(f"render:credit_refund:{job_id}", ttl_sec=7 * 86400):
+                refunded = await refund_credits_best_effort(
+                    verified_user_id,
+                    charged,
+                    reason="user_cancel",
+                    route="render-cancel",
+                )
+
+    return {
+        "status": "cancelled",
+        "job_id": job_id,
+        "rq_cancelled": rq_cancelled,
+        "credits_refunded": refunded,
+    }
 
 
 @app.get("/api/render/dead")
@@ -1362,15 +1455,18 @@ async def export_download(job_id: str, user_id: str, token: str, expires: int):
         await asyncio.to_thread(blob.reload)
         file_size = blob.size or 0
 
-        data = await asyncio.to_thread(blob.download_as_bytes)
-
-        async def stream_gcs():
-            chunk_size = 256 * 1024
-            for i in range(0, len(data), chunk_size):
-                yield data[i : i + chunk_size]
+        # Prefer true generator via to_thread per-chunk would be chatty; use
+        # sync iterator wrapped so memory stays bounded to one chunk at a time.
+        def stream_gcs_sync():
+            with blob.open("rb") as handle:
+                while True:
+                    chunk = handle.read(256 * 1024)
+                    if not chunk:
+                        break
+                    yield chunk
 
         return StreamingResponse(
-            stream_gcs(),
+            stream_gcs_sync(),
             media_type="video/mp4",
             headers={
                 "Content-Disposition": f'attachment; filename="{job_id}.mp4"',
@@ -1400,7 +1496,7 @@ async def stats_endpoint(
 
 
 @app.websocket("/ws/stats/{user_id}")
-async def stats_ws(websocket: WebSocket, user_id: str, token: str = ""):
+async def stats_ws(websocket: WebSocket, user_id: str, token: str = Query(default="")):
     """Authenticated stats stream — JWT via ?token= (browsers cannot set WS headers)."""
     from services.auth import verify_bearer_token
     from fastapi import HTTPException as _HTTPException
@@ -1433,8 +1529,9 @@ async def stats_ws(websocket: WebSocket, user_id: str, token: str = ""):
 # ---- yt-dlp passthroughs (unchanged behaviour) -------------------------------
 
 
+@limiter.limit("30/minute")
 @app.get("/api/info")
-async def get_video_info(url: str):
+async def get_video_info(request: Request, url: str):
     """
     Returns video metadata for a YouTube URL.
 
@@ -1519,8 +1616,9 @@ async def get_video_info(url: str):
     }
 
 
+@limiter.limit("20/minute")
 @app.get("/api/proxy")
-async def proxy_video(url: str):
+async def proxy_video(request: Request, url: str):
     _require_youtube_url(url)
 
     import httpx
@@ -1620,8 +1718,9 @@ async def proxy_video(url: str):
         )
 
 
+@limiter.limit("40/minute")
 @app.head("/api/proxy-video")
-async def proxy_video_stream_head(url: str):
+async def proxy_video_stream_head(request: Request, url: str):
     """
     Immediate HEAD response — lets browsers probe the endpoint without triggering
     a full yt-dlp extraction. Returns Accept-Ranges so browsers know seeking works.
@@ -1641,6 +1740,7 @@ async def proxy_video_stream_head(url: str):
     )
 
 
+@limiter.limit("40/minute")
 @app.get("/api/proxy-video")
 async def proxy_video_stream(url: str, request: Request):
     """
@@ -1822,8 +1922,9 @@ async def proxy_video_stream(url: str, request: Request):
         raise HTTPException(status_code=500, detail="Stream error — please try again.")
 
 
+@limiter.limit("20/minute")
 @app.get("/api/audio")
-async def get_audio(url: str = Query(...)):
+async def get_audio(request: Request, url: str = Query(...)):
     """Serves the audio stream for a given YouTube URL with 100% reliability fallbacks."""
     from services.cobalt_client import download_audio as cobalt_download
 
@@ -2101,6 +2202,11 @@ async def run_preflight(
         }
 
     except (GeminiBackpressureError, GeminiBackpressureUnavailable):
+        from services.credit_guard import refund_credits_best_effort
+
+        await refund_credits_best_effort(
+            user_id, 50, reason="gemini_backpressure", route="preflight"
+        )
         raise
     except Exception as primary_exc:
         # Classify the failure type for logging
@@ -2175,6 +2281,11 @@ async def run_preflight(
                 "preflight_fallback_failed user=%s error=%s", user_id, str(fb_exc)[:200]
             )
             # Both strategies exhausted — now raise
+            from services.credit_guard import refund_credits_best_effort
+
+            await refund_credits_best_effort(
+                user_id, 50, reason="analysis_failed", route="preflight"
+            )
             if isinstance(primary_exc, asyncio.TimeoutError):
                 raise HTTPException(
                     status_code=504,
@@ -2183,7 +2294,10 @@ async def run_preflight(
                         "Try again with a shorter clip."
                     ),
                 )
-            raise HTTPException(status_code=500, detail=str(primary_exc))
+            raise HTTPException(
+                status_code=500,
+                detail="Pre-Flight analysis failed. Credits were refunded — try again.",
+            )
 
 
 @limiter.limit("10/minute")
@@ -2227,29 +2341,45 @@ async def run_director(
         # Re-raise HTTP exceptions (like 402) so they aren't swallowed by the broad except
         raise
     except asyncio.TimeoutError:
+        from services.credit_guard import refund_credits_best_effort
+
+        await refund_credits_best_effort(user_id, 30, reason="timeout", route="direct")
         raise HTTPException(
             status_code=504, detail="Storyboard generation timed out after 120 seconds."
         )
     except (GeminiBackpressureError, GeminiBackpressureUnavailable):
+        from services.credit_guard import refund_credits_best_effort
+
+        await refund_credits_best_effort(
+            user_id, 30, reason="gemini_backpressure", route="direct"
+        )
         raise
     except Exception as exc:
         logger.error("POST /api/direct failed: %s", exc)
+        from services.credit_guard import refund_credits_best_effort
+
+        await refund_credits_best_effort(
+            user_id, 30, reason="generation_failed", route="direct"
+        )
         raise HTTPException(
             status_code=500, detail="Storyboard generation failed. Please try again."
         )
 
 
+@limiter.limit("5/minute")
 @app.post("/api/create-video")
 async def create_video(
-    request: CreateVideoRequest, verified_user_id: str = Depends(get_verified_user_id)
+    request: Request,
+    body: CreateVideoRequest,
+    verified_user_id: str = Depends(get_verified_user_id),
 ):
     """
     Runs: ScriptAgent → PreFlight → RenderService (Background)
     """
-    user_id = verified_user_id or request.user_id
+    user_id = verified_user_id or body.user_id
     workload_id = hashlib.sha256(
         json.dumps(
-            {"script": request.script, "clip_paths": request.clip_paths},
+            {"script": body.script, "clip_paths": body.clip_paths},
             sort_keys=True,
             separators=(",", ":"),
         ).encode("utf-8")
@@ -2257,13 +2387,13 @@ async def create_video(
     await _admit_user_workload(
         user_id=user_id,
         workload_id=workload_id,
-        query=request.script,
+        query=body.script,
     )
     try:
         from agent.script_agent import ScriptAgent
 
         agent = ScriptAgent()
-        production_plan = await agent.run(request.script, request.clip_paths)
+        production_plan = await agent.run(body.script, body.clip_paths)
 
         job_id = f"gen-{uuid.uuid4().hex}"
 
@@ -2382,8 +2512,15 @@ async def liveness():
 
 @app.get("/health/ready")
 async def readiness():
-    # Relaxed DB check: remain ready even if DB is transiently offline
-    return {"status": "ready"}
+    """Cloud Run may probe this path — require Redis so we never false-green."""
+    try:
+        redis_conn.ping()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={"status": "not_ready", "dependency": "redis"},
+        ) from exc
+    return {"status": "ready", "redis": True}
 
 
 @app.get("/health/startup")
@@ -2510,6 +2647,7 @@ async def adk_enhance(
         raise HTTPException(status_code=500, detail="Failed to enhance script")
 
 
+@limiter.limit("5/minute")
 @app.post("/api/adk/generate")
 async def adk_generate(
     request: Request,
@@ -2546,50 +2684,76 @@ async def adk_generate(
         )
 
     from services.adk_service import ADKService
+    from services.credit_guard import refund_credits_best_effort
 
-    plan = await ADKService.generate_production_plan(
-        script=body.script,
-        voice_id=body.voice_id,
-        uploaded_file_ids=body.uploaded_file_ids,
-        user_id=user_id,
-        stock_query=body.stock_query,
-        aspect_ratio=body.aspect_ratio,
-    )
-
-    job_id = uuid.uuid4().hex
-    project_svc = get_project_service()
-    project_id = await project_svc.create_project(
-        user_id,
-        f"Short - {datetime.now().strftime('%Y-%m-%d %H:%M')}",
-        body.script,
-    )
-
-    await project_svc.update_project(
-        project_id,
-        user_id,
-        {
-            "status": "processing",
-            "job_id": job_id,
-            "segments": plan["segments"],
-            "voice_id": body.voice_id,
-            "aspect_ratio": body.aspect_ratio,
-        },
-    )
-
-    await dispatch_render_task(
-        RenderTaskPayload(
-            job_id=job_id,
-            video_id="adk-generated",
-            start_sec=0.0,
-            end_sec=0.0,
+    job_id = ""
+    project_id = ""
+    try:
+        plan = await ADKService.generate_production_plan(
+            script=body.script,
+            voice_id=body.voice_id,
+            uploaded_file_ids=body.uploaded_file_ids,
             user_id=user_id,
-            options={
-                "production_plan": plan,
-                "quality": body.quality,
+            stock_query=body.stock_query,
+            aspect_ratio=body.aspect_ratio,
+        )
+
+        job_id = uuid.uuid4().hex
+        project_svc = get_project_service()
+        project_id = await project_svc.create_project(
+            user_id,
+            f"Short - {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+            body.script,
+        )
+
+        await project_svc.update_project(
+            project_id,
+            user_id,
+            {
+                "status": "processing",
+                "job_id": job_id,
+                "segments": plan["segments"],
+                "voice_id": body.voice_id,
                 "aspect_ratio": body.aspect_ratio,
             },
         )
-    )
+
+        await dispatch_render_task(
+            RenderTaskPayload(
+                job_id=job_id,
+                video_id="adk-generated",
+                start_sec=0.0,
+                end_sec=0.0,
+                user_id=user_id,
+                options={
+                    "production_plan": plan,
+                    "quality": body.quality,
+                    "aspect_ratio": body.aspect_ratio,
+                },
+            )
+        )
+    except HTTPException:
+        await refund_credits_best_effort(
+            user_id, 50, reason="adk_http_fail", route="adk-generate"
+        )
+        raise
+    except Exception as exc:
+        logger.exception("adk_generate_failed user=%s", user_id)
+        await refund_credits_best_effort(
+            user_id, 50, reason="adk_failed", route="adk-generate"
+        )
+        raise HTTPException(
+            status_code=503,
+            detail="ADK generate failed. Credits were refunded — try again.",
+        ) from exc
+
+    try:
+        redis_conn.hset(
+            f"render:meta:{job_id}",
+            mapping={"credits_charged": "50"},
+        )
+    except Exception as exc:
+        logger.warning("adk_credits_stamp_failed job_id=%s err=%s", job_id, exc)
 
     from services.stats_service import increment_stats
 
@@ -2757,7 +2921,10 @@ async def get_presigned_upload_url(
         )
     except RuntimeError as exc:
         logger.error("presigned_url_failed user=%s: %s", verified_user_id, exc)
-        raise HTTPException(status_code=503, detail=str(exc))
+        raise HTTPException(
+            status_code=503,
+            detail="Upload service temporarily unavailable. Try again shortly.",
+        ) from exc
     except Exception as exc:
         logger.exception("presigned_url_unexpected user=%s: %s", verified_user_id, exc)
         raise HTTPException(status_code=500, detail="Could not generate upload URL")

@@ -179,7 +179,7 @@ export function CommandPalette() {
           </CommandItem>
           <CommandItem onSelect={() => runCommand(() => router.push("/adk"))}>
             <Bot className="mr-2 h-4 w-4" />
-            <span>ADK (Coming Soon)</span>
+            <span>ADK Studio (Coming Soon)</span>
           </CommandItem>
           <CommandItem onSelect={() => runCommand(() => router.push("/history"))}>
             <History className="mr-2 h-4 w-4" />

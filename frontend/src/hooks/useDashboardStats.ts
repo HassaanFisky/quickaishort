@@ -119,13 +119,16 @@ function openWebSocket(
     try {
       const { getSession } = await import("next-auth/react");
       const session = await getSession();
-      const token = session?.backendToken;
+      const token =
+        typeof session?.backendToken === "string" ? session.backendToken : "";
       if (!token) {
         if (alive()) setTransport("rest");
         return;
       }
+      if (!alive()) return;
+      const qs = new URLSearchParams({ token });
       const socket = new WebSocket(
-        `${wsBase}/ws/stats/${encodeURIComponent(userId)}?token=${encodeURIComponent(token)}`,
+        `${wsBase}/ws/stats/${encodeURIComponent(userId)}?${qs.toString()}`,
       );
       wsRef.current = socket;
       socket.onopen = () => {

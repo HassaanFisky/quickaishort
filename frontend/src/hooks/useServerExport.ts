@@ -10,9 +10,11 @@ import { generateSRT } from "@/lib/utils/srtGenerator";
 import {
   API_URL,
   buildExportDownloadUrl,
+  cancelExportJob,
   getExportStatus,
   requestExport,
 } from "@/lib/api";
+import { formatApiDetail } from "@/lib/authenticatedFetch";
 import type {
   CanvasOverlay,
   ExportAspect,
@@ -188,7 +190,23 @@ export function useServerExport({ userId }: UseServerExportArgs) {
         }
       });
       channel.bind("error", (data: { error?: string }) => {
-        finishFailure(data?.error ?? "Render failed");
+        const err = String(data?.error ?? "");
+        if (err.toLowerCase() === "cancelled") {
+          cleanup();
+          setIsExporting(false);
+          setExportProgress(0);
+          setActiveJobId(null);
+          toast.info("Export cancelled.");
+          return;
+        }
+        finishFailure(err || "Render failed");
+      });
+      channel.bind("cancelled", () => {
+        cleanup();
+        setIsExporting(false);
+        setExportProgress(0);
+        setActiveJobId(null);
+        toast.info("Export cancelled.");
       });
 
       // Belt-and-braces: also poll periodically. If Pusher delivers first, the
@@ -363,13 +381,13 @@ export function useServerExport({ userId }: UseServerExportArgs) {
         subscribeRealtime(job_id);
       } catch (err: unknown) {
         if (axios.isAxiosError(err)) {
-          const backendMsg =
-            err.response?.data?.detail ||
-            err.response?.data?.message ||
-            err.response?.data?.error ||
-            err.message ||
-            "Failed to queue export";
-          finishFailure(typeof backendMsg === "string" ? backendMsg : JSON.stringify(backendMsg));
+          const backendMsg = formatApiDetail(
+            err.response?.data?.detail ??
+              err.response?.data?.message ??
+              err.response?.data?.error,
+            err.response?.status ?? 500,
+          );
+          finishFailure(backendMsg || err.message || "Failed to queue export");
         } else {
           finishFailure(err instanceof Error ? err.message : "Failed to queue export");
         }
@@ -380,6 +398,30 @@ export function useServerExport({ userId }: UseServerExportArgs) {
 
   return {
     exportClip,
+    cancelExport: async () => {
+      const jobId = activeJobId;
+      cleanup();
+      setIsExporting(false);
+      setExportProgress(0);
+      setActiveJobId(null);
+      if (!jobId) {
+        toast.info("Export cancelled.");
+        return;
+      }
+      try {
+        await cancelExportJob(jobId);
+        toast.success("Export cancelled.");
+      } catch (err: unknown) {
+        if (axios.isAxiosError(err)) {
+          toast.error(
+            formatApiDetail(err.response?.data?.detail, err.response?.status ?? 500) ||
+              "Could not cancel export on server.",
+          );
+        } else {
+          toast.error("Could not cancel export on server.");
+        }
+      }
+    },
     isExporting,
     exportProgress,
     activeJobId,

@@ -150,7 +150,7 @@ async def reserve_credits(user_id: str, amount: int) -> bool:
 
 
 async def refund_credits(user_id: str, amount: int) -> bool:
-    """Return previously reserved credits after a hard AI failure."""
+    """Return credits after a failed or cache-hit AI turn (never goes unbounded)."""
     if not user_id or user_id == "anonymous" or amount <= 0:
         return False
     if not is_ready():
@@ -166,7 +166,8 @@ async def refund_credits(user_id: str, amount: int) -> bool:
             if not snap.exists:
                 return None
             data = snap.to_dict() or {}
-            new_balance = int(data.get("credits_balance", 0)) + int(amount)
+            balance = int(data.get("credits_balance", 0) or 0)
+            new_balance = balance + amount
             transaction.update(
                 doc_ref,
                 {
@@ -192,6 +193,7 @@ async def refund_credits(user_id: str, amount: int) -> bool:
         await emit_stats_updated(user_id, payload)
     except Exception:
         pass
+    logger.info("credit_refunded user_id=%s amount=%d", user_id, amount)
     return True
 
 

@@ -122,9 +122,12 @@ export function useIngestLifecycle(opts: {
   } = useEditorStore();
 
   const beginIngest = useCallback(() => {
+    ingestGenRef.current += 1;
+    uploadAbortRef.current?.abort();
+    cancelPipeline();
     resetIngestLifecycle();
     setIngestStage("identify");
-  }, [resetIngestLifecycle, setIngestStage]);
+  }, [cancelPipeline, resetIngestLifecycle, setIngestStage]);
 
   const bumpGen = useCallback(() => {
     ingestGenRef.current += 1;
@@ -287,9 +290,11 @@ export function useIngestLifecycle(opts: {
               });
               return;
             } else if (axErr.response) {
-              errMsg =
-                axErr.response.data?.detail ||
-                `Server error ${axErr.response.status}`;
+              const { formatApiDetail } = await import("@/lib/authenticatedFetch");
+              errMsg = formatApiDetail(
+                axErr.response.data?.detail,
+                axErr.response.status,
+              );
             }
           } else if (error instanceof Error) {
             errMsg = error.message || errMsg;

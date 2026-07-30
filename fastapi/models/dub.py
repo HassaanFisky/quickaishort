@@ -77,6 +77,7 @@ class DubJobStatus(BaseModel):
     fallback_reason: Optional[str] = None
     error: Optional[str] = None
     cache_hit: bool = False
+    credits_charged: int = Field(default=0, ge=0, le=10_000)
     created_at: float
     updated_at: float
 

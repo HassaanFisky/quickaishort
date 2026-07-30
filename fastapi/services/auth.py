@@ -29,14 +29,14 @@ def verify_bearer_token(token: str) -> str:
             status_code=503,
             detail="Authentication service misconfigured. Contact support.",
         )
-    if not token:
+    if not token or not str(token).strip():
         raise HTTPException(
             status_code=401,
             detail="Missing authorization token.",
         )
     try:
         payload = _jwt.decode(
-            token,
+            str(token).strip(),
             _NEXTAUTH_SECRET,
             algorithms=[_ALGORITHM],
             leeway=30,
@@ -45,6 +45,8 @@ def verify_bearer_token(token: str) -> str:
         if not user_id:
             raise HTTPException(status_code=401, detail="Token missing user identity.")
         return str(user_id)
+    except HTTPException:
+        raise
     except _jwt.PyJWTError as exc:
         logger.warning("JWT verification failed: %s", exc)
         raise HTTPException(status_code=401, detail="Invalid or expired token.")
@@ -62,3 +64,7 @@ def get_verified_user_id(
     if authorization.lower().startswith("bearer "):
         token = authorization[7:].strip()
     return verify_bearer_token(token)
+
+
+# Back-compat alias for older call sites.
+verify_access_token = verify_bearer_token

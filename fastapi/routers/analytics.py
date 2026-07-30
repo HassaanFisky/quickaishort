@@ -9,12 +9,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import statistics
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from services.db import get_db, is_ready
@@ -26,6 +27,13 @@ router = APIRouter(prefix="/api/analytics", tags=["analytics"])
 COLLECTION = "analytics_events"
 MAX_EVENTS_PER_BATCH = 200
 SUMMARY_SCAN_LIMIT = 5000
+
+
+def _require_admin(secret: str | None) -> None:
+    expected = (os.environ.get("ADMIN_SECRET") or "").strip()
+    provided = (secret or "").strip()
+    if not expected or provided != expected:
+        raise HTTPException(status_code=403, detail="Forbidden")
 
 
 class AnalyticsEventIn(BaseModel):
@@ -78,7 +86,11 @@ async def ingest_events(batch: AnalyticsBatchIn) -> dict:
 
 
 @router.get("/summary")
-async def get_summary(days: int = 7) -> dict:
+async def get_summary(
+    days: int = 7,
+    x_admin_secret: str | None = Header(None, alias="X-Admin-Secret"),
+) -> dict:
+    _require_admin(x_admin_secret)
     if days < 1 or days > 90:
         raise HTTPException(status_code=400, detail="days must be between 1 and 90")
 

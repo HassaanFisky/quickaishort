@@ -209,7 +209,7 @@ def _build_viral_pipeline():
     # Configure retry options for Gemini API (429/5xx protection)
     retry_config = genai_types.HttpRetryOptions(
         initial_delay=2.0,
-        attempts=5,
+        attempts=2,
     )
     generate_config = genai_types.GenerateContentConfig(
         http_options=genai_types.HttpOptions(retry_options=retry_config)

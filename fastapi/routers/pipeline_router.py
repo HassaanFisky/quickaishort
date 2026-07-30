@@ -3,10 +3,8 @@
 Adapts the sprint's "Objective 7" to the real architecture:
 - There is no server-side ASR (Whisper runs in the browser), so the caller
   supplies the transcript the editor already produced.
-- Clip scoring uses the real ADK viral pipeline (run_viral_pipeline), NOT the
-  non-existent ExtractorService.extract_clips().
-- The heavy render still runs on the RQ worker via process_render_task with its
-  real positional signature; we never block a worker by polling inside it.
+- Clip scoring uses the real ADK viral pipeline (run_viral_pipeline).
+- Production render dispatch is Cloud Tasks via dispatch_render_task (RQ local only).
 - Pipeline state lives in a Redis STRING key (pipeline:{id}, JSON) and is merged
   with the live render meta HASH (get_render_status) on read.
 """
@@ -23,19 +21,15 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from services.auth import get_verified_user_id
-from services.queue_service import (
-    redis_conn,
-    render_queue,
-    JOB_TIMEOUT_SECONDS,
-    JOB_RESULT_TTL_SECONDS,
-    JOB_FAILURE_TTL_SECONDS,
-    is_overloaded,
-)
+from services.credit_guard import refund_credits_best_effort, require_credits
+from services.queue_service import is_overloaded, redis_conn
+from services.render_dispatch import RenderTaskPayload, dispatch_render_task
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 PIPELINE_TTL = 7200  # 2 hours
+PIPELINE_CREDIT_COST = 20
 
 
 class PipelineTranscriptChunk(BaseModel):
@@ -78,7 +72,6 @@ async def run_pipeline(
     verified_user_id: str = Depends(get_verified_user_id),
 ):
     """Analyze -> pick top clip -> enqueue render. Returns once the render is queued."""
-    # AuthZ: JWT user is sole tenant id — never trust body userId (TD-LEGACY-01)
     user_id = verified_user_id
     if is_overloaded():
         raise HTTPException(
@@ -89,30 +82,12 @@ async def run_pipeline(
             status_code=400, detail="transcript is required for analysis"
         )
 
-    # Secondary gate: same credit cost as /api/process-video (enqueues a render).
-    # Fail-closed: stats outage must not free-run expensive viral+render work.
-    try:
-        from services.stats_service import deduct_credits
-
-        ok = await deduct_credits(user_id, 20)
-        if not ok:
-            raise HTTPException(
-                status_code=402,
-                detail="Insufficient credits. Please upgrade your plan to continue.",
-            )
-    except HTTPException:
-        raise
-    except Exception as exc:
-        logger.error(
-            "pipeline_credit_deduction_failed user_id=%s err=%s",
-            user_id,
-            exc,
-            exc_info=True,
-        )
-        raise HTTPException(
-            status_code=503,
-            detail="Credit service unavailable. Try again shortly.",
-        ) from exc
+    await require_credits(
+        user_id,
+        PIPELINE_CREDIT_COST,
+        route="pipeline",
+        detail="Insufficient credits. Please upgrade your plan to continue.",
+    )
 
     pipeline_id = uuid.uuid4().hex
     run_id = req.runId or uuid.uuid4().hex
@@ -128,7 +103,6 @@ async def run_pipeline(
         },
     )
 
-    # Step 1 - clip scoring via the real ADK viral pipeline (browser transcript).
     try:
         from agent import run_viral_pipeline
 
@@ -138,18 +112,30 @@ async def run_pipeline(
         )
     except Exception as exc:
         logger.exception("pipeline_analysis_failed pipeline_id=%s", pipeline_id)
+        await refund_credits_best_effort(
+            user_id,
+            PIPELINE_CREDIT_COST,
+            reason="analysis_failed",
+            route="pipeline",
+        )
         _set_pipeline(
             pipeline_id,
             {
                 "pipeline_id": pipeline_id,
                 "status": "failed",
-                "error": f"analysis failed: {exc}"[:300],
+                "error": "analysis failed",
                 "run_id": run_id,
             },
         )
-        raise HTTPException(status_code=500, detail="Pipeline analysis failed")
+        raise HTTPException(status_code=500, detail="Pipeline analysis failed") from exc
 
     if not suggestions:
+        await refund_credits_best_effort(
+            user_id,
+            PIPELINE_CREDIT_COST,
+            reason="no_clips",
+            route="pipeline",
+        )
         _set_pipeline(
             pipeline_id,
             {
@@ -163,11 +149,7 @@ async def run_pipeline(
             status_code=422, detail="No viable clips found in transcript"
         )
 
-    # Step 2 - pick the top clip by viral score.
     top = max(suggestions, key=lambda s: s.viralAnalysis.score)
-
-    # Step 3 - enqueue the render with the REAL positional signature:
-    # (job_id, video_id, start_sec, end_sec, user_id, options, run_id).
     job_id = uuid.uuid4().hex
     options = {
         "aspect_ratio": req.aspect_ratio,
@@ -175,36 +157,46 @@ async def run_pipeline(
         "captions_enabled": bool(top.suggestedCaptions),
     }
     try:
-        from render_worker import process_render_task
-        from rq import Retry as RqRetry
-
-        render_queue.enqueue(
-            process_render_task,
-            job_id,
-            req.videoId,
-            float(top.start),
-            float(top.end),
-            user_id,
-            options,
-            run_id,
-            job_id=job_id,
-            job_timeout=JOB_TIMEOUT_SECONDS,
-            result_ttl=JOB_RESULT_TTL_SECONDS,
-            failure_ttl=JOB_FAILURE_TTL_SECONDS,
-            retry=RqRetry(max=2, interval=[30, 60]),
+        await dispatch_render_task(
+            RenderTaskPayload(
+                job_id=job_id,
+                video_id=req.videoId,
+                start_sec=float(top.start),
+                end_sec=float(top.end),
+                user_id=user_id,
+                options=options,
+                run_id=run_id,
+            )
         )
     except Exception as exc:
         logger.exception("pipeline_enqueue_failed pipeline_id=%s", pipeline_id)
+        await refund_credits_best_effort(
+            user_id,
+            PIPELINE_CREDIT_COST,
+            reason="dispatch_failed",
+            route="pipeline",
+        )
         _set_pipeline(
             pipeline_id,
             {
                 "pipeline_id": pipeline_id,
                 "status": "failed",
-                "error": f"enqueue failed: {exc}"[:300],
+                "error": "enqueue failed",
                 "run_id": run_id,
             },
         )
-        raise HTTPException(status_code=503, detail="Render queue error")
+        raise HTTPException(
+            status_code=503,
+            detail="Render queue unavailable. Credits were not charged — try again.",
+        ) from exc
+
+    try:
+        redis_conn.hset(
+            f"render:meta:{job_id}",
+            mapping={"credits_charged": str(PIPELINE_CREDIT_COST)},
+        )
+    except Exception as exc:
+        logger.warning("pipeline_credits_stamp_failed job_id=%s err=%s", job_id, exc)
 
     _set_pipeline(
         pipeline_id,
@@ -219,16 +211,15 @@ async def run_pipeline(
                 "start": top.start,
                 "end": top.end,
                 "score": top.viralAnalysis.score,
-                "reason": top.reason,
             },
             "created_at": time.time(),
         },
     )
-
     return {
         "pipeline_id": pipeline_id,
         "status": "rendering",
-        "render_job_id": job_id,
+        "job_id": job_id,
+        "run_id": run_id,
         "top_clip": {
             "start": top.start,
             "end": top.end,
@@ -238,28 +229,28 @@ async def run_pipeline(
 
 
 @router.get("/api/pipeline/{pipeline_id}/status")
-async def get_pipeline_status(
+async def pipeline_status(
     pipeline_id: str,
     verified_user_id: str = Depends(get_verified_user_id),
 ):
-    """Compose the pipeline record with the live render status hash."""
     data = _get_pipeline(pipeline_id)
-    if not data:
-        raise HTTPException(status_code=404, detail="Pipeline not found or expired")
-    if data.get("user_id") and data.get("user_id") != verified_user_id:
-        raise HTTPException(status_code=404, detail="Pipeline not found or expired")
+    if data is None:
+        raise HTTPException(status_code=404, detail="Pipeline not found")
+    if data.get("user_id") and data["user_id"] != verified_user_id:
+        raise HTTPException(status_code=404, detail="Pipeline not found")
 
     render_job_id = data.get("render_job_id")
     if render_job_id:
-        from services.render_queue import get_render_status
+        try:
+            from services.render_queue import get_render_status
 
-        render_status = get_render_status(render_job_id)
-        data["render"] = render_status
-        rstatus = render_status.get("status")
-        if rstatus == "success":
-            data["status"] = "done"
-            data["rendered_url"] = render_status.get("rendered_url", "")
-        elif rstatus in ("dead", "cancelled"):
-            data["status"] = "failed"
-
+            meta = get_render_status(render_job_id)
+            data["render"] = meta
+            internal = meta.get("status")
+            if internal == "success":
+                data["status"] = "completed"
+            elif internal in {"dead", "cancelled", "superseded", "duplicate"}:
+                data["status"] = "failed"
+        except Exception:
+            pass
     return data

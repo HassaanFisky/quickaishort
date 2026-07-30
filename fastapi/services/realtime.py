@@ -132,3 +132,25 @@ async def emit_export_event(
         except Exception as exc:
             logger.error("Pusher trigger failed for export %s: %s", job_id, exc)
     await ws_manager.broadcast(user_id, f"export:{event}", payload)
+
+
+async def emit_dub_event(
+    user_id: str,
+    job_id: str,
+    event: str,
+    payload: dict[str, Any],
+) -> None:
+    """Dual-publish a per-job Dub Video event (progress/complete/failed)."""
+    payload = _serializable({**payload, "job_id": job_id})
+    client = _init_pusher()
+    if client is not None:
+        try:
+            await asyncio.to_thread(
+                client.trigger,
+                f"dub-{job_id}",
+                event,
+                payload,
+            )
+        except Exception as exc:
+            logger.error("Pusher trigger failed for dub %s: %s", job_id, exc)
+    await ws_manager.broadcast(user_id, f"dub:{event}", payload)

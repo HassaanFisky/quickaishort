@@ -42,13 +42,19 @@ async def start_dub_job(
             detail="Choose a non-English target language for Dub Video.",
         )
 
-    # Fail-closed credits before any Gemini/TTS spend
+    # Create/reuse job first so cache hits never burn credits.
+    job = await create_job(body, verified_user_id)
+    if job.cache_hit:
+        return job
+
+    # Fail-closed credits only for new billable work (Gemini/TTS spend).
     cost = credit_cost_for_mode(body.mode)
     try:
         from services.stats_service import deduct_credits
 
         ok = await deduct_credits(verified_user_id, cost)
         if not ok:
+            mark_cancelled(job.job_id)
             raise HTTPException(
                 status_code=402,
                 detail=f"Insufficient credits. Dub Video requires {cost} credits.",
@@ -56,19 +62,33 @@ async def start_dub_job(
     except HTTPException:
         raise
     except Exception as exc:
+        mark_cancelled(job.job_id)
         logger.exception("dub_credits_gate_failed user=%s", verified_user_id)
         raise HTTPException(
             status_code=503,
             detail="Credits service unavailable. Dub Video blocked fail-closed.",
         ) from exc
 
-    job = await create_job(body, verified_user_id)
-    if job.cache_hit:
-        return job
+    job = _update(job, credits_charged=cost)
+    try:
+        await dispatch_dub_processing(
+            job.job_id, verified_user_id, run_id=body.run_id or ""
+        )
+    except Exception as exc:
+        from services.credit_guard import refund_credits_best_effort
 
-    await dispatch_dub_processing(
-        job.job_id, verified_user_id, run_id=body.run_id or ""
-    )
+        mark_cancelled(job.job_id)
+        await refund_credits_best_effort(
+            verified_user_id,
+            cost,
+            reason="dispatch_failed",
+            route="dub",
+        )
+        logger.exception("dub_dispatch_failed job=%s", job.job_id)
+        raise HTTPException(
+            status_code=503,
+            detail="Dub queue unavailable. Credits were not charged — try again.",
+        ) from exc
     refreshed = load_job(job.job_id) or job
     return refreshed
 
@@ -95,4 +115,15 @@ async def cancel_dub_job(
     if job.status in {"ready", "degraded", "failed", "cancelled"}:
         return job
     mark_cancelled(job_id)
+    charged = int(job.credits_charged or 0)
+    if charged > 0:
+        from services.credit_guard import claim_once, refund_credits_best_effort
+
+        if claim_once(f"dub:credit_refund:{job_id}", ttl_sec=7 * 86400):
+            await refund_credits_best_effort(
+                verified_user_id,
+                charged,
+                reason="user_cancel",
+                route="dub-cancel",
+            )
     return _update(job, status="cancelled", progress=100, message="Cancelled")

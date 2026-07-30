@@ -321,6 +321,8 @@ async def _async_process_render_task(
     user_id: str,
     options: dict,
     run_id: str = "",
+    *,
+    attempt_number: int = 1,
 ) -> dict:
     """Actual async implementation that shares a single event loop."""
     started_at = time.time()
@@ -346,12 +348,41 @@ async def _async_process_render_task(
 
     production_plan = options.get("production_plan")
     render_manifest = options.get("render_manifest")
+    _ = attempt_number  # Cloud Tasks path; RQ still derives attempt from job header
+
+    # O1 early cancel/stale-run guard: cancel bumps render:runid — exit before
+    # ffmpeg/GCS spend, and never overwrite a newer owner with this run_id.
+    if run_id:
+        try:
+            _owner = redis_conn.get(_RUNID_KEY.format(job_id))
+            if isinstance(_owner, (bytes, bytearray)):
+                _owner = _owner.decode()
+            if _owner and _owner != run_id:
+                logger.warning(
+                    "stale_run_early_exit job_id=%s my_run=%s current=%s",
+                    job_id,
+                    run_id,
+                    _owner,
+                )
+                try:
+                    redis_conn.hset(
+                        _META_KEY.format(job_id),
+                        mapping={"status": "superseded"},
+                    )
+                except Exception:
+                    pass
+                return {"status": "superseded", "job_id": job_id}
+        except Exception as exc:
+            logger.warning(
+                "runid_early_check_failed job_id=%s error=%s",
+                job_id,
+                str(exc)[:200],
+            )
 
     # Phase 61: Manifest compile validation
     if render_manifest:
         try:
             from services.manifest_renderer import compile_manifest_to_ffmpeg
-            import time
 
             t0 = time.time()
 

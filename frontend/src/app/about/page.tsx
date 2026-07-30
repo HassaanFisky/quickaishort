@@ -3,9 +3,9 @@ import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 
 export const metadata: Metadata = {
-  title: "About — Quick AI Shorts",
+  title: "About — QuickAI Short",
   description:
-    "Pre-Flight: the only AI system that simulates 6 audience personas on your clip before you publish.",
+    "Conversational AI video editing: ingest a clip, chat to edit, preview live, and export a short.",
 };
 
 export default function AboutPage() {
@@ -17,20 +17,18 @@ export default function AboutPage() {
           About
         </p>
         <h1 className="mt-3 text-4xl md:text-5xl font-bold tracking-tight">
-          Stop publishing blind.
+          Conversation is the editing workflow.
         </h1>
         <div className="mt-8 space-y-6 text-muted-foreground leading-relaxed">
           <p>
-            Quick AI Shorts is a full-stack short-form video platform — from AI-assisted
-            editing to pre-publication audience validation. Paste a YouTube URL, edit on
-            a multi-track timeline with canvas overlays and AI voice commands, then run
-            your clip through Pre-Flight: six distinct AI audience personas that simulate
-            real viewer behaviour before you ever post.
+            QuickAI Short is a conversational AI video editor. Paste a YouTube URL or
+            upload a file, tell the AI what to cut, caption, or reframe, preview every
+            change live, then export a short when it feels right.
           </p>
           <p>
-            Other tools tell you <em>which clip</em> to cut. We give you the editor to
-            cut it, the AI to direct it, and the intelligence to know <em>if it will
-            work</em> — all in one browser tab.
+            You stay the director. QuickAI performs the craft. The timeline shows the
+            result — chat is how you steer. Optional Pre-Flight audience simulation is
+            a skill when you want a second opinion, not the product&apos;s sole identity.
           </p>
           <p>
             Built by Hassaan Fisky, a solo founder operating from Karachi,

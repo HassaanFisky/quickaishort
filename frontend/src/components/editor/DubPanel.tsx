@@ -11,13 +11,30 @@ import {
 } from "@/lib/studio/dubFsm";
 import { useEditorStore } from "@/stores/editorStore";
 
+function readLastDubLang(): DubTargetLang {
+  if (typeof window === "undefined") return "es";
+  const saved = window.localStorage.getItem("qai:dub-last-lang");
+  if (saved && DUB_LANG_OPTIONS.some((o) => o.code === saved)) {
+    return saved as DubTargetLang;
+  }
+  return "es";
+}
+
 export function DubPanel() {
   const { dubJob, startDub, cancelDub, clearDub, stageLabel } = useDubVideo();
   const hasTranscript = useEditorStore((s) => !!s.transcript?.chunks?.length);
-  const [lang, setLang] = useState<DubTargetLang>("es");
+  const [lang, setLang] = useState<DubTargetLang>(readLastDubLang);
   const [mode, setMode] = useState<DubMode>("full_dub");
   const [showAdvanced, setShowAdvanced] = useState(false);
   const busy = !isDubTerminal(dubJob.status) && dubJob.status !== "idle";
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("qai:dub-last-lang", lang);
+    } catch {
+      /* private mode */
+    }
+  }, [lang]);
 
   useEffect(() => {
     try {
@@ -25,11 +42,12 @@ export function DubPanel() {
       if (!raw) return;
       sessionStorage.removeItem("qai:dub-intent");
       const intent = JSON.parse(raw) as { targetLang?: DubTargetLang; mode?: DubMode };
+      const targetLang = intent.targetLang ?? readLastDubLang();
       if (intent.targetLang) setLang(intent.targetLang);
       if (intent.mode) setMode(intent.mode);
       if (hasTranscript && !busy) {
         void startDub({
-          targetLang: intent.targetLang ?? "es",
+          targetLang,
           mode: intent.mode ?? "full_dub",
         });
       }
@@ -55,19 +73,23 @@ export function DubPanel() {
       </div>
 
       {!hasTranscript && (
-        <p className="text-xs text-amber-400/90 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2">
+        <p
+          role="status"
+          className="text-12 text-amber-400/90 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2"
+        >
           Transcribe the video first, then start Dub Video.
         </p>
       )}
 
       <label className="block space-y-1.5">
-        <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+        <span className="text-12 font-bold uppercase tracking-widest text-muted-foreground">
           Translate to
         </span>
         <select
-          className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+          className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
           value={lang}
           disabled={busy}
+          aria-label="Target language"
           onChange={(e) => setLang(e.target.value as DubTargetLang)}
         >
           {DUB_LANG_OPTIONS.map((o) => (
@@ -78,10 +100,10 @@ export function DubPanel() {
         </select>
       </label>
 
-      <div className="space-y-2">
-        <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+      <fieldset className="space-y-2 border-0 p-0 m-0">
+        <legend className="text-12 font-bold uppercase tracking-widest text-muted-foreground mb-2">
           Output
-        </span>
+        </legend>
         {(
           [
             ["full_dub", "Full dub (voice + subtitles)"],
@@ -91,7 +113,7 @@ export function DubPanel() {
         ).map(([value, label]) => (
           <label
             key={value}
-            className="flex items-center gap-2 text-xs text-foreground/90"
+            className="flex items-center gap-2 text-12 text-foreground/90"
           >
             <input
               type="radio"
@@ -103,17 +125,18 @@ export function DubPanel() {
             {label}
           </label>
         ))}
-      </div>
+      </fieldset>
 
       <button
         type="button"
-        className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground"
+        className="text-12 font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground"
         onClick={() => setShowAdvanced((v) => !v)}
+        aria-expanded={showAdvanced}
       >
         {showAdvanced ? "Hide details" : "More details"}
       </button>
       {showAdvanced && (
-        <p className="text-[11px] text-muted-foreground leading-relaxed">
+        <p className="text-12 text-muted-foreground leading-relaxed">
           Source speech must be English (current transcription model). Voice uses
           Google Neural2. Failed voice falls back to translated subtitles with a
           clear notice — never a fake dub.
@@ -121,29 +144,42 @@ export function DubPanel() {
       )}
 
       {(busy || dubJob.status !== "idle") && (
-        <div className="rounded-lg border border-border bg-card/60 px-3 py-2 space-y-1.5">
+        <div
+          className="rounded-lg border border-border bg-card/60 px-3 py-2 space-y-1.5"
+          role="status"
+          aria-live="polite"
+        >
           <div className="flex items-center justify-between gap-2">
-            <span className="text-xs font-medium text-foreground flex items-center gap-1.5">
-              {busy && <Loader2 className="h-3 w-3 animate-spin" />}
+            <span className="text-12 font-medium text-foreground flex items-center gap-1.5">
+              {busy && <Loader2 className="h-3 w-3 animate-spin" aria-hidden />}
               {stageLabel}
             </span>
-            <span className="text-[10px] text-muted-foreground tabular-nums">
+            <span className="text-12 text-muted-foreground tabular-nums">
               {Math.round(dubJob.progress)}%
             </span>
           </div>
-          <div className="h-1 rounded-full bg-muted overflow-hidden">
+          <div
+            className="h-1 rounded-full bg-muted overflow-hidden"
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round(dubJob.progress)}
+            aria-label="Dub progress"
+          >
             <div
               className="h-full bg-primary transition-all duration-300"
               style={{ width: `${Math.max(2, dubJob.progress)}%` }}
             />
           </div>
           {dubJob.fallbackReason && (
-            <p className="text-[11px] text-amber-300/90">
+            <p className="text-12 text-amber-300/90" role="alert">
               Voice unavailable — showing translated subtitles.
             </p>
           )}
           {dubJob.error && (
-            <p className="text-[11px] text-red-400">{dubJob.error}</p>
+            <p className="text-12 text-red-400" role="alert">
+              {dubJob.error}
+            </p>
           )}
         </div>
       )}

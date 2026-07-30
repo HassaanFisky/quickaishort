@@ -68,7 +68,9 @@ from models.ai_editor import (  # noqa: F401
 
 logger = logging.getLogger(__name__)
 
-MOCK_ENABLED = os.getenv("MOCK_AI_EDITOR", "false").lower() == "true"
+from core.flags import is_mock_ai_editor
+
+MOCK_ENABLED = is_mock_ai_editor()
 
 # Reference canvas dimensions (1080p portrait)
 _CANVAS_W = 1080.0

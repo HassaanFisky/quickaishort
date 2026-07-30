@@ -178,8 +178,8 @@ async def test_cancelled_task_exits_before_tier_lookup_or_render(monkeypatch) ->
     fake_redis.values["render:runid:job-1"] = "cancelled-run"
     monkeypatch.setattr(render_worker, "redis_conn", fake_redis)
     monkeypatch.setattr(render_dispatch, "redis_conn", fake_redis)
-    tier_lookup = AsyncMock()
-    monkeypatch.setattr(render_worker, "check_user_tier", tier_lookup)
+    storage_factory = AsyncMock(side_effect=AssertionError("must not start render"))
+    monkeypatch.setattr(render_worker, "get_storage_service", storage_factory)
 
     result = await render_worker._async_process_render_task(
         "job-1",
@@ -193,13 +193,18 @@ async def test_cancelled_task_exits_before_tier_lookup_or_render(monkeypatch) ->
     )
 
     assert result == {"status": "superseded", "job_id": "job-1"}
-    tier_lookup.assert_not_awaited()
+    storage_factory.assert_not_called()
     assert fake_redis.hashes["render:meta:job-1"]["status"] == "superseded"
+    # Cancel owner must remain — worker must not reclaim the run id.
+    assert fake_redis.values["render:runid:job-1"] == "cancelled-run"
 
 
 @pytest.mark.asyncio
 async def test_renderer_acknowledges_terminal_result(monkeypatch) -> None:
     monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.setattr(
+        render_service_app, "_require_task_invocation", lambda **_: None
+    )
     monkeypatch.setattr(render_service_app, "_ensure_clients", AsyncMock())
     monkeypatch.setattr(
         render_service_app,
@@ -231,6 +236,9 @@ async def test_renderer_acknowledges_terminal_result(monkeypatch) -> None:
 @pytest.mark.asyncio
 async def test_renderer_final_failure_is_5xx_and_cleans_pending(monkeypatch) -> None:
     monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.setattr(
+        render_service_app, "_require_task_invocation", lambda **_: None
+    )
     monkeypatch.setattr(render_service_app, "_ensure_clients", AsyncMock())
     record_failure = AsyncMock()
     monkeypatch.setattr(
@@ -267,6 +275,9 @@ async def test_renderer_intermediate_failure_keeps_pending_for_retry(
     monkeypatch,
 ) -> None:
     monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.setattr(
+        render_service_app, "_require_task_invocation", lambda **_: None
+    )
     monkeypatch.setattr(render_service_app, "_ensure_clients", AsyncMock())
     monkeypatch.setattr(
         render_service_app,

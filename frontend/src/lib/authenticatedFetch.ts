@@ -114,19 +114,38 @@ export async function authenticatedFetch(
  * Call after authenticatedFetch when !response.ok.
  * (401 modal is already signaled by authenticatedFetch on exhausted retry.)
  */
+/** Extract a human-readable message from FastAPI `detail` (string | object | list). */
+export function formatApiDetail(detail: unknown, status: number): string {
+  if (typeof detail === "string" && detail.trim()) return detail;
+  if (Array.isArray(detail)) {
+    const parts = detail
+      .map((item) => {
+        if (typeof item === "string") return item;
+        if (item && typeof item === "object" && "msg" in item) {
+          return String((item as { msg: unknown }).msg);
+        }
+        return null;
+      })
+      .filter(Boolean);
+    if (parts.length) return parts.join("; ");
+  }
+  if (detail && typeof detail === "object") {
+    const obj = detail as Record<string, unknown>;
+    if (typeof obj.message === "string" && obj.message.trim()) return obj.message;
+    if (typeof obj.detail === "string" && obj.detail.trim()) return obj.detail;
+    if (typeof obj.error === "string" && obj.error.trim()) return obj.error;
+  }
+  return `Request failed: ${status}`;
+}
+
 export async function throwIfNotOk(response: Response): Promise<void> {
   if (response.ok) return;
 
   const error = await response.json().catch(() => ({}));
-  const rawDetail = (error as { detail?: unknown }).detail;
-  let detail = `Request failed: ${response.status}`;
-  if (typeof rawDetail === "string") {
-    detail = rawDetail;
-  } else if (rawDetail && typeof rawDetail === "object") {
-    const d = rawDetail as { message?: unknown; detail?: unknown };
-    if (typeof d.message === "string") detail = d.message;
-    else if (typeof d.detail === "string") detail = d.detail;
-  }
+  const detail = formatApiDetail(
+    (error as { detail?: unknown }).detail ?? error,
+    response.status,
+  );
 
   throw new AuthenticatedFetchError(
     `${detail} (${response.status})`,

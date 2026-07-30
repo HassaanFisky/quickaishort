@@ -26,6 +26,18 @@ def _env_flag(name: str, *, default: bool = False) -> bool:
     return raw.strip().lower() in _TRUE_VALUES
 
 
+def is_mock_ai_editor() -> bool:
+    """Local/CI mock for AI Editor — blocked in ENVIRONMENT=production."""
+    if not _env_flag("MOCK_AI_EDITOR", default=False):
+        return False
+    if os.getenv("ENVIRONMENT", "").strip().lower() == "production":
+        logger.error(
+            "MOCK_AI_EDITOR is set but ENVIRONMENT=production — mock sandbox blocked"
+        )
+        return False
+    return True
+
+
 def is_mock_ai_mode() -> bool:
     """Return True only for explicit local/dev mock short-circuits.
 

@@ -61,32 +61,57 @@ render_queue = Queue(
 )
 
 
+def pending_render_depth() -> int:
+    """Count in-flight Cloud Tasks / RQ renders tracked in Redis ZSET."""
+    try:
+        # render_dispatch writes render:pending; prune stale scores (>6h).
+        cutoff = __import__("time").time() - 6 * 3600
+        redis_conn.zremrangebyscore("render:pending", 0, cutoff)
+        return int(redis_conn.zcard("render:pending") or 0)
+    except Exception:
+        return -1
+
+
 def is_overloaded() -> bool:
     """Returns True if the system is too busy or in safe mode.
 
-    Raises RedisConnectionError / RedisTimeoutError when Redis is fully
-    unreachable so callers get a real 503 rather than a misleading
-    "queue overloaded" response that hides the outage.
+    Production admission uses Redis `render:pending` (Cloud Tasks reality).
+    Local RQ fallback also checks RQ queue length.
+    Raises RedisConnectionError / RedisTimeoutError when Redis is unreachable.
     """
     if SAFE_MODE:
         logger.warning("safe_mode_active_rejecting_tasks")
         return True
 
     try:
-        depth = len(render_queue)
-        if depth >= MAX_QUEUE_DEPTH:
+        pending = pending_render_depth()
+        if pending < 0:
+            # Pending key unavailable — fall through to RQ depth as secondary.
+            pending = 0
+        if pending >= MAX_QUEUE_DEPTH:
             logger.warning(
-                "queue_depth_threshold_reached", depth=depth, limit=MAX_QUEUE_DEPTH
+                "pending_render_threshold_reached depth=%s limit=%s",
+                pending,
+                MAX_QUEUE_DEPTH,
             )
             return True
+
+        # Local RQ listener path — still meaningful in non-production.
+        if os.environ.get("ENVIRONMENT", "").strip().lower() != "production":
+            depth = len(render_queue)
+            if depth >= MAX_QUEUE_DEPTH:
+                logger.warning(
+                    "queue_depth_threshold_reached depth=%s limit=%s",
+                    depth,
+                    MAX_QUEUE_DEPTH,
+                )
+                return True
         return False
     except (RedisConnectionError, RedisTimeoutError):
-        # Redis is down — surface the real error, don't mask it as "overloaded".
         logger.exception("redis_connection_failure_in_queue_health_check")
         raise
     except Exception as e:
-        # Unexpected error: degrade gracefully but log clearly.
-        logger.error("queue_health_check_unexpected_error", error=str(e))
+        logger.error("queue_health_check_unexpected_error error=%s", e)
         return True
 
 
