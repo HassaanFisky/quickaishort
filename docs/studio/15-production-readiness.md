@@ -14,7 +14,7 @@
 | ADK Coming Soon blur | **Go** | Google Agent Development Kit Coming Soon + IA skeleton shipped |
 | Billing / credits | **Conditional** | Paddle present; AI Editor credit gate **fail-closed** (503 on stats outage; stream gated). Soft-fail only via `CREDITS_SOFT_FAIL=true` (non-prod). |
 | Live Gemini generateContent | **No-Go** until founder top-up | 429 prepayment credits depleted on project `99900313102` |
-| Demo / Devpost (challenge) | Per CLAUDE checklist | Separate from Studio |
+| Public product claims | **Go** when shipped vs roadmap is honest | No external contest framing |
 
 ---
 

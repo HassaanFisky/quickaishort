@@ -169,15 +169,13 @@ Also saved as `.antigravity/AGENTS.md` (auto-loaded by Antigravity Manager).
 ## 1. IDENTITY & MISSION
 
 You are the lead engineer for QuickAIShort.online — a YouTube-to-viral-shorts 
-SaaS platform built for the Google for Startups AI Agents Challenge 2026.
+SaaS platform for creators.
 
 Project owner: Hassaan Fisky, solo founder, Karachi, Pakistan.
 Domain: quickaishort.online (owned since Nov 2025)
 Stack: Next.js 14.2.35 + Tailwind v4 + Framer Motion (frontend), FastAPI + yt-dlp + Whisper + ffmpeg-python (backend), Google ADK multi-agent system (active). Browser preview uses MediaRecorder; final export uses server-side ffmpeg-python via RQ worker.
-Submission deadline: June 5, 2026.
 
-Your mission: Ship production-grade code that wins the challenge. Every line 
-you write is judged by Google engineers. Act accordingly.
+Your mission: Ship production-grade product code. Optimize for reliability, honesty of claims, and long-term value per dollar.
 
 ---
 
@@ -279,7 +277,7 @@ FILE EDITING
 
 BROWSER AGENT
 - Use for: navigating Google Cloud Console, Vercel dashboard, GitHub, 
-  Cloudflare DNS, Devpost submission.
+  Cloudflare DNS.
 - Before clicking: take screenshot to confirm the element is visible.
 - Before typing credentials: confirm the correct page in the URL bar.
 - Never auto-submit forms with payment info, legal agreements, or account 
@@ -440,11 +438,11 @@ EDITOR SURFACE
 ARTIFACTS
 - Agent produces artifacts (file diffs, terminal logs, browser recordings)
 - Review ALL artifacts before merging. Never blind-approve.
-- Keep artifacts around for audit trail during the challenge submission
+- Keep artifacts around for audit trail during production work
 
 SKILLS (.antigravity/skills/)
 
-- Create reusable skill files for: "deploy-to-cloudrun", "run-adk-test", "record-demo-video", "submit-to-devpost"
+- Create reusable skill files for: "deploy-to-cloudrun", "run-adk-test", "record-demo-video"
 - Each skill = SKILL.md + supporting scripts
 - Agent auto-discovers skills relevant to the current task
 
@@ -492,7 +490,7 @@ WHEN THE AGENT GETS STUCK IN A LOOP
 
 ---
 
-## 12. CHALLENGE ELIGIBILITY CHECKLIST (ALWAYS KEEP CURRENT)
+## 12. PRODUCTION SHIP CHECKLIST (ALWAYS KEEP CURRENT)
 
 The agent must treat these as acceptance tests before any "shipping" claim:
 
@@ -500,9 +498,6 @@ The agent must treat these as acceptance tests before any "shipping" claim:
 - [x] Uses Google ADK for agent orchestration — `google-adk[bigquery]>=2.1.0`; confirmed by /health: "adk":true
 - [x] Has deployed, publicly accessible URL at quickaishort.online — live 2026-05-06
 - [x] Has public GitHub repo with MIT LICENSE file — github.com/HassaanFisky/quickaishort
-- [ ] Has 2:50–3:00 demo video showing live pipeline (not mock) — NEEDS RECORDING (blocked until Gemini credits top-up)
-- [ ] Devpost submission complete with all fields filled — NEEDS SUBMISSION
-- [ ] Google for Startups form submitted with correct startup stage (Pre-seed) — NEEDS SUBMISSION
 
 Do not claim a task is "done" until it passes every relevant item above.
 
@@ -512,15 +507,14 @@ Do not claim a task is "done" until it passes every relevant item above.
 
 Keep this section updated as the project evolves.
 
-Last updated: 2026-07-26
+Last updated: 2026-07-30
 
-CURRENT PHASE: PRODUCTION LIVE — Submission Sprint + Studio Kernel dual-run + Dub Video + Studio Genius OS Phase 1
+CURRENT PHASE: PRODUCTION LIVE — Studio Kernel dual-run + Dub Video + Studio Genius OS Phase 1
 
 BLOCKED:
 
-- **Gemini prepayment credits depleted (429)** on project `99900313102` — founder must top up at https://ai.studio/projects before live demo / key rotate. Auth OK; generateContent fails.
+- **Gemini prepayment credits depleted (429)** on project `99900313102` — founder must top up at https://ai.studio/projects before live AI chat / analyze / key rotate. Auth OK; generateContent fails.
 - **Dub Video live smoke** blocked on Gemini credits (+ TTS key confirm).
-- Demo video + Devpost + Google for Startups form (challenge checklist).
 
 NOT BLOCKED (verified 2026-07-26):
 
@@ -535,10 +529,9 @@ NOT BLOCKED (verified 2026-07-26):
 NEXT ACTIONS:
 
 1. Founder: top up Gemini credits → verify generateContent 200
-2. Deploy ADR-015 API + FE
-3. Record 3-minute demo (live pipeline, not mock)
-4. Submit Devpost + Google for Startups form (Pre-seed)
-5. Phase 2: ADR-006 native FunctionDeclaration
+2. Optional product demo recording when AI path is live
+3. Phase 2: ADR-006 native FunctionDeclaration
+4. Optional: add PEXELS_API_KEY + GOOGLE_TTS_API_KEY to Cloud Run when ADK workspace is released
 
 CURRENT FRAMING:
 Product today: **QuickAI Short** — conversational AI video editing (ingest → chat → preview → export).
@@ -621,14 +614,11 @@ KEY DECISIONS (do not change without reason):
 
 IN PROGRESS:
 
-- Demo video recording (2:50–3:00, showing live pipeline)
-- Devpost submission
-- Google for Startups form
+- Product hardening + Studio evolution (Kernel / Dub / Genius OS)
 
 BLOCKED:
 
 - **Gemini prepayment credits depleted (429)** — see WORKING MEMORY header (2026-07-21).
-- Demo video + Devpost + Google for Startups form.
 
 OPTIONAL ENV VARS (add to fastapi/.env for fuller ADK media helpers when UI ships):
 
@@ -638,10 +628,9 @@ OPTIONAL ENV VARS (add to fastapi/.env for fuller ADK media helpers when UI ship
 NEXT ACTIONS:
 
 1. Founder: top up Gemini credits → verify generateContent 200
-2. Record 3-minute demo video showing live conversational editor (not mock) at quickaishort.online
-3. Submit Devpost entry (all required fields) — see DEVPOST_SUBMISSION.md
-4. Submit Google for Startups AI Agents Challenge form (Pre-seed stage)
-5. Optional: add PEXELS_API_KEY + GOOGLE_TTS_API_KEY to Cloud Run when ADK workspace is released
+2. Optional: record a product demo when AI path is live
+3. Phase 2: ADR-006 native FunctionDeclaration
+4. Optional: add PEXELS_API_KEY + GOOGLE_TTS_API_KEY to Cloud Run when ADK workspace is released
 
 ---
 
@@ -661,13 +650,14 @@ Read this file at the start of every session. When this file is updated, acknowl
 
 ## CHANGELOG
 
+- **2026-07-30:** Dropped external contest/submission framing from agent protocol and public About copy. Product focus = SaaS shipping only.
 - **2026-07-26:** **Studio Genius OS Phase 1 (ADR-015)** — Redis durable Orchestrator PlanStore; multi-turn `history` + stream chat path; universal MediaGraph suggestion copy; Dub docked in Studio chat (floating sheet removed); real `ADD_SFX` Web Audio preview + registry emit; registry sync script byte-identical; movie-length dub deferred; ADR-006 FC = Phase 2. Verified: 34 targeted pytest, `tsc --noEmit`.
 - **2026-07-25:** **Dub Video (ADR-014)** implemented: staged translate (Gemini) → Google TTS → align → preview → export mute+replace; capabilities `DUB_VIDEO`/`TRANSLATE_CAPTIONS`; `/api/studio/v1/dub` + worker `/tasks/dub`; FE DubPanel + chat chip; EN-source only; TTS fail → explicit degraded captions. Verified: 8 dub tests, registry sync, `tsc --noEmit`, `pnpm build`. Live smoke blocked on Gemini credits + TTS key.
 - **2026-07-25:** M3 ingest FSM shipped to production (`9c6ca78`): sole Studio ingest path via `useIngestLifecycle`; FE Vercel + API `quickai-api-00109-57j`. Deploy unblocker (`2f7e18f`) committed missing `render_dispatch.py` + `google-cloud-tasks` so Cloud Build import smoke check passes. Worker left at `00088-sig` (no M3 worker surface). Gemini credits still depleted.
 - **2026-07-23:** Local orchestration/cost hardening (not deployed): Gemini-only Luna/visual/Terra profiles made explicit; Terra remains one strict JSON-repair attempt; rolling daily pool removed in favor of the fixed trusted-tier matrix; tenant cache moved to MD5 fingerprint + SHA-256 collision guard; Redis-backed Gemini 429 cooldown added; SDK quota retry fan-out disabled; ADK package and google-genai imports made request-lazy; all `sys.exit()` worker paths removed. Verified 167 backend tests. Production Gemini remains blocked by depleted prepayment credits.
 - **2026-07-22:** Cloud Tasks production cutover deployed: `quickai-render` durable queue; `quickai-worker` converted from public always-on RQ listener to private OIDC-only request renderer (`min=0`, request CPU, concurrency 1, max 3); API switched to named-task dispatch; Redis retained for status/runId/locks/dedupe. Live no-spend `/tasks/render` probes returned 200 and caught/fixed a latent non-manifest `time` shadowing crash; request-level DLQ fallback covers pre-render failures. API rev `00103-725`, renderer rev `00088-sig`; 163 backend tests pass.
 - **2026-07-22:** Local cost/reliability hardening baseline (subsequently deployed by the Cloud Tasks cutover above; daily admission superseded 2026-07-23): trusted tier + 3-video daily admission wired to active AI/render routes; exact-state Redis cache avoids duplicate model calls and credits; worker forces Free 720p/watermark across legacy, manifest, and production-plan renders; RQ Redis restart-loop and swallowed retry failures fixed; Gemini quota retries eliminated; unauthenticated paid Next.js analysis/STT paths retired and three unused Google client dependencies removed. Verified 155 backend tests, FFmpeg 720p watermark integration, TypeScript, ESLint, and Next.js production build.
-- **2026-07-21:** Documentation synchronization pass — root README/VISION/ARCHITECTURE + studio index realigned to QuickAI Short (production) → QuickAI Studio (evolution); ADK UI Coming Soon; GCS primary; EP package status corrected; DEVPOST/DEMO scripts de-hyped.
+- **2026-07-21:** Documentation synchronization pass — root README/VISION/ARCHITECTURE + studio index realigned to QuickAI Short (production) → QuickAI Studio (evolution); ADK UI Coming Soon; GCS primary; EP package status corrected; DEMO scripts de-hyped.
 - **2026-07-21:** Ownership cycle — AI Editor credits fail-closed + stream gate; honest Gemini analyze failures; onboarding tour opens AI panel for `ai.*` steps; orphan `YouTubeInputStrip` removed (IngestSurface is sole ingest UI); CLAUDE.md auth/version/Gemini blocker drift corrected.
 - **2026-07-21:** Added the founder-mandated permanent principal engineering ownership policy, continuous whole-system production review, and explicit approval boundaries; activated both canonical governance rules for every repository session.
 - **2026-07-21:** Added the founder-mandated permanent cost-efficiency architecture policy and canonical Cursor rule. Cost is now a pre-implementation gate for every QuickAI Studio change.

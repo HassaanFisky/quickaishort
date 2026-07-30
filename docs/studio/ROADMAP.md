@@ -36,9 +36,8 @@
 - [x] Redis Upstash TLS
 - [x] API `min-instances=0` + cpu-throttling
 - [x] Worker Cloud Tasks cutover (`min=0`)
-- [ ] **Gemini prepayment top-up** at https://ai.studio/projects — unblock analyze + AI chat + demo
+- [ ] **Gemini prepayment top-up** at https://ai.studio/projects — unblock analyze + AI chat
 - [ ] **Rotate `ADMIN_SECRET`** — value previously recorded in docs; set new secret on Cloud Run only (never commit)
-- [ ] Demo video 2:50–3:00 + Devpost + Google for Startups form
 - [ ] Approve auth-gate / rate-limit for public `/api/proxy*`, `/api/audio`, `/api/info` (FinOps)
 - [ ] Approve Legacy `Projects` / GridFS `/api/v1/video` cutover delete
 
@@ -59,7 +58,6 @@
 |------|------|
 | Live Gemini `generateContent` | **Founder top-up** |
 | `GOOGLE_TTS_API_KEY` on API + worker | **Founder** — required for full Dub Video voice |
-| Demo / Devpost / Google form | **Founder** |
 | Dub Video live smoke (translate+TTS+export) | After Gemini + TTS secrets |
 | ADR-006 native Gemini FunctionDeclaration (tool-loop) | Phase 2 after ADR-015 |
 | Movie-length (1–2hr) dub EP | Deferred — not ADR-014 shorts |

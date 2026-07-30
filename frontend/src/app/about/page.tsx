@@ -33,8 +33,8 @@ export default function AboutPage() {
             work</em> — all in one browser tab.
           </p>
           <p>
-            Built for the Google for Startups AI Agents Challenge 2026 by Hassaan
-            Fisky, a solo founder operating from Karachi, Pakistan.
+            Built by Hassaan Fisky, a solo founder operating from Karachi,
+            Pakistan.
           </p>
         </div>
       </main>
