@@ -35,6 +35,13 @@ from models.ai_editor import (
     EditorCommandResponse,
 )
 from services.agent_runtime import ensure_agent_ready
+from services.ai_editor_errors import (
+    AiEditorErrorKind,
+    detail_message,
+    from_backpressure,
+    http_error,
+    sse_error_event,
+)
 from services.ai_editor_sanitiser import MOCK_ENABLED, mock_response, sanitise
 from services.auth import get_verified_user_id
 from services.gemini_backpressure import (
@@ -61,20 +68,22 @@ def _credits_soft_fail_allowed() -> bool:
 
 
 async def _require_ai_editor_credit(user_id: str, *, route: str) -> bool:
-    """Deduct 1 credit before Gemini spend. Returns True when a charge was taken.
+    """Reserve 1 credit before Gemini spend (commit on success, refund on hard fail).
 
-    Matches pipeline_router fail-closed policy: stats outage → 503, not free AI.
-    Set CREDITS_SOFT_FAIL=true only for non-prod debugging (returns False = no charge).
-    Callers must refund on cache hit, policy block, or failure after a True return.
+    Returns True when a charge was taken. Matches pipeline_router fail-closed policy:
+    stats outage → 503, not free AI. Set CREDITS_SOFT_FAIL=true only for non-prod
+    debugging (returns False = no charge). Callers must refund on cache hit, policy
+    block, or failure after a True return.
     """
     try:
-        from services.stats_service import deduct_credits
+        from services.stats_service import reserve_credits
 
-        ok = await deduct_credits(user_id, 1)
+        ok = await reserve_credits(user_id, 1)
         if not ok:
-            raise HTTPException(
-                status_code=402,
-                detail="Insufficient credits. Upgrade to Pro to continue.",
+            raise http_error(
+                402,
+                AiEditorErrorKind.CREDITS,
+                "Insufficient credits. Upgrade to Pro to continue.",
             )
         return True
     except HTTPException:
@@ -82,27 +91,28 @@ async def _require_ai_editor_credit(user_id: str, *, route: str) -> bool:
     except Exception as exc:
         if _credits_soft_fail_allowed():
             logger.warning(
-                "%s: credit deduction failed for %s: %s (CREDITS_SOFT_FAIL=true)",
+                "%s: credit reservation failed for %s: %s (CREDITS_SOFT_FAIL=true)",
                 route,
                 user_id,
                 exc,
             )
             return False
         logger.error(
-            "%s: credit deduction failed for %s: %s",
+            "%s: credit reservation failed for %s: %s",
             route,
             user_id,
             exc,
             exc_info=True,
         )
-        raise HTTPException(
-            status_code=503,
-            detail="Credit service unavailable. Try again shortly.",
+        raise http_error(
+            503,
+            AiEditorErrorKind.CREDIT_SERVICE,
+            "Credit service unavailable. Try again shortly.",
         ) from exc
 
 
 async def _refund_ai_editor_credit(user_id: str, *, route: str) -> None:
-    """Best-effort refund — never raises to the client path."""
+    """Best-effort refund after reserved credit when the model path hard-fails."""
     try:
         from services.stats_service import refund_credits
 
@@ -115,7 +125,7 @@ async def _refund_ai_editor_credit(user_id: str, *, route: str) -> None:
             )
     except Exception as exc:
         logger.error(
-            "%s: credit refund error user=%s: %s",
+            "%s: credit refund failed for %s: %s",
             route,
             user_id,
             exc,
@@ -261,15 +271,31 @@ async def _execute_via_dual_router(
         )
 
     if result.action_intent == "RETRY_LATER":
-        headers = (
-            {"Retry-After": str(result.retry_after_seconds)}
-            if result.retry_after_seconds
-            else {}
+        msg = (result.message or "").lower()
+        kind = (
+            AiEditorErrorKind.HARD_QUOTA
+            if any(
+                token in msg
+                for token in (
+                    "quota is exhausted",
+                    "hard_quota",
+                    "prepayment",
+                    "credits depleted",
+                    "resource_exhausted",
+                )
+            )
+            else AiEditorErrorKind.TRANSIENT
         )
-        raise HTTPException(
-            status_code=429,
-            detail=result.message,
-            headers=headers or None,
+        raise http_error(
+            429,
+            kind,
+            result.message
+            or (
+                "AI is temporarily unavailable (provider limit)."
+                if kind is AiEditorErrorKind.HARD_QUOTA
+                else "AI is briefly rate-limited."
+            ),
+            retry_after=result.retry_after_seconds,
         )
 
     payload = result.payload if isinstance(result.payload, dict) else {}
@@ -422,8 +448,8 @@ async def ai_edit(
         )
         if charged and response.cached:
             await _refund_ai_editor_credit(user_id, route="ai_edit")
-    except HTTPException:
-        if charged:
+    except HTTPException as exc:
+        if charged and exc.status_code >= 400:
             await _refund_ai_editor_credit(user_id, route="ai_edit")
         raise
     except TimeoutError:
@@ -435,15 +461,11 @@ async def ai_edit(
     except GeminiBackpressureError as exc:
         if charged:
             await _refund_ai_editor_credit(user_id, route="ai_edit")
-        raise HTTPException(
-            status_code=429,
-            detail=str(exc),
-            headers={"Retry-After": str(exc.cooldown.retry_after_seconds)},
-        ) from exc
+        raise from_backpressure(exc) from exc
     except GeminiBackpressureUnavailable as exc:
         if charged:
             await _refund_ai_editor_credit(user_id, route="ai_edit")
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise http_error(503, AiEditorErrorKind.UNAVAILABLE, str(exc)) from exc
     except Exception as exc:
         if charged:
             await _refund_ai_editor_credit(user_id, route="ai_edit")
@@ -504,10 +526,27 @@ async def handle_editor_command(
             project_context=request.project_context,
             history=request.history,
         )
-    except Exception:
-        if charged:
+    except HTTPException as exc:
+        if charged and exc.status_code >= 400:
             await _refund_ai_editor_credit(user_id, route="handle_editor_command")
         raise
+    except GeminiBackpressureError as exc:
+        if charged:
+            await _refund_ai_editor_credit(user_id, route="handle_editor_command")
+        raise from_backpressure(exc) from exc
+    except GeminiBackpressureUnavailable as exc:
+        if charged:
+            await _refund_ai_editor_credit(user_id, route="handle_editor_command")
+        raise http_error(503, AiEditorErrorKind.UNAVAILABLE, str(exc)) from exc
+    except Exception as exc:
+        if charged:
+            await _refund_ai_editor_credit(user_id, route="handle_editor_command")
+        logger.error(
+            "handle_editor_command error user=%s: %s", user_id, exc, exc_info=True
+        )
+        raise HTTPException(
+            status_code=500, detail="AI editor encountered an internal error."
+        ) from exc
 
     if charged and _should_refund_editor_command(response):
         await _refund_ai_editor_credit(user_id, route="handle_editor_command")
@@ -574,12 +613,45 @@ async def handle_editor_command_stream(
             yield 'data: {"stage":"applying","message":"Applying edits…"}\n\n'
             yield f"data: {result.model_dump_json()}\n\n"
         except HTTPException as exc:
+            if charged and exc.status_code >= 400:
+                await _refund_ai_editor_credit(
+                    user_id, route="handle_editor_command_stream"
+                )
+            kind = AiEditorErrorKind.UNKNOWN
+            retry_after = None
+            if isinstance(exc.detail, dict):
+                raw_kind = exc.detail.get("kind")
+                if isinstance(raw_kind, str):
+                    try:
+                        kind = AiEditorErrorKind(raw_kind)
+                    except ValueError:
+                        kind = AiEditorErrorKind.UNKNOWN
+                ra = exc.detail.get("retry_after")
+                if isinstance(ra, int):
+                    retry_after = ra
+            elif exc.status_code == 429:
+                kind = AiEditorErrorKind.TRANSIENT
+            elif exc.status_code == 402:
+                kind = AiEditorErrorKind.CREDITS
+            yield sse_error_event(
+                kind=kind,
+                message=detail_message(exc.detail),
+                status=exc.status_code,
+                retry_after=retry_after,
+            )
+        except GeminiBackpressureError as exc:
             if charged:
                 await _refund_ai_editor_credit(
                     user_id, route="handle_editor_command_stream"
                 )
-            detail = exc.detail if isinstance(exc.detail, str) else str(exc.detail)
-            yield f'data: {{"error": {detail!r}, "status": {exc.status_code}}}\n\n'
+            bp = from_backpressure(exc)
+            d = bp.detail if isinstance(bp.detail, dict) else {}
+            yield sse_error_event(
+                kind=d.get("kind", AiEditorErrorKind.TRANSIENT.value),
+                message=detail_message(bp.detail),
+                status=429,
+                retry_after=d.get("retry_after"),
+            )
         except Exception as exc:
             if charged:
                 await _refund_ai_editor_credit(
@@ -591,7 +663,11 @@ async def handle_editor_command_stream(
                 exc,
                 exc_info=True,
             )
-            yield 'data: {"error": "AI editor encountered an internal error.", "status": 500}\n\n'
+            yield sse_error_event(
+                kind=AiEditorErrorKind.UNKNOWN,
+                message="AI editor encountered an internal error.",
+                status=500,
+            )
 
     return StreamingResponse(
         guarded_stream(),

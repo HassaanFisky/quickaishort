@@ -127,14 +127,57 @@ export const authOptions: NextAuthOptions = {
         }
       }
 
-      // Explicit update() call (e.g., after Paddle activation): refresh isPro from DB.
-      if (trigger === "update") {
+      // Explicit update() call (e.g., after Paddle activation): refresh isPro from
+      // Firestore-backed FastAPI /api/stats (billing SoT), then mirror into Mongo.
+      if (trigger === "update" && token.id) {
         try {
-          await connectDB();
-          const dbUser = await User.findById(token.id).select("isPro isPremium settings");
-          if (dbUser) {
-            token.isPro = dbUser.isPro || dbUser.isPremium || false;
-            token.settings = dbUser.settings;
+          const apiBase = (
+            process.env.NEXT_PUBLIC_API_URL ||
+            process.env.API_URL ||
+            ""
+          ).replace(/\/$/, "");
+          if (apiBase) {
+            const minted = await mintBackendToken({
+              id: String(token.id),
+              email: token.email,
+              isPro: Boolean(token.isPro),
+            });
+            if (minted) {
+              const res = await fetch(`${apiBase}/api/stats`, {
+                headers: {
+                  Authorization: `Bearer ${minted}`,
+                  "X-User-Id": String(token.id),
+                },
+                cache: "no-store",
+              });
+              if (res.ok) {
+                const stats = (await res.json()) as {
+                  is_pro?: boolean;
+                  is_premium?: boolean;
+                };
+                const fromFirestore = Boolean(stats.is_pro || stats.is_premium);
+                token.isPro = fromFirestore;
+                try {
+                  await connectDB();
+                  await User.findByIdAndUpdate(token.id, {
+                    isPro: fromFirestore,
+                    isPremium: fromFirestore,
+                    updatedAt: new Date(),
+                  });
+                } catch (mirrorErr) {
+                  console.error("[jwt] Mongo Pro mirror failed:", mirrorErr);
+                }
+              }
+            }
+          } else {
+            await connectDB();
+            const dbUser = await User.findById(token.id).select(
+              "isPro isPremium settings",
+            );
+            if (dbUser) {
+              token.isPro = dbUser.isPro || dbUser.isPremium || false;
+              token.settings = dbUser.settings;
+            }
           }
         } catch (err) {
           console.error("[jwt] refresh failed:", err);

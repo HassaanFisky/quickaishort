@@ -21,8 +21,8 @@ _NEXTAUTH_SECRET = os.getenv("NEXTAUTH_SECRET", "")
 _ALGORITHM = "HS256"
 
 
-def verify_access_token(token: str) -> str:
-    """Decode a raw NextAuth JWT and return user_id, or raise HTTPException."""
+def verify_bearer_token(token: str) -> str:
+    """Decode a raw HS256 NextAuth/backend JWT → user_id. Raises HTTPException."""
     if not _NEXTAUTH_SECRET:
         logger.error("NEXTAUTH_SECRET is not set. Rejecting request.")
         raise HTTPException(
@@ -63,4 +63,8 @@ def get_verified_user_id(
     token = ""
     if authorization.lower().startswith("bearer "):
         token = authorization[7:].strip()
-    return verify_access_token(token)
+    return verify_bearer_token(token)
+
+
+# Back-compat alias for older call sites.
+verify_access_token = verify_bearer_token

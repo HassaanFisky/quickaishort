@@ -89,10 +89,6 @@ async function persistArtifactsAndReady(opts: {
   advanceIngestToReady();
 }
 
-function markIngestReadySoft(): void {
-  advanceIngestToReady();
-}
-
 export function useMediaPipeline() {
   const { data: session } = useSession();
   const userId = session?.user?.id ?? "anonymous";
@@ -232,7 +228,12 @@ export function useMediaPipeline() {
         toast.info(infoMsg, { duration: 6000 });
         setAgentState("ingestion", { status: "error" });
         setProcessing(false, "idle");
-        markIngestReadySoft();
+        useEditorStore
+          .getState()
+          .failIngest(
+            "analysis_failed",
+            "Auto-analysis unavailable. Retry analysis or upload an MP4.",
+          );
       });
 
     // GCS upload is owned by useIngestLifecycle.ingestFile (canonical path).
@@ -333,8 +334,13 @@ export function useMediaPipeline() {
             "Analysis failed";
           toast.error(typeof msg === "string" ? msg : "Analysis failed. Please try again.");
           setAgentState("viralAnalysis", { status: "error" });
-          setProcessing(false, "ready");
-          await persistArtifactsAndReady({ suggestions: [] });
+          setProcessing(false, "idle");
+          useEditorStore
+            .getState()
+            .failIngest(
+              "analysis_failed",
+              typeof msg === "string" ? msg : "Analysis failed. Retry to continue.",
+            );
         });
     } else if (transcription.progress) {
       setAgentState("transcription", { progress: transcription.progress });
@@ -358,7 +364,7 @@ export function useMediaPipeline() {
       if (transcription.error) setAgentState("transcription", { status: "error" });
       if (analysis.error) setAgentState("viralAnalysis", { status: "error" });
       setProcessing(false, "idle");
-      markIngestReadySoft();
+      useEditorStore.getState().failIngest("analysis_failed", error);
     }
   }, [transcription.error, analysis.error, setProcessing, setAgentState]);
 

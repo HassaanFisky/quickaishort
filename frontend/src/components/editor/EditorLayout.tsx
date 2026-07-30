@@ -11,7 +11,6 @@ import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
 import QSLogo from "@/components/shared/QSLogo";
 import {
-  Zap,
   Sparkles,
   X,
   AlertCircle,
@@ -83,9 +82,9 @@ export default function EditorLayout() {
     ingestUrl,
     ingestFile,
     retryAnalyze,
+    retryLastIngest,
     cancelUpload,
     cancelAnalyze,
-    lastFileRef,
   } = useIngestLifecycle({ runPipeline, cancelPipeline });
 
   // Sync transcript to AI panel context after pipeline completes
@@ -105,7 +104,6 @@ export default function EditorLayout() {
   }, [storeTranscript, storeVideoMetadata, setVideoContext]);
 
   const [exportOpen, setExportOpen] = useState(false);
-  const [localEngineEnabled, setLocalEngineEnabled] = useState(false);
   const [isAdvancedMode, setIsAdvancedMode] = useState(false);
   const hasShownShortcutsRef = useRef(false);
   useEffect(() => {
@@ -183,15 +181,16 @@ export default function EditorLayout() {
   // (transcription worker status), which never left "loading" after init.
   const isAnalysing = isProcessing;
 
-  // Collapse URL bar 1.5s after video loads (and ingest reached ready)
+  // Collapse import bar 1.5s after video loads (and ingest reached ready)
   useEffect(() => {
-    if (!sourceUrl || isAnalysing || (ingestStage !== "ready" && ingestStage !== "idle")) {
+    const hasMedia = Boolean(sourceUrl || sourceFile);
+    if (!hasMedia || isAnalysing || (ingestStage !== "ready" && ingestStage !== "idle")) {
       if (ingestStage !== "ready") setPanelCollapsed(false);
       return;
     }
     const t = setTimeout(() => setPanelCollapsed(true), 1500);
     return () => clearTimeout(t);
-  }, [sourceUrl, isAnalysing, ingestStage]);
+  }, [sourceUrl, sourceFile, isAnalysing, ingestStage]);
 
   // Keyboard shortcut hint — fires once after first video load
   useEffect(() => {
@@ -350,6 +349,33 @@ export default function EditorLayout() {
     cancelAnalyze();
   };
 
+  const ingestSurfaceProps = {
+    urlInput,
+    urlValid,
+    youtubePreviewId,
+    isAnalysing,
+    panelCollapsed,
+    currentStage,
+    ingestStage,
+    videoTitle: storeVideoMetadata?.title,
+    hasSource: Boolean(sourceUrl || sourceFile),
+    ingestUploadProgress,
+    ingestError: ingestFailMessage,
+    ingestFromCache,
+    onUrlChange: handleUrlChange,
+    onAnalyze: () => void ingestUrl(urlInput),
+    onCancelAnalyze: handleCancel,
+    onExpandPanel: () => setPanelCollapsed(false),
+    onFileChosen: (f: File) => void ingestFile(f),
+    onCancelUpload: cancelUpload,
+    onRetryUpload: () => retryLastIngest(),
+    onReplace: () => {
+      setPanelCollapsed(false);
+      useEditorStore.getState().resetIngestLifecycle();
+    },
+    onDragHandled: () => setIsDraggingOver(false),
+  };
+
   const handleDrop = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
@@ -500,22 +526,6 @@ export default function EditorLayout() {
               </button>
             </>
           )}
-          {isAdvancedMode && (
-            <button
-              onClick={() => setLocalEngineEnabled((v) => !v)}
-              title={localEngineEnabled ? "Local engine ON — click to disable" : "Use local engine (beta)"}
-              aria-label="Toggle local FFmpeg.wasm decode engine"
-              className={cn(
-                "h-9 px-2 rounded-xl flex items-center gap-1 text-[10px] font-bold border transition-all duration-200",
-                localEngineEnabled
-                  ? "bg-amber-500/15 border-amber-500/40 text-amber-400 hover:bg-amber-500/25"
-                  : "bg-card border-border text-fg-muted hover:text-foreground"
-              )}
-            >
-              <Zap size={11} />
-              {localEngineEnabled ? "Local On" : "Local Off"}
-            </button>
-          )}
 
           <button
             data-tour-id="export.button"
@@ -559,9 +569,9 @@ export default function EditorLayout() {
         </div>
       </header>
 
-      {/* Error recovery banner — ingest FSM terminal failures */}
+      {/* Error recovery banner — loaded media only (empty uses inline IngestSurface error) */}
       <AnimatePresence>
-        {ingestStage === "failed" && ingestFailMessage && (
+        {ingestStage === "failed" && ingestFailMessage && (sourceUrl || sourceFile) && (
           <motion.div
             key="error-banner"
             initial={{ height: 0, opacity: 0 }}
@@ -580,10 +590,7 @@ export default function EditorLayout() {
                 <X size={13} />
               </button>
               <button
-                onClick={() => {
-                  if (lastFileRef.current) void ingestFile(lastFileRef.current);
-                  else void ingestUrl(urlInput);
-                }}
+                onClick={() => retryLastIngest()}
                 className="shrink-0 font-bold hover:text-red-300 transition-colors text-[10px] uppercase tracking-widest"
               >
                 Retry
@@ -612,34 +619,10 @@ export default function EditorLayout() {
 
           {/* Center — Stage */}
           <section className="relative flex flex-col items-center justify-center gap-4 min-h-0">
-            <IngestSurface
-              urlInput={urlInput}
-              urlValid={urlValid}
-              youtubePreviewId={youtubePreviewId}
-              isAnalysing={isAnalysing}
-              panelCollapsed={panelCollapsed}
-              currentStage={currentStage}
-              ingestStage={ingestStage}
-              videoTitle={storeVideoMetadata?.title}
-              hasSource={Boolean(sourceUrl || sourceFile)}
-              ingestUploadProgress={ingestUploadProgress}
-              ingestError={ingestFailMessage}
-              ingestFromCache={ingestFromCache}
-              onUrlChange={handleUrlChange}
-              onAnalyze={() => void ingestUrl(urlInput)}
-              onCancelAnalyze={handleCancel}
-              onExpandPanel={() => setPanelCollapsed(false)}
-              onFileChosen={(f) => void ingestFile(f)}
-              onCancelUpload={cancelUpload}
-              onRetryUpload={() => {
-                if (lastFileRef.current) void ingestFile(lastFileRef.current);
-                else void ingestUrl(urlInput);
-              }}
-              onReplace={() => {
-                setPanelCollapsed(false);
-                useEditorStore.getState().resetIngestLifecycle();
-              }}
-            />
+            {/* Dock only after media exists or analysis is running — URL preview stays in hero */}
+            {(Boolean(sourceUrl || sourceFile) || isAnalysing) && (
+              <IngestSurface variant="dock" {...ingestSurfaceProps} />
+            )}
             {/* Video stage */}
             <div className="editor-stage-bg w-full h-full flex items-center justify-center rounded-2xl overflow-hidden border border-border relative">
               <AnimatePresence mode="wait">
@@ -653,7 +636,7 @@ export default function EditorLayout() {
                     className="absolute inset-0 z-10 flex items-center justify-center"
                   >
                     {youtubePreviewId ? (
-                      <div className="relative w-full h-full flex items-center justify-center p-16">
+                      <div className="relative w-full h-full flex items-center justify-center p-4 sm:p-8 lg:p-16">
                         {/* Video stays fully visible at all times — status floats below, never covers */}
                         <YouTubePlayer videoId={youtubePreviewId} className="max-w-lg w-full" />
                         {/* Thin top progress shimmer — premium, non-blocking */}
@@ -688,73 +671,48 @@ export default function EditorLayout() {
                       </div>
                     )}
                   </motion.div>
-                ) : youtubePreviewId && !sourceUrl ? (
-                  <motion.div
-                    key="stage-youtube-preview"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="w-full h-full flex items-center justify-center p-16"
-                  >
-                    <YouTubePlayer videoId={youtubePreviewId} className="max-w-lg w-full" />
-                  </motion.div>
-                ) : !sourceUrl && !youtubePreviewId && !isAnalysing ? (
+                ) : !sourceUrl && !sourceFile && !isAnalysing ? (
                   <motion.div
                     key="stage-empty"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    className="w-full h-full flex flex-col items-center justify-end gap-4 text-center px-8 pb-10 pt-24"
+                    className="w-full h-full flex flex-col items-center justify-center gap-4 sm:gap-6 text-center px-4 sm:px-8 py-4 sm:py-8 overflow-y-auto"
                   >
-                    {/* Hero sits lower so paste/drop input (IngestSurface) stays primary */}
-                    <div className="relative opacity-90">
-                      <div className="w-14 h-14 rounded-xl bg-card border border-border flex items-center justify-center shadow-md">
-                        <QSLogo variant="mark" size="md" />
-                      </div>
-                    </div>
-                    <div className="max-w-sm">
-                      <h3 className="text-base font-bold text-foreground mb-1.5 tracking-tight">
-                        Ready to create
-                      </h3>
-                      <p className="text-sm text-muted-foreground leading-relaxed">
-                        Paste a YouTube URL, drop a video file, or enter any direct video link.
-                        <span className="text-[10px] text-fg-subtle mt-1 block">
-                          Supports MP4, WebM, MOV · YouTube · Direct URLs
-                        </span>
+                    {/* One composition: import IS the stage (center), not a top chrome strip */}
+                    <IngestSurface variant="hero" {...ingestSurfaceProps} />
+                    <div className="w-full max-w-md px-2 hidden sm:block">
+                      <p className="text-[10px] font-medium tracking-wide text-fg-subtle mb-2">
+                        Or start from a template
                       </p>
-                    </div>
-                    <div className="flex items-center gap-3 text-[10px] text-fg-subtle">
-                      <span className="flex items-center gap-1.5">
-                        <kbd className="px-1.5 py-0.5 rounded bg-foreground/5 border border-foreground/8 font-mono text-[9px]">Shift</kbd>
-                        <kbd className="px-1.5 py-0.5 rounded bg-foreground/5 border border-foreground/8 font-mono text-[9px]">Alt</kbd>
-                        <kbd className="px-1.5 py-0.5 rounded bg-foreground/5 border border-foreground/8 font-mono text-[9px]">A</kbd>
-                        <span>Chat</span>
-                      </span>
-                      <span className="w-px h-3 bg-foreground/10" />
-                      <span className="flex items-center gap-1.5">
-                        <kbd className="px-1.5 py-0.5 rounded bg-foreground/5 border border-foreground/8 font-mono text-[9px]">?</kbd>
-                        <span>Shortcuts</span>
-                      </span>
-                    </div>
-                    {/* Template selector — quick-start presets */}
-                    <div className="w-full max-w-sm">
-                      <p className="text-[9px] font-black uppercase tracking-widest text-fg-subtle mb-2">Start from a template</p>
-                      <div className="grid grid-cols-5 gap-1.5">
+                      <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
                         {PROJECT_TEMPLATES.map((tpl) => (
                           <button
                             key={tpl.id}
+                            type="button"
                             onClick={() => {
                               const ar = tpl.aspectRatio === "16:9" ? "9:16" : tpl.aspectRatio;
                               setExportSetting("aspectRatio", ar as "9:16" | "1:1");
-                              toast(`Template: ${tpl.label}`, { description: `Aspect ratio set to ${tpl.aspectRatio} · max ${tpl.maxDuration}s`, duration: 3000 });
+                              toast(`Template: ${tpl.label}`, {
+                                description: `Aspect ratio set to ${tpl.aspectRatio} · max ${tpl.maxDuration}s`,
+                                duration: 3000,
+                              });
                             }}
-                            className="flex flex-col items-center gap-1 px-1 py-2 rounded-xl bg-card border border-border hover:border-primary/40 hover:bg-primary/5 transition-colors group"
+                            className="min-h-11 flex flex-col items-center gap-1 px-1 py-2 rounded-xl bg-card/60 border border-border hover:border-primary/40 hover:bg-primary/5 hover:-translate-y-0.5 active:scale-[0.98] transition-[transform,border-color,background-color] group"
                           >
-                            <div className={cn(
-                              "rounded border border-foreground/10 bg-foreground/5 group-hover:border-primary/30 transition-colors",
-                              tpl.aspectRatio === "9:16" ? "w-3 h-5" : tpl.aspectRatio === "1:1" ? "w-4 h-4" : "w-5 h-3"
-                            )} />
-                            <span className="text-[8px] font-bold text-fg-subtle group-hover:text-primary transition-colors leading-tight text-center">{tpl.label.replace(" ", "\n")}</span>
+                            <div
+                              className={cn(
+                                "rounded border border-foreground/10 bg-foreground/5 group-hover:border-primary/30 transition-colors",
+                                tpl.aspectRatio === "9:16"
+                                  ? "w-3 h-5"
+                                  : tpl.aspectRatio === "1:1"
+                                    ? "w-4 h-4"
+                                    : "w-5 h-3",
+                              )}
+                            />
+                            <span className="text-[8px] font-semibold text-fg-subtle group-hover:text-primary transition-colors leading-tight text-center">
+                              {tpl.label.replace(" ", "\n")}
+                            </span>
                           </button>
                         ))}
                       </div>
@@ -971,6 +929,7 @@ export default function EditorLayout() {
         <EditorOnboardingTour
           initialStep={tourStep}
           onFinished={() => setShowTour(false)}
+          onEnsureIngestVisible={() => setPanelCollapsed(false)}
         />
       )}
     </div>

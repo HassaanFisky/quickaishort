@@ -24,7 +24,7 @@ import { GlowButton } from "@/components/ui/GlowButton";
 import { CreditsLowBanner } from "@/components/shared/CreditsLowBanner";
 import { InlineError } from "@/components/shared/InlineError";
 import { EmptyState } from "@/components/shared/EmptyState";
-import { AIPanel } from "@/components/ai/AIPanel";
+import { DashboardFaqPanel } from "@/components/ai/AIPanel";
 import { spring } from "@/lib/animations";
 import { ActivityFeed } from "@/components/dashboard/ActivityFeed";
 import { UsageStatsCard } from "@/components/dashboard/UsageStatsCard";
@@ -413,7 +413,7 @@ export default function DashboardPage() {
       )}
 
       {/* General-purpose AI assistant panel */}
-      <AIPanel />
+      <DashboardFaqPanel />
     </div>
   );
 }

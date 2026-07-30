@@ -144,6 +144,11 @@ async def deduct_credits(user_id: str, amount: int) -> bool:
     return True
 
 
+async def reserve_credits(user_id: str, amount: int) -> bool:
+    """Alias for deduct — reserved until commit/refund on the request path."""
+    return await deduct_credits(user_id, amount)
+
+
 async def refund_credits(user_id: str, amount: int) -> bool:
     """Return credits after a failed or cache-hit AI turn (never goes unbounded)."""
     if not user_id or user_id == "anonymous" or amount <= 0:
@@ -232,7 +237,7 @@ async def is_user_premium(user_id: str) -> bool:
         logger.warning("Redis premium cache read failed: %s", _err)
 
     stats = await get_user_stats(user_id)
-    is_premium = stats.get("is_premium", False)
+    is_premium = bool(stats.get("is_premium") or stats.get("is_pro"))
     try:
         await async_redis_conn.setex(cache_key, 300, b"1" if is_premium else b"0")
     except Exception as _err:
@@ -289,7 +294,8 @@ def _serialize(doc: dict[str, Any] | None, user_id: str) -> dict[str, Any]:
         total_duration_processed=float(doc.get("total_duration_processed", 0.0)),
         export_count=int(doc.get("export_count", 0)),
         ai_runs=int(doc.get("ai_runs", 0)),
-        is_premium=bool(doc.get("is_premium", False)),
-        is_pro=bool(doc.get("is_pro", False)),
+        is_premium=bool(doc.get("is_premium", False) or doc.get("is_pro", False)),
+        is_pro=bool(doc.get("is_pro", False) or doc.get("is_premium", False)),
+        paddle_subscription_id=doc.get("paddle_subscription_id"),
         updated_at=doc.get("updated_at") or datetime.now(timezone.utc),
     ).model_dump(mode="json")

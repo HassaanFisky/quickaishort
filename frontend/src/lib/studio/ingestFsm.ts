@@ -27,6 +27,7 @@ export type IngestFailCode =
   | "too_large"
   | "invalid_url"
   | "meta_fetch_failed"
+  | "analysis_failed"
   | "cancelled"
   | "timeout"
   | "unknown";

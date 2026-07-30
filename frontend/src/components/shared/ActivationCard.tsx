@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { GENERAL_EMAIL, mailto } from "@/lib/email-addresses";
 import { useSession } from "next-auth/react";
 import { CheckCircle2, Loader2, Sparkles } from "lucide-react";
 import { getStats } from "@/lib/api";
@@ -239,7 +240,7 @@ export function ActivationCard({
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
               <a
-                href="mailto:support@quickaishort.online"
+                href={mailto(GENERAL_EMAIL)}
                 className="inline-flex h-9 items-center rounded-xl bg-amber-500/10 px-4 text-[11px] font-bold uppercase tracking-widest text-amber-500 border border-amber-500/30 hover:bg-amber-500/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500 transition-colors"
                 style={{ transitionDuration: "var(--motion-2)" }}
               >

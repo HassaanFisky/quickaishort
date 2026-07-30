@@ -798,10 +798,15 @@ html.liquid-transition::view-transition-new(root) {
   .hero-glow-b,
   .hero-glow-c,
   .elite-ring,
-  .living-water-bg::after,
-  .marquee-track,
-  .marquee-dot {
+  .living-water-bg::after {
     animation: none !important;
+  }
+
+  /* Marquee: keep decorative motion alive but slower (Linear-style pattern) —
+     a slow, pausable, purely-horizontal ticker doesn't trigger vestibular
+     issues the way parallax/zoom motion does. */
+  .marquee-track {
+    animation: marquee 60s linear infinite !important;
   }
 }
 
@@ -1477,8 +1482,7 @@ nav:has(.nav-link:hover) .nav-link:not(:hover) {
   background-image:
     radial-gradient(ellipse 70% 28% at 50% -8%, hsl(var(--accent-indigo) / 0.06) 0%, transparent 100%);
   border: 1px solid hsl(var(--border));
-  border-radius: 1.5rem;
-  /* rounded-3xl panel */
+  border-radius: 1.5rem; /* rounded-3xl panel */
   display: flex;
   flex-direction: column;
   z-index: auto;
@@ -2009,24 +2013,23 @@ nav:has(.nav-link:hover) .nav-link:not(:hover) {
   --studio-color-bg-surface: #111116;
   --studio-color-bg-overlay: #1e1e26;
   --studio-color-border-clean: hsl(var(--border) / 0.6);
-  /* Prefer semantic HSL tokens — hex retained only where CSS can't resolve hsl() in older usages */
-  --studio-color-accent: hsl(var(--primary));
+  --studio-color-accent: #a855f7;
   --studio-color-text-title: hsl(var(--fg));
 
   --studio-border-primary: hsl(var(--border) / 0.7);
   --studio-border-secondary: hsl(var(--border-strong) / 0.8);
-  --studio-border-focus: hsl(var(--primary) / 0.65);
+  --studio-border-focus: hsl(var(--accent-indigo) / 0.65);
 
   --studio-text-primary: hsl(var(--fg));
   --studio-text-secondary: hsl(var(--fg-muted));
   --studio-text-tertiary: hsl(var(--fg-subtle));
   --studio-text-inverse: hsl(var(--bg-base));
 
-  --studio-accent-primary: hsl(var(--primary));
-  --studio-accent-primary-muted: hsl(var(--primary) / 0.18);
-  --studio-accent-secondary: hsl(var(--primary) / 0.85);
-  --studio-accent-tertiary: hsl(var(--primary) / 0.65);
-  --studio-accent-pink: 330 81% 60%;
+  --studio-accent-primary: #a855f7;
+  --studio-accent-primary-muted: rgba(168, 85, 247, 0.18);
+  --studio-accent-secondary: #7c3aed;
+  --studio-accent-tertiary: #5b21b6;
+  --studio-accent-pink: #ec4899;
 
   /* Spacing / radius / shadow — studio-* to avoid @theme radius collision */
   --studio-space-1: 4px;
@@ -2108,8 +2111,7 @@ nav:has(.nav-link:hover) .nav-link:not(:hover) {
 .panel {
   background: hsl(var(--bg-subtle));
   border: 1px solid var(--studio-border-primary);
-  border-radius: 1.5rem;
-  /* sheets/panels → rounded-3xl */
+  border-radius: 1.5rem; /* sheets/panels → rounded-3xl */
   overflow: hidden;
 }
 

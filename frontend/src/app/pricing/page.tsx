@@ -13,20 +13,9 @@ import { toast } from "sonner";
 import { ActivationCard } from "@/components/shared/ActivationCard";
 import { ConfettiBurst } from "@/components/shared/ConfettiBurst";
 import { cn } from "@/lib/utils";
+import { BILLING_PLANS, PADDLE_PRICE_ID_PRO } from "@/lib/billing-plans";
 
-const FAQS: { q: string; a: string; link?: { href: string; label: string } }[] = [
-  {
-    q: "What's the difference between Free and Pro?",
-    a: "Free gives you local browser AI processing, transcription, AI clip detection (5 clips per video), 9:16 auto-reframe, face tracking, and 720p export with a \"Made with QuickAI\" watermark. Pro adds 4K export, watermark removal, Deep Analysis (Gemini-powered viral intelligence), unlimited clip suggestions, export history with cloud sync, and priority processing.",
-  },
-  {
-    q: "Where is my video processed?",
-    a: "Preview, transcription, and clip analysis run locally in your browser. When you request a final server export, the render happens in our cloud and the finished file is stored for you to download.",
-  },
-  {
-    q: "What export formats do you support?",
-    a: "Vertical 9:16 MP4, ready for Shorts, Reels, and TikTok. Free exports at 720p with a watermark; Pro exports up to 4K with no watermark.",
-  },
+const FAQS = [
   {
     q: "Can I cancel anytime?",
     a: "Yes. Cancel from your Paddle receipt email or by contacting support — you keep Pro access until the end of the current billing period.",
@@ -37,61 +26,20 @@ const FAQS: { q: string; a: string; link?: { href: string; label: string } }[] =
     link: { href: "/refund-policy", label: "Read the refund policy" },
   },
   {
-    q: "Does it work on mobile?",
-    a: "Yes. The editor is touch-optimized for phones and tablets. Browser-side AI features work best in a modern desktop browser.",
+    q: "Do Free credits refresh every month?",
+    a: "No. Free accounts get 100 starter credits once. Credits do not auto-refresh. Upgrade to Pro for a monthly credit grant on successful billing events.",
+  },
+  {
+    q: "What are the Free plan limits?",
+    a: "Free exports are capped at 720p with a mandatory “Made with QuickAI” watermark, 3 AI video workloads per UTC day, and a 500 MB projected storage boundary. Chat edits cost 1 credit; exports cost 20.",
   },
   {
     q: "Do you offer team plans?",
-    a: "A Teams tier (multiple seats, batch processing, API access) is coming soon — join the waitlist by emailing support@quickaishort.online.",
+    a: "The Agency tier (seats, batch, API) is Coming Soon — not sellable yet. Contact support to join the waitlist.",
   },
 ];
 
-const PADDLE_PRICE_ID_PRO =
-  process.env.NEXT_PUBLIC_PADDLE_PRICE_ID_PRO ?? "pri_01krk7sez47kmd25kdtnff1z9t";
-
-const PLANS = [
-  {
-    id: "free",
-    name: "Free",
-    price: "$0",
-    period: "forever",
-    description: "Local browser AI processing. No credit card required.",
-    features: [
-      "Local browser AI processing",
-      "Transcription (in-browser Whisper)",
-      "AI clip detection (5 clips/video)",
-      "9:16 auto-reframe",
-      "Face tracking",
-      "720p export with \"Made with QuickAI\" watermark",
-    ],
-    cta: "Start Free",
-    href: "/editor",
-    highlight: false,
-    paddle: false,
-  },
-  {
-    id: "pro",
-    name: "Pro",
-    price: "$29",
-    period: "per month",
-    description: "4K export, no watermark, and Gemini-powered Deep Analysis.",
-    features: [
-      "Everything in Free",
-      "4K export",
-      "Watermark removal",
-      "Deep Analysis (Gemini-powered viral intelligence)",
-      "Unlimited clip suggestions",
-      "Whisper Large transcription",
-      "Export history & cloud sync",
-      "Priority processing queue",
-      "Caption style presets",
-    ],
-    cta: "Upgrade to Pro",
-    href: "#",
-    highlight: true,
-    paddle: true,
-  },
-];
+const PLANS = BILLING_PLANS;
 
 export default function PricingPage() {
   const { data: session } = useSession();
@@ -206,12 +154,13 @@ export default function PricingPage() {
               SHIP MORE.<br />SPEND LESS.
             </h1>
             <p className="text-muted-foreground text-xl max-w-2xl mx-auto">
-              Start free with local browser AI and 720p exports. Go Pro for 4K, watermark removal, and Gemini-powered Deep Analysis.
+              Clear limits. No dark patterns. Free is honest 720p with watermark —
+              Pro removes the ceiling.
             </p>
           </motion.div>
 
           {/* Plans Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-3xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {PLANS.map((plan, i) => (
               <motion.div
                 key={plan.name}
@@ -254,7 +203,7 @@ export default function PricingPage() {
                   </p>
                   {plan.id === "pro" && (
                     <p className="text-[10px] text-fg-muted mt-2 leading-relaxed">
-                      Traditional NLE subscriptions start at $22/mo — QuickAI includes conversational editing + cloud export for $29.
+                      Traditional NLE subscriptions start at $22/mo — QuickAI includes editor + AI + Pre-Flight for $29.
                     </p>
                   )}
                 </div>
@@ -291,7 +240,7 @@ export default function PricingPage() {
                       )}
                     </GlowButton>
                   )
-                ) : (
+                ) : plan.href !== "#" ? (
                   <GlowButton
                     variant="glass"
                     className="w-full h-12 rounded-2xl font-bold group"
@@ -302,31 +251,18 @@ export default function PricingPage() {
                       <ArrowRight className="ml-2 w-4 h-4 group-hover:translate-x-1 transition-transform" />
                     </Link>
                   </GlowButton>
+                ) : (
+                  <GlowButton
+                    variant="glass"
+                    className="w-full h-12 rounded-2xl font-bold"
+                    disabled
+                  >
+                    {plan.cta}
+                  </GlowButton>
                 )}
               </motion.div>
             ))}
           </div>
-
-          {/* Teams — coming soon */}
-          <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.35 }}
-            className="max-w-3xl mx-auto mt-8"
-          >
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 rounded-2xl border border-white/5 nano-glass px-6 py-4">
-              <p className="text-sm text-muted-foreground text-center sm:text-left">
-                <span className="font-bold text-foreground">Teams — coming soon.</span>{" "}
-                Multiple seats, batch processing, and API access.
-              </p>
-              <a
-                href="mailto:support@quickaishort.online?subject=Teams%20waitlist"
-                className="text-sm font-semibold text-primary hover:underline whitespace-nowrap"
-              >
-                Join the waitlist
-              </a>
-            </div>
-          </motion.div>
 
           {/* Bottom note */}
           <motion.div
@@ -336,7 +272,7 @@ export default function PricingPage() {
             className="flex items-center justify-center gap-2 text-center text-muted-foreground text-sm mt-16"
           >
             <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" aria-hidden="true" />
-            Payments secured by Paddle. Cancel anytime.
+            Payments secured by Paddle. Cancel anytime. All plans include full client-side processing.
           </motion.div>
 
           {/* FAQ */}

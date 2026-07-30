@@ -1,0 +1,15 @@
+{
+  "name": "quickaishort",
+  "private": true,
+  "description": "QuickAI Short monorepo root — frontend (Next.js) + fastapi (FastAPI)",
+  "scripts": {
+    "build": "pnpm --dir frontend run build",
+    "build:frontend": "pnpm --dir frontend run build",
+    "dev": "pnpm --dir frontend run dev",
+    "lint": "pnpm --dir frontend run lint",
+    "typecheck": "pnpm --dir frontend exec tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

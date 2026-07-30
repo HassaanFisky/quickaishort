@@ -128,7 +128,7 @@ FILE EDITING
 BROWSER AGENT
 
 - Use for: navigating Google Cloud Console, Vercel dashboard, GitHub,
-  Cloudflare DNS, Devpost submission.
+  Cloudflare DNS.
 - Before clicking: take screenshot to confirm the element is visible.
 - Before typing credentials: confirm the correct page in the URL bar.
 - Never auto-submit forms with payment info, legal agreements, or account
@@ -283,11 +283,11 @@ ARTIFACTS
 
 - Agent produces artifacts (file diffs, terminal logs, browser recordings)
 - Review ALL artifacts before merging. Never blind-approve.
-- Keep artifacts around for audit trail during the challenge submission
+- Keep artifacts around for audit trail during production work
 
 SKILLS (.antigravity/skills/)
 
-- Create reusable skill files for: "deploy-to-cloudrun", "run-adk-test", "record-demo-video", "submit-to-devpost"
+- Create reusable skill files for: "deploy-to-cloudrun", "run-adk-test", "record-demo-video"
 - Each skill = SKILL.md + supporting scripts
 - Agent auto-discovers skills relevant to the current task
 
@@ -337,17 +337,14 @@ WHEN THE AGENT GETS STUCK IN A LOOP
 
 ---
 
-## 12. CHALLENGE ELIGIBILITY CHECKLIST (ALWAYS KEEP CURRENT)
+## 12. PRODUCTION SHIP CHECKLIST (ALWAYS KEEP CURRENT)
 
 The agent must treat these as acceptance tests before any "shipping" claim:
 
-- [ ] Uses Google Gemini model (not OpenAI/Claude) for core AI logic
-- [ ] Uses Google ADK v1.0+ for agent orchestration
-- [ ] Has deployed, publicly accessible URL at quickaishort.online
-- [ ] Has public GitHub repo with MIT LICENSE file
-- [ ] Has 2:50–3:00 demo video showing live pipeline (not mock)
-- [ ] Devpost submission complete with all fields filled
-- [ ] Google for Startups form submitted with correct startup stage (Pre-seed)
+- [x] Uses Google Gemini model (not OpenAI/Claude) for core AI logic
+- [x] Uses Google ADK for agent orchestration
+- [x] Has deployed, publicly accessible URL at quickaishort.online
+- [x] Has public GitHub repo with MIT LICENSE file
 
 Do not claim a task is "done" until it passes every relevant item above.
 
@@ -372,20 +369,17 @@ COMPLETED:
 
 IN PROGRESS:
 
-- Cloud Run deployment (backend)
-- Google for Startups form submission
+- Product hardening + Studio evolution
 
 BLOCKED:
 
-- None. GCP billing resolved. Railway association fully terminated.
+- Gemini prepayment credits may block live AI path — confirm at ai.studio
 
 NEXT ACTIONS:
 
-1. Fill in fastapi/.env and frontend/.env.local from their .env.example templates
-2. Run ./deploy.sh to deploy backend to Cloud Run + frontend to Vercel
-3. Verify /health returns {"status":"ok","mongo":true,"adk":true}
-4. Record 3-minute demo video showing Pre-Flight live
-5. Submit to Devpost
+1. Keep production health green (`/health`, `/ready`)
+2. Founder: top up Gemini credits when AI features need live verification
+3. Continue Studio Kernel / Genius OS shipping honestly (shipped vs roadmap)
 
 ---
 
@@ -396,10 +390,10 @@ When in doubt, choose the option that:
 1. Preserves existing working code
 2. Can be verified in under 60 seconds
 3. Is reversible with one command
-4. Moves the challenge submission forward
+4. Moves the product (QuickAI Short → Studio) forward honestly — shipped vs roadmap
 
-If a task doesn't move us closer to winning the June 5 submission,
-deprioritize it. Every hour counts.
+If a task doesn't move us closer to a reliable product and honest docs,
+deprioritize it.
 
 Read this file at the start of every session. When this file is updated,
 acknowledge the change in one line before starting work.

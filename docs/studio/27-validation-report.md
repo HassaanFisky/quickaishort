@@ -55,7 +55,5 @@
 
 ## Still open (non-code)
 
-1. Gemini credit top-up → live demo  
-2. Demo video 2:50–3:00  
-3. Devpost + Google for Startups form  
-4. Founder consent before deleting legacy Firestore `Projects`
+1. Gemini credit top-up → live AI path  
+2. Founder consent before deleting legacy Firestore `Projects`

@@ -1,10 +1,8 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
-import { Resend } from "resend";
 import connectDB from "@/lib/db/mongodb";
 import User from "@/lib/db/models/user";
-
-const FROM = process.env.RESEND_FROM_EMAIL ?? "noreply@quickaishort.online";
+import { sendTransactionalEmail } from "@/lib/transactional-email";
 const APP_URL = (process.env.NEXTAUTH_URL ?? "https://www.quickaishort.online").replace(/\/$/, "");
 const EXPIRY_MS = 60 * 60 * 1000; // 1 hour
 const RATE_LIMIT_MS = 5 * 60 * 1000; // 5 minutes between resends
@@ -61,9 +59,7 @@ export async function POST(req: Request) {
 
     const resetUrl = `${APP_URL}/reset-password?token=${token}`;
 
-    const resend = new Resend(process.env.RESEND_API_KEY);
-    const { error: sendError } = await resend.emails.send({
-      from: FROM,
+    const sendResult = await sendTransactionalEmail({
       to: normalizedEmail,
       subject: "Reset your QuickAI Short password",
       text: `Reset your QuickAI Short password\n\nClick this link to reset your password (expires in 1 hour):\n${resetUrl}\n\nIf you didn't request this, ignore this email.`,
@@ -95,16 +91,17 @@ export async function POST(req: Request) {
       `,
     });
 
-    // Resend v2+ returns { data, error } — never throws
-    if (sendError) {
-      console.error("[forgot-password] Resend error:", JSON.stringify(sendError));
+    if (!sendResult.ok) {
+      console.error("[forgot-password] email send failed:", sendResult.error);
       return NextResponse.json(
         { message: "Failed to send reset email. Please try again in a moment." },
         { status: 500 }
       );
     }
 
-    console.info(`[forgot-password] Reset email sent to ${maskEmail(normalizedEmail)}`);
+    console.info(
+      `[forgot-password] Reset email sent via ${sendResult.provider} to ${maskEmail(normalizedEmail)}`
+    );
     return NextResponse.json({ message: "If that email exists, a reset link has been sent." });
   } catch (err) {
     console.error("[forgot-password] Unexpected error:", err);

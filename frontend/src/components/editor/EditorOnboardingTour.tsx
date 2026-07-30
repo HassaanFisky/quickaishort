@@ -18,6 +18,8 @@ const STEPS: { id: string; sentence: string }[] = [
 interface EditorOnboardingTourProps {
   initialStep?: number;
   onFinished: () => void;
+  /** Expand collapsed import chip before measuring ingest.* steps. */
+  onEnsureIngestVisible?: () => void;
 }
 
 /**
@@ -26,6 +28,7 @@ interface EditorOnboardingTourProps {
 export default function EditorOnboardingTour({
   initialStep = 0,
   onFinished,
+  onEnsureIngestVisible,
 }: EditorOnboardingTourProps) {
   const reduceMotion = useReducedMotion();
   const [step, setStep] = useState(initialStep);
@@ -52,6 +55,19 @@ export default function EditorOnboardingTour({
       window.clearTimeout(t2);
     };
   }, [step, setAIPanelOpen, measure]);
+
+  // Ingest anchors may live in a collapsed chip — expand before measuring.
+  useEffect(() => {
+    const id = STEPS[step]?.id;
+    if (!id?.startsWith("ingest.")) return;
+    onEnsureIngestVisible?.();
+    const t1 = window.setTimeout(measure, 50);
+    const t2 = window.setTimeout(measure, 220);
+    return () => {
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+    };
+  }, [step, onEnsureIngestVisible, measure]);
 
   useLayoutEffect(() => {
     measure();

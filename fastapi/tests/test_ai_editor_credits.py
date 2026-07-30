@@ -97,7 +97,7 @@ async def test_ai_edit_insufficient_credits_402(monkeypatch):
     with (
         patch("routers.ai_editor_router.ensure_agent_ready"),
         patch(
-            "services.stats_service.deduct_credits",
+            "services.stats_service.reserve_credits",
             new_callable=AsyncMock,
             return_value=False,
         ),
@@ -115,7 +115,7 @@ async def test_ai_edit_credit_outage_fail_closed_503(monkeypatch):
     with (
         patch("routers.ai_editor_router.ensure_agent_ready"),
         patch(
-            "services.stats_service.deduct_credits",
+            "services.stats_service.reserve_credits",
             new_callable=AsyncMock,
             side_effect=RuntimeError("firestore down"),
         ),
@@ -132,7 +132,7 @@ async def test_command_credit_outage_fail_closed_503(monkeypatch):
     with (
         patch("routers.ai_editor_router.ensure_agent_ready"),
         patch(
-            "services.stats_service.deduct_credits",
+            "services.stats_service.reserve_credits",
             new_callable=AsyncMock,
             side_effect=RuntimeError("firestore down"),
         ),
@@ -149,7 +149,7 @@ async def test_stream_requires_credits_before_gemini(monkeypatch):
     deduct = AsyncMock(return_value=False)
     with (
         patch("routers.ai_editor_router.ensure_agent_ready") as ready,
-        patch("services.stats_service.deduct_credits", deduct),
+        patch("services.stats_service.reserve_credits", deduct),
         patch(
             "routers.ai_editor_router._execute_via_dual_router",
             new_callable=AsyncMock,
@@ -183,7 +183,7 @@ async def test_credit_soft_fail_opt_in_allows_proceed(monkeypatch):
     with (
         patch("routers.ai_editor_router.ensure_agent_ready"),
         patch(
-            "services.stats_service.deduct_credits",
+            "services.stats_service.reserve_credits",
             new_callable=AsyncMock,
             side_effect=RuntimeError("firestore down"),
         ),
@@ -214,7 +214,7 @@ async def test_free_4k_command_returns_upgrade_without_credit(monkeypatch):
         AsyncMock(return_value=(UserTier.FREE, blocked)),
     )
     deduct = AsyncMock(return_value=True)
-    monkeypatch.setattr("services.stats_service.deduct_credits", deduct)
+    monkeypatch.setattr("services.stats_service.reserve_credits", deduct)
 
     response = await ai_editor_router.handle_editor_command(
         _cmd_req("Export this in 4K"),
@@ -300,7 +300,7 @@ async def test_command_ignores_client_tier_and_uses_trusted_tier(monkeypatch):
     monkeypatch.setattr(ai_editor_router, "_execute_via_dual_router", capture_tier)
     monkeypatch.setattr(ai_editor_router, "is_mock_ai_mode", lambda: False)
     monkeypatch.setattr(
-        "services.stats_service.deduct_credits",
+        "services.stats_service.reserve_credits",
         AsyncMock(return_value=True),
     )
 

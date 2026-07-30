@@ -11,8 +11,8 @@ export function CreditsLowBanner({ credits }: CreditsLowBannerProps) {
     ? "You're out of credits."
     : `You have ${credits} ${credits === 1 ? "credit" : "credits"} left.`;
   const body = isExhausted
-    ? "Upgrade to Pro to keep creating — Free tier credits are limited."
-    : "Upgrade to Pro for more headroom on Pre-Flight and exports.";
+    ? "Upgrade to Pro for more AI edits, exports, and Dub Video — Free starter credits do not auto-refresh."
+    : "Upgrade to Pro for 4K exports without watermark, unlimited daily AI workloads, and more credits.";
 
   return (
     <div
@@ -33,7 +33,7 @@ export function CreditsLowBanner({ credits }: CreditsLowBannerProps) {
         className="shrink-0 rounded-md px-2 py-1 text-sm font-semibold text-primary transition-colors hover:text-primary/80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
         style={{ transitionDuration: "var(--motion-2)" }}
       >
-        Get more
+        Upgrade
       </Link>
     </div>
   );

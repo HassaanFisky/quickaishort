@@ -327,7 +327,7 @@ async def dispatch_render_task(
     return receipt
 
 
-def _enqueue_dub_cloud_task(payload: "DubTaskPayload") -> RenderDispatchReceipt:
+def _enqueue_dub_cloud_task(payload: DubTaskPayload) -> RenderDispatchReceipt:
     from models.dub import DubTaskPayload as _DubTaskPayload
 
     assert isinstance(payload, _DubTaskPayload)
@@ -373,7 +373,7 @@ def _enqueue_dub_cloud_task(payload: "DubTaskPayload") -> RenderDispatchReceipt:
         )
 
 
-async def dispatch_dub_task(payload: "DubTaskPayload") -> RenderDispatchReceipt:
+async def dispatch_dub_task(payload: DubTaskPayload) -> RenderDispatchReceipt:
     """Enqueue Dub Video synthesize/align work on the private request renderer."""
 
     receipt = await asyncio.to_thread(_enqueue_dub_cloud_task, payload)

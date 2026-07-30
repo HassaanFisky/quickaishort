@@ -223,6 +223,7 @@ export function useServerExport({ userId }: UseServerExportArgs) {
         sourceFile,
         sourceUrl,
         sourceGcsPath,
+        cloudUploadFailed,
         selectedClipId,
         suggestions,
         transcript,
@@ -231,6 +232,13 @@ export function useServerExport({ userId }: UseServerExportArgs) {
         compiledManifest,
         rebuildRenderManifest,
       } = useEditorStore.getState();
+
+      if (cloudUploadFailed && sourceFile && !sourceGcsPath) {
+        toast.error(
+          "Cloud upload incomplete — local preview only. Retry upload before server export.",
+        );
+        return;
+      }
 
       // Phase 60: ensure we have a fresh manifest
       let manifest = compiledManifest;

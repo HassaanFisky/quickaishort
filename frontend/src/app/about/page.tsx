@@ -31,8 +31,8 @@ export default function AboutPage() {
             a skill when you want a second opinion, not the product&apos;s sole identity.
           </p>
           <p>
-            Built for the Google for Startups AI Agents Challenge 2026 by Hassaan
-            Fisky, a solo founder operating from Karachi, Pakistan.
+            Built by Hassaan Fisky, a solo founder operating from Karachi,
+            Pakistan.
           </p>
         </div>
       </main>

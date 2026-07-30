@@ -23,9 +23,14 @@ from models.ai_editor import (
     TrimAction,
     RemoveSilencesAction,
 )
-from services.gemini_client import DEFAULT_MODEL, call_gemini_text
+from services.gemini_client import DEFAULT_MODEL, call_gemini, call_gemini_text
 from services.ai_editor_sanitiser import sanitise
 from services.ai_router import get_model_for_task, TaskType, UserTier
+from services.native_tools import (
+    build_editor_function_declarations,
+    function_calls_to_actions,
+    native_tools_enabled,
+)
 from services.tool_registry import (
     build_orchestrator_system_prompt,
     build_planner_prompt_section,
@@ -83,14 +88,68 @@ async def process_editor_command(
     system = build_orchestrator_system_prompt(command)
     prompt = f"{system}\n\nUser command: {command}{context_str}"
 
+    parsed: dict[str, Any]
     try:
-        raw = await call_gemini_text(
-            prompt,
-            model=model_config.model_name,
-            json_mode=True,
-            max_attempts=3,
-        )
-        parsed = _parse_gemini_json(raw)
+        if native_tools_enabled():
+            decls = build_editor_function_declarations()
+            logger.info(
+                "studio_native_tools_canary decls=%d command_len=%d",
+                len(decls),
+                len(command),
+            )
+            # Single-step FC canary: tools attached; if the model returns
+            # function calls we map them; otherwise fall through to JSON text.
+            response = await call_gemini(
+                prompt,
+                model=model_config.model_name,
+                generation_config={"response_mime_type": "application/json"},
+                tools=[{"function_declarations": decls}] if decls else None,
+                max_attempts=2,
+            )
+            function_calls: list[Any] = []
+            try:
+                candidates = getattr(response, "candidates", None) or []
+                for cand in candidates:
+                    content = getattr(cand, "content", None)
+                    parts = getattr(content, "parts", None) or []
+                    for part in parts:
+                        fc = getattr(part, "function_call", None)
+                        if fc is not None:
+                            function_calls.append(fc)
+            except Exception as exc:
+                logger.warning("native_tools_parse_parts_failed: %s", exc)
+
+            if function_calls:
+                actions = function_calls_to_actions(function_calls)
+                parsed = {
+                    "intent": "edit",
+                    "confidence": 0.88,
+                    "actions": actions,
+                    "feedback": "Applied tool plan.",
+                    "message": "Applied tool plan.",
+                    "suggestions": [],
+                    "status": "ok" if actions else "no_op",
+                    "fallback": "Rephrase the command and retry.",
+                }
+            else:
+                raw_text = getattr(response, "text", None) or ""
+                parsed = _parse_gemini_json(raw_text) if raw_text else {}
+                if not parsed:
+                    raw = await call_gemini_text(
+                        prompt,
+                        model=model_config.model_name,
+                        json_mode=True,
+                        max_attempts=3,
+                    )
+                    parsed = _parse_gemini_json(raw)
+        else:
+            raw = await call_gemini_text(
+                prompt,
+                model=model_config.model_name,
+                json_mode=True,
+                max_attempts=3,
+            )
+            parsed = _parse_gemini_json(raw)
     except json.JSONDecodeError as e:
         raise HTTPException(
             status_code=422, detail="AI returned invalid JSON. Please try again."

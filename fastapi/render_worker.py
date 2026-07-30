@@ -17,6 +17,9 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 if current_dir not in sys.path:
     sys.path.insert(0, current_dir)
 
+# Re-export tier policy early so unit tests can import without loading RQ.
+from services.tier_render_policy import apply_tier_render_policy  # noqa: E402
+
 from rq import Worker  # noqa: E402
 from services.queue_service import (  # noqa: E402
     redis_conn,
@@ -46,6 +49,9 @@ from services.observability import (  # noqa: E402
 )
 from services.job_persistence import persist_failed_job  # noqa: E402
 from services.render_queue import push_result as _rq_push_result  # noqa: E402
+
+# Re-export for tests that import from render_worker.
+__all__ = ["apply_tier_render_policy", "process_render_task"]
 
 
 def validate_env():
@@ -231,6 +237,7 @@ def _build_job(
         image_path=(
             Path(options["watermark_path"]) if options.get("watermark_path") else None
         ),
+        text=str(options.get("watermark_text") or "Made with QuickAI"),
     )
 
     job = RenderJob(
@@ -269,6 +276,12 @@ def _build_job(
         ),
         manifest_filter_complex=options.get("_manifest_filter_complex"),
         manifest_meta=options.get("render_manifest"),
+        output_width=(
+            int(options["output_width"]) if options.get("output_width") else None
+        ),
+        output_height=(
+            int(options["output_height"]) if options.get("output_height") else None
+        ),
     )
 
     music_id = options.get("music_id")
@@ -314,6 +327,25 @@ async def _async_process_render_task(
     """Actual async implementation that shares a single event loop."""
     started_at = time.time()
     options = options or {}
+
+    # Trusted Free/Pro policy — never trust client watermark/resolution flags.
+    try:
+        from core.limits import check_user_tier
+
+        tier = await check_user_tier(user_id)
+        options = apply_tier_render_policy(options, tier)
+    except Exception as exc:
+        logger.error(
+            "tier_render_policy_failed",
+            job_id=job_id,
+            user_id=user_id,
+            error=str(exc),
+        )
+        # Fail closed to Free policy if tier lookup explodes mid-job.
+        from core.limits import UserTier
+
+        options = apply_tier_render_policy(options, UserTier.FREE)
+
     production_plan = options.get("production_plan")
     render_manifest = options.get("render_manifest")
     _ = attempt_number  # Cloud Tasks path; RQ still derives attempt from job header

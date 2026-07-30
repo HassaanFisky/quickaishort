@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
@@ -305,6 +305,10 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
               </button>
             ))}
           </div>
+          <p className="text-[10px] text-fg-muted mt-2 leading-relaxed">
+            Free plan: server export is forced to 720p with a “Made with QuickAI”
+            watermark. Upgrade to Pro for up to 4K without watermark.
+          </p>
         </div>
 
         {/* Phase 63: Manifest validation */}
