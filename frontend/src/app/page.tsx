@@ -1,32 +1,30 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import { CinematicIntro } from "@/components/layout/CinematicIntro";
-import { motion, useScroll, useTransform, useSpring, AnimatePresence, useInView } from "framer-motion";
+import { motion, useScroll, useTransform, useSpring, AnimatePresence } from "framer-motion";
 import {
   Sparkles,
   Users,
   Target,
   Check,
   ArrowRight,
-  Play,
   Brain,
   Star,
-  ChevronRight,
   Zap,
   BarChart,
   Video,
   Mic,
-  Layers
+  Layers,
+  ShieldCheck,
 } from "lucide-react";
 import { GlowButton } from "@/components/ui/GlowButton";
 import { cn } from "@/lib/utils";
-import { spring, containerVariants, itemVariants, staggerFast } from "@/lib/animations";
-import { useAnimatedCounter } from "@/hooks/useAnimatedCounter";
+import { spring, containerVariants, itemVariants } from "@/lib/animations";
+import { BILLING_PLANS } from "@/lib/billing-plans";
 
 const PERSONAS = [
   {
@@ -174,7 +172,7 @@ export default function LandingPage() {
         "relative min-h-screen bg-background text-foreground selection:bg-primary/30 overflow-x-hidden font-sans transition-opacity duration-1000",
         showIntro ? "opacity-0 h-screen overflow-hidden" : "opacity-100"
       )}>
-        {/* Scroll progress bar (Stripe/Linear style) */}
+        {/* Scroll progress bar (Linear-style) */}
         <motion.div className="scroll-progress" style={{ scaleX }} aria-hidden="true" />
 
         <Navbar />
@@ -307,7 +305,7 @@ export default function LandingPage() {
           </section>
 
           {/* BENTO GRID FEATURES */}
-          <section className="py-32 px-6">
+          <section id="features" className="py-32 px-6 scroll-mt-24">
             <div className="max-w-5xl mx-auto">
               <motion.div
                 initial={{ opacity: 0, y: 16 }}
@@ -483,6 +481,97 @@ export default function LandingPage() {
                   </motion.div>
                 ))}
               </div>
+            </div>
+          </section>
+
+          {/* PRICING — Paddle Billing catalog (Free / Pro / Agency) */}
+          <section id="pricing" aria-label="Pricing" className="py-32 px-6 border-t ghost-border bg-black/20 scroll-mt-24">
+            <div className="max-w-6xl mx-auto">
+              <motion.div
+                initial={{ opacity: 0, y: 16 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-80px" }}
+                transition={{ ...spring.smooth }}
+                className="text-center mb-16"
+              >
+                <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-white/10 bg-white/5 text-primary text-xs font-bold uppercase tracking-widest mb-6">
+                  <Sparkles className="w-3 h-3" />
+                  Paddle Billing
+                </div>
+                <h2 className="text-4xl md:text-5xl font-black mb-4 tracking-tight">
+                  Clear plans. <span className="brand-gradient-text">No dark patterns.</span>
+                </h2>
+                <p className="text-lg text-muted-foreground max-w-xl mx-auto">
+                  Free is honest 720p with watermark — Pro removes the ceiling via secure Paddle checkout.
+                </p>
+              </motion.div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                {BILLING_PLANS.map((plan, i) => (
+                  <motion.div
+                    key={plan.id}
+                    initial={{ opacity: 0, y: 24 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true, margin: "-40px" }}
+                    transition={{ ...spring.smooth, delay: i * 0.08 }}
+                    className={cn(
+                      "relative rounded-[2rem] p-8 flex flex-col gap-6",
+                      plan.highlight
+                        ? "nano-glass border-2 border-transparent bg-origin-border shadow-[0_0_40px_rgba(168,85,247,0.12)] [background-image:linear-gradient(hsl(var(--bg-base)),hsl(var(--bg-base))),linear-gradient(135deg,#a855f7,#ec4899)] [background-clip:padding-box,border-box]"
+                        : "nano-glass border border-white/5",
+                    )}
+                  >
+                    {plan.highlight && (
+                      <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full bg-primary text-primary-foreground text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5">
+                        <Zap className="w-3 h-3 fill-current" />
+                        Most Popular
+                      </div>
+                    )}
+
+                    <div>
+                      <h3 className="text-sm font-black uppercase tracking-widest text-muted-foreground mb-3">
+                        {plan.name}
+                      </h3>
+                      <div className="flex items-end gap-2 mb-2">
+                        <span className="text-5xl font-bold tracking-tighter">{plan.price}</span>
+                        <span className="text-muted-foreground text-sm pb-1">/{plan.period}</span>
+                      </div>
+                      <p className="text-sm text-muted-foreground leading-relaxed">{plan.description}</p>
+                    </div>
+
+                    <ul className="space-y-3 flex-1">
+                      {plan.features.map((feature) => (
+                        <li key={feature} className="flex items-start gap-3 text-sm">
+                          <Check className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                          <span className="text-foreground/80">{feature}</span>
+                        </li>
+                      ))}
+                    </ul>
+
+                    {plan.href !== "#" ? (
+                      <GlowButton
+                        variant={plan.highlight ? "premium" : "glass"}
+                        className="w-full h-12 rounded-2xl font-bold group"
+                        asChild
+                      >
+                        <Link href={plan.href}>
+                          {plan.cta}
+                          <ArrowRight className="ml-2 w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                        </Link>
+                      </GlowButton>
+                    ) : (
+                      <GlowButton variant="glass" className="w-full h-12 rounded-2xl font-bold" disabled>
+                        {plan.cta}
+                      </GlowButton>
+                    )}
+                  </motion.div>
+                ))}
+              </div>
+
+              <p className="flex items-center justify-center gap-2 text-center text-muted-foreground text-sm mt-12">
+                <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" aria-hidden="true" />
+                Payments secured by Paddle. Cancel anytime.
+              </p>
             </div>
           </section>
 

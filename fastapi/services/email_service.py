@@ -1,9 +1,8 @@
-"""Transactional email via Resend.
+"""Transactional email via ImprovMX Send API with Resend fallback.
 
-Resend account + RESEND_API_KEY must be provisioned before sends actually
-go out — see docs/SENTRY_SETUP.md sibling note in CLAUDE.md §13. Until then,
-every call here logs a "skipped_no_api_key" attempt to Firestore and returns
-False without raising, so signup/billing flows are never blocked by email.
+ImprovMX free = inbound only (send_ready=false). Until Light/Premium is
+purchased, outbound uses Resend when RESEND_API_KEY is set so signup /
+billing emails are not silently dropped.
 """
 
 from __future__ import annotations
@@ -12,42 +11,36 @@ import asyncio
 import logging
 import os
 from datetime import datetime, timezone
+from typing import Any
 
-import resend
+import httpx
 
 from services.db import get_db, is_ready
+from services.improvmx_service import (
+    GENERAL_EMAIL,
+    is_configured as improvmx_configured,
+    send_email as improvmx_send,
+)
 
 logger = logging.getLogger(__name__)
 
 EMAIL_LOG_COLLECTION = "email_log"
-FROM_ADDRESS = os.environ.get(
-    "RESEND_FROM_ADDRESS", "QuickAI Short <onboarding@quickaishort.online>"
-)
-
-_client_ready = False
+RESEND_API_URL = "https://api.resend.com/emails"
 
 
-def _ensure_client() -> bool:
-    global _client_ready
-    api_key = os.environ.get("RESEND_API_KEY", "")
-    if not api_key:
-        return False
-    if not _client_ready:
-        resend.api_key = api_key
-        _client_ready = True
-    return True
-
-
-async def _log_attempt(kind: str, to_email: str, status: str, detail: str = "") -> None:
+async def _log_attempt(
+    kind: str, to_email: str, status: str, detail: str = "", provider: str = ""
+) -> None:
     if not is_ready():
         return
 
-    def _do():
+    def _do() -> None:
         get_db().collection(EMAIL_LOG_COLLECTION).document().set(
             {
                 "kind": kind,
                 "to": to_email,
                 "status": status,
+                "provider": provider,
                 "detail": detail[:300],
                 "sent_at": datetime.now(timezone.utc),
             }
@@ -70,6 +63,7 @@ def _brand_wrapper(title: str, body_html: str) -> str:
 <div style="color:#a1a1aa;font-size:14px;line-height:1.6;">{body_html}</div>
 <p style="margin:32px 0 0;font-size:11px;color:#52525b;">
 You're receiving this because you have an account at quickaishort.online.
+Questions? Reply to {GENERAL_EMAIL}.
 </p>
 </td></tr>
 </table>
@@ -78,21 +72,127 @@ You're receiving this because you have an account at quickaishort.online.
 </body></html>"""
 
 
-async def _send(kind: str, to_email: str, subject: str, html: str) -> bool:
-    if not _ensure_client():
-        await _log_attempt(kind, to_email, "skipped_no_api_key")
-        return False
-    try:
-        await asyncio.to_thread(
-            resend.Emails.send,
-            {"from": FROM_ADDRESS, "to": to_email, "subject": subject, "html": html},
+def _resend_configured() -> bool:
+    return bool(os.environ.get("RESEND_API_KEY", "").strip())
+
+
+def _improvmx_unavailable(error: str) -> bool:
+    e = error.lower()
+    return any(
+        token in e
+        for token in (
+            "premium",
+            "forbidden",
+            "not found",
+            "404",
+            "403",
+            "send_ready",
+            "not configured for sending",
+            "skipped_no_api_key",
         )
-        await _log_attempt(kind, to_email, "sent")
-        return True
+    )
+
+
+async def _send_resend(to_email: str, subject: str, html: str) -> dict[str, Any]:
+    api_key = os.environ.get("RESEND_API_KEY", "").strip()
+    if not api_key:
+        return {"success": False, "error": "skipped_no_resend_key"}
+
+    domain = os.environ.get("IMPROVMX_DOMAIN", "quickaishort.online").strip()
+    alias = os.environ.get("IMPROVMX_FROM_ALIAS", "noreply").strip() or "noreply"
+    from_addr = (
+        os.environ.get("RESEND_FROM_EMAIL", "").strip() or f"{alias}@{domain}"
+    )
+    reply_to = (
+        os.environ.get("IMPROVMX_REPLY_TO", "").strip()
+        or os.environ.get("SUPPORT_EMAIL", "").strip()
+        or os.environ.get("GENERAL_EMAIL", "").strip()
+        or "contact@quickaishort.online"
+    )
+
+    payload = {
+        "from": from_addr,
+        "to": [to_email],
+        "subject": subject,
+        "html": html,
+        "reply_to": reply_to,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                RESEND_API_URL,
+                json=payload,
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+            )
+        body = response.json() if response.content else {}
+        if response.status_code >= 400:
+            detail = body.get("message") or body.get("name") or response.text[:300]
+            return {"success": False, "error": str(detail), "status_code": response.status_code}
+        return {"success": True, "id": body.get("id"), "provider": "resend"}
     except Exception as exc:
-        logger.warning("email_send_failed kind=%s to=%s err=%s", kind, to_email, exc)
-        await _log_attempt(kind, to_email, "failed", str(exc))
+        return {"success": False, "error": str(exc)}
+
+
+async def email_provider_status() -> dict[str, Any]:
+    """Lightweight readiness snapshot for ops (no secrets)."""
+    return {
+        "improvmx_configured": improvmx_configured(),
+        "resend_configured": _resend_configured(),
+        "from_alias": os.environ.get("IMPROVMX_FROM_ALIAS", "noreply").strip() or "noreply",
+        "domain": os.environ.get("IMPROVMX_DOMAIN", "quickaishort.online").strip(),
+        "support_email": os.environ.get("SUPPORT_EMAIL", "contact@quickaishort.online"),
+        "note": (
+            "ImprovMX free cannot send (daily_send=0). "
+            "Outbound uses Resend fallback until ImprovMX Light/Premium."
+        ),
+    }
+
+
+async def _send(kind: str, to_email: str, subject: str, html: str) -> bool:
+    if improvmx_configured():
+        try:
+            result = await improvmx_send(to=to_email, subject=subject, html=html)
+            if result.get("success") is not False and not result.get("error"):
+                await _log_attempt(kind, to_email, "sent", provider="improvmx")
+                return True
+            detail = str(result.get("error", "send_failed"))
+            await _log_attempt(kind, to_email, "failed", detail, provider="improvmx")
+            if not _improvmx_unavailable(detail) and not _resend_configured():
+                return False
+        except Exception as exc:
+            logger.warning("improvmx_send_failed kind=%s err=%s", kind, exc)
+            await _log_attempt(kind, to_email, "failed", str(exc), provider="improvmx")
+    else:
+        await _log_attempt(kind, to_email, "skipped_no_api_key", provider="improvmx")
+
+    if _resend_configured():
+        result = await _send_resend(to_email, subject, html)
+        if result.get("success"):
+            await _log_attempt(
+                kind, to_email, "sent", "fallback_after_improvmx", provider="resend"
+            )
+            logger.info("email_sent_via_resend_fallback kind=%s", kind)
+            return True
+        await _log_attempt(
+            kind,
+            to_email,
+            "failed",
+            str(result.get("error", "resend_failed")),
+            provider="resend",
+        )
         return False
+
+    await _log_attempt(
+        kind,
+        to_email,
+        "failed",
+        "no_outbound_provider: upgrade ImprovMX or set RESEND_API_KEY",
+        provider="none",
+    )
+    return False
 
 
 async def send_welcome_email(user_email: str, user_name: str) -> bool:
@@ -120,9 +220,7 @@ async def send_pro_activation_email(user_email: str, user_name: str) -> bool:
 
 
 async def send_weekly_digest(user_email: str, stats: dict) -> bool:
-    """Not triggered by any scheduled job yet — the trigger (Cloud Scheduler
-    + per-user opt-in check) is Phase 47/48 territory. Function exists now so
-    the email template and send path are ready when that job is wired."""
+    """Not triggered by any scheduled job yet — template ready for Phase 47/48."""
     html = _brand_wrapper(
         "Your week on QuickAI Short",
         f"Exports: {stats.get('export_count', 0)} &middot; "

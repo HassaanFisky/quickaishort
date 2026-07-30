@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
+import { GENERAL_EMAIL, mailto } from "@/lib/email-addresses";
 
 export const metadata: Metadata = {
   title: "Refund Policy — Quick AI Shorts",
@@ -78,9 +79,12 @@ export default function RefundPolicyPage() {
               If you believe you qualify for an exceptional refund or have billing concerns, 
               please reach out to our team at:
             </p>
-            <div className="inline-block px-6 py-3 bg-foreground/5 rounded-full border border-foreground/10 text-foreground font-medium hover:bg-foreground/10 transition-colors cursor-pointer">
-              support@quickaishort.online
-            </div>
+            <a
+              href={mailto(GENERAL_EMAIL)}
+              className="inline-block px-6 py-3 bg-foreground/5 rounded-full border border-foreground/10 text-foreground font-medium hover:bg-foreground/10 transition-colors"
+            >
+              {GENERAL_EMAIL}
+            </a>
           </section>
         </div>
       </main>

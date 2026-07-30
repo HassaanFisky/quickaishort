@@ -51,7 +51,7 @@ Depending on your host operating system, execute the following script from the p
 - `ADMIN_SECRET`: The shared API secret to authorize admin endpoints (e.g. email, referral bonuses, latency).
 - `SENTRY_DSN`: Sentry connection URL for backend crash reporting.
 - `RESEND_API_KEY`: API key for transaction-based emails.
-- `RESEND_FROM_ADDRESS`: Default verified sender (e.g., `onboarding@quickaishort.online`).
+- `RESEND_FROM_EMAIL`: Transactional sender (`noreply@quickaishort.online`). Human Reply-To / support channel: `contact@quickaishort.online`.
 - `PADDLE_WEBHOOK_SECRET`: The Ed25519 public key obtained from the Paddle dashboard.
 
 ---

@@ -800,7 +800,7 @@ html.liquid-transition::view-transition-new(root) {
     animation: none !important;
   }
 
-  /* Marquee: keep decorative motion alive but slower (Stripe/Linear pattern) â€”
+  /* Marquee: keep decorative motion alive but slower (Linear-style pattern) —
      a slow, pausable, purely-horizontal ticker doesn't trigger vestibular
      issues the way parallax/zoom motion does. */
   .marquee-track {

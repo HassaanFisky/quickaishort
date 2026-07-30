@@ -38,7 +38,7 @@ This checklist should be reviewed before major production cuts (billing, irrever
 
 ### Email Integration (Resend)
 - [ ] Ensure Resend account is active, sender domain verified, and `RESEND_API_KEY` set.
-- [ ] Ensure `RESEND_FROM_ADDRESS` is configured correctly (e.g. `onboarding@quickaishort.online`).
+- [ ] Ensure `RESEND_FROM_EMAIL` is `noreply@quickaishort.online` and Reply-To / contact vars are `contact@quickaishort.online`.
 
 ### Error Tracking (Sentry)
 - [ ] Ensure Sentry projects are created for both Next.js and FastAPI.
@@ -66,7 +66,7 @@ This checklist should be reviewed before major production cuts (billing, irrever
 - [ ] `ADMIN_SECRET` (Matching frontend `ADMIN_SECRET`)
 - [ ] `SENTRY_DSN` (Sentry backend key)
 - [ ] `RESEND_API_KEY` (Resend API client key)
-- [ ] `RESEND_FROM_ADDRESS`
+- [ ] `RESEND_FROM_EMAIL` (`noreply@quickaishort.online`) + `IMPROVMX_REPLY_TO` / contact aliases (`contact@quickaishort.online`)
 - [ ] `PADDLE_WEBHOOK_SECRET`
 
 ---

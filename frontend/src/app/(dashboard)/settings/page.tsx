@@ -2,6 +2,7 @@
 
 import { useSession } from "next-auth/react";
 import { useTheme } from "next-themes";
+import { GENERAL_EMAIL, mailto } from "@/lib/email-addresses";
 import {
   Card,
   CardContent,
@@ -296,7 +297,7 @@ export default function SettingsPage() {
                         </p>
                       </div>
                       <Button variant="outline" className="h-10 px-5 rounded-xl font-bold text-sm shrink-0" asChild>
-                        <a href="mailto:support@quickaishort.online">
+                        <a href={mailto(GENERAL_EMAIL)}>
                           <Mail className="w-3.5 h-3.5 mr-2" />
                           Contact support
                         </a>

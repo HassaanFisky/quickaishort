@@ -15,7 +15,11 @@ from typing import Optional
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, field_validator
 
-from services.email_service import send_pro_activation_email, send_welcome_email
+from services.email_service import (
+    email_provider_status,
+    send_pro_activation_email,
+    send_welcome_email,
+)
 
 router = APIRouter(prefix="/api/internal/email", tags=["email"])
 
@@ -36,6 +40,15 @@ def _verify_secret(x_admin_secret: Optional[str]) -> None:
     expected = os.getenv("ADMIN_SECRET")
     if not expected or x_admin_secret != expected:
         raise HTTPException(status_code=403, detail="Invalid admin secret")
+
+
+@router.get("/health")
+async def email_health(
+    x_admin_secret: Optional[str] = Header(None, alias="X-Admin-Secret"),
+) -> dict:
+    """Ops readiness — no secrets returned. Admin-gated."""
+    _verify_secret(x_admin_secret)
+    return await email_provider_status()
 
 
 @router.post("/welcome")
