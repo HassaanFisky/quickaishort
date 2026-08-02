@@ -7,7 +7,6 @@ import {
   Scissors,
   History,
   LayoutDashboard,
-  Bot,
   SquareSplitHorizontal,
   Type,
   Rocket,
@@ -171,19 +170,19 @@ export function CommandPalette() {
         <CommandGroup heading="Go to">
           <CommandItem onSelect={() => runCommand(() => router.push("/dashboard"))}>
             <LayoutDashboard className="mr-2 h-4 w-4" />
-            <span>Dashboard</span>
+            <span>Home</span>
           </CommandItem>
           <CommandItem onSelect={() => runCommand(() => router.push("/editor"))}>
             <Scissors className="mr-2 h-4 w-4" />
-            <span>Editor</span>
+            <span>New edit</span>
           </CommandItem>
-          <CommandItem onSelect={() => runCommand(() => router.push("/adk"))}>
-            <Bot className="mr-2 h-4 w-4" />
-            <span>ADK Studio (Coming Soon)</span>
+          <CommandItem onSelect={() => runCommand(() => router.push("/projects"))}>
+            <History className="mr-2 h-4 w-4" />
+            <span>Projects</span>
           </CommandItem>
           <CommandItem onSelect={() => runCommand(() => router.push("/history"))}>
             <History className="mr-2 h-4 w-4" />
-            <span>History</span>
+            <span>Recent exports</span>
           </CommandItem>
         </CommandGroup>
         <CommandSeparator />

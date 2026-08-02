@@ -106,6 +106,11 @@ class _FakeRedis:
         self.values[key] = value
         return value
 
+    async def decr(self, key: str) -> int:
+        value = int(self.values.get(key, 0)) - 1
+        self.values[key] = value
+        return value
+
     async def expire(self, key: str, seconds: int) -> bool:
         _ = key, seconds
         return True
@@ -644,8 +649,13 @@ async def test_gemini_quota_error_is_never_retried(monkeypatch) -> None:
         aio=SimpleNamespace(models=SimpleNamespace(generate_content=generate))
     )
     guard = RedisGeminiBackpressure(_FakeRedis(), clock=lambda: 100.0)
+    spend = SimpleNamespace(admit=AsyncMock())
     monkeypatch.setattr(gemini_client, "get_client", lambda: client)
     monkeypatch.setattr(gemini_client, "_get_backpressure_guard", lambda: guard)
+    monkeypatch.setattr(
+        "services.gemini_spend_cap.get_gemini_spend_cap",
+        lambda: spend,
+    )
 
     with pytest.raises(GeminiBackpressureError) as first:
         await gemini_client.call_gemini("prompt", max_attempts=3)
@@ -655,6 +665,7 @@ async def test_gemini_quota_error_is_never_retried(monkeypatch) -> None:
         await gemini_client.call_gemini("prompt", max_attempts=3)
 
     generate.assert_awaited_once()
+    assert spend.admit.await_count == 2
 
 
 @pytest.mark.asyncio
@@ -731,10 +742,15 @@ async def test_mock_ai_mode_blocked_in_production(monkeypatch) -> None:
         aio=SimpleNamespace(models=SimpleNamespace(generate_content=generate))
     )
     guard = RedisGeminiBackpressure(_FakeRedis(), clock=lambda: 100.0)
+    spend = SimpleNamespace(admit=AsyncMock())
     monkeypatch.setenv("MOCK_AI_MODE", "true")
     monkeypatch.setenv("ENVIRONMENT", "production")
     monkeypatch.setattr(gemini_client, "get_client", lambda: client)
     monkeypatch.setattr(gemini_client, "_get_backpressure_guard", lambda: guard)
+    monkeypatch.setattr(
+        "services.gemini_spend_cap.get_gemini_spend_cap",
+        lambda: spend,
+    )
 
     text = await gemini_client.call_gemini_text(
         "hello", json_mode=False, max_attempts=1
@@ -742,6 +758,7 @@ async def test_mock_ai_mode_blocked_in_production(monkeypatch) -> None:
 
     assert text == '{"ok":true}'
     generate.assert_awaited_once()
+    spend.admit.assert_awaited_once()
 
 
 @pytest.mark.asyncio

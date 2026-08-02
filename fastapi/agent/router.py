@@ -48,6 +48,7 @@ from middleware.cost_guard import (
 )
 from models.ai_editor import AiEditorAction
 from services.gemini_backpressure import GeminiBackpressureError
+from services.gemini_spend_cap import GeminiSpendCapError
 
 logger = logging.getLogger(__name__)
 
@@ -551,6 +552,16 @@ class DualModelRouter:
                     if receipt is not None
                     else exc.cooldown.retry_after_seconds
                 ),
+                limit_decision=static_decision,
+            )
+        except GeminiSpendCapError as exc:
+            await self._cache.release(lookup)
+            return RouterResponse(
+                action_intent=RouterActionIntent.RETRY_LATER,
+                task=request.task,
+                message=str(exc),
+                profile_used=primary_profile,
+                retry_after_seconds=exc.retry_after_seconds,
                 limit_decision=static_decision,
             )
         except RateLimitDeferred as exc:

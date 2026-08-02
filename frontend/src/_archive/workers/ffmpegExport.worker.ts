@@ -1,12 +1,12 @@
-// Module 5 (worker half) — Local WebAssembly Canvas Encoder
-// Receives JPEG-compressed canvas frames from the main thread, writes them
-// into FFmpeg.wasm's virtual filesystem as an image sequence, then executes
-// a libx264 encode pass and transfers the resulting MP4 ArrayBuffer back.
-//
-// Installation (run from frontend/):
-//   pnpm add @ffmpeg/ffmpeg@0.12.15 @ffmpeg/util@0.12.2
-//
-// SharedArrayBuffer is required — the editor route already sets COEP/COOP headers.
+/**
+ * ARCHIVE-ONLY — not on the live `/editor` path (2026-08-02 quarantine).
+ * Live Preview = WebCodecs / MediaRecorder (`ExportDialog`).
+ * Final shareable MP4 = Cloud Tasks → private Cloud Run ffmpeg → GCS.
+ * Do not re-wire into production UI or market as Final export.
+ *
+ * Historical: Module 5 (worker half) — Local WebAssembly Canvas Encoder.
+ * SharedArrayBuffer / COEP-COOP required if ever revived behind a flag.
+ */
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore — install with: pnpm add @ffmpeg/ffmpeg@0.12.15 @ffmpeg/util@0.12.2

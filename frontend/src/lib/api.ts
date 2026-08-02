@@ -192,6 +192,57 @@ export async function getStats(userId: string): Promise<UserStats> {
   return data;
 }
 
+/** AI editor readiness + Gemini circuit + process-local cache stats. */
+export async function getAiEditorHealth(): Promise<{
+  status: string;
+  mock_ai_mode?: boolean;
+  gemini_circuit?: {
+    blocked?: boolean | null;
+    kind?: string | null;
+    retry_after_seconds?: number | null;
+    state?: string;
+  };
+  ai_cache?: { hits?: number; misses?: number; hit_rate?: number | null };
+  studio_native_tools?: boolean;
+}> {
+  const { data } = await axios.get(`${API_URL}/api/ai-editor/health`);
+  return data;
+}
+
+/** EP-004 orchestrator — structured capability plan (MediaGraph chips). */
+export async function orchestratorPlan(payload: Record<string, unknown>) {
+  const { data } = await axios.post(
+    `${API_URL}/api/studio/v1/orchestrator/plan`,
+    payload,
+  );
+  return data;
+}
+
+/** EP-004 orchestrator — Kernel execute after local apply. */
+export async function orchestratorExecute(payload: Record<string, unknown>) {
+  const { data } = await axios.post(
+    `${API_URL}/api/studio/v1/orchestrator/execute`,
+    payload,
+  );
+  return data;
+}
+
+/** Dub Video enqueue (ADR-014). */
+export async function createDubJob(payload: Record<string, unknown>) {
+  const { data } = await axios.post(`${API_URL}/api/studio/v1/dub`, payload);
+  return data;
+}
+
+export async function getDubJob(jobId: string) {
+  const { data } = await axios.get(`${API_URL}/api/studio/v1/dub/${jobId}`);
+  return data;
+}
+
+export async function cancelDubJob(jobId: string) {
+  const { data } = await axios.delete(`${API_URL}/api/studio/v1/dub/${jobId}`);
+  return data;
+}
+
 export function buildExportDownloadUrl(relative: string): string {
   if (!relative) return "";
   if (relative.startsWith("http://") || relative.startsWith("https://")) {

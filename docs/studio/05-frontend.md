@@ -73,9 +73,9 @@ This is the seed of the Studio Tool Runtime on the client.
 | Whisper transcription | `@xenova/transformers`, `useMediaPipeline` / workers |
 | Face tracking | `hooks/useFaceTracker.ts` MediaPipe |
 | Scene / beat detection | `lib/sceneDetection.ts`, `lib/beatDetection.ts` |
-| FFmpeg.wasm export | `@ffmpeg/ffmpeg` dependency; worker docs in CLAUDE |
-| WebGPU shaders | `lib/webgpu/**` |
-| Server export | `hooks/useServerExport.ts` |
+| Local preview export | WebCodecs / MediaRecorder (`clientExport.ts`) — device-local |
+| FFmpeg.wasm | Present as decode helper + archived orphan export worker — **not** the live Final export path |
+| Server final export | `hooks/useServerExport.ts` → Cloud Tasks → private ffmpeg renderer → GCS |
 
 ---
 

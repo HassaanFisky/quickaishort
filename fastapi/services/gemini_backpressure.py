@@ -22,7 +22,9 @@ _FAILURE_KEY = "gemini:backpressure:failures"
 _FAILURE_WINDOW_SECONDS = 300
 _DEFAULT_BASE_DELAY_SECONDS = 2
 _DEFAULT_MAX_DELAY_SECONDS = 60
-_DEFAULT_HARD_QUOTA_DELAY_SECONDS = 300
+# After depleted prepaid / billing hard-quota, keep the herd blocked longer
+# so trickle retries cannot burn a fresh $10–20 top-up within minutes.
+_DEFAULT_HARD_QUOTA_DELAY_SECONDS = 3600
 
 
 class AsyncRedisBackpressureClient(Protocol):

@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, MutableRefObject } from "react";
-import Pusher, { type Channel } from "pusher-js";
+import type { Channel } from "pusher-js";
 
 import { API_URL, getStats } from "@/lib/api";
+import { getSharedPusher } from "@/lib/pusherClient";
 import { EMPTY_STATS, type UserStats } from "@/types/stats";
 
 interface UseDashboardStatsArgs {
@@ -27,7 +28,6 @@ export function useDashboardStats({
   );
   const [error, setError] = useState<string | null>(null);
 
-  const pusherRef = useRef<Pusher | null>(null);
   const channelRef = useRef<Channel | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
@@ -60,13 +60,9 @@ export function useDashboardStats({
         setError("Could not reach the stats service.");
       });
 
-    const key = process.env.NEXT_PUBLIC_PUSHER_KEY;
-    const cluster = process.env.NEXT_PUBLIC_PUSHER_CLUSTER;
-
-    if (key && cluster) {
+    const pusher = getSharedPusher();
+    if (pusher) {
       try {
-        const pusher = new Pusher(key, { cluster });
-        pusherRef.current = pusher;
         const channel = pusher.subscribe(`user-dashboard-${userId}`);
         channelRef.current = channel;
         channel.bind("stats-updated", (data: Partial<UserStats>) => {
@@ -88,10 +84,7 @@ export function useDashboardStats({
         channelRef.current.unsubscribe();
         channelRef.current = null;
       }
-      if (pusherRef.current) {
-        pusherRef.current.disconnect();
-        pusherRef.current = null;
-      }
+      // Do not disconnect shared Pusher — other hooks may still use it.
       if (wsRef.current) {
         wsRef.current.close();
         wsRef.current = null;

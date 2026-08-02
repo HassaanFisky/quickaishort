@@ -9,12 +9,12 @@ export MSYS2_ARG_CONV_EXCL="--liveness-probe=*:--startup-probe=*"
 
 PROJECT_ID="quickaishort-agent-494304"
 REGION="us-central1"
-REPO_NAME="quickai-repo"
+REPO_NAME="cloud-run-source-deploy"
 BUCKET_NAME="quickaishort-agent-494304-media"   # verified real bucket name
 SA_EMAIL="99900313102-compute@developer.gserviceaccount.com"
 TASKS_QUEUE="quickai-render"
 IMAGE_TAG=$(date +%Y%m%d-%H%M%S)
-IMAGE_URI="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/backend:${IMAGE_TAG}"
+IMAGE_URI="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/quickaishort/backend:${IMAGE_TAG}"
 PUBLIC_API_URL="https://quickai-api-y2cgnbsbxa-uc.a.run.app"
 
 echo "Deploying QuickAI to Production [Tag: ${IMAGE_TAG}]..."

@@ -5,11 +5,10 @@ import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useEffect } from "react";
 import {
-  LayoutGrid,
-  Scissors,
-  Bot,
-  History as HistoryIcon,
-  Settings as SettingsIcon,
+  Plus,
+  FolderOpen,
+  Clock,
+  User,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -18,27 +17,15 @@ interface TabItem {
   href: string;
   label: string;
   icon: LucideIcon;
-  /** Announced label for screen readers when UI label is shortened. */
-  ariaLabel?: string;
 }
 
-// Mirrors Sidebar.tsx NAV_ITEMS for desktop/mobile navigation parity.
-// Labels shortened for narrow viewports where needed.
 const TABS: TabItem[] = [
-  { href: "/dashboard", label: "Home", icon: LayoutGrid },
-  { href: "/editor", label: "Editor", icon: Scissors },
-  {
-    href: "/adk",
-    label: "Soon",
-    icon: Bot,
-    ariaLabel: "ADK Studio — Coming Soon",
-  },
-  { href: "/history", label: "Library", icon: HistoryIcon },
-  { href: "/settings", label: "Profile", icon: SettingsIcon },
+  { href: "/dashboard", label: "Home", icon: Plus },
+  { href: "/projects", label: "Projects", icon: FolderOpen },
+  { href: "/history", label: "Recent", icon: Clock },
+  { href: "/settings", label: "Account", icon: User },
 ];
 
-// Routes where the tab bar should never render, even if the session is authenticated.
-// /editor hides the bar so timeline + chat sheets don't fight global chrome.
 const HIDDEN_PATHS = new Set<string>(["/signin", "/signup"]);
 
 function isEditorPath(pathname: string | null): boolean {
@@ -55,9 +42,6 @@ export function BottomTabBar() {
     !HIDDEN_PATHS.has(pathname ?? "") &&
     !isEditorPath(pathname);
 
-  // Toggle a body class so the global CSS rule reserves matching bottom padding
-  // on <main> while the bar is mounted. This prevents the fixed bar from
-  // overlapping the final scroll position of page content.
   useEffect(() => {
     if (!shouldRender) return;
     document.body.classList.add("has-bottom-nav");
@@ -71,11 +55,11 @@ export function BottomTabBar() {
   return (
     <nav
       aria-label="App sections"
-      className="md:hidden fixed bottom-0 inset-x-0 z-40 nano-glass border-t border-white/5"
+      className="md:hidden fixed bottom-0 inset-x-0 z-40 border-t border-border bg-[hsl(var(--bg-base))]"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
       <ul role="list" className="flex h-14">
-        {TABS.map(({ href, label, icon: Icon, ariaLabel }) => {
+        {TABS.map(({ href, label, icon: Icon }) => {
           const active =
             pathname === href ||
             (href !== "/" && pathname?.startsWith(`${href}/`));
@@ -84,19 +68,17 @@ export function BottomTabBar() {
               <Link
                 href={href}
                 aria-current={active ? "page" : undefined}
-                aria-label={ariaLabel ?? label}
                 className={cn(
                   "relative flex h-full w-full flex-col items-center justify-center gap-1 text-[11px] font-medium",
                   "transition-colors active:opacity-70",
-                  "focus-visible:outline-2 focus-visible:outline-offset-[-4px] focus-visible:outline-primary",
-                  active ? "text-primary" : "text-muted-foreground",
+                  "focus-visible:outline-2 focus-visible:outline-offset-[-4px] focus-visible:outline-[hsl(var(--accent-indigo))]",
+                  active ? "text-[hsl(var(--accent-indigo))]" : "text-[hsl(var(--fg-subtle))]",
                 )}
-                style={{ transitionDuration: "var(--motion-2)" }}
               >
                 {active && (
                   <span
                     aria-hidden="true"
-                    className="absolute top-0 left-1/2 -translate-x-1/2 h-[2px] w-8 rounded-b-full bg-primary"
+                    className="absolute top-0 left-1/2 -translate-x-1/2 h-[2px] w-8 rounded-b-full bg-[hsl(var(--accent-indigo))]"
                   />
                 )}
                 <Icon className="w-5 h-5 shrink-0" aria-hidden="true" />

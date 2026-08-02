@@ -81,7 +81,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} ${montserrat.variable} antialiased`}
       >
         <SkipLink />
-        <div className="living-water-bg" />
+        <div className="living-water-bg opacity-40 dark:opacity-20" />
         <AppProviders>
           <RouteAnalytics />
           <PaddleProvider />

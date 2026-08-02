@@ -507,16 +507,16 @@ Do not claim a task is "done" until it passes every relevant item above.
 
 Keep this section updated as the project evolves.
 
-Last updated: 2026-07-30
+Last updated: 2026-08-01
 
-CURRENT PHASE: PRODUCTION LIVE — Studio Kernel dual-run + Dub Video + Studio Genius OS Phase 1
+CURRENT PHASE: PRODUCTION LIVE — Studio Kernel dual-run + Dub Video + Studio Genius OS Phase 1 + **P0 spend/spoof lockdown in-repo**
 
 BLOCKED:
 
 - **Gemini prepayment credits depleted (429)** on project `99900313102` — founder must top up at https://ai.studio/projects before live AI chat / analyze / key rotate. Auth OK; generateContent fails.
 - **Dub Video live smoke** blocked on Gemini credits (+ TTS key confirm).
 
-NOT BLOCKED (verified 2026-07-26):
+NOT BLOCKED (verified 2026-07-26; lockdown code 2026-08-01):
 
 - API `/health` green (mongo/redis/adk/gcs); `/ready` ready; ingest policy route auth-gated 401
 - Cloud Tasks `quickai-render` RUNNING; private renderer OIDC
@@ -525,13 +525,16 @@ NOT BLOCKED (verified 2026-07-26):
 - **M3 ingest FSM live**: sole editor ingest path `useIngestLifecycle`
 - **Dub Video (ADR-014) code complete**
 - **Studio Genius OS Phase 1 (ADR-015)**: Redis Orchestrator PlanStore; multi-turn + stream chat; universal suggestion copy; docked Dub; real ADD_SFX Web Audio preview; FC = Phase 2
+- **P0 lockdown (2026-08-01, needs deploy):** JWT-only tenant on analyze/process-video/preflight/direct/create-video; prod OpenAPI off; FE CSP-Report-Only + HSTS; AIPanel zero-credit send block; export preview-vs-final copy; docs synced; `archive/obsolete-claims-2026-08/`
 
 NEXT ACTIONS:
 
 1. Founder: top up Gemini credits → verify generateContent 200
-2. Optional product demo recording when AI path is live
-3. Phase 2: ADR-006 native FunctionDeclaration
-4. Optional: add PEXELS_API_KEY + GOOGLE_TTS_API_KEY to Cloud Run when ADK workspace is released
+2. Deploy lockdown revision (API + Vercel FE) after local verify
+3. Founder live checks: GCS no public ACL; prod `/docs` 404; `/metrics` rejects without admin
+4. Weeks 3–4: stream/Pusher latency polish
+5. Phase 2: ADR-006 native FunctionDeclaration
+6. Optional: add PEXELS_API_KEY + GOOGLE_TTS_API_KEY to Cloud Run when ADK workspace is released
 
 CURRENT FRAMING:
 Product today: **QuickAI Short** — conversational AI video editing (ingest → chat → preview → export).

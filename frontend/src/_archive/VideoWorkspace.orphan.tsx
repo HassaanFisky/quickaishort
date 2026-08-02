@@ -240,7 +240,7 @@ export default function VideoWorkspace() {
   // ── Initialize FFmpeg worker ─────────────────────────────────────────────────
   useEffect(() => {
     const worker = new Worker(
-      new URL("../../workers/ffmpegExport.worker.ts", import.meta.url),
+      new URL("./workers/ffmpegExport.worker.ts", import.meta.url),
       { type: "module" },
     );
 

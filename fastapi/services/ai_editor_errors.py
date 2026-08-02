@@ -12,11 +12,13 @@ from typing import Any
 
 from fastapi import HTTPException
 from services.gemini_backpressure import Gemini429Kind, GeminiBackpressureError
+from services.gemini_spend_cap import GeminiSpendCapError
 
 
 class AiEditorErrorKind(str, Enum):
     HARD_QUOTA = "hard_quota"
     TRANSIENT = "transient"
+    SPEND_CAP = "spend_cap"
     CREDITS = "credits"
     CREDIT_SERVICE = "credit_service"
     UNAUTHORIZED = "unauthorized"
@@ -76,6 +78,34 @@ def from_backpressure(exc: GeminiBackpressureError) -> HTTPException:
         kind,
         message,
         retry_after=exc.cooldown.retry_after_seconds,
+    )
+
+
+def from_spend_cap(exc: GeminiSpendCapError) -> HTTPException:
+    """Map global call-budget / kill-switch blocks to an honest UX envelope."""
+
+    if exc.reason == "kill_switch":
+        message = (
+            "AI spend is paused by the founder kill-switch. "
+            "No Gemini call was made — your timeline edits are safe."
+        )
+    elif exc.reason == "daily_cap":
+        message = (
+            "Daily AI call budget reached. No further Gemini spend today — "
+            "your timeline edits are safe."
+        )
+    elif exc.reason == "hourly_cap":
+        message = (
+            "Hourly AI call budget reached. Try again later — "
+            "no Gemini call was made."
+        )
+    else:
+        message = "AI spend budget blocked this request. No Gemini call was made."
+    return http_error(
+        429,
+        AiEditorErrorKind.SPEND_CAP,
+        message,
+        retry_after=exc.retry_after_seconds,
     )
 
 

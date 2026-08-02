@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import axios from "axios";
-import Pusher, { type Channel } from "pusher-js";
+import type { Channel } from "pusher-js";
 import { toast } from "sonner";
 
 import { useEditorStore } from "@/stores/editorStore";
@@ -15,6 +15,7 @@ import {
   requestExport,
 } from "@/lib/api";
 import { formatApiDetail } from "@/lib/authenticatedFetch";
+import { getSharedPusher } from "@/lib/pusherClient";
 import type {
   CanvasOverlay,
   ExportAspect,
@@ -34,7 +35,10 @@ interface ExportClipOptions {
   watermarkEnabled?: boolean;
 }
 
+/** Aggressive poll when Pusher unavailable. */
 const POLL_INTERVAL_MS = 3000;
+/** Slower belt-and-braces when realtime is connected. */
+const POLL_INTERVAL_PUSHER_MS = 12_000;
 const POLL_TIMEOUT_MS = 10 * 60 * 1000;
 
 export function useServerExport({ userId }: UseServerExportArgs) {
@@ -45,7 +49,6 @@ export function useServerExport({ userId }: UseServerExportArgs) {
   const [exportError, setExportError] = useState<string | null>(null);
   const [lastDownloadUrl, setLastDownloadUrl] = useState<string | null>(null);
 
-  const pusherRef = useRef<Pusher | null>(null);
   const channelRef = useRef<Channel | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollDeadlineRef = useRef<number>(0);
@@ -135,7 +138,7 @@ export function useServerExport({ userId }: UseServerExportArgs) {
   );
 
   const startPolling = useCallback(
-    (jobId: string) => {
+    (jobId: string, intervalMs: number = POLL_INTERVAL_MS) => {
       if (pollRef.current) clearInterval(pollRef.current);
       pollDeadlineRef.current = Date.now() + POLL_TIMEOUT_MS;
       pollRef.current = setInterval(async () => {
@@ -158,23 +161,19 @@ export function useServerExport({ userId }: UseServerExportArgs) {
         } catch (err) {
           if (process.env.NODE_ENV !== "production") console.warn("Export status poll failed:", err);
         }
-      }, POLL_INTERVAL_MS);
+      }, intervalMs);
     },
     [finishFailure, finishSuccess, userId],
   );
 
   const subscribeRealtime = useCallback(
     (jobId: string) => {
-      const key = process.env.NEXT_PUBLIC_PUSHER_KEY;
-      const cluster = process.env.NEXT_PUBLIC_PUSHER_CLUSTER;
-      if (!key || !cluster) {
-        startPolling(jobId);
+      const pusher = getSharedPusher();
+      if (!pusher) {
+        startPolling(jobId, POLL_INTERVAL_MS);
         return;
       }
-      if (!pusherRef.current) {
-        pusherRef.current = new Pusher(key, { cluster });
-      }
-      const channel = pusherRef.current.subscribe(`export-${jobId}`);
+      const channel = pusher.subscribe(`export-${jobId}`);
       channelRef.current = channel;
 
       channel.bind("progress", (data: { progress?: number }) => {
@@ -186,7 +185,7 @@ export function useServerExport({ userId }: UseServerExportArgs) {
         if (data?.download_url) {
           finishSuccess(jobId, data.download_url);
         } else {
-          startPolling(jobId);
+          startPolling(jobId, POLL_INTERVAL_MS);
         }
       });
       channel.bind("error", (data: { error?: string }) => {
@@ -209,12 +208,10 @@ export function useServerExport({ userId }: UseServerExportArgs) {
         toast.info("Export cancelled.");
       });
 
-      // Belt-and-braces: also poll periodically. If Pusher delivers first, the
-      // poll will see "finished" and short-circuit; if Pusher silently drops,
-      // the poll catches it.
-      startPolling(jobId);
+      // Events primary; slow poll only if Pusher silently drops.
+      startPolling(jobId, POLL_INTERVAL_PUSHER_MS);
     },
-    [finishFailure, finishSuccess, startPolling],
+    [cleanup, finishFailure, finishSuccess, startPolling],
   );
 
   const exportClip = useCallback(
@@ -383,8 +380,8 @@ export function useServerExport({ userId }: UseServerExportArgs) {
         if (axios.isAxiosError(err)) {
           const backendMsg = formatApiDetail(
             err.response?.data?.detail ??
-              err.response?.data?.message ??
-              err.response?.data?.error,
+            err.response?.data?.message ??
+            err.response?.data?.error,
             err.response?.status ?? 500,
           );
           finishFailure(backendMsg || err.message || "Failed to queue export");
@@ -415,7 +412,7 @@ export function useServerExport({ userId }: UseServerExportArgs) {
         if (axios.isAxiosError(err)) {
           toast.error(
             formatApiDetail(err.response?.data?.detail, err.response?.status ?? 500) ||
-              "Could not cancel export on server.",
+            "Could not cancel export on server.",
           );
         } else {
           toast.error("Could not cancel export on server.");

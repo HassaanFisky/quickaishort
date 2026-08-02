@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
+from core.rate_limit import limiter
 from models.dub import DubJobCreateRequest, DubJobStatus
 from services.auth import get_verified_user_id
 from services.dub_service import (
@@ -23,18 +24,24 @@ router = APIRouter(prefix="/api/studio/v1/dub", tags=["studio-dub"])
 
 
 @router.get("/languages")
+@limiter.limit("60/minute")
 async def list_dub_languages(
+    request: Request,
     verified_user_id: str = Depends(get_verified_user_id),
 ) -> dict:
+    _ = request
     _ = verified_user_id
     return {"languages": supported_languages()}
 
 
 @router.post("", response_model=DubJobStatus)
+@limiter.limit("10/minute")
 async def start_dub_job(
+    request: Request,
     body: DubJobCreateRequest,
     verified_user_id: str = Depends(get_verified_user_id),
 ) -> DubJobStatus:
+    _ = request
     if body.target_lang == "en" and body.mode != "captions_only":
         # English → English full dub is a no-op waste; allow captions_only only.
         raise HTTPException(
@@ -94,10 +101,13 @@ async def start_dub_job(
 
 
 @router.get("/{job_id}", response_model=DubJobStatus)
+@limiter.limit("60/minute")
 async def get_dub_job(
+    request: Request,
     job_id: str,
     verified_user_id: str = Depends(get_verified_user_id),
 ) -> DubJobStatus:
+    _ = request
     job = load_job(job_id)
     if job is None or job.user_id != verified_user_id:
         raise HTTPException(status_code=404, detail="Dub job not found")
@@ -105,10 +115,13 @@ async def get_dub_job(
 
 
 @router.delete("/{job_id}", response_model=DubJobStatus)
+@limiter.limit("20/minute")
 async def cancel_dub_job(
+    request: Request,
     job_id: str,
     verified_user_id: str = Depends(get_verified_user_id),
 ) -> DubJobStatus:
+    _ = request
     job = load_job(job_id)
     if job is None or job.user_id != verified_user_id:
         raise HTTPException(status_code=404, detail="Dub job not found")

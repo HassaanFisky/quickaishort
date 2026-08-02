@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
+from starlette.requests import Request
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -48,6 +49,24 @@ def _edit_req() -> AIEditorRequest:
 
 def _cmd_req(command: str = "add captions") -> EditorCommandRequest:
     return EditorCommandRequest(command=command, user_tier="free")
+
+
+def _http_request() -> Request:
+    """Real Starlette Request for SlowAPI-decorated handlers."""
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0"},
+        "http_version": "1.1",
+        "method": "POST",
+        "scheme": "http",
+        "path": "/api/ai-editor/command",
+        "raw_path": b"/api/ai-editor/command",
+        "query_string": b"",
+        "headers": [],
+        "client": ("127.0.0.1", 12345),
+        "server": ("test", 80),
+    }
+    return Request(scope)
 
 
 def _command_ok(**kwargs):
@@ -103,7 +122,7 @@ async def test_ai_edit_insufficient_credits_402(monkeypatch):
         ),
     ):
         with pytest.raises(HTTPException) as ei:
-            await ai_editor_router.ai_edit(_edit_req(), user_id="u1")
+            await ai_editor_router.ai_edit(_http_request(), body=_edit_req(), user_id="u1")
         assert ei.value.status_code == 402
 
 
@@ -121,7 +140,7 @@ async def test_ai_edit_credit_outage_fail_closed_503(monkeypatch):
         ),
     ):
         with pytest.raises(HTTPException) as ei:
-            await ai_editor_router.ai_edit(_edit_req(), user_id="u1")
+            await ai_editor_router.ai_edit(_http_request(), body=_edit_req(), user_id="u1")
         assert ei.value.status_code == 503
 
 
@@ -138,7 +157,7 @@ async def test_command_credit_outage_fail_closed_503(monkeypatch):
         ),
     ):
         with pytest.raises(HTTPException) as ei:
-            await ai_editor_router.handle_editor_command(_cmd_req(), user_id="u1")
+            await ai_editor_router.handle_editor_command(_http_request(), body=_cmd_req(), user_id="u1")
         assert ei.value.status_code == 503
 
 
@@ -157,7 +176,7 @@ async def test_stream_requires_credits_before_gemini(monkeypatch):
     ):
         with pytest.raises(HTTPException) as ei:
             await ai_editor_router.handle_editor_command_stream(
-                _cmd_req(), user_id="u1"
+                _http_request(), body=_cmd_req(), user_id="u1"
             )
         assert ei.value.status_code == 402
         deduct.assert_awaited_once_with("u1", 1)
@@ -193,7 +212,7 @@ async def test_credit_soft_fail_opt_in_allows_proceed(monkeypatch):
             return_value=fake,
         ),
     ):
-        resp = await ai_editor_router.ai_edit(_edit_req(), user_id="u1")
+        resp = await ai_editor_router.ai_edit(_http_request(), body=_edit_req(), user_id="u1")
         assert resp.model == "gemini-2.5-flash"
 
 
@@ -217,7 +236,8 @@ async def test_free_4k_command_returns_upgrade_without_credit(monkeypatch):
     monkeypatch.setattr("services.stats_service.reserve_credits", deduct)
 
     response = await ai_editor_router.handle_editor_command(
-        _cmd_req("Export this in 4K"),
+        _http_request(),
+        body=_cmd_req("Export this in 4K"),
         user_id="u1",
     )
 
@@ -247,7 +267,7 @@ async def test_command_cache_hit_refunds_credit(monkeypatch):
             side_effect=cached_command,
         ),
     ):
-        resp = await ai_editor_router.handle_editor_command(_cmd_req(), user_id="u1")
+        resp = await ai_editor_router.handle_editor_command(_http_request(), body=_cmd_req(), user_id="u1")
     assert resp.cached is True
     deduct.assert_awaited_once_with("u1", 1)
     refund.assert_awaited_once_with("u1", 1)
@@ -268,8 +288,11 @@ async def test_command_failure_after_deduct_refunds(monkeypatch):
             side_effect=RuntimeError("gemini down"),
         ),
     ):
-        with pytest.raises(RuntimeError):
-            await ai_editor_router.handle_editor_command(_cmd_req(), user_id="u1")
+        with pytest.raises(HTTPException) as ei:
+            await ai_editor_router.handle_editor_command(
+                _http_request(), body=_cmd_req(), user_id="u1"
+            )
+        assert ei.value.status_code == 500
     deduct.assert_awaited_once_with("u1", 1)
     refund.assert_awaited_once_with("u1", 1)
 
@@ -284,7 +307,7 @@ async def test_command_success_keeps_charge(monkeypatch):
         patch("services.stats_service.deduct_credits", deduct),
         patch("services.stats_service.refund_credits", refund),
     ):
-        await ai_editor_router.handle_editor_command(_cmd_req(), user_id="u1")
+        await ai_editor_router.handle_editor_command(_http_request(), body=_cmd_req(), user_id="u1")
     deduct.assert_awaited_once_with("u1", 1)
     refund.assert_not_awaited()
 
@@ -305,7 +328,8 @@ async def test_command_ignores_client_tier_and_uses_trusted_tier(monkeypatch):
     )
 
     await ai_editor_router.handle_editor_command(
-        EditorCommandRequest(command="Add captions", user_tier="pro"),
+        _http_request(),
+        body=EditorCommandRequest(command="Add captions", user_tier="pro"),
         user_id="u1",
     )
 

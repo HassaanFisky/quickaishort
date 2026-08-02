@@ -98,6 +98,11 @@ async def call_gemini(
         )
         return SimpleNamespace(text=text, model_version="mock-ai-mode")
 
+    # Global prepaid protection — before backpressure and before HTTP.
+    from services.gemini_spend_cap import get_gemini_spend_cap
+
+    await get_gemini_spend_cap().admit()
+
     guard = _get_backpressure_guard()
     await guard.check()
     client = get_client()
@@ -139,15 +144,39 @@ async def call_gemini(
                 return await _attempt()
         raise RuntimeError("Gemini retry loop ended without a result")
 
+    import time as _time
+
+    started = _time.perf_counter()
     try:
         response = await _execute()
     except Exception as exc:
         deferred = await guard.record_429(exc)
+        elapsed_ms = (_time.perf_counter() - started) * 1000
         if deferred is not None:
+            logger.warning(
+                "gemini_call_deferred model=%s elapsed_ms=%.0f",
+                target_model,
+                elapsed_ms,
+            )
             raise deferred from exc
+        logger.error(
+            "gemini_call_failed model=%s elapsed_ms=%.0f err_type=%s",
+            target_model,
+            elapsed_ms,
+            type(exc).__name__,
+        )
         raise
 
     await guard.clear_after_success()
+    # Attribution only — never log prompt/transcript bodies (privacy).
+    text_len = len(getattr(response, "text", None) or "")
+    logger.info(
+        "gemini_call_ok model=%s elapsed_ms=%.0f response_chars=%d tools=%d",
+        target_model,
+        (_time.perf_counter() - started) * 1000,
+        text_len,
+        len(tools or []),
+    )
     return response
 
 

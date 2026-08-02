@@ -34,8 +34,8 @@ import {
 } from "lucide-react";
 import { useUIStore, type EditorTool } from "@/stores/uiStore";
 import { useEditorStore } from "@/stores/editorStore";
-import { useServerExport } from "@/hooks/useServerExport";
 import { usePreflight } from "@/hooks/usePreflight";
+import { useServerExportStore } from "@/stores/serverExportStore";
 import { cn } from "@/lib/utils";
 import { formatTime } from "@/lib/utils/formatTime";
 import { useSession } from "next-auth/react";
@@ -553,16 +553,14 @@ export default function RightPanel() {
   const { data: session } = useSession();
   const userId = session?.user?.id ?? "";
 
-  const {
-    exportClip,
-    cancelExport,
-    isExporting,
-    exportProgress,
-    exportDone,
-    exportError,
-    lastDownloadUrl,
-    resetExportState,
-  } = useServerExport({ userId });
+  // Server export is owned by ServerExportHost (chat-primary always mounted).
+  const isExporting = useServerExportStore((s) => s.isExporting);
+  const exportProgress = useServerExportStore((s) => s.exportProgress);
+  const exportDone = useServerExportStore((s) => s.exportDone);
+  const exportError = useServerExportStore((s) => s.exportError);
+  const lastDownloadUrl = useServerExportStore((s) => s.lastDownloadUrl);
+  const cancelExport = useServerExportStore((s) => s.cancelExport);
+  const resetExportState = useServerExportStore((s) => s.resetExportState);
 
   const {
     isRunning: isPreflightRunning,
@@ -622,8 +620,9 @@ export default function RightPanel() {
   const isZeroState = !hasVideo || !hasClip;
 
   const handleExport = useCallback(() => {
-    exportClip({ quality: exportSettings.quality, captionsEnabled });
-  }, [exportClip, exportSettings.quality, captionsEnabled]);
+    // Owned by ServerExportHost — keep a single enqueue + cancel path.
+    window.dispatchEvent(new CustomEvent("qai:export"));
+  }, []);
 
   const handleRunPreflight = useCallback(async () => {
     if (!userId || !selectedClip) return;
@@ -648,22 +647,14 @@ export default function RightPanel() {
     );
   }, [selectedClip, triggerPreflight, userId]);
 
-  // Shortcut actions arrive as window events from the editor's binding engine
-  // (single source of truth lives in shortcutsStore — see app/editor/page.tsx).
+  // Preflight shortcut only — export listener lives in ServerExportHost.
   useEffect(() => {
     const onPreflight = () => {
       if (selectedClip && !isPreflightRunning) handleRunPreflight();
     };
-    const onExport = () => {
-      if (selectedClip && (sourceFile || sourceUrl) && !isExporting) handleExport();
-    };
     window.addEventListener("qai:preflight", onPreflight);
-    window.addEventListener("qai:export", onExport);
-    return () => {
-      window.removeEventListener("qai:preflight", onPreflight);
-      window.removeEventListener("qai:export", onExport);
-    };
-  }, [selectedClip, isPreflightRunning, handleRunPreflight, handleExport, isExporting, sourceFile, sourceUrl]);
+    return () => window.removeEventListener("qai:preflight", onPreflight);
+  }, [selectedClip, isPreflightRunning, handleRunPreflight]);
 
   // ------------------------------------------------------------------
   // NO VIDEO — clean empty state
@@ -1403,7 +1394,7 @@ export default function RightPanel() {
                           Download
                         </button>
                         <button
-                          onClick={() => resetExportState()}
+                          onClick={() => resetExportState?.()}
                           className="w-full h-9 text-[12px] font-semibold text-muted-foreground hover:text-foreground transition-colors"
                         >
                           Export again
@@ -1423,7 +1414,7 @@ export default function RightPanel() {
                         </div>
                         <button
                           onClick={() => {
-                            resetExportState();
+                            resetExportState?.();
                             handleExport();
                           }}
                           className="w-full h-12 rounded-2xl bg-secondary/50 border border-border flex items-center justify-center gap-2 text-foreground font-semibold text-sm hover:bg-secondary transition-colors"
@@ -1460,7 +1451,7 @@ export default function RightPanel() {
                         </p>
                         <button
                           type="button"
-                          onClick={() => void cancelExport()}
+                          onClick={() => void cancelExport?.()}
                           className="w-full h-9 rounded-xl border border-border bg-secondary/40 text-[12px] font-semibold text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
                         >
                           Cancel export

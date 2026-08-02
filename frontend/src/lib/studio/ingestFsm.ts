@@ -57,13 +57,13 @@ export function canTransitionIngest(current: IngestStage, next: IngestStage): bo
 /** Human labels for calm progress UI (no marketing fluff). */
 export const INGEST_STAGE_LABELS: Record<IngestStage, string> = {
   idle: "Waiting",
-  identify: "Identifying source…",
-  validate: "Validating…",
-  acquire_meta: "Fetching media info…",
-  projectize: "Creating project…",
-  analyze: "Analyzing…",
-  ready: "Ready",
-  failed: "Failed",
+  identify: "Reading your footage…",
+  validate: "Checking format…",
+  acquire_meta: "Uploading…",
+  projectize: "Setting up project…",
+  analyze: "Analysing the transcript…",
+  ready: "Ready to edit",
+  failed: "Something blocked processing",
 };
 
 /** Ordered progress steps shown in the UI (excludes idle/failed). */

@@ -191,14 +191,12 @@
   }
 
   .dark {
-    /* ===== STUDIO DARK â€” Anthropic-grade neutral graphite, soft contrasted text ===== */
-    --bg-base: 240 6% 8%;
-    /* ~#131316 */
-    --bg-subtle: 240 5% 11%;
-    /* panels ~#1a1a1d */
-    --bg-muted: 240 5% 16%;
-    /* controls ~#26262b */
-    --bg-elevated: 240 5% 13%;
+    /* ===== STUDIO DARK — near-black graphite editing surface ===== */
+    --bg-base: 0 0% 4%;
+    /* ~#0a0a0a */
+    --bg-subtle: 0 0% 7%;
+    --bg-muted: 0 0% 11%;
+    --bg-elevated: 0 0% 9%;
     --border-strong: 240 5% 30%;
     --fg: 240 12% 96%;
     /* soft white ~#f3f3f6 */
@@ -455,7 +453,7 @@ html.liquid-transition::view-transition-new(root) {
     overflow-x: hidden;
     @apply bg-background text-foreground antialiased;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
-    background: radial-gradient(circle at 50% 0%, hsl(var(--background) / 0.8) 0%, hsl(var(--background)) 100%);
+    background: hsl(var(--background));
   }
 
   :focus-visible {
@@ -1537,8 +1535,8 @@ nav:has(.nav-link:hover) .nav-link:not(:hover) {
 
 .ai-panel-title {
   font-size: 0.825rem;
-  font-weight: 900;
-  letter-spacing: 0.04em;
+  font-weight: 600;
+  letter-spacing: 0.02em;
   color: hsl(var(--fg));
 }
 
@@ -1570,27 +1568,70 @@ nav:has(.nav-link:hover) .nav-link:not(:hover) {
 
 .suggestions-rail {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 0.375rem;
   padding: 0.625rem 0.875rem;
   border-top: 1px solid hsl(var(--border));
   background: hsl(var(--accent-indigo) / 0.04);
   flex-shrink: 0;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+.suggestions-rail::-webkit-scrollbar {
+  height: 4px;
 }
 
 .suggestion-chip {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
   background: hsl(var(--accent-indigo) / 0.1);
   border: 1px solid hsl(var(--accent-indigo) / 0.22);
   color: hsl(var(--accent-indigo));
   font-size: 0.7rem;
   font-weight: 600;
-  padding: 0.28em 0.7em;
-  border-radius: 99px;
+  padding: 0.45em 0.85em;
+  border-radius: 0.75rem;
   cursor: pointer;
-  transition: all var(--studio-transition-fast, 0.1s ease);
+  transition: background var(--studio-transition-fast, 0.1s ease),
+    border-color var(--studio-transition-fast, 0.1s ease),
+    box-shadow var(--studio-transition-fast, 0.1s ease),
+    transform var(--studio-transition-fast, 0.1s ease);
   text-align: left;
-  line-height: 1.4;
+  line-height: 1.35;
   letter-spacing: 0.01em;
+  max-width: min(100%, 18rem);
+  min-height: 44px;
+  min-width: 44px;
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+}
+
+.suggestion-chip--export {
+  border-color: hsl(var(--primary) / 0.45);
+  background: hsl(var(--primary) / 0.12);
+  color: hsl(var(--primary));
+}
+
+.suggestion-chip-label {
+  display: block;
+  font-weight: 600;
+}
+
+.suggestion-chip-evidence {
+  display: block;
+  font-size: 0.62rem;
+  font-weight: 500;
+  opacity: 0.72;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 .suggestion-chip:hover:not(:disabled) {
@@ -1600,9 +1641,29 @@ nav:has(.nav-link:hover) .nav-link:not(:hover) {
   transform: translateY(-1px);
 }
 
+.suggestion-chip:focus-visible {
+  outline: 2px solid hsl(var(--accent-indigo) / 0.7);
+  outline-offset: 2px;
+}
+
+.suggestion-chip--reduced-motion,
+.suggestion-chip--reduced-motion:hover:not(:disabled) {
+  transition: none;
+  transform: none;
+  box-shadow: none;
+}
+
 .suggestion-chip:disabled {
   opacity: 0.35;
   cursor: not-allowed;
+}
+
+@media (min-width: 768px) {
+  .suggestions-rail {
+    flex-wrap: wrap;
+    overflow-x: visible;
+    scroll-snap-type: none;
+  }
 }
 
 .ai-messages {
@@ -1854,18 +1915,18 @@ nav:has(.nav-link:hover) .nav-link:not(:hover) {
 .send-btn {
   width: 2.125rem;
   height: 2.125rem;
-  background: linear-gradient(135deg, #a855f7 0%, #ec4899 100%);
+  background: hsl(var(--accent-indigo));
   border: none;
   border-radius: 0.625rem;
-  color: #fff;
+  color: hsl(var(--accent-fg));
   font-size: 0.9rem;
-  font-weight: 700;
+  font-weight: 600;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  box-shadow: 0 2px 14px hsl(var(--accent-indigo) / 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  box-shadow: 0 2px 8px hsl(var(--accent-indigo) / 0.25);
   transition: opacity 0.1s ease, transform 0.1s ease;
 }
 

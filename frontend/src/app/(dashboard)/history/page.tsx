@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { History, Video, Calendar, Download, Trash2, Sparkles } from "lucide-react";
+import { History, Video, Calendar, Download, Trash2 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,17 +9,17 @@ import LoadingSpinner from "@/components/shared/LoadingSpinner";
 import axios from "axios";
 import { format } from "date-fns";
 import { motion } from "framer-motion";
-import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-
 import { ExportRecord } from "@/types/models";
 import { buildExportDownloadUrl } from "@/lib/api";
-import { containerVariants, itemVariants, scaleUpVariants } from "@/lib/animations";
+import { containerVariants, itemVariants } from "@/lib/animations";
+import { EmptyState } from "@/components/shared/EmptyState";
+import { InlineError } from "@/components/shared/InlineError";
 
 export default function HistoryPage() {
   const queryClient = useQueryClient();
 
-  const { data: exports, isLoading } = useQuery<ExportRecord[]>({
+  const { data: exports, isLoading, isError } = useQuery<ExportRecord[]>({
     queryKey: ["exports"],
     queryFn: async () => {
       const res = await axios.get("/api/exports");
@@ -36,16 +36,14 @@ export default function HistoryPage() {
       toast.success("Export deleted.");
     },
     onError: () => {
-      toast.error("Failed to delete export.");
+      toast.error("Couldn't delete this export. Try again in a moment.");
     },
   });
 
   const handleDownload = (exp: ExportRecord) => {
-    const url = exp.downloadUrl
-      ? buildExportDownloadUrl(exp.downloadUrl)
-      : null;
+    const url = exp.downloadUrl ? buildExportDownloadUrl(exp.downloadUrl) : null;
     if (!url) {
-      toast.error("Download link unavailable. Re-export the clip to generate a new one.");
+      toast.error("Download link expired. Re-export from the editor to generate a new file.");
       return;
     }
     const a = document.createElement("a");
@@ -60,98 +58,88 @@ export default function HistoryPage() {
 
   if (isLoading)
     return (
-      <div className="h-[60vh] flex items-center justify-center">
-        <div className="relative">
-          <div className="absolute inset-0 bg-primary/20 blur-3xl rounded-full animate-pulse" />
-          <LoadingSpinner size={48} className="relative z-10" />
-        </div>
+      <div className="h-[50vh] flex items-center justify-center">
+        <LoadingSpinner size={40} />
       </div>
     );
 
   return (
-    <div className="container mx-auto px-6 py-12 space-y-12 max-w-7xl">
-      {/* Header Section */}
-      <motion.div 
-        initial={{ y: -20, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        className="flex flex-col md:flex-row md:items-end justify-between gap-6"
-      >
-        <div className="space-y-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20">
-              <History className="w-5 h-5 text-primary" />
-            </div>
-            <h1 className="text-4xl md:text-5xl font-black tracking-tighter premium-gradient-text">
-              Export History
-            </h1>
-          </div>
-          <p className="text-muted-foreground text-lg font-medium opacity-80 max-w-xl leading-relaxed">
-            Manage and download your previously generated viral clips. High-performance archival for your elite studio.
-          </p>
-        </div>
-        <div className="flex items-center gap-4">
-          <Badge variant="outline" className="px-4 py-1.5 border-foreground/10 bg-foreground/5 text-xs font-black tracking-widest uppercase rounded-full">
-            {exports?.length || 0} Total Sessions
-          </Badge>
-        </div>
-      </motion.div>
+    <div className="space-y-8">
+      <header className="space-y-1">
+        <h1 className="text-xl sm:text-2xl font-semibold text-[hsl(var(--fg))]">Recent exports</h1>
+        <p className="text-[13px] text-[hsl(var(--fg-subtle))]">
+          Download finished shorts or remove old exports.
+        </p>
+      </header>
 
-      {/* Grid Section */}
-      {exports && exports.length > 0 ? (
-        <motion.div 
+      {isError && (
+        <InlineError
+          title="Exports couldn't load"
+          body="Check your connection and refresh. Your editor projects are unaffected."
+        />
+      )}
+
+      {!isError && exports && exports.length === 0 && (
+        <EmptyState
+          icon={History}
+          title="No exports yet"
+          body="Finish an edit in the workspace, then export a short to see it here."
+          actionLabel="Start editing"
+          actionHref="/editor"
+          size="md"
+        />
+      )}
+
+      {exports && exports.length > 0 && (
+        <motion.div
           variants={containerVariants}
           initial="hidden"
           animate="visible"
-          className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8"
+          className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"
         >
           {exports.map((exp) => (
             <motion.div key={exp._id} variants={itemVariants}>
-              <Card className="group depth-card glass-surface overflow-hidden border-foreground/5 hover:border-primary/30 transition-all duration-500 rounded-[2.5rem]">
+              <Card className="overflow-hidden border-border bg-[hsl(var(--bg-subtle))]">
                 <CardContent className="p-0">
-                  {/* Preview Placeholder */}
-                  <div className="aspect-video bg-foreground/[0.03] relative flex items-center justify-center group-hover:bg-foreground/[0.05] transition-colors duration-500">
-                    <Video className="w-14 h-14 text-foreground/10 group-hover:text-primary/20 transition-colors" />
-                    <div className="absolute top-4 left-4">
-                      <Badge className="bg-primary/10 text-primary text-[10px] font-black px-3 py-1 rounded-full backdrop-blur-md border border-primary/20 uppercase tracking-widest">
-                        {exp.settings?.aspectRatio || "9:16"}
-                      </Badge>
-                    </div>
-                    <div className="absolute inset-0 bg-linear-to-t from-background/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                  <div className="aspect-video bg-[hsl(var(--bg-muted))] relative flex items-center justify-center">
+                    <Video className="w-10 h-10 text-[hsl(var(--fg-subtle))]/40" aria-hidden />
+                    <span className="absolute top-3 left-3 text-[10px] font-medium px-2 py-0.5 rounded-md bg-[hsl(var(--bg-base))]/80 border border-border">
+                      {exp.settings?.aspectRatio || "9:16"} · {exp.settings?.quality}
+                    </span>
                   </div>
 
-                  <div className="p-8 space-y-6">
-                    <div className="space-y-2">
-                      <h3
-                        className="text-xl font-bold truncate tracking-tight text-foreground/90"
-                        title={exp.output?.filename}
-                      >
-                        {exp.output?.filename || "Elite Studio Session"}
+                  <div className="p-4 space-y-3">
+                    <div>
+                      <h3 className="text-[13px] font-medium truncate" title={exp.output?.filename}>
+                        {exp.output?.filename || `Export ${exp.clipId.slice(0, 6)}`}
                       </h3>
-                      <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground tracking-wide">
-                        <Calendar className="w-3.5 h-3.5" />
+                      <div className="flex items-center gap-1.5 text-[11px] text-[hsl(var(--fg-subtle))] mt-1">
+                        <Calendar className="w-3 h-3" aria-hidden />
                         {format(new Date(exp.createdAt), "MMM d, yyyy · p")}
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="flex gap-2">
                       <Button
                         variant="outline"
                         size="sm"
-                        className="h-11 gap-2 border-foreground/10 bg-foreground/5 hover:bg-primary hover:text-white hover:border-primary transition-all duration-300 font-bold rounded-xl disabled:opacity-40"
+                        className="flex-1 h-9 text-[12px]"
                         onClick={() => handleDownload(exp)}
                         disabled={!exp.downloadUrl}
-                        title={exp.downloadUrl ? "Download export" : "Re-export to generate a download link"}
                       >
-                        <Download className="w-4 h-4" /> Download
+                        <Download className="w-3.5 h-3.5 mr-1.5" /> Download
                       </Button>
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-11 gap-2 text-muted-foreground hover:text-destructive hover:bg-destructive/5 transition-all duration-300 font-bold rounded-xl"
-                        onClick={() => deleteMutation.mutate(exp._id)}
-                        disabled={deleteMutation.isPending}
+                        className="h-9 text-[12px] text-red-400 hover:text-red-300"
+                        onClick={() => {
+                          if (confirm("Delete this export permanently?")) {
+                            deleteMutation.mutate(exp._id);
+                          }
+                        }}
                       >
-                        <Trash2 className="w-4 h-4" /> Delete
+                        <Trash2 className="w-3.5 h-3.5" />
                       </Button>
                     </div>
                   </div>
@@ -160,30 +148,14 @@ export default function HistoryPage() {
             </motion.div>
           ))}
         </motion.div>
-      ) : (
-        <motion.div 
-          variants={scaleUpVariants}
-          initial="hidden"
-          animate="visible"
-          className="py-32 text-center max-w-lg mx-auto space-y-8 depth-card glass-surface rounded-[3rem] border-dashed border-2 border-foreground/10 bg-transparent"
-        >
-          <div className="bg-primary/10 w-24 h-24 rounded-full flex items-center justify-center mx-auto border border-primary/20">
-            <History className="w-10 h-10 text-primary animate-pulse" />
-          </div>
-          <div className="space-y-3">
-            <h3 className="text-3xl font-black tracking-tight">Empty Archives</h3>
-            <p className="text-muted-foreground font-medium text-lg px-8 opacity-80">
-              Your generated clips will appear here. Start your first elite studio session to begin.
-            </p>
-          </div>
-          <Button asChild size="lg" className="h-14 px-8 rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-primary/20">
-            <Link href="/editor">
-              <Sparkles className="w-5 h-5 mr-2" />
-              Go to Studio
-            </Link>
-          </Button>
-        </motion.div>
       )}
+
+      <p className="text-[12px] text-[hsl(var(--fg-subtle))]">
+        Need a saved project?{" "}
+        <Link href="/projects" className="text-[hsl(var(--accent-indigo))] hover:underline">
+          View all projects
+        </Link>
+      </p>
     </div>
   );
 }

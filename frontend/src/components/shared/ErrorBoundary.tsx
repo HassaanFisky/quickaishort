@@ -62,32 +62,31 @@ export class ErrorBoundary extends Component<Props, State> {
               <AlertTriangle className="w-8 h-8 text-destructive" strokeWidth={1.5} />
             </div>
 
-            <h1 className="text-2xl font-black tracking-tight text-foreground mb-2">
-              Something went wrong
+            <h1 className="text-xl font-semibold tracking-tight text-foreground mb-2">
+              This screen hit an error
             </h1>
-            <p className="text-sm text-muted-foreground mb-4 max-w-xs mx-auto">
-              The studio encountered an unexpected error. Your session data is safe.
+            <p className="text-sm text-muted-foreground mb-4 max-w-sm mx-auto leading-relaxed">
+              The editor UI crashed, but your timeline and uploads are not deleted. Refresh or return home to continue.
             </p>
 
-            {/* Non-technical hint — internal detail never exposed to users */}
-            <p className="text-[10px] font-mono text-destructive/50 bg-destructive/5 border border-destructive/10 rounded-xl px-4 py-2 mb-8">
-              If this keeps happening, please refresh the page or return to the dashboard.
+            <p className="text-[11px] text-muted-foreground/80 mb-8">
+              If it happens again, note what you clicked last and retry from the home workspace.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <button
                 onClick={() => this.setState({ hasError: false, error: null })}
-                className="inline-flex items-center justify-center gap-2 h-12 px-6 rounded-2xl bg-primary text-white font-black text-sm uppercase tracking-widest hover:bg-primary/90 transition-all shadow-[0_0_20px_hsl(var(--primary)/0.3)]"
+                className="inline-flex items-center justify-center gap-2 h-10 px-5 rounded-xl bg-primary text-primary-foreground font-medium text-sm hover:bg-primary/90 transition-colors"
               >
                 <RefreshCcw className="w-4 h-4" />
-                Try Again
+                Try again
               </button>
               <Link
                 href="/dashboard"
-                className="inline-flex items-center justify-center gap-2 h-12 px-6 rounded-2xl bg-secondary text-foreground font-black text-sm uppercase tracking-widest hover:bg-secondary/80 transition-all border border-foreground/5"
+                className="inline-flex items-center justify-center gap-2 h-10 px-5 rounded-xl border border-border text-foreground font-medium text-sm hover:bg-muted transition-colors"
               >
                 <LayoutGrid className="w-4 h-4" />
-                Return to Dashboard
+                Back to home
               </Link>
             </div>
           </div>

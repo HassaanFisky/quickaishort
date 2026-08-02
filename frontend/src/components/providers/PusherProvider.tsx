@@ -1,12 +1,16 @@
 "use client";
 
-import React from "react";
+import React, { useEffect } from "react";
+import { getSharedPusher } from "@/lib/pusherClient";
 
 /**
- * Passthrough shell — job/dashboard channels are owned by focused hooks
- * (`useDashboardStats`, `useServerExport`, `useDubVideo`) to avoid duplicate
- * Pusher clients and dead `user-events-*` subscriptions that never receive emits.
+ * Eagerly warms the shared Pusher singleton so export/dub/dashboard hooks
+ * reuse one connection. Channel ownership stays in those hooks.
  */
 export function PusherProvider({ children }: { children: React.ReactNode }) {
+  useEffect(() => {
+    getSharedPusher();
+  }, []);
+
   return <>{children}</>;
 }

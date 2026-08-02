@@ -9,7 +9,7 @@
 | Suggestions feel generic | Instant title heuristics only | Expected until AnalysisAgent |
 | Advanced panels missing | Need `?advanced=1` | EditorLayout |
 | Whisper slow | COEP/COOP only on `/editor` | next.config headers |
-| FFmpeg.wasm hang | CDN block | 15s timeout path in workspace |
+| FFmpeg.wasm hang | CDN block on orphan path | Live Final export = server; local preview = WebCodecs/MediaRecorder. Orphan FFmpeg.wasm worker archived under `frontend/src/_archive/` |
 | Worker jobs orphaned | Crash before terminal meta | recover_stale_jobs; DLQ |
 | `/ready` flapping | Heavy init in probe path | Ensure deferred startup checks |
 

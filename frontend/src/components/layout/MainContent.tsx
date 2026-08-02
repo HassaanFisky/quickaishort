@@ -9,7 +9,7 @@ export function MainContent({ children }: { children: React.ReactNode }) {
     <div
       className={cn(
         "transition-[padding-left] duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)]",
-        isSidebarCollapsed ? "md:pl-20" : "md:pl-[240px]",
+        isSidebarCollapsed ? "md:pl-[56px]" : "md:pl-[220px]",
       )}
     >
       {children}

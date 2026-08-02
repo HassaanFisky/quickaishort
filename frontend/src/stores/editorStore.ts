@@ -119,7 +119,7 @@ export interface EditorAction {
   | "REMOVE_OVERLAY"        // { element_id }
   | "BROLL_OPEN_LIBRARY"    // {} — UI-only: opens the B-roll drawer
   | "BROLL_CLEAR_ALL"       // {} — removes all BROLL elements
-  | "REMOVE_SILENCES"       // { min_silence_sec, padding_sec } — trims leading/trailing silence
+  | "REMOVE_SILENCES"       // { min_silence_sec, padding_sec, segments? } — cut silence gaps from payload/store
   // ─── Phase 4b: NLE Timeline Tools ───────────────────────────────────────
   | "POINTER_SELECT"        // { clip_id? } — activate pointer tool
   | "BLADE_SPLIT"           // { time_sec } — split all clips at time
@@ -1365,6 +1365,24 @@ export const useEditorStore = create<EditorState>()(
         const store = useEditorStore.getState();
         const videoEl = store.videoElementRef?.current;
 
+        /** Honest partial / missing deps — never silent no-op (chat continuum). */
+        const refuseTool = (
+          type: string,
+          reason: string,
+          opts?: { openAdvanced?: boolean },
+        ) => {
+          if (typeof window === "undefined") return;
+          window.dispatchEvent(
+            new CustomEvent("qai:ai-tool-refused", {
+              detail: {
+                type,
+                reason,
+                openAdvanced: Boolean(opts?.openAdvanced),
+              },
+            }),
+          );
+        };
+
         actions.forEach((action) => {
           switch (action.type) {
 
@@ -1499,8 +1517,64 @@ export const useEditorStore = create<EditorState>()(
 
             // ── Intelligent tool actions ──────────────────────────────────────
             case "DETECT_VIRAL_MOMENTS": {
-              const moments = action.payload.moments as AiViralMoment[];
-              store.setAiSuggestions({ viralMoments: moments ?? [] });
+              // Honesty: never silently empty. Prefer payload → store moments → clip scores → retry analysis.
+              const raw = action.payload.moments as AiViralMoment[] | undefined;
+              let moments: AiViralMoment[] = Array.isArray(raw)
+                ? raw.filter(
+                    (m) =>
+                      m &&
+                      typeof m.timestamp === "number" &&
+                      Number.isFinite(m.timestamp),
+                  )
+                : [];
+
+              if (!moments.length && store.aiSuggestions.viralMoments.length) {
+                moments = [...store.aiSuggestions.viralMoments];
+              }
+
+              if (!moments.length && store.suggestions.length) {
+                moments = store.suggestions
+                  .map((c) => {
+                    const score =
+                      typeof c.score === "number"
+                        ? c.score
+                        : (c.viralAnalysis?.score ?? 0);
+                    return {
+                      timestamp: c.start,
+                      hook:
+                        c.hook ||
+                        c.title ||
+                        c.reason ||
+                        `Highlight @ ${Math.floor(c.start / 60)}:${String(
+                          Math.floor(c.start % 60),
+                        ).padStart(2, "0")}`,
+                      score,
+                    } satisfies AiViralMoment;
+                  })
+                  .filter((m) => m.score > 0)
+                  .sort((a, b) => b.score - a.score)
+                  .slice(0, 5);
+              }
+
+              if (moments.length) {
+                store.setAiSuggestions({ viralMoments: moments });
+                const top = moments[0];
+                if (videoEl && Number.isFinite(top.timestamp)) {
+                  videoEl.currentTime = Math.max(0, top.timestamp);
+                }
+              } else {
+                store.setAiSuggestions({
+                  viralMoments: [],
+                  lastEditExplanation: {
+                    explanation:
+                      "No viral moments found yet — re-running analysis when possible, or ask after transcript is ready.",
+                    confidence: "low",
+                  },
+                });
+                if (typeof window !== "undefined") {
+                  window.dispatchEvent(new Event("retry-analysis"));
+                }
+              }
               break;
             }
             case "GENERATE_HOOK_CAPTION": {
@@ -1535,10 +1609,17 @@ export const useEditorStore = create<EditorState>()(
             // ── Phase 3a: B-Roll / Overlay actions ───────────────────────────
             case "ADD_BROLL": {
               const p = action.payload;
+              const downloadUrl = typeof p.download_url === "string" ? p.download_url : "";
+              if (!downloadUrl) {
+                // Wired path needs a stock pick — open library instead of empty overlay.
+                store.setBRollDrawerOpen(true);
+                refuseTool("ADD_BROLL", "needs_stock_pick");
+                break;
+              }
               store.addElement({
                 type: "BROLL",
                 pexels_id: p.pexels_id as number,
-                download_url: p.download_url as string,
+                download_url: downloadUrl,
                 thumbnail_url: p.thumbnail_url as string,
                 title: (p.title as string) ?? "",
                 start_sec: p.start_sec as number,
@@ -1580,17 +1661,108 @@ export const useEditorStore = create<EditorState>()(
               break;
             }
             case "REMOVE_SILENCES": {
+              // Cut real silence gaps from payload segments or store.silenceSegments —
+              // never the dishonest "first/last transcript chunk" span.
               const p = action.payload;
-              const paddingSec = (p.padding_sec as number) ?? 0.08;
-              const { transcript, duration } = store;
-              if (!transcript?.chunks?.length || duration === 0) break;
-              const chunks = [...transcript.chunks].sort((a, b) => a.start - b.start);
-              const trimStart = Math.max(0, chunks[0].start - paddingSec);
-              const trimEnd = Math.min(duration, chunks[chunks.length - 1].end + paddingSec);
+              const minSilenceSec =
+                typeof p.min_silence_sec === "number" ? p.min_silence_sec : 0.6;
+              const paddingSec =
+                typeof p.padding_sec === "number" ? p.padding_sec : 0.08;
+              const { duration } = store;
+              if (!duration || duration <= 0) break;
+
+              type SilenceLike = { start: number; end: number; type?: string };
+              const raw: SilenceLike[] = Array.isArray(p.segments)
+                ? (p.segments as SilenceLike[])
+                : store.silenceSegments;
+
+              const silences = raw
+                .map((s) => ({
+                  start: Number(s.start),
+                  end: Number(s.end),
+                  type: s.type,
+                }))
+                .filter((s) => {
+                  if (!Number.isFinite(s.start) || !Number.isFinite(s.end)) return false;
+                  if (s.end <= s.start) return false;
+                  if (s.type === "keep") return false;
+                  return s.end - s.start >= minSilenceSec;
+                })
+                .map((s) => ({
+                  start: Math.max(0, s.start + paddingSec),
+                  end: Math.min(duration, s.end - paddingSec),
+                }))
+                .filter((s) => s.end > s.start)
+                .sort((a, b) => a.start - b.start);
+
+              if (!silences.length) break;
+
+              // Merge overlapping silence intervals
+              const merged: { start: number; end: number }[] = [];
+              for (const sil of silences) {
+                const last = merged[merged.length - 1];
+                if (last && sil.start <= last.end) {
+                  last.end = Math.max(last.end, sil.end);
+                } else {
+                  merged.push({ ...sil });
+                }
+              }
+
+              // Keep ranges = timeline minus silence gaps
+              const keeps: { start: number; end: number }[] = [];
+              let cursor = 0;
+              for (const sil of merged) {
+                if (sil.start > cursor + 0.05) {
+                  keeps.push({ start: cursor, end: sil.start });
+                }
+                cursor = Math.max(cursor, sil.end);
+              }
+              if (cursor < duration - 0.05) {
+                keeps.push({ start: cursor, end: duration });
+              }
+
+              const meaningful = keeps.filter((k) => k.end - k.start >= 0.25);
+              if (!meaningful.length) break;
+
+              const keepDuration = meaningful.reduce(
+                (acc, k) => acc + (k.end - k.start),
+                0,
+              );
               // 80 % safety rail — don't remove more than 80 % of the video
-              if ((trimEnd - trimStart) < duration * 0.2) break;
-              store.setTrimMarker({ startTime: trimStart, endTime: trimEnd });
-              if (videoEl) videoEl.currentTime = trimStart;
+              if (keepDuration < duration * 0.2) break;
+
+              store.setSilenceSegments(
+                merged.map((s) => ({
+                  start: s.start,
+                  end: s.end,
+                  type: "silence" as const,
+                })),
+              );
+              store.setTrimMarker({
+                startTime: meaningful[0].start,
+                endTime: meaningful[meaningful.length - 1].end,
+              });
+
+              // Mid-gap cuts → surface keep windows as timeline clips (honest preview)
+              if (meaningful.length > 1 || merged.some((s) => s.start > 0.15 && s.end < duration - 0.15)) {
+                store.setSuggestions(
+                  meaningful.map((k, i) => ({
+                    id:
+                      typeof crypto !== "undefined" && crypto.randomUUID
+                        ? crypto.randomUUID()
+                        : `keep-${i}-${k.start}`,
+                    start: k.start,
+                    end: k.end,
+                    confidence: 0.9,
+                    reason: `Keep after silence cut (${i + 1}/${meaningful.length})`,
+                    aspectRatio: "9:16" as const,
+                    captionsEnabled: store.captionsEnabled,
+                    status: "ready" as const,
+                  })),
+                );
+              }
+
+              if (videoEl) videoEl.currentTime = meaningful[0].start;
               break;
             }
 
@@ -1671,20 +1843,72 @@ export const useEditorStore = create<EditorState>()(
             case "BACKWARD_LANE_SELECT":
               store.setActiveTimelineTool("backward-lane");
               break;
-            case "MARK_IN":
+            case "MARK_IN": {
               store.setActiveTimelineTool("mark-in");
-              store.setPendingSeek(action.payload.time_sec as number);
+              const t = Number(
+                action.payload.time_sec ?? store.currentTime ?? 0,
+              );
+              if (!Number.isFinite(t)) {
+                refuseTool("MARK_IN", "missing_time_sec");
+                break;
+              }
+              const clamped = Math.max(0, Math.min(t, store.duration || t));
+              store.setMarkIn(clamped);
+              store.setPendingSeek(clamped);
               break;
-            case "MARK_OUT":
+            }
+            case "MARK_OUT": {
               store.setActiveTimelineTool("mark-out");
-              store.setPendingSeek(action.payload.time_sec as number);
+              const t = Number(
+                action.payload.time_sec ?? store.currentTime ?? 0,
+              );
+              if (!Number.isFinite(t)) {
+                refuseTool("MARK_OUT", "missing_time_sec");
+                break;
+              }
+              const clamped = Math.max(0, Math.min(t, store.duration || t));
+              store.setMarkOut(clamped);
+              store.setPendingSeek(clamped);
               break;
-            case "CLIP_RANGE_MARK":
+            }
+            case "CLIP_RANGE_MARK": {
               store.setActiveTimelineTool("clip-range-mark");
+              const clipId =
+                (action.payload.clip_id as string | undefined) ||
+                store.selectedClipId;
+              const clip = clipId
+                ? store.suggestions.find((c) => c.id === clipId)
+                : store.suggestions[0];
+              if (!clip) {
+                refuseTool("CLIP_RANGE_MARK", "no_clip");
+                break;
+              }
+              store.setMarkIn(clip.start);
+              store.setMarkOut(clip.end);
+              store.selectClip(clip.id);
+              store.setPendingSeek(clip.start);
               break;
-            case "RANGE_MARK":
+            }
+            case "RANGE_MARK": {
               store.setActiveTimelineTool("range-mark");
+              const inSec = Number(action.payload.in_sec);
+              const outSec = Number(action.payload.out_sec);
+              if (
+                !Number.isFinite(inSec) ||
+                !Number.isFinite(outSec) ||
+                outSec <= inSec
+              ) {
+                refuseTool("RANGE_MARK", "invalid_range");
+                break;
+              }
+              const dur = store.duration || outSec;
+              const ni = Math.max(0, Math.min(inSec, dur));
+              const no = Math.max(ni + 0.05, Math.min(outSec, dur));
+              store.setMarkIn(ni);
+              store.setMarkOut(no);
+              store.setPendingSeek(ni);
               break;
+            }
             case "EXTRACT": {
               store.setActiveTimelineTool("extract");
               const exClipId = action.payload.clip_id as string;
@@ -1719,13 +1943,30 @@ export const useEditorStore = create<EditorState>()(
               break;
             case "COLOR_WHEELS":
             case "COLOR_CURVES":
-            case "HSL_SECONDARIES":
-              store.setClipColor({
-                ...(action.payload.hue_shift !== undefined && { hueShift: action.payload.hue_shift as number }),
-                ...(action.payload.saturation_adjust !== undefined && { satAdjust: action.payload.saturation_adjust as number }),
-                ...(action.payload.luminance_adjust !== undefined && { lumAdjust: action.payload.luminance_adjust as number }),
+            case "HSL_SECONDARIES": {
+              // Partial: basic HSL preview only — full wheels live in Advanced.
+              const hasBasic =
+                action.payload.hue_shift !== undefined ||
+                action.payload.saturation_adjust !== undefined ||
+                action.payload.luminance_adjust !== undefined;
+              if (hasBasic) {
+                store.setClipColor({
+                  ...(action.payload.hue_shift !== undefined && {
+                    hueShift: action.payload.hue_shift as number,
+                  }),
+                  ...(action.payload.saturation_adjust !== undefined && {
+                    satAdjust: action.payload.saturation_adjust as number,
+                  }),
+                  ...(action.payload.luminance_adjust !== undefined && {
+                    lumAdjust: action.payload.luminance_adjust as number,
+                  }),
+                });
+              }
+              refuseTool(action.type, "partial_open_advanced", {
+                openAdvanced: true,
               });
               break;
+            }
             case "APPLY_LUT":
               store.setClipColor({
                 lutUrl: action.payload.lut_url as string,
@@ -1748,13 +1989,9 @@ export const useEditorStore = create<EditorState>()(
             case "LOAD_PROJECT":
             case "AUTO_REFRAME":
             case "ADD_VOICEOVER":
-              if (typeof window !== "undefined") {
-                window.dispatchEvent(
-                  new CustomEvent("qai:ai-tool-refused", {
-                    detail: { type: action.type, reason: "not_implemented_in_preview" },
-                  }),
-                );
-              }
+              refuseTool(action.type, "not_implemented_in_preview", {
+                openAdvanced: true,
+              });
               break;
             case "ADD_RECT_MASK":
             case "ADD_ELLIPSE_MASK":
@@ -1784,6 +2021,10 @@ export const useEditorStore = create<EditorState>()(
               break;
             }
             case "SET_TRANSITION":
+              // Partial — chat can toggle transitions; styled transition UI is Advanced.
+              refuseTool("SET_TRANSITION", "partial_open_advanced", {
+                openAdvanced: true,
+              });
               break;
             case "DUB_VIDEO":
             case "TRANSLATE_CAPTIONS":
@@ -1997,16 +2238,9 @@ export const useEditorStore = create<EditorState>()(
               store.setSplitScreenPreset((action.payload.preset_id as string) || null);
               break;
             default: {
-              if (typeof window !== "undefined") {
-                window.dispatchEvent(
-                  new CustomEvent("qai:ai-tool-refused", {
-                    detail: {
-                      type: action.type,
-                      reason: "unhandled_capability",
-                    },
-                  }),
-                );
-              }
+              refuseTool(action.type, "unhandled_capability", {
+                openAdvanced: true,
+              });
               break;
             }
           }

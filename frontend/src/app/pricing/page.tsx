@@ -35,7 +35,7 @@ const FAQS = [
   },
   {
     q: "Do you offer team plans?",
-    a: "The Agency tier (seats, batch, API) is Coming Soon — not sellable yet. Contact support to join the waitlist.",
+    a: "Agency (team seats, batch, API) isn't self-serve yet. Email support@quickaishort.online to join the waitlist.",
   },
 ];
 

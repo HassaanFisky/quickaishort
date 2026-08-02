@@ -40,7 +40,8 @@ Export bake: `POST /api/process-video` accepts `mute_source_audio` + `dub_audio_
 | POST | `/api/youtube/clip` | verify |
 | GET | `/api/info`, `/api/stream-info` | mixed |
 | GET | `/api/proxy`, `/api/proxy-video`, `/api/audio` | mixed |
-| POST | `/api/analyze`, `/api/process-video`, `/api/create-video` | JWT typical |
+| POST | `/api/analyze`, `/api/process-video`, `/api/create-video` | JWT sole tenant (body userId ignored) |
+| POST | `/api/preflight`, `/api/direct` | JWT sole tenant |
 | GET | `/api/status/{job_id}` | mixed |
 | GET | `/api/render/status/{job_id}` | mixed |
 | DELETE | `/api/render/{job_id}` | JWT |
@@ -53,7 +54,7 @@ Export bake: `POST /api/process-video` accepts `mute_source_audio` + `dub_audio_
 |--------|------|------|
 | POST | `/api/adk/upload`, `/api/adk/enhance`, `/api/adk/generate` | JWT |
 | GET | `/api/adk/stock` | often open |
-| POST | `/api/preflight`, `/api/direct` | JWT typical |
+| POST | `/api/preflight`, `/api/direct` | JWT sole tenant (body user_id ignored) |
 | GET | `/api/broll/search` | verify |
 | GET | `/api/music` | verify |
 
@@ -61,8 +62,8 @@ Export bake: `POST /api/process-video` accepts `mute_source_audio` + `dub_audio_
 
 | Method | Path | Auth |
 |--------|------|------|
-| POST | `/api/pipeline/run` | **NONE — gap** |
-| GET | `/api/pipeline/{id}/status` | verify |
+| POST | `/api/pipeline/run` | JWT + credits fail-closed |
+| GET | `/api/pipeline/{id}/status` | JWT (owner check) |
 | GET/PATCH/DELETE | `/api/projects`, `/api/projects/{id}` | JWT |
 | GET | `/api/stats` | JWT |
 | WS | `/ws/stats/{user_id}` | verify |

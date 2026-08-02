@@ -10,13 +10,46 @@ const nextConfig = {
     return [{ source: "/ads", destination: "/adk", permanent: true }];
   },
   async headers() {
+    // Global lockdown — report-only CSP first (enforce after console is clean).
+    // HSTS is harmless on localhost HTTP (browsers ignore); enforced on HTTPS.
+    const securityHeaders = [
+      { key: "X-Content-Type-Options", value: "nosniff" },
+      { key: "X-Frame-Options", value: "DENY" },
+      { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+      {
+        key: "Permissions-Policy",
+        value: "camera=(), geolocation=(), payment=(), usb=(), microphone=(self)",
+      },
+      {
+        key: "Strict-Transport-Security",
+        value: "max-age=63072000; includeSubDomains; preload",
+      },
+      {
+        key: "Content-Security-Policy-Report-Only",
+        value: [
+          "default-src 'self'",
+          "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://*.sentry.io",
+          "style-src 'self' 'unsafe-inline'",
+          "img-src 'self' data: blob: https:",
+          "font-src 'self' data:",
+          "media-src 'self' blob: https: mediastream:",
+          "connect-src 'self' https: wss: blob:",
+          "worker-src 'self' blob:",
+          "frame-ancestors 'none'",
+          "base-uri 'self'",
+          "form-action 'self'",
+          "object-src 'none'",
+        ].join("; "),
+      },
+    ];
     const isolationHeaders = [
       { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
       { key: "Cross-Origin-Embedder-Policy", value: "require-corp" },
     ];
     return [
-      // SharedArrayBuffer required paths (Whisper.wasm, FFmpeg.wasm, OPFS)
-      { source: "/editor/:path*", headers: isolationHeaders },
+      { source: "/:path*", headers: securityHeaders },
+      // SharedArrayBuffer required paths (Whisper.wasm, OPFS decode)
+      { source: "/editor/:path*", headers: [...securityHeaders, ...isolationHeaders] },
     ];
   },
   eslint: { ignoreDuringBuilds: true },

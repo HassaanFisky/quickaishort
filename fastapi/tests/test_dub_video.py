@@ -179,6 +179,7 @@ async def test_dub_cache_hit_skips_credit_charge(monkeypatch):
     """Reused ready/degraded jobs must not deduct credits."""
     from routers import dub_router
     from models.dub import DubJobStatus
+    from starlette.requests import Request
 
     ready = DubJobStatus(
         job_id="cached1",
@@ -205,7 +206,24 @@ async def test_dub_cache_hit_skips_credit_charge(monkeypatch):
         target_lang="es",
         mode="captions_only",
     )
-    out = await dub_router.start_dub_job(req, verified_user_id="u-cache")
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0"},
+        "http_version": "1.1",
+        "method": "POST",
+        "scheme": "http",
+        "path": "/api/studio/v1/dub",
+        "raw_path": b"/api/studio/v1/dub",
+        "query_string": b"",
+        "headers": [],
+        "client": ("127.0.0.1", 12345),
+        "server": ("test", 80),
+    }
+    out = await dub_router.start_dub_job(
+        Request(scope),
+        body=req,
+        verified_user_id="u-cache",
+    )
     assert out.cache_hit is True
     deduct.assert_not_awaited()
     dispatch.assert_not_awaited()

@@ -87,12 +87,19 @@ export function buildEdgeFacets(input: {
     };
   }
   if (input.silenceSegments && input.silenceSegments.length > 0) {
-    facets.silence = {
-      segments: input.silenceSegments.map((s) => ({
-        start: s.start,
-        end: s.end,
-      })),
-    };
+    const silenceOnly = input.silenceSegments.filter((s) => {
+      const typed = s as { start: number; end: number; type?: string };
+      return typed.type !== "keep";
+    });
+    if (silenceOnly.length > 0) {
+      facets.silence = {
+        segments: silenceOnly.map((s) => ({
+          start: s.start,
+          end: s.end,
+          type: "silence",
+        })),
+      };
+    }
   }
   if (input.viralMoments && input.viralMoments.length > 0) {
     facets.viral_moments = {

@@ -5,12 +5,13 @@ $ErrorActionPreference = "Stop"
 
 $PROJECT_ID = "quickaishort-agent-494304"
 $REGION = "us-central1"
-$REPO_NAME = "quickai-repo"
+# Canonical AR repo (FinOps 2026-08): orphan `quickai-repo` removed; triggers use this.
+$REPO_NAME = "cloud-run-source-deploy"
 $BUCKET_NAME = "quickaishort-agent-494304-media"   # verified real bucket name
 $SA_EMAIL = "99900313102-compute@developer.gserviceaccount.com"
 $TASKS_QUEUE = "quickai-render"
 $IMAGE_TAG = Get-Date -Format "yyyyMMdd-HHmmss"
-$IMAGE_URI = "$($REGION)-docker.pkg.dev/$($PROJECT_ID)/$($REPO_NAME)/backend:$($IMAGE_TAG)"
+$IMAGE_URI = "$($REGION)-docker.pkg.dev/$($PROJECT_ID)/$($REPO_NAME)/quickaishort/backend:$($IMAGE_TAG)"
 $PUBLIC_API_URL = "https://quickai-api-y2cgnbsbxa-uc.a.run.app"
 
 Write-Output "Deploying QuickAI to Production (Windows Native) [Tag: $IMAGE_TAG]..."

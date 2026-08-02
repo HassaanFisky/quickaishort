@@ -32,15 +32,17 @@ Rel(qai, pusher, "events")
 │  Vercel      │              │  Cloud Run      │
 │              │◄──Pusher/WS──│                 │
 └──────┬───────┘              └────────┬────────┘
-       │ Zustand NLE                   │ enqueue
+       │ Zustand NLE                   │ Cloud Tasks
        │ Whisper.wasm                  ▼
-       │ optional FFmpeg.wasm   ┌─────────────────┐
-       └───────────────────────►│ RQ render_worker│
-                                │ Cloud Run       │
+       │ WebCodecs/MediaRecorder┌─────────────────┐
+       │ (local preview only)   │ Private renderer│
+       └───────────────────────►│ Cloud Run min=0 │
                                 └────────┬────────┘
                                          ▼
                                       GCS + Redis
 ```
+
+> **Truth (2026-08-01):** Production final export is Cloud Tasks → private request-bound ffmpeg renderer (`min=0`). RQ is local fallback only. Live FFmpeg.wasm final-export UI is archive-only (`frontend/src/_archive/`).
 
 ---
 

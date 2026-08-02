@@ -1,6 +1,8 @@
 """Deterministic Gemini response fixtures for MOCK_AI_MODE.
 
 Zero-cost local validation only. Never used when ENVIRONMENT=production.
+Phase 2: multi-action plans mirror MediaGraph suggestion richness
+(transcript hook, silence surgery, viral pack, caption craft, SFX).
 """
 
 from __future__ import annotations
@@ -36,6 +38,78 @@ _MOCK_TIMELINE_ACTIONS: list[dict[str, Any]] = [
     },
     {"type": "SET_AUDIO_BOOST", "value": 120},
     {"type": "TIMELINE_ZOOM", "zoom_factor": 1.0},
+]
+
+# Rich multi-action packs matching suggestion-engine evidence (heuristic / $0).
+_MOCK_SILENCE_PACK: list[dict[str, Any]] = [
+    {
+        "type": "REMOVE_SILENCES",
+        "min_silence_sec": 0.6,
+        "padding_sec": 0.08,
+        "segments": [
+            {"start": 4.2, "end": 6.8, "type": "silence"},
+            {"start": 18.0, "end": 21.5, "type": "silence"},
+        ],
+    },
+    {"type": "SEEK", "time": 4.0},
+    {
+        "type": "ADD_CAPTION",
+        "text": "Cut the dead air",
+        "startTime": 3.5,
+        "endTime": 5.5,
+    },
+]
+
+_MOCK_VIRAL_PACK: list[dict[str, Any]] = [
+    {
+        "type": "DETECT_VIRAL_MOMENTS",
+        "moments": [
+            {
+                "timestamp": 2.0,
+                "hook": "Mock viral hook",
+                "score": 86,
+            },
+            {
+                "timestamp": 40.0,
+                "hook": "Mock payoff",
+                "score": 74,
+            },
+        ],
+    },
+    {"type": "TRIM", "start": 2.0, "end": 17.0},
+    {"type": "SEEK", "time": 2.0},
+    {
+        "type": "GENERATE_HOOK_CAPTION",
+        "captions": ["Wait for it", "This changes everything"],
+    },
+]
+
+_MOCK_HOOK_PACK: list[dict[str, Any]] = [
+    {"type": "TRIM", "start": 0.0, "end": 12.0},
+    {
+        "type": "ADD_CAPTION",
+        "text": "Hook line from transcript",
+        "startTime": 0.0,
+        "endTime": 2.8,
+    },
+    {
+        "type": "GENERATE_HOOK_CAPTION",
+        "captions": ["You won't believe this", "Watch till the end"],
+    },
+    {"type": "SET_PLAYBACK_SPEED", "value": 110},
+]
+
+_MOCK_AUDIO_PACK: list[dict[str, Any]] = [
+    {"type": "SET_AUDIO_BOOST", "value": 130},
+    {"type": "SET_NOISE_REDUCTION", "value": 40},
+    {"type": "ADD_SFX", "sfx_id": "impact-thud", "start_sec": 2.0, "volume": 0.9},
+]
+
+_MOCK_MARKS_PACK: list[dict[str, Any]] = [
+    {"type": "MARK_IN", "time_sec": 2.0},
+    {"type": "MARK_OUT", "time_sec": 17.0},
+    {"type": "RANGE_MARK", "in_sec": 2.0, "out_sec": 17.0},
+    {"type": "SEEK", "time": 2.0},
 ]
 
 
@@ -88,6 +162,24 @@ def mock_timeline_plan_dict() -> dict[str, Any]:
             "duration_sec": 15.0,
         },
     }
+
+
+def mock_rich_plan_dict(
+    actions: list[dict[str, Any]],
+    *,
+    message: str,
+    suggestions: list[str],
+) -> dict[str, Any]:
+    """Multi-action plan fixture matching suggestion-pack richness."""
+
+    base = mock_timeline_plan_dict()
+    base["actions"] = list(actions)
+    base["message"] = message
+    base["feedback"] = message
+    base["suggestions"] = suggestions
+    base["intent"] = "edit"
+    base["confidence"] = 0.9
+    return base
 
 
 def mock_visual_analysis_dict() -> dict[str, Any]:
@@ -177,6 +269,110 @@ def _contents_blob(contents: Any) -> str:
     return str(contents)
 
 
+def _select_rich_editor_plan(blob: str) -> dict[str, Any]:
+    """Pick a multi-action MOCK pack from command / context keywords."""
+
+    if any(
+        k in blob
+        for k in (
+            "silence",
+            "dead air",
+            "remove_silences",
+            "cut silence",
+            "silence_count",
+        )
+    ):
+        return mock_rich_plan_dict(
+            _MOCK_SILENCE_PACK,
+            message="Mock cut dead air and previewed the first gap.",
+            suggestions=[
+                "Preview the next silence gap",
+                "Boost audio after the cut",
+                "Export Final",
+            ],
+        )
+    if any(
+        k in blob
+        for k in (
+            "viral",
+            "highlight",
+            "detect_viral",
+            "viral_top",
+            "best moment",
+        )
+    ):
+        return mock_rich_plan_dict(
+            _MOCK_VIRAL_PACK,
+            message="Mock found highlights and trimmed to the top moment.",
+            suggestions=[
+                "Seek to the payoff beat",
+                "Add a hook caption",
+                "Export Final",
+            ],
+        )
+    if any(
+        k in blob
+        for k in (
+            "hook",
+            "opening",
+            "truncate",
+            "first line",
+            "hook_line",
+            "transcript_slice",
+        )
+    ):
+        return mock_rich_plan_dict(
+            _MOCK_HOOK_PACK,
+            message="Mock trimmed to the hook and drafted captions.",
+            suggestions=[
+                "Toggle captions on",
+                "Speed up pacing slightly",
+                "Export Final",
+            ],
+        )
+    if any(
+        k in blob
+        for k in (
+            "boost",
+            "noise",
+            "audio",
+            "sfx",
+            "louder",
+            "volume",
+        )
+    ):
+        return mock_rich_plan_dict(
+            _MOCK_AUDIO_PACK,
+            message="Mock boosted audio, reduced noise, and previewed SFX.",
+            suggestions=[
+                "Cut dead air next",
+                "Find viral moments",
+                "Export Final",
+            ],
+        )
+    if any(
+        k in blob
+        for k in (
+            "mark in",
+            "mark out",
+            "range_mark",
+            "mark_in",
+            "i/o",
+            "in and out",
+        )
+    ):
+        return mock_rich_plan_dict(
+            _MOCK_MARKS_PACK,
+            message="Mock set in/out marks on the highlight range.",
+            suggestions=[
+                "Trim to marks",
+                "Export Final",
+                "Add a hook caption",
+            ],
+        )
+    return mock_timeline_plan_dict()
+
+
 def build_mock_gemini_text(
     contents: Any,
     *,
@@ -196,7 +392,7 @@ def build_mock_gemini_text(
         payload: Any = mock_visual_analysis_dict()
     elif "luna-orchestration-v1" in blob or "terra-json-repair-v1" in blob:
         # DualModelRouter TimelinePlanOutput is extra=forbid — keep the 4 ABI fields.
-        rich = mock_timeline_plan_dict()
+        rich = _select_rich_editor_plan(blob)
         payload = {
             "actions": rich["actions"],
             "message": rich["message"],
@@ -208,8 +404,8 @@ def build_mock_gemini_text(
     elif "score these viral" in blob or "hookstrength" in blob:
         payload = mock_viral_clips_dict()
     else:
-        # AI editor / command path accepts a richer multi-track fixture.
-        payload = mock_timeline_plan_dict()
+        # AI editor / command path — keyword-rich multi-action fixtures.
+        payload = _select_rich_editor_plan(blob)
 
     return json.dumps(payload, ensure_ascii=False)
 
@@ -234,6 +430,26 @@ def build_mock_output_model(
             "status": timeline["status"],
         }
     )
+    # Rich packs as secondary candidates for looser schemas.
+    for pack in (
+        _MOCK_SILENCE_PACK,
+        _MOCK_VIRAL_PACK,
+        _MOCK_HOOK_PACK,
+        _MOCK_AUDIO_PACK,
+    ):
+        rich = mock_rich_plan_dict(
+            pack,
+            message="Mock multi-action plan.",
+            suggestions=["Export Final"],
+        )
+        candidates.append(
+            {
+                "actions": rich["actions"],
+                "message": rich["message"],
+                "suggestions": rich["suggestions"],
+                "status": rich["status"],
+            }
+        )
     candidates.append(timeline)
     candidates.append({"answer": "mock-ai-mode"})
     candidates.append(mock_visual_analysis_dict())

@@ -25,7 +25,6 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { parseYouTubeId } from "@/lib/youtube-utils";
-import { PROJECT_TEMPLATES } from "@/lib/project/templates";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useSwipeGesture } from "@/hooks/useTouchGestures";
 import { FALLBACK_INGEST_POLICY } from "@/lib/studio/ingestPolicy";
@@ -51,7 +50,10 @@ import { TimelineLoader } from "@/components/ui/TimelineLoader";
 import { LiquidThemeToggle } from "@/components/shared/LiquidThemeToggle";
 import { AIPanel } from "@/components/editor/AIPanel";
 import IngestSurface from "./IngestSurface";
+import { WorkspaceComposer, type WorkspaceComposerSubmit } from "@/components/workspace/WorkspaceComposer";
 import ExportDialog from "./ExportDialog";
+import ServerExportHost from "./ServerExportHost";
+import { useServerExportStore } from "@/stores/serverExportStore";
 
 const EditorOnboardingTour = dynamic(
   () => import("./EditorOnboardingTour"),
@@ -65,7 +67,6 @@ export default function EditorLayout() {
     currentStage,
     sourceUrl,
     sourceFile,
-    setExportSetting,
     selectedClipId,
     ingestStage,
     ingestFailMessage,
@@ -87,7 +88,8 @@ export default function EditorLayout() {
     cancelAnalyze,
   } = useIngestLifecycle({ runPipeline, cancelPipeline });
 
-  // Sync transcript to AI panel context after pipeline completes
+  // Sync transcript to AI panel context after pipeline completes.
+  // Skip no-op writes — avoids StrictMode/ref churn during ingest re-renders.
   const storeTranscript = useEditorStore((s) => s.transcript);
   const storeVideoMetadata = useEditorStore((s) => s.videoMetadata);
   useEffect(() => {
@@ -96,6 +98,14 @@ export default function EditorLayout() {
       .map((c) => c.text)
       .join(" ")
       .slice(0, 3000);
+    const prev = useAIPanel.getState().videoContext;
+    if (
+      prev?.id === storeVideoMetadata.id &&
+      prev.title === (storeVideoMetadata.title ?? "YouTube Video") &&
+      prev.transcript === transcriptText
+    ) {
+      return;
+    }
     setVideoContext({
       id: storeVideoMetadata.id,
       title: storeVideoMetadata.title ?? "YouTube Video",
@@ -104,6 +114,9 @@ export default function EditorLayout() {
   }, [storeTranscript, storeVideoMetadata, setVideoContext]);
 
   const [exportOpen, setExportOpen] = useState(false);
+  const isServerExporting = useServerExportStore((s) => s.isExporting);
+  const serverExportProgress = useServerExportStore((s) => s.exportProgress);
+  const cancelServerExport = useServerExportStore((s) => s.cancelExport);
   const [isAdvancedMode, setIsAdvancedMode] = useState(false);
   const hasShownShortcutsRef = useRef(false);
   useEffect(() => {
@@ -134,12 +147,21 @@ export default function EditorLayout() {
     setIsAdvancedMode(new URLSearchParams(window.location.search).get("advanced") === "1");
   }, []);
 
+  // Chat → Advanced handoff for honest partial tools (COLOR_WHEELS, etc.).
+  useEffect(() => {
+    const openAdvanced = () => setIsAdvancedMode(true);
+    window.addEventListener("qai:open-advanced", openAdvanced);
+    return () => window.removeEventListener("qai:open-advanced", openAdvanced);
+  }, []);
+
   const [urlInput, setUrlInput] = useState("");
 
   const [urlValid, setUrlValid] = useState<boolean | null>(null);
   const [youtubePreviewId, setYoutubePreviewId] = useState<string | null>(null);
   const [panelCollapsed, setPanelCollapsed] = useState(false);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
+  /** Additional sources attached at start — editor analyses one active source at a time. */
+  const [queuedSourceFiles, setQueuedSourceFiles] = useState<File[]>([]);
   const [showTour, setShowTour] = useState(false);
   const [tourStep, setTourStep] = useState(0);
   const hasAutoImportedRef = useRef(false);
@@ -149,6 +171,12 @@ export default function EditorLayout() {
   // for the desktop inline RightPanel, since RightPanel is otherwise only
   // mounted inside isAdvancedMode-gated sections below.
   const isMobile = useMediaQuery("(max-width: 768px)");
+  // Mobile chat-primary: once ingest is ready, open Studio chat sheet.
+  useEffect(() => {
+    if (ingestStage === "ready" && isMobile) {
+      setAIPanelOpen(true);
+    }
+  }, [ingestStage, isMobile, setAIPanelOpen]);
   const [mobileInspectorOpen, setMobileInspectorOpen] = useState(false);
   const mobileSheetRef = useRef<HTMLDivElement | null>(null);
   const lastAutoOpenedClipId = useRef<string | null>(null);
@@ -279,6 +307,36 @@ export default function EditorLayout() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot URL bootstrap
   }, []);
 
+  // M3 — workspace boot from dashboard composer
+  const hasWorkspaceBootRef = useRef(false);
+  useEffect(() => {
+    if (hasWorkspaceBootRef.current) return;
+    hasWorkspaceBootRef.current = true;
+    try {
+      const raw = sessionStorage.getItem("qai:workspace-boot");
+      if (!raw) return;
+      const boot = JSON.parse(raw) as { prompt?: string; url?: string };
+      sessionStorage.removeItem("qai:workspace-boot");
+      if (boot.prompt) {
+        sessionStorage.setItem("qai:initial-prompt", boot.prompt);
+      }
+      const pending = (window as Window & { __qaiPendingFiles?: FileList }).__qaiPendingFiles;
+      if (boot.url) {
+        setUrlInput(boot.url);
+        void ingestUrl(boot.url);
+      } else if (pending?.[0]) {
+        void ingestFile(pending[0]);
+        if (pending.length > 1) {
+          setQueuedSourceFiles(Array.from(pending).slice(1));
+        }
+      }
+      delete (window as Window & { __qaiPendingFiles?: FileList }).__qaiPendingFiles;
+    } catch {
+      /* non-blocking */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot boot
+  }, []);
+
   // M3 — session restore: if refresh cleared Zustand but IDB artifact exists, re-ingest via FSM (cache hit → no Gemini).
   const hasSessionRestoredRef = useRef(false);
   useEffect(() => {
@@ -349,6 +407,33 @@ export default function EditorLayout() {
     cancelAnalyze();
   };
 
+  const handleComposerSubmit = ({ prompt, url, files }: WorkspaceComposerSubmit) => {
+    if (prompt.trim()) {
+      try {
+        sessionStorage.setItem("qai:initial-prompt", prompt.trim());
+      } catch {
+        /* ignore */
+      }
+    }
+    if (url?.trim()) {
+      setUrlInput(url);
+      void ingestUrl(url);
+      return;
+    }
+    const first = files[0]?.file;
+    if (first) {
+      if (files.length > 1) {
+        setQueuedSourceFiles(files.slice(1).map((f) => f.file));
+      }
+      void ingestFile(first);
+    }
+  };
+
+  const activateQueuedSource = (file: File) => {
+    setQueuedSourceFiles((prev) => prev.filter((f) => f !== file));
+    void ingestFile(file);
+  };
+
   const ingestSurfaceProps = {
     urlInput,
     urlValid,
@@ -380,8 +465,13 @@ export default function EditorLayout() {
     e.preventDefault();
     e.stopPropagation();
     setIsDraggingOver(false);
-    const file = e.dataTransfer.files?.[0];
-    if (file) void ingestFile(file);
+    const files = Array.from(e.dataTransfer.files ?? []).filter((f) =>
+      f.type.startsWith("video/"),
+    );
+    if (files[0]) {
+      void ingestFile(files[0]);
+      if (files.length > 1) setQueuedSourceFiles(files.slice(1));
+    }
   };
 
   const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
@@ -404,7 +494,7 @@ export default function EditorLayout() {
       className={cn(
         "editor-shell-bg h-screen w-screen overflow-hidden flex flex-col p-4 gap-4 relative",
         "transition-[padding-left] duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)]",
-        isSidebarCollapsed ? "md:pl-20" : "md:pl-[256px]"
+        isSidebarCollapsed ? "md:pl-[56px]" : "md:pl-[220px]"
       )}
     >
       {/* Drag-to-import overlay */}
@@ -420,7 +510,7 @@ export default function EditorLayout() {
             <div className="absolute inset-0 bg-primary/10 backdrop-blur-sm border-2 border-dashed border-primary/50 rounded-2xl" />
             <div className="relative flex flex-col items-center gap-3 text-center">
               <Upload className="w-12 h-12 text-primary" />
-              <p className="text-base font-bold text-foreground">Drop your video here</p>
+              <p className="text-base font-semibold text-foreground">Drop your video here</p>
               <p className="text-xs text-fg-muted">
                 {FALLBACK_INGEST_POLICY.examples_label}
               </p>
@@ -467,7 +557,7 @@ export default function EditorLayout() {
             </span>
             <span
               className={cn(
-                "text-[10px] font-black tracking-[0.18em] uppercase leading-none whitespace-nowrap",
+                "text-[10px] font-semibold tracking-[0.18em] uppercase leading-none whitespace-nowrap",
                 ingestStage === "failed"
                   ? "text-red-300"
                   : isProcessing || (ingestStage !== "idle" && ingestStage !== "ready")
@@ -476,16 +566,18 @@ export default function EditorLayout() {
               )}
             >
               {ingestStage === "failed"
-                ? "Ingest Failed"
+                ? "Processing blocked"
                 : ingestStage === "analyze" && currentStage === "transcribing"
-                  ? "Creating Subtitles"
+                  ? "Analysing the transcript"
                   : ingestStage === "analyze" && currentStage === "analyzing"
-                    ? "Finding Viral Hooks"
-                    : ingestStage !== "idle" && ingestStage !== "ready"
-                      ? INGEST_STAGE_LABELS[ingestStage].replace(/…$/, "")
-                      : isProcessing
-                        ? "Working…"
-                        : "Studio Ready"}
+                    ? "Finding high-retention moments"
+                    : ingestStage === "acquire_meta"
+                      ? "Uploading footage"
+                      : ingestStage !== "idle" && ingestStage !== "ready"
+                        ? INGEST_STAGE_LABELS[ingestStage].replace(/…$/, "")
+                        : isProcessing
+                          ? "Working…"
+                          : "Ready to edit"}
             </span>
           </div>
 
@@ -527,28 +619,49 @@ export default function EditorLayout() {
             </>
           )}
 
-          <button
-            data-tour-id="export.button"
-            onClick={() => setExportOpen(true)}
-            disabled={!sourceUrl || isProcessing}
-            title={
-              sourceUrl && !isProcessing
-                ? "Export — Shift+Alt+E"
-                : isProcessing
-                  ? "Export is disabled while your video is processing"
-                  : "Load a video to enable export"
-            }
-            aria-label="Export video"
-            className={cn(
-              "h-9 px-3.5 rounded-xl flex items-center gap-2 text-xs font-bold transition-all duration-200",
-              sourceUrl && !isProcessing
-                ? "bg-primary text-white shadow-[0_2px_12px_-2px_rgba(168,85,247,0.4)] hover:shadow-[0_4px_20px_-2px_rgba(168,85,247,0.5)] hover:-translate-y-px active:scale-[0.97]"
-                : "bg-foreground/5 border border-foreground/8 text-fg-muted cursor-not-allowed opacity-50"
-            )}
-          >
-            <Download size={13} />
-            Export
-          </button>
+          {isServerExporting ? (
+            <div
+              className="flex items-center gap-2 h-9 px-2 rounded-xl bg-card border border-primary/30"
+              role="status"
+              aria-live="polite"
+              aria-label={`Server export ${serverExportProgress}%`}
+            >
+              <span className="text-[10px] font-bold tabular-nums text-primary min-w-[2.5rem]">
+                {serverExportProgress}%
+              </span>
+              <button
+                type="button"
+                onClick={() => void cancelServerExport?.()}
+                className="h-7 px-2 rounded-lg text-[10px] font-bold uppercase tracking-wider text-fg-muted hover:text-foreground border border-border"
+                aria-label="Cancel server export"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button
+              data-tour-id="export.button"
+              onClick={() => setExportOpen(true)}
+              disabled={!sourceUrl || isProcessing}
+              title={
+                sourceUrl && !isProcessing
+                  ? "Export — Shift+Alt+E"
+                  : isProcessing
+                    ? "Export is disabled while your video is processing"
+                    : "Load a video to enable export"
+              }
+              aria-label="Export video"
+              className={cn(
+                "h-9 px-3.5 rounded-xl flex items-center gap-2 text-xs font-bold transition-all duration-200",
+                sourceUrl && !isProcessing
+                  ? "bg-primary text-white shadow-[0_2px_12px_-2px_rgba(168,85,247,0.4)] hover:shadow-[0_4px_20px_-2px_rgba(168,85,247,0.5)] hover:-translate-y-px active:scale-[0.97]"
+                  : "bg-foreground/5 border border-foreground/8 text-fg-muted cursor-not-allowed opacity-50"
+              )}
+            >
+              <Download size={13} />
+              Export
+            </button>
+          )}
 
           <button
             onClick={() => setAIPanelOpen(!aiPanelOpen)}
@@ -647,12 +760,12 @@ export default function EditorLayout() {
                         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
                           <div className="flex items-center gap-2.5 px-4 py-2 rounded-full bg-card/95 border border-border shadow-lg">
                             <Loader2 className="w-3.5 h-3.5 text-primary animate-spin shrink-0" />
-                            <span className="text-[10px] font-black uppercase tracking-[0.18em] text-foreground whitespace-nowrap">
+                            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-foreground whitespace-nowrap">
                               {currentStage === "transcribing"
-                                ? "Creating subtitles"
+                                ? "Analysing the transcript"
                                 : currentStage === "analyzing"
-                                  ? "Finding viral hooks"
-                                  : "Loading video"}
+                                  ? "Finding high-retention moments"
+                                  : "Preparing footage"}
                             </span>
                           </div>
                         </div>
@@ -662,10 +775,10 @@ export default function EditorLayout() {
                         <TimelineLoader
                           phases={
                             currentStage === "transcribing"
-                              ? ["Transcribing...", "Captioning...", "Building subtitles..."]
+                              ? ["Analysing the transcript…", "Building captions…", "Syncing speech…"]
                               : currentStage === "analyzing"
-                                ? ["Analyzing...", "Scoring virality...", "Finding hooks..."]
-                                : ["Downloading...", "Preparing...", "Extracting..."]
+                                ? ["Finding high-retention moments…", "Scoring segments…", "Preparing clips…"]
+                                : ["Uploading…", "Reading footage…", "Almost ready…"]
                           }
                         />
                       </div>
@@ -677,46 +790,48 @@ export default function EditorLayout() {
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    className="w-full h-full flex flex-col items-center justify-center gap-4 sm:gap-6 text-center px-4 sm:px-8 py-4 sm:py-8 overflow-y-auto"
+                    className="w-full h-full flex flex-col items-center justify-center px-4 py-8 overflow-y-auto"
                   >
-                    {/* One composition: import IS the stage (center), not a top chrome strip */}
-                    <IngestSurface variant="hero" {...ingestSurfaceProps} />
-                    <div className="w-full max-w-md px-2 hidden sm:block">
-                      <p className="text-[10px] font-medium tracking-wide text-fg-subtle mb-2">
-                        Or start from a template
-                      </p>
-                      <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
-                        {PROJECT_TEMPLATES.map((tpl) => (
-                          <button
-                            key={tpl.id}
-                            type="button"
-                            onClick={() => {
-                              const ar = tpl.aspectRatio === "16:9" ? "9:16" : tpl.aspectRatio;
-                              setExportSetting("aspectRatio", ar as "9:16" | "1:1");
-                              toast(`Template: ${tpl.label}`, {
-                                description: `Aspect ratio set to ${tpl.aspectRatio} · max ${tpl.maxDuration}s`,
-                                duration: 3000,
-                              });
-                            }}
-                            className="min-h-11 flex flex-col items-center gap-1 px-1 py-2 rounded-xl bg-card/60 border border-border hover:border-primary/40 hover:bg-primary/5 hover:-translate-y-0.5 active:scale-[0.98] transition-[transform,border-color,background-color] group"
-                          >
-                            <div
-                              className={cn(
-                                "rounded border border-foreground/10 bg-foreground/5 group-hover:border-primary/30 transition-colors",
-                                tpl.aspectRatio === "9:16"
-                                  ? "w-3 h-5"
-                                  : tpl.aspectRatio === "1:1"
-                                    ? "w-4 h-4"
-                                    : "w-5 h-3",
-                              )}
-                            />
-                            <span className="text-[8px] font-semibold text-fg-subtle group-hover:text-primary transition-colors leading-tight text-center">
-                              {tpl.label.replace(" ", "\n")}
-                            </span>
-                          </button>
-                        ))}
+                    <WorkspaceComposer
+                      busy={ingestStage !== "idle" && ingestStage !== "ready" && ingestStage !== "failed"}
+                      uploadProgress={ingestUploadProgress}
+                      onCancel={() => {
+                        if (ingestUploadProgress != null) cancelUpload();
+                        else cancelAnalyze();
+                      }}
+                      onSubmit={handleComposerSubmit}
+                    />
+                    {queuedSourceFiles.length > 0 && (
+                      <div
+                        className="w-full max-w-2xl mt-4 rounded-xl border border-border bg-[hsl(var(--bg-subtle))] px-3 py-2.5"
+                        aria-label="Other attached sources"
+                      >
+                        <p className="text-[12px] font-medium text-[hsl(var(--fg-muted))] mb-2">
+                          {queuedSourceFiles.length} other source
+                          {queuedSourceFiles.length === 1 ? "" : "s"} ready — switch when you want to edit a different file
+                        </p>
+                        <ul className="space-y-1.5">
+                          {queuedSourceFiles.map((file) => (
+                            <li
+                              key={`${file.name}-${file.size}-${file.lastModified}`}
+                              className="flex items-center gap-2 text-[12px]"
+                            >
+                              <span className="min-w-0 flex-1 truncate text-[hsl(var(--fg))]">
+                                {file.name}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => activateQueuedSource(file)}
+                                disabled={isProcessing}
+                                className="shrink-0 text-[11px] font-medium text-[hsl(var(--accent-indigo))] hover:underline disabled:opacity-50"
+                              >
+                                Use this source
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
                       </div>
-                    </div>
+                    )}
                   </motion.div>
                 ) : (
                   <motion.div
@@ -757,7 +872,7 @@ export default function EditorLayout() {
         )}
       >
         <div className="flex items-center justify-between px-3 h-14 shrink-0 border-b border-border/60">
-          <span className="text-[10px] font-black uppercase tracking-[0.18em] text-fg-muted">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-fg-muted">
             Timeline
           </span>
           <button
@@ -813,7 +928,7 @@ export default function EditorLayout() {
               className="fixed left-0 top-0 bottom-0 w-80 bg-card border-r border-border z-50 flex flex-col overflow-hidden lg:hidden"
             >
               <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-fg-muted">Viral Clips</span>
+                <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-fg-muted">Viral Clips</span>
                 <button
                   onClick={() => setLeftPanelOpen(false)}
                   aria-label="Close clips panel"
@@ -852,7 +967,7 @@ export default function EditorLayout() {
               className="fixed right-0 top-0 bottom-0 w-80 bg-card border-l border-border z-50 flex flex-col overflow-hidden lg:hidden"
             >
               <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-fg-muted">Properties</span>
+                <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-fg-muted">Properties</span>
                 <button
                   onClick={() => setRightPanelOpen(false)}
                   aria-label="Close properties panel"
@@ -905,7 +1020,7 @@ export default function EditorLayout() {
                 <GripHorizontal size={16} className="text-foreground/20" aria-hidden="true" />
               </div>
               <div className="flex items-center justify-between px-4 py-2 border-b border-border shrink-0">
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-fg-muted">Properties</span>
+                <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-fg-muted">Properties</span>
                 <button
                   onClick={() => setMobileInspectorOpen(false)}
                   aria-label="Close properties panel"
@@ -923,7 +1038,13 @@ export default function EditorLayout() {
       </AnimatePresence>
 
       {/* Export dialog — opened via Export button in header */}
-      <ExportDialog open={exportOpen} onClose={() => setExportOpen(false)} />
+      {/* Sole owner of Cloud Tasks export + qai:export (chat-primary has no RightPanel). */}
+      <ServerExportHost />
+
+      {/* Lazy-mount Dialog: keeps Radix composeRefs out of the ingest tree (StrictMode). */}
+      {exportOpen ? (
+        <ExportDialog open onClose={() => setExportOpen(false)} />
+      ) : null}
 
       {showTour && (
         <EditorOnboardingTour

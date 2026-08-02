@@ -47,8 +47,7 @@ from fastapi.responses import (
     JSONResponse,
     StreamingResponse,
 )
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from starlette.background import BackgroundTask
 from pydantic import BaseModel, Field
@@ -128,6 +127,10 @@ from services.agent_runtime import ensure_agent_ready
 from services.gemini_backpressure import (
     GeminiBackpressureError,
     GeminiBackpressureUnavailable,
+)
+from services.gemini_spend_cap import (
+    GeminiSpendCapError,
+    GeminiSpendCapUnavailable,
 )
 
 load_dotenv()
@@ -381,7 +384,14 @@ async def lifespan(_app: FastAPI):
         logger.info("lifespan_shutdown")
 
 
-app = FastAPI(lifespan=lifespan)
+# Production: close OpenAPI recon surface (docs/redoc/schema). Dev/staging keep them.
+_IS_PRODUCTION = os.getenv("ENVIRONMENT", "").strip().lower() == "production"
+app = FastAPI(
+    lifespan=lifespan,
+    docs_url=None if _IS_PRODUCTION else "/docs",
+    redoc_url=None if _IS_PRODUCTION else "/redoc",
+    openapi_url=None if _IS_PRODUCTION else "/openapi.json",
+)
 
 
 @app.exception_handler(GeminiBackpressureError)
@@ -400,6 +410,33 @@ async def _gemini_backpressure_handler(
 async def _gemini_backpressure_unavailable_handler(
     _request: Request,
     exc: GeminiBackpressureUnavailable,
+) -> JSONResponse:
+    return JSONResponse(status_code=503, content={"detail": str(exc)})
+
+
+@app.exception_handler(GeminiSpendCapError)
+async def _gemini_spend_cap_handler(
+    _request: Request,
+    exc: GeminiSpendCapError,
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=429,
+        content={
+            "detail": {
+                "kind": "spend_cap",
+                "message": str(exc),
+                "reason": exc.reason,
+                "retry_after": exc.retry_after_seconds,
+            }
+        },
+        headers={"Retry-After": str(exc.retry_after_seconds)},
+    )
+
+
+@app.exception_handler(GeminiSpendCapUnavailable)
+async def _gemini_spend_cap_unavailable_handler(
+    _request: Request,
+    exc: GeminiSpendCapUnavailable,
 ) -> JSONResponse:
     return JSONResponse(status_code=503, content={"detail": str(exc)})
 
@@ -467,19 +504,8 @@ from routers.dub_router import router as dub_router  # noqa: E402
 app.include_router(dub_router)
 
 
-def get_real_ip(request: Request) -> str:
-    """
-    Extract the real client IP from X-Forwarded-For (Cloud Run LB/Vercel injects this).
-    Falls back to direct remote address for local development.
-    """
-    xff = request.headers.get("X-Forwarded-For", "")
-    if xff:
-        # X-Forwarded-For: client, proxy1, proxy2 — take the leftmost (first) address
-        return xff.split(",")[0].strip()
-    return request.client.host if request.client else "127.0.0.1"
+from core.rate_limit import get_real_ip, limiter  # noqa: E402
 
-
-limiter = Limiter(key_func=get_real_ip, default_limits=["200/minute"])
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 try:
@@ -840,7 +866,8 @@ async def analyze_video(
     body: AnalyzeRequest,
     verified_user_id: str = Depends(get_verified_user_id),
 ):
-    user_id = verified_user_id or body.userId or "anonymous"
+    # JWT sole tenant authority — body.userId must never bill/cache/spend.
+    user_id = verified_user_id
     charged = False
     try:
         await _admit_user_workload(
@@ -879,7 +906,12 @@ async def analyze_video(
                 user_id, 10, reason="http_error", route="analyze"
             )
         raise
-    except (GeminiBackpressureError, GeminiBackpressureUnavailable):
+    except (
+        GeminiBackpressureError,
+        GeminiBackpressureUnavailable,
+        GeminiSpendCapError,
+        GeminiSpendCapUnavailable,
+    ):
         if charged:
             from services.credit_guard import refund_credits_best_effort
 
@@ -907,7 +939,8 @@ async def analyze_video(
 async def export_video(
     request: ExportRequest, verified_user_id: str = Depends(get_verified_user_id)
 ):
-    user_id = verified_user_id or request.user_id
+    # JWT sole tenant authority — request.user_id is ignored for billing/ACL.
+    user_id = verified_user_id
 
     # EP-006 / ADR-012 — Kernel snapshot is bake authority when project_id set
     bake_manifest = request.render_manifest
@@ -1272,6 +1305,63 @@ async def render_dlq_stats(
     from services.render_queue import get_dlq_stats
 
     return get_dlq_stats()
+
+
+@app.get("/api/admin/ai-cache/stats")
+async def admin_ai_cache_stats(
+    x_admin_secret: Optional[str] = Header(None, alias="X-Admin-Secret"),
+):
+    """Process-local AI exact-state cache hit-rate + DLQ + Gemini circuit snapshot."""
+    _require_admin(x_admin_secret)
+    from middleware.cost_guard import ai_cache_stats
+    from services.render_queue import get_dlq_stats
+
+    circuit: dict[str, object] = {"state": "unavailable"}
+    try:
+        from services.gemini_backpressure import get_gemini_backpressure
+
+        circuit = await get_gemini_backpressure().snapshot()
+    except Exception as exc:
+        circuit = {"state": "unavailable", "error": str(exc)[:120]}
+
+    dlq = get_dlq_stats()
+    # Soft alert signal for operators / Sentry breadcrumbs (no paid SaaS).
+    if isinstance(dlq, dict) and int(dlq.get("dead_count") or 0) > 0:
+        logger.warning(
+            "render_dlq_depth dead_count=%s last_job_id=%s",
+            dlq.get("dead_count"),
+            dlq.get("last_job_id"),
+        )
+        try:
+            import sentry_sdk
+
+            sentry_sdk.capture_message(
+                f"render_dlq_depth={dlq.get('dead_count')}",
+                level="warning",
+            )
+        except Exception:
+            pass
+    if circuit.get("blocked") is True:
+        logger.warning(
+            "gemini_circuit_blocked kind=%s retry_after=%s",
+            circuit.get("kind"),
+            circuit.get("retry_after_seconds"),
+        )
+        try:
+            import sentry_sdk
+
+            sentry_sdk.capture_message(
+                f"gemini_circuit_blocked kind={circuit.get('kind')}",
+                level="error",
+            )
+        except Exception:
+            pass
+
+    return {
+        "ai_cache": ai_cache_stats(),
+        "render_dlq": dlq,
+        "gemini_circuit": circuit,
+    }
 
 
 class ReferralBonusRequest(BaseModel):
@@ -2140,7 +2230,8 @@ async def run_preflight(
     verified_user_id: str = Depends(get_verified_user_id),
 ):
     ensure_agent_ready("preflight_agent", strict=False)
-    user_id = verified_user_id or body.user_id
+    # JWT sole tenant authority — body.user_id ignored for credits/Gemini spend.
+    user_id = verified_user_id
     if not _ADK_AVAILABLE:
         raise HTTPException(
             status_code=503,
@@ -2201,7 +2292,12 @@ async def run_preflight(
             "degraded": False,
         }
 
-    except (GeminiBackpressureError, GeminiBackpressureUnavailable):
+    except (
+        GeminiBackpressureError,
+        GeminiBackpressureUnavailable,
+        GeminiSpendCapError,
+        GeminiSpendCapUnavailable,
+    ):
         from services.credit_guard import refund_credits_best_effort
 
         await refund_credits_best_effort(
@@ -2307,7 +2403,8 @@ async def run_director(
     body: DirectRequest,
     verified_user_id: str = Depends(get_verified_user_id),
 ):
-    user_id = verified_user_id or body.user_id
+    # JWT sole tenant authority — body.user_id ignored for credits/Gemini spend.
+    user_id = verified_user_id
     if not _ADK_AVAILABLE:
         raise HTTPException(
             status_code=503,
@@ -2347,7 +2444,12 @@ async def run_director(
         raise HTTPException(
             status_code=504, detail="Storyboard generation timed out after 120 seconds."
         )
-    except (GeminiBackpressureError, GeminiBackpressureUnavailable):
+    except (
+        GeminiBackpressureError,
+        GeminiBackpressureUnavailable,
+        GeminiSpendCapError,
+        GeminiSpendCapUnavailable,
+    ):
         from services.credit_guard import refund_credits_best_effort
 
         await refund_credits_best_effort(
@@ -2376,7 +2478,8 @@ async def create_video(
     """
     Runs: ScriptAgent → PreFlight → RenderService (Background)
     """
-    user_id = verified_user_id or body.user_id
+    # JWT sole tenant authority — body.user_id ignored for credits/render ACL.
+    user_id = verified_user_id
     workload_id = hashlib.sha256(
         json.dumps(
             {"script": body.script, "clip_paths": body.clip_paths},
@@ -2461,7 +2564,12 @@ async def create_video(
         }
     except HTTPException:
         raise
-    except (GeminiBackpressureError, GeminiBackpressureUnavailable):
+    except (
+        GeminiBackpressureError,
+        GeminiBackpressureUnavailable,
+        GeminiSpendCapError,
+        GeminiSpendCapUnavailable,
+    ):
         raise
     except Exception as exc:
         logger.exception("Video creation pipeline failed: %s", exc)
@@ -2640,7 +2748,12 @@ async def adk_enhance(
         agent = ScriptAgent()
         enhanced_text = await agent.enhance_script(body.topic)
         return {"enhanced_script": enhanced_text}
-    except (GeminiBackpressureError, GeminiBackpressureUnavailable):
+    except (
+        GeminiBackpressureError,
+        GeminiBackpressureUnavailable,
+        GeminiSpendCapError,
+        GeminiSpendCapUnavailable,
+    ):
         raise
     except Exception as e:
         logger.error(f"ADK Enhance failed: {e}")

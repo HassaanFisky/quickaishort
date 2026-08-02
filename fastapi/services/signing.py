@@ -5,7 +5,8 @@ import hmac
 import os
 import time
 
-DEFAULT_TTL_SECONDS = 24 * 60 * 60
+# L5: default shortened from 24h — override with EXPORT_URL_TTL_SECONDS.
+DEFAULT_TTL_SECONDS = 4 * 60 * 60
 
 
 def _secret() -> bytes:

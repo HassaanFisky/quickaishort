@@ -11,6 +11,7 @@ import SplashScreen from "@/components/shared/SplashScreen";
 import PageTransition from "@/components/shared/PageTransition";
 import { SessionExpiryModal } from "@/components/shared/SessionExpiryModal";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 export function AppProviders({ children }: { children: ReactNode }) {
   const [queryClient] = useState(
@@ -48,12 +49,14 @@ export function AppProviders({ children }: { children: ReactNode }) {
               disableTransitionOnChange
               themes={["dark", "oled", "light"]}
             >
-              <SplashScreen />
-              <ErrorBoundary>
-                <PageTransition>{children}</PageTransition>
-              </ErrorBoundary>
-              <Toaster position="top-center" richColors />
-              <SessionExpiryModal />
+              <TooltipProvider delayDuration={200}>
+                <SplashScreen />
+                <ErrorBoundary>
+                  <PageTransition>{children}</PageTransition>
+                </ErrorBoundary>
+                <Toaster position="top-center" richColors />
+                <SessionExpiryModal />
+              </TooltipProvider>
             </ThemeProvider>
           </PusherProvider>
         </QueryClientProvider>

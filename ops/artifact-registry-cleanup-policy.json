@@ -1,0 +1,25 @@
+[
+  {
+    "name": "delete-untagged",
+    "action": {"type": "Delete"},
+    "condition": {
+      "tagState": "untagged",
+      "olderThan": "7d"
+    }
+  },
+  {
+    "name": "delete-old-versions",
+    "action": {"type": "Delete"},
+    "condition": {
+      "tagState": "any",
+      "olderThan": "21d"
+    }
+  },
+  {
+    "name": "keep-minimum-versions",
+    "action": {"type": "Keep"},
+    "mostRecentVersions": {
+      "keepCount": 5
+    }
+  }
+]

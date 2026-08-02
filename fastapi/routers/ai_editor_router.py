@@ -13,11 +13,12 @@ import os
 import time
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import TypeAdapter
 
 from core.flags import is_mock_ai_mode
+from core.rate_limit import limiter
 from core.limits import (
     LimitEvaluation,
     UserTier,
@@ -39,6 +40,7 @@ from services.ai_editor_errors import (
     AiEditorErrorKind,
     detail_message,
     from_backpressure,
+    from_spend_cap,
     http_error,
     sse_error_event,
 )
@@ -47,6 +49,10 @@ from services.auth import get_verified_user_id
 from services.gemini_backpressure import (
     GeminiBackpressureError,
     GeminiBackpressureUnavailable,
+)
+from services.gemini_spend_cap import (
+    GeminiSpendCapError,
+    GeminiSpendCapUnavailable,
 )
 from services.tool_registry import list_capabilities_public
 
@@ -401,7 +407,9 @@ async def _execute_ai_edit_via_dual_router(
 
 
 @router.post("/api/ai-edit", response_model=AIEditorResponse)
+@limiter.limit("20/minute")
 async def ai_edit(
+    request: Request,
     body: AIEditorRequest,
     user_id: str = Depends(get_verified_user_id),
 ) -> AIEditorResponse:
@@ -466,6 +474,14 @@ async def ai_edit(
         if charged:
             await _refund_ai_editor_credit(user_id, route="ai_edit")
         raise http_error(503, AiEditorErrorKind.UNAVAILABLE, str(exc)) from exc
+    except GeminiSpendCapError as exc:
+        if charged:
+            await _refund_ai_editor_credit(user_id, route="ai_edit")
+        raise from_spend_cap(exc) from exc
+    except GeminiSpendCapUnavailable as exc:
+        if charged:
+            await _refund_ai_editor_credit(user_id, route="ai_edit")
+        raise http_error(503, AiEditorErrorKind.UNAVAILABLE, str(exc)) from exc
     except Exception as exc:
         if charged:
             await _refund_ai_editor_credit(user_id, route="ai_edit")
@@ -494,18 +510,21 @@ async def ai_edit(
 
 
 @router.post("/api/ai-editor/command", response_model=EditorCommandResponse)
+@limiter.limit("20/minute")
 async def handle_editor_command(
-    request: EditorCommandRequest,
+    request: Request,
+    body: EditorCommandRequest,
     user_id: str = Depends(get_verified_user_id),
 ):
     """Natural-language command → multi-track action JSON via DualModelRouter."""
-    if not request.command.strip():
+    _ = request
+    if not body.command.strip():
         raise HTTPException(status_code=400, detail="Command cannot be empty")
 
     tier, evaluation = await _admit_editor_command(
         user_id=user_id,
-        command=request.command,
-        workload_id=request.workload_id,
+        command=body.command,
+        workload_id=body.workload_id,
     )
     if not evaluation.decision.allowed:
         return _blocked_command_response(evaluation)
@@ -520,11 +539,11 @@ async def handle_editor_command(
     try:
         response = await _execute_via_dual_router(
             user_id=user_id,
-            command=request.command,
-            workload_id=request.workload_id,
+            command=body.command,
+            workload_id=body.workload_id,
             user_tier=tier.value,
-            project_context=request.project_context,
-            history=request.history,
+            project_context=body.project_context,
+            history=body.history,
         )
     except HTTPException as exc:
         if charged and exc.status_code >= 400:
@@ -535,6 +554,14 @@ async def handle_editor_command(
             await _refund_ai_editor_credit(user_id, route="handle_editor_command")
         raise from_backpressure(exc) from exc
     except GeminiBackpressureUnavailable as exc:
+        if charged:
+            await _refund_ai_editor_credit(user_id, route="handle_editor_command")
+        raise http_error(503, AiEditorErrorKind.UNAVAILABLE, str(exc)) from exc
+    except GeminiSpendCapError as exc:
+        if charged:
+            await _refund_ai_editor_credit(user_id, route="handle_editor_command")
+        raise from_spend_cap(exc) from exc
+    except GeminiSpendCapUnavailable as exc:
         if charged:
             await _refund_ai_editor_credit(user_id, route="handle_editor_command")
         raise http_error(503, AiEditorErrorKind.UNAVAILABLE, str(exc)) from exc
@@ -554,36 +581,43 @@ async def handle_editor_command(
 
 
 @router.post("/api/ai-editor/edit", response_model=EditorCommandResponse)
+@limiter.limit("20/minute")
 async def handle_editor_edit(
-    request: EditorCommandRequest,
+    request: Request,
+    body: EditorCommandRequest,
     user_id: str = Depends(get_verified_user_id),
 ):
     """Alias for `/api/ai-editor/command` (edit surface)."""
-    return await handle_editor_command(request, user_id=user_id)
+    return await handle_editor_command(request, body=body, user_id=user_id)
 
 
 @router.post("/api/ai-editor/generate", response_model=EditorCommandResponse)
+@limiter.limit("20/minute")
 async def handle_editor_generate(
-    request: EditorCommandRequest,
+    request: Request,
+    body: EditorCommandRequest,
     user_id: str = Depends(get_verified_user_id),
 ):
     """Alias for `/api/ai-editor/command` (generate surface)."""
-    return await handle_editor_command(request, user_id=user_id)
+    return await handle_editor_command(request, body=body, user_id=user_id)
 
 
 @router.post("/api/ai-editor/command/stream")
+@limiter.limit("20/minute")
 async def handle_editor_command_stream(
-    request: EditorCommandRequest,
+    request: Request,
+    body: EditorCommandRequest,
     user_id: str = Depends(get_verified_user_id),
 ):
     """Streaming path — DualModelRouter plan emitted as one SSE JSON event."""
-    if not request.command.strip():
+    _ = request
+    if not body.command.strip():
         raise HTTPException(status_code=400, detail="Command cannot be empty")
 
     tier, evaluation = await _admit_editor_command(
         user_id=user_id,
-        command=request.command,
-        workload_id=request.workload_id,
+        command=body.command,
+        workload_id=body.workload_id,
     )
     if not evaluation.decision.allowed:
         raise_resource_ceiling(evaluation.decision)
@@ -597,20 +631,20 @@ async def handle_editor_command_stream(
 
     async def guarded_stream():
         try:
-            yield 'data: {"stage":"planning","message":"Planning your edit…"}\n\n'
+            yield 'data: {"stage":"planning","message":"Reading your cut…"}\n\n'
             result = await _execute_via_dual_router(
                 user_id=user_id,
-                command=request.command,
-                workload_id=request.workload_id,
+                command=body.command,
+                workload_id=body.workload_id,
                 user_tier=tier.value,
-                project_context=request.project_context,
-                history=request.history,
+                project_context=body.project_context,
+                history=body.history,
             )
             if charged and _should_refund_editor_command(result):
                 await _refund_ai_editor_credit(
                     user_id, route="handle_editor_command_stream"
                 )
-            yield 'data: {"stage":"applying","message":"Applying edits…"}\n\n'
+            yield 'data: {"stage":"applying","message":"Updating the preview…"}\n\n'
             yield f"data: {result.model_dump_json()}\n\n"
         except HTTPException as exc:
             if charged and exc.status_code >= 400:
@@ -652,6 +686,29 @@ async def handle_editor_command_stream(
                 status=429,
                 retry_after=d.get("retry_after"),
             )
+        except GeminiSpendCapError as exc:
+            if charged:
+                await _refund_ai_editor_credit(
+                    user_id, route="handle_editor_command_stream"
+                )
+            sc = from_spend_cap(exc)
+            d = sc.detail if isinstance(sc.detail, dict) else {}
+            yield sse_error_event(
+                kind=d.get("kind", AiEditorErrorKind.SPEND_CAP.value),
+                message=detail_message(sc.detail),
+                status=429,
+                retry_after=d.get("retry_after"),
+            )
+        except (GeminiBackpressureUnavailable, GeminiSpendCapUnavailable) as exc:
+            if charged:
+                await _refund_ai_editor_credit(
+                    user_id, route="handle_editor_command_stream"
+                )
+            yield sse_error_event(
+                kind=AiEditorErrorKind.UNAVAILABLE,
+                message=str(exc),
+                status=503,
+            )
         except Exception as exc:
             if charged:
                 await _refund_ai_editor_credit(
@@ -677,13 +734,19 @@ async def handle_editor_command_stream(
 
 @router.get("/api/ai-editor/health")
 async def health_check_ai():
-    """Honest AI readiness — key presence + Gemini circuit state."""
+    """Honest AI readiness — key presence + Gemini circuit + spend cap + cache."""
     api_key = os.getenv("GEMINI_API_KEY")
     mock = is_mock_ai_mode()
     circuit: dict[str, object] = {
         "blocked": False,
         "kind": None,
         "retry_after_seconds": None,
+        "state": "unknown",
+    }
+    spend: dict[str, object] = {
+        "kill_switch": False,
+        "blocked": False,
+        "reason": None,
         "state": "unknown",
     }
     try:
@@ -697,17 +760,34 @@ async def health_check_ai():
             "retry_after_seconds": None,
             "state": "unavailable",
         }
+    try:
+        from services.gemini_spend_cap import get_gemini_spend_cap
+
+        spend = await get_gemini_spend_cap().snapshot()
+    except Exception:
+        spend = {
+            "kill_switch": None,
+            "blocked": None,
+            "reason": None,
+            "state": "unavailable",
+        }
 
     if mock:
         status = "ok"
     elif not api_key:
         status = "missing_api_key"
+    elif spend.get("blocked") is True or spend.get("kill_switch") is True:
+        status = "spend_capped"
     elif circuit.get("blocked") is True:
         status = "deferred"
-    elif circuit.get("state") in {"unavailable", "invalid"}:
+    elif circuit.get("state") in {"unavailable", "invalid"} or spend.get(
+        "state"
+    ) == "unavailable":
         status = "degraded"
     else:
         status = "ok"
+
+    from middleware.cost_guard import ai_cache_stats
 
     return {
         "status": status,
@@ -715,6 +795,11 @@ async def health_check_ai():
         "primary_model": os.getenv("GEMINI_PRIMARY_MODEL", "gemini-2.5-flash"),
         "free_model": os.getenv("GEMINI_FREE_MODEL", "gemini-2.5-flash-lite"),
         "gemini_circuit": circuit,
+        "gemini_spend_cap": spend,
+        "ai_cache": ai_cache_stats(),
+        "studio_native_tools": __import__(
+            "core.flags", fromlist=["is_studio_native_tools"]
+        ).is_studio_native_tools(),
     }
 
 

@@ -17,9 +17,10 @@ import time
 import uuid
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
+from core.rate_limit import limiter
 from services.auth import get_verified_user_id
 from services.credit_guard import refund_credits_best_effort, require_credits
 from services.queue_service import is_overloaded, redis_conn
@@ -67,11 +68,14 @@ def _get_pipeline(pipeline_id: str) -> Optional[dict]:
 
 
 @router.post("/api/pipeline/run")
+@limiter.limit("5/minute")
 async def run_pipeline(
+    request: Request,
     req: PipelineRunRequest,
     verified_user_id: str = Depends(get_verified_user_id),
 ):
     """Analyze -> pick top clip -> enqueue render. Returns once the render is queued."""
+    _ = request
     user_id = verified_user_id
     if is_overloaded():
         raise HTTPException(
@@ -229,10 +233,13 @@ async def run_pipeline(
 
 
 @router.get("/api/pipeline/{pipeline_id}/status")
+@limiter.limit("60/minute")
 async def pipeline_status(
+    request: Request,
     pipeline_id: str,
     verified_user_id: str = Depends(get_verified_user_id),
 ):
+    _ = request
     data = _get_pipeline(pipeline_id)
     if data is None:
         raise HTTPException(status_code=404, detail="Pipeline not found")

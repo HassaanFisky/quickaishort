@@ -1,7 +1,7 @@
 """Production-safe feature flags for local validation only.
 
 Author: QuickAI Engineering
-Last modified: 2026-07-23
+Last modified: 2026-08-02
 """
 
 from __future__ import annotations
@@ -15,6 +15,8 @@ logger = logging.getLogger(__name__)
 # explicitly opts in, and never inside ENVIRONMENT=production.
 MOCK_AI_MODE: bool = False
 STUDIO_NATIVE_TOOLS: bool = False
+# Optional Gemini re-rank of MediaGraph suggestion labels — OFF until credits.
+STUDIO_SUGGESTION_LLM: bool = False
 
 _TRUE_VALUES = frozenset({"1", "true", "yes", "on"})
 
@@ -63,3 +65,14 @@ def is_studio_native_tools() -> bool:
     """
 
     return _env_flag("STUDIO_NATIVE_TOOLS", default=STUDIO_NATIVE_TOOLS)
+
+
+def is_studio_suggestion_llm() -> bool:
+    """Optional Gemini re-rank/rewrite of MediaGraph suggestion chip labels.
+
+    Default OFF — ``derive_suggestions`` heuristics only ($0). Set
+    STUDIO_SUGGESTION_LLM=1 after Gemini credits + CostGuard canary. Fail-closed
+    callers must keep the heuristic list on 429 / cache / model errors.
+    """
+
+    return _env_flag("STUDIO_SUGGESTION_LLM", default=STUDIO_SUGGESTION_LLM)

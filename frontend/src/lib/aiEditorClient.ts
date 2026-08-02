@@ -1,8 +1,10 @@
 /**
- * Typed API client for POST /api/ai-edit (FastAPI Pillar-2 endpoint).
- *
- * Proxied through Next.js /api/ai/editor/route.ts which attaches the
- * NextAuth JWT. This module is the network boundary — no React deps.
+ * DEPRECATED for live Studio chat (2026-08-02).
+ * Live path: `gemini-editor.ts` → FastAPI `/api/ai-editor/command[/stream]`
+ * via `authenticatedFetch` (same JWT contract as `api.ts` axios interceptors).
+ * This module hits Next.js `/api/ai/editor` (Pillar-2 proxy) — kept for
+ * `frontend/scripts/test-ai-editor-client.mjs` + validate script only.
+ * Do not wire into AIPanel.
  */
 
 import type { AiEditorRequest, AiEditorResponse } from "@/types/ai-editor";

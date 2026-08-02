@@ -135,7 +135,10 @@ Never bypass EP-001. Never invent a second tool ABI.
 | `whisper.worker.ts` | In-browser transcription |
 | `face.worker.ts` | MediaPipe face tracking |
 | `analysis.worker.ts` | Silence / energy analysis |
-| `ffmpegExport.worker.ts` | Client preview export path (CDN-timeout guarded) |
+| `_archive/workers/ffmpegExport.worker.ts` | **Quarantined** (orphan VideoWorkspace only) — not live `/editor`; never Final |
+
+**Live client export:** WebCodecs (`ExportDialog`) + MediaRecorder fallback.  
+**Final shareable MP4:** Cloud Tasks → private Cloud Run renderer → GCS.
 
 Production export authority: private request-bound Cloud Run renderer + GCS.
 

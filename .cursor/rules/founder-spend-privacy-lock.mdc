@@ -1,0 +1,25 @@
+---
+description: Founder spend lock — no live Gemini/token tests without explicit ask; review/debug first; keep product private
+alwaysApply: true
+---
+
+# Founder Spend + Privacy Lock (QuickAI Short)
+
+Permanent founder directive (Hassaan). Applies in every chat, including new sessions.
+
+## No unpaid / surprise spend
+- **Never** run live Gemini / AI Studio / paid provider smoke tests, generateContent probes, or “just check tokens” calls **without the founder explicitly asking in that turn**.
+- Health checks that do **not** call the model (`/health`, `/api/ai-editor/health` snapshot) are fine when verifying deploys.
+- If unsure whether a command bills Gemini or other paid APIs: **stop and ask**.
+- Respect existing spend caps (`GEMINI_DAILY_CALL_CAP`, `GEMINI_HOURLY_CALL_CAP`, `GEMINI_SPEND_KILL_SWITCH`). Do not raise caps or disable kill-switch without explicit approval.
+
+## Current working mode (until founder says otherwise)
+- Prefer **review, verify, debug, architecture** over live AI exercise.
+- Do not burn prepaid credits “to prove it works” — code review, py_compile, tsc, unit tests with `MOCK_AI_MODE`, and free health endpoints first.
+
+## Privacy
+- Treat QuickAI Short / Studio as **private founder IP**. Do not publish, open-source, or share secrets, `.env`, keys, admin secrets, cookies, or internal roadmap externally.
+- Never paste live credentials into chat replies or docs.
+
+## Default reply when tempted to test live AI
+Ask one line: “Live Gemini test chalaun? (haan/na)” — then wait.

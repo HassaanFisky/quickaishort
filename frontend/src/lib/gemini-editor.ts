@@ -149,6 +149,16 @@ export function buildProjectContextForCommand(input: {
   transcript?: TranscriptLike | { chunks?: TranscriptLike[] } | Array<TranscriptLike>
   captions?: CaptionLike[]
   videoAnalysis?: VideoAnalysis | null
+  /** Silence gaps (keep segments filtered by caller or typed). */
+  silenceSegments?: Array<{ start: number; end: number; type?: string }> | null
+  /** Top viral / highlight moments already in store or facets. */
+  viralMoments?: Array<{
+    timestamp?: number
+    start?: number
+    end?: number
+    score?: number
+    hook?: string
+  }> | null
 }): Record<string, unknown> {
   const { editorState } = input
   const duration = editorState.videoDuration || 0
@@ -204,6 +214,61 @@ export function buildProjectContextForCommand(input: {
     }))
     .filter((c) => c.text)
 
+  const silenceRaw = input.silenceSegments ?? []
+  const silenceGaps = silenceRaw
+    .map((s) => ({
+      start: Number(s.start),
+      end: Number(s.end),
+      type: s.type,
+    }))
+    .filter(
+      (s) =>
+        Number.isFinite(s.start) &&
+        Number.isFinite(s.end) &&
+        s.end > s.start &&
+        s.type !== "keep",
+    )
+  const silenceCount = silenceGaps.length
+  const longestSilenceSec =
+    silenceCount > 0
+      ? Math.max(...silenceGaps.map((s) => s.end - s.start))
+      : 0
+
+  const viralRaw = input.viralMoments ?? []
+  const viralTop = viralRaw
+    .map((m) => {
+      const timestamp = Number(m.timestamp ?? m.start ?? 0)
+      const score = Number(m.score ?? 0)
+      if (!Number.isFinite(timestamp)) return null
+      return {
+        timestamp,
+        end: Number.isFinite(Number(m.end)) ? Number(m.end) : undefined,
+        score: Number.isFinite(score) ? score : 0,
+        hook: typeof m.hook === "string" ? m.hook.slice(0, 80) : undefined,
+      }
+    })
+    .filter(Boolean)
+    .sort((a, b) => (b?.score ?? 0) - (a?.score ?? 0))
+    .slice(0, 5)
+
+  const markIn = editorState.markIn
+  const markOut = editorState.markOut
+  const marks =
+    markIn != null || markOut != null
+      ? {
+          markIn: markIn ?? null,
+          markOut: markOut ?? null,
+          span_sec:
+            markIn != null && markOut != null && markOut > markIn
+              ? markOut - markIn
+              : null,
+        }
+      : null
+
+  // Hook slice — first non-empty transcript line for planner grounding.
+  const hookLine =
+    (transcript[0] as { text?: string } | null)?.text?.slice(0, 80) || null
+
   return {
     clip_count: editorState.clipCount,
     duration,
@@ -220,10 +285,18 @@ export function buildProjectContextForCommand(input: {
     clipIndex: editorState.clipIndex,
     clipStart: editorState.clipStart,
     clipEnd: editorState.clipEnd,
-    markIn: editorState.markIn,
-    markOut: editorState.markOut,
+    markIn,
+    markOut,
+    marks,
     recentActions: editorState.recentActions.slice(-8),
     transcript,
+    transcript_slice: {
+      chunk_count: transcript.length,
+      hook_line: hookLine,
+    },
+    silence_count: silenceCount,
+    longest_silence_sec: Number(longestSilenceSec.toFixed(2)),
+    viral_top: viralTop,
     captions,
     run_id: input.runId || undefined,
   }
@@ -347,12 +420,12 @@ export async function streamEditorCommand(
   return parsed;
 }
 
-// Health check
+/** @deprecated Use `getAiEditorHealth` from `@/lib/api` (auth + circuit fields). */
 export async function checkAIEditorHealth(): Promise<{
   status: string
-  primary_model: string
-  free_model: string
+  primary_model?: string
+  free_model?: string
 }> {
-  const response = await fetch(`${API_BASE}/api/ai-editor/health`)
-  return response.json()
+  const { getAiEditorHealth } = await import("@/lib/api");
+  return getAiEditorHealth();
 }

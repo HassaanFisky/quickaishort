@@ -76,7 +76,7 @@ export default function Footer() {
             © {new Date().getFullYear()} QuickAI Short. All rights reserved.
           </p>
           <p className="text-[11px] text-[hsl(var(--fg-subtle))]">
-            Built with Gemini 2.5 Flash · Google ADK · Paddle Billing
+            Built with Gemini · Paddle Billing
           </p>
         </div>
       </div>

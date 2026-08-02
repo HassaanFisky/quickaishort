@@ -84,14 +84,14 @@ export function DashboardFaqPanel({ embedded = false }: AIPanelProps) {
       } else if (res.status === 401) {
         content = 'Sign in to use AI suggestions.';
       } else if (res.status === 503) {
-        content = 'AI service not configured — contact support.';
+        content = 'AI suggestions are offline right now. Try again shortly.';
       } else if (res.status === 429) {
         content = 'Rate limit exceeded — try again in a moment.';
       } else if (res.status >= 500) {
         content = `AI error (${res.status}) — please try again.`;
         setRetryText(trimmed);
       } else {
-        content = data.message ?? 'Something went wrong.';
+        content = data.message ?? 'That suggestion failed. Your project is unchanged — try again.';
       }
 
       addMessage({ role: 'assistant', content });

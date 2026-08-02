@@ -1,11 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef } from "react";
-import { getSession } from "next-auth/react";
 import axios from "axios";
-import Pusher, { type Channel } from "pusher-js";
+import type { Channel } from "pusher-js";
 import { toast } from "sonner";
-import { API_URL } from "@/lib/api";
+import { cancelDubJob, createDubJob, getDubJob } from "@/lib/api";
+import { getSharedPusher } from "@/lib/pusherClient";
 import { useEditorStore } from "@/stores/editorStore";
 import {
   DUB_STAGE_LABELS,
@@ -14,6 +14,9 @@ import {
   type DubStage,
   type DubTargetLang,
 } from "@/lib/studio/dubFsm";
+
+const DUB_POLL_MS = 4000;
+const DUB_POLL_PUSHER_MS = 12_000;
 
 export interface DubJobResponse {
   job_id: string;
@@ -52,16 +55,6 @@ type DubRealtimePayload = {
   mode?: DubMode;
   target_lang?: DubTargetLang;
 };
-
-async function authHeaders(): Promise<Record<string, string>> {
-  const session = await getSession();
-  const token = (session as { backendToken?: string } | null)?.backendToken;
-  const userId = session?.user?.id;
-  const headers: Record<string, string> = {};
-  if (token) headers.Authorization = `Bearer ${token}`;
-  if (userId) headers["X-User-Id"] = userId;
-  return headers;
-}
 
 function applyDubResult(job: DubJobResponse) {
   const store = useEditorStore.getState();
@@ -141,7 +134,6 @@ function toastTerminal(status: DubStage, message?: string, error?: string | null
 export function useDubVideo() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollErrorsRef = useRef(0);
-  const pusherRef = useRef<Pusher | null>(null);
   const channelRef = useRef<Channel | null>(null);
   const toastedTerminalRef = useRef<string | null>(null);
   const dubJob = useEditorStore((s) => s.dubJob);
@@ -170,11 +162,7 @@ export function useDubVideo() {
   const pollJob = useCallback(
     async (jobId: string) => {
       try {
-        const headers = await authHeaders();
-        const { data } = await axios.get<DubJobResponse>(
-          `${API_URL}/api/studio/v1/dub/${jobId}`,
-          { headers, timeout: 20_000 },
-        );
+        const data = (await getDubJob(jobId)) as DubJobResponse;
         pollErrorsRef.current = 0;
         applyDubResult(data);
         if (isDubTerminal(data.status)) {
@@ -195,28 +183,24 @@ export function useDubVideo() {
   );
 
   const startPolling = useCallback(
-    (jobId: string) => {
+    (jobId: string, intervalMs: number = DUB_POLL_MS) => {
       stopPoll();
       pollRef.current = setInterval(() => {
         void pollJob(jobId);
-      }, 4000);
+      }, intervalMs);
     },
     [pollJob, stopPoll],
   );
 
   const subscribeRealtime = useCallback(
     (jobId: string) => {
-      const key = process.env.NEXT_PUBLIC_PUSHER_KEY;
-      const cluster = process.env.NEXT_PUBLIC_PUSHER_CLUSTER;
       cleanupRealtime();
-      if (!key || !cluster) {
-        startPolling(jobId);
+      const pusher = getSharedPusher();
+      if (!pusher) {
+        startPolling(jobId, DUB_POLL_MS);
         return;
       }
-      if (!pusherRef.current) {
-        pusherRef.current = new Pusher(key, { cluster });
-      }
-      const channel = pusherRef.current.subscribe(`dub-${jobId}`);
+      const channel = pusher.subscribe(`dub-${jobId}`);
       channelRef.current = channel;
 
       channel.bind("progress", (data: DubRealtimePayload) => {
@@ -239,8 +223,8 @@ export function useDubVideo() {
         stopWatching();
       });
 
-      // Belt-and-braces slower poll if events drop.
-      startPolling(jobId);
+      // Events primary; slow poll only if Pusher silently drops.
+      startPolling(jobId, DUB_POLL_PUSHER_MS);
     },
     [cleanupRealtime, pollJob, startPolling, stopWatching],
   );
@@ -275,24 +259,19 @@ export function useDubVideo() {
       });
 
       try {
-        const headers = await authHeaders();
-        const { data } = await axios.post<DubJobResponse>(
-          `${API_URL}/api/studio/v1/dub`,
-          {
-            transcript: chunks.map((c) => ({
-              text: c.text,
-              start: c.start,
-              end: c.end,
-            })),
-            target_lang: opts.targetLang,
-            mode: opts.mode ?? "full_dub",
-            voice_id: opts.voiceId ?? null,
-            project_id: store.studioProjectId,
-            source_fingerprint: store.ingestFingerprint,
-            run_id: store.runId,
-          },
-          { headers, timeout: 120_000 },
-        );
+        const data = (await createDubJob({
+          transcript: chunks.map((c) => ({
+            text: c.text,
+            start: c.start,
+            end: c.end,
+          })),
+          target_lang: opts.targetLang,
+          mode: opts.mode ?? "full_dub",
+          voice_id: opts.voiceId ?? null,
+          project_id: store.studioProjectId,
+          source_fingerprint: store.ingestFingerprint,
+          run_id: store.runId,
+        })) as DubJobResponse;
         applyDubResult(data);
         if (!isDubTerminal(data.status)) {
           subscribeRealtime(data.job_id);
@@ -328,11 +307,7 @@ export function useDubVideo() {
     if (!jobId) return;
     stopWatching();
     try {
-      const headers = await authHeaders();
-      const { data } = await axios.delete<DubJobResponse>(
-        `${API_URL}/api/studio/v1/dub/${jobId}`,
-        { headers },
-      );
+      const data = (await cancelDubJob(jobId)) as DubJobResponse;
       applyDubResult(data);
     } catch {
       useEditorStore.getState().setDubJob({

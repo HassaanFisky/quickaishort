@@ -29,6 +29,11 @@ DEFAULT_TOKEN_BUCKET_REFILL_PER_SEC = 0.5
 DEFAULT_DEFER_BASE_SECONDS = 2
 DEFAULT_DEFER_MAX_SECONDS = 120
 
+# Process-local AI cache observability (admin/health). Not a billing source of truth.
+_ai_cache_hits = 0
+_ai_cache_misses = 0
+_ai_cache_in_flight = 0
+
 
 class CostGuardUnavailable(RuntimeError):
     """Fail-closed signal: cache state is unknown, so model spend is blocked."""
@@ -150,11 +155,14 @@ return 0
                 "AI cache lookup failed; model call blocked to prevent unbounded spend."
             ) from exc
 
+        global _ai_cache_hits, _ai_cache_misses, _ai_cache_in_flight
+
         if raw is not None:
             try:
                 envelope = CacheEnvelope.model_validate_json(
                     _decode_redis_value(raw), strict=True
                 )
+                _ai_cache_hits += 1
                 return CacheLookup(
                     status=CacheLookupStatus.HIT,
                     cache_key=cache_key,
@@ -183,11 +191,13 @@ return 0
             ) from exc
 
         if acquired:
+            _ai_cache_misses += 1
             return CacheLookup(
                 status=CacheLookupStatus.MISS_RESERVED,
                 cache_key=cache_key,
                 lease_token=token,
             )
+        _ai_cache_in_flight += 1
         return CacheLookup(
             status=CacheLookupStatus.IN_FLIGHT,
             cache_key=cache_key,
@@ -275,6 +285,29 @@ return 0
             f"{self._prefix}:{CACHE_SCHEMA_VERSION}:{tenant_hash}:"
             f"{fingerprint}:{collision_guard}"
         )
+
+
+def ai_cache_stats() -> dict[str, object]:
+    """Process-local AI exact-state cache counters for admin/health."""
+    hits = _ai_cache_hits
+    misses = _ai_cache_misses
+    in_flight = _ai_cache_in_flight
+    total = hits + misses
+    hit_rate = round(hits / total, 4) if total else None
+    return {
+        "schema_version": CACHE_SCHEMA_VERSION,
+        "hits": hits,
+        "misses": misses,
+        "in_flight": in_flight,
+        "hit_rate": hit_rate,
+    }
+
+
+def reset_ai_cache_stats_for_tests() -> None:
+    global _ai_cache_hits, _ai_cache_misses, _ai_cache_in_flight
+    _ai_cache_hits = 0
+    _ai_cache_misses = 0
+    _ai_cache_in_flight = 0
 
 
 class TokenBucketDecision(BaseModel):

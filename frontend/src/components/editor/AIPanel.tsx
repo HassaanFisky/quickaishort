@@ -16,6 +16,11 @@ import {
   type CanonicalEditorAction,
   AiEditorCommandError,
 } from "@/lib/gemini-editor";
+import {
+  getAiEditorHealth,
+  orchestratorPlan,
+  orchestratorExecute,
+} from "@/lib/api";
 import { mapAiEditorError } from "@/lib/aiEditorErrors";
 import { useSession } from "next-auth/react";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
@@ -74,7 +79,7 @@ function ThinkingBubble({ stageLabel }: { stageLabel?: string }) {
         </div>
       </div>
       <p className="text-12 text-muted-foreground pl-8">
-        {stageLabel?.trim() || "Working on your edit…"}
+        {stageLabel?.trim() || "Got it — shaping your edit…"}
       </p>
     </div>
   );
@@ -142,9 +147,12 @@ export function AIPanel() {
     timelineMarkers,
     transcript,
     silenceSegments,
+    aiSuggestions,
     duration,
     runId,
     currentTime,
+    sourceUrl,
+    sourceFile,
   } = useEditorStore();
 
   const [inputText, setInputText] = useState("");
@@ -152,7 +160,9 @@ export function AIPanel() {
   const [suggestions, setSuggestions] = useState<SuggestionIntent[]>([]);
   const [suggestionsLoaded, setSuggestionsLoaded] = useState(false);
   const [followUpChips, setFollowUpChips] = useState<string[]>([]);
-  const [thinkingStage, setThinkingStage] = useState("Working on your edit…");
+  const [thinkingStage, setThinkingStage] = useState("Got it — shaping your edit…");
+  const [showExportFinalChip, setShowExportFinalChip] = useState(false);
+  const firstWinAckedRef = useRef(false);
   const activeTool = useUIStore((s) => s.activeTool);
   const setActiveTool = useUIStore((s) => s.setActiveTool);
   const mediaGraphIdRef = useRef<string | null>(null);
@@ -168,9 +178,58 @@ export function AIPanel() {
     setSuggestionsLoaded(false);
     setSuggestions([]);
     setKernelSyncState("idle");
+    setShowExportFinalChip(false);
+    firstWinAckedRef.current = false;
   }, [runId]);
 
-  // Editor credit chip — Firestore SoT via /api/stats (once per session user).
+  // Composer handoff — pre-fill chat when user described intent on home workspace
+  useEffect(() => {
+    if (!sourceUrl && !sourceFile) return;
+    try {
+      const pending = sessionStorage.getItem("qai:initial-prompt");
+      if (!pending) return;
+      sessionStorage.removeItem("qai:initial-prompt");
+      setInputText(pending);
+    } catch {
+      /* ignore */
+    }
+  }, [runId, sourceUrl, sourceFile]);
+
+  // Honest partial / missing-tool feedback from dispatchAIActions — never silent.
+  useEffect(() => {
+    const onRefused = (ev: Event) => {
+      const detail = (ev as CustomEvent<{
+        type?: string;
+        reason?: string;
+        openAdvanced?: boolean;
+      }>).detail;
+      const type = detail?.type || "tool";
+      const reason = detail?.reason || "unavailable";
+      const label = type.replace(/_/g, " ").toLowerCase();
+      let content: string;
+      if (reason === "needs_stock_pick") {
+        content =
+          "Pick a B-roll clip from the library — chat needs a stock source first.";
+      } else if (reason === "partial_open_advanced") {
+        content = `${label} is only partial in chat — open Advanced for full controls.`;
+      } else if (reason === "not_implemented_in_preview") {
+        content = `${label} isn't chat-ready yet — open Advanced to finish that edit.`;
+      } else if (reason === "missing_time_sec" || reason === "invalid_range") {
+        content = `Couldn't apply ${label} — need a clear time or in/out range.`;
+      } else if (reason === "no_clip") {
+        content = "No clip selected for that mark — pick a clip first.";
+      } else {
+        content = `${label} isn't available from chat yet — try Advanced or another edit.`;
+      }
+      addAIMessage({ role: "assistant", content, actions: [] });
+      if (detail?.openAdvanced && typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("qai:open-advanced"));
+      }
+    };
+    window.addEventListener("qai:ai-tool-refused", onRefused as EventListener);
+    return () =>
+      window.removeEventListener("qai:ai-tool-refused", onRefused as EventListener);
+  }, [addAIMessage]);
   useEffect(() => {
     const userId = session?.user?.id;
     if (!userId) {
@@ -189,6 +248,40 @@ export function AIPanel() {
       cancelled = true;
     };
   }, [session?.user?.id]);
+
+  // Honest Gemini circuit — poll lightly while chat is open (no fake success).
+  const [circuitBanner, setCircuitBanner] = useState<string | null>(null);
+  useEffect(() => {
+    if (!aiPanelOpen) return;
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const health = await getAiEditorHealth();
+        if (cancelled) return;
+        const circuit = health.gemini_circuit;
+        if (health.status === "deferred" || circuit?.blocked === true) {
+          const ra = circuit?.retry_after_seconds;
+          setCircuitBanner(
+            ra
+              ? `AI briefly unavailable — retry in ~${ra}s. Timeline edits are safe.`
+              : "AI temporarily unavailable (provider limit). Timeline edits are safe — try again later.",
+          );
+        } else if (health.status === "missing_api_key") {
+          setCircuitBanner("AI is not configured on the server.");
+        } else {
+          setCircuitBanner(null);
+        }
+      } catch {
+        if (!cancelled) setCircuitBanner(null);
+      }
+    };
+    void poll();
+    const id = window.setInterval(poll, 60_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [aiPanelOpen]);
 
   const [recentActions, setRecentActions] = useState<string[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -502,19 +595,16 @@ export function AIPanel() {
       addAIMessage({ role: "user", content: s.label });
       setAIThinking(true);
       try {
-        const { data: plan } = await axios.post(
-          `${API_URL}/api/studio/v1/orchestrator/plan`,
-          {
-            source: "suggestion",
-            project_id: useEditorStore.getState().studioProjectId,
-            structured: {
-              capability_id: s.capability_id,
-              params: s.params ?? {},
-              label: s.label,
-              suggestion_id: s.suggestion_id,
-            },
+        const plan = await orchestratorPlan({
+          source: "suggestion",
+          project_id: useEditorStore.getState().studioProjectId,
+          structured: {
+            capability_id: s.capability_id,
+            params: s.params ?? {},
+            label: s.label,
+            suggestion_id: s.suggestion_id,
           },
-        );
+        });
         const step = plan?.steps?.[0];
         if (step?.capability_id) {
           dispatchAIActions([
@@ -523,6 +613,51 @@ export function AIPanel() {
               payload: step.params ?? {},
             },
           ]);
+        }
+
+        // Apply honesty: DETECT_VIRAL must never look like a silent success.
+        if (step?.capability_id === "DETECT_VIRAL_MOMENTS") {
+          const st = useEditorStore.getState();
+          const moments = st.aiSuggestions.viralMoments;
+          const explain = st.aiSuggestions.lastEditExplanation;
+          if (moments.length > 0) {
+            const pride =
+              !firstWinAckedRef.current
+                ? " Nice — first win locked in."
+                : "";
+            if (!firstWinAckedRef.current) {
+              firstWinAckedRef.current = true;
+              setShowExportFinalChip(true);
+            }
+            addAIMessage({
+              role: "assistant",
+              content: `Found ${moments.length} highlight${moments.length === 1 ? "" : "s"} — preview at the top moment.${pride}`,
+              actions: [{ type: step.capability_id, payload: step.params ?? {} }],
+            });
+            return;
+          }
+          addAIMessage({
+            role: "assistant",
+            content:
+              explain?.explanation ||
+              "No viral moments yet — analysis will retry when the transcript is ready.",
+            actions: [],
+          });
+          return;
+        }
+
+        if (step?.capability_id === "REMOVE_SILENCES") {
+          const st = useEditorStore.getState();
+          const cuts = st.silenceSegments.filter((seg) => seg.type !== "keep");
+          if (cuts.length === 0 && !st.trimMarker) {
+            addAIMessage({
+              role: "assistant",
+              content:
+                "No silence gaps long enough to cut — dead-air markers need to finish analyzing first.",
+              actions: [],
+            });
+            return;
+          }
         }
 
         if (
@@ -534,7 +669,7 @@ export function AIPanel() {
             useEditorStore.getState().rebuildRenderManifest();
             const st = useEditorStore.getState();
             if (st.compiledManifest) {
-              await axios.post(`${API_URL}/api/studio/v1/orchestrator/execute`, {
+              await orchestratorExecute({
                 plan_id: plan.plan_id,
                 project_id: st.studioProjectId,
                 base_revision: st.studioAckedRevision,
@@ -546,9 +681,9 @@ export function AIPanel() {
             const { formatApiDetail } = await import("@/lib/authenticatedFetch");
             const detail = axios.isAxiosError(syncErr)
               ? formatApiDetail(
-                  syncErr.response?.data?.detail,
-                  syncErr.response?.status ?? 500,
-                )
+                syncErr.response?.data?.detail,
+                syncErr.response?.status ?? 500,
+              )
               : "";
             addAIMessage({
               role: "assistant",
@@ -564,9 +699,16 @@ export function AIPanel() {
           }
         }
 
+        // First-win pride + optional Export Final (continuum +2 heuristic path).
+        let pride = "";
+        if (step?.capability_id && !firstWinAckedRef.current) {
+          firstWinAckedRef.current = true;
+          setShowExportFinalChip(true);
+          pride = " Nice — preview looks sharper.";
+        }
         addAIMessage({
           role: "assistant",
-          content: plan?.message || `Planned: ${s.capability_id}`,
+          content: `${plan?.message || "Done — preview updated."}${pride}`,
           actions: step
             ? [{ type: step.capability_id, payload: step.params ?? {} }]
             : [],
@@ -575,7 +717,7 @@ export function AIPanel() {
         const { formatApiDetail } = await import("@/lib/authenticatedFetch");
         const msg = axios.isAxiosError(err)
           ? formatApiDetail(err.response?.data?.detail, err.response?.status ?? 500) ||
-            "Could not apply grounded suggestion — try typing the edit."
+          "Could not apply grounded suggestion — try typing the edit."
           : "Could not apply grounded suggestion — try typing the edit.";
         addAIMessage({ role: "assistant", content: msg, actions: [] });
       } finally {
@@ -589,6 +731,17 @@ export function AIPanel() {
     async (text: string) => {
       const trimmed = text.trim();
       if (!trimmed || isAIThinking) return;
+
+      // Fail-closed before network: zero credits must never burn Gemini prepaid.
+      if (creditBalance !== null && creditBalance <= 0) {
+        addAIMessage({
+          role: "assistant",
+          content:
+            "You're out of credits. Upgrade to Pro to keep editing with AI — no charge was made.",
+          actions: [],
+        });
+        return;
+      }
 
       // Save to command history (dedupe consecutive duplicates)
       if (commandHistoryRef.current[commandHistoryRef.current.length - 1] !== trimmed) {
@@ -607,7 +760,8 @@ export function AIPanel() {
       }));
 
       addAIMessage({ role: "user", content: trimmed });
-      setThinkingStage("Planning your edit…");
+      // Instant perceived ack (<300ms) — stage before model round-trip.
+      setThinkingStage("Got it — shaping your edit…");
       setAIThinking(true);
       setFollowUpChips([]);
 
@@ -622,6 +776,12 @@ export function AIPanel() {
           transcript,
           captions,
           videoAnalysis,
+          silenceSegments,
+          viralMoments: (aiSuggestions.viralMoments ?? []).map((m) => ({
+            timestamp: m.timestamp,
+            score: m.score,
+            hook: m.hook,
+          })),
         });
         const result = await streamEditorCommand(
           {
@@ -639,8 +799,10 @@ export function AIPanel() {
           },
           (stage) => {
             if (stage.message) setThinkingStage(stage.message);
-            else if (stage.stage === "planning") setThinkingStage("Planning your edit…");
-            else if (stage.stage === "applying") setThinkingStage("Applying edits…");
+            else if (stage.stage === "planning")
+              setThinkingStage("Reading your cut…");
+            else if (stage.stage === "applying")
+              setThinkingStage("Updating the preview…");
           },
         );
 
@@ -691,15 +853,12 @@ export function AIPanel() {
                   params: a.payload ?? {},
                 }),
               );
-              const { data: plan } = await axios.post(
-                `${API_URL}/api/studio/v1/orchestrator/plan`,
-                {
-                  source: "chat",
-                  intent_text: trimmed,
-                  project_id: projectId,
-                  structured_steps,
-                },
-              );
+              const plan = await orchestratorPlan({
+                source: "chat",
+                intent_text: trimmed,
+                project_id: projectId,
+                structured_steps,
+              });
               useEditorStore.getState().rebuildRenderManifest();
               const st = useEditorStore.getState();
               if (
@@ -708,16 +867,13 @@ export function AIPanel() {
                 projectId &&
                 plan.steps?.length
               ) {
-                const { data: executed } = await axios.post(
-                  `${API_URL}/api/studio/v1/orchestrator/execute`,
-                  {
-                    plan_id: plan.plan_id,
-                    project_id: projectId,
-                    base_revision: st.studioAckedRevision,
-                    base_snapshot_hash: st.studioSnapshotHash,
-                    proposed_manifest: st.compiledManifest,
-                  },
-                );
+                const executed = await orchestratorExecute({
+                  plan_id: plan.plan_id,
+                  project_id: projectId,
+                  base_revision: st.studioAckedRevision,
+                  base_snapshot_hash: st.studioSnapshotHash,
+                  proposed_manifest: st.compiledManifest,
+                });
                 const head = await fetchStudioHead(projectId);
                 useEditorStore.setState({
                   studioAckedRevision: head.revision,
@@ -781,9 +937,9 @@ export function AIPanel() {
               : axios.isAxiosError(err)
                 ? err.response?.status
                 : err &&
-                    typeof err === "object" &&
-                    "status" in err &&
-                    typeof (err as { status: unknown }).status === "number"
+                  typeof err === "object" &&
+                  "status" in err &&
+                  typeof (err as { status: unknown }).status === "number"
                   ? (err as { status: number }).status
                   : undefined;
         const body =
@@ -822,7 +978,26 @@ export function AIPanel() {
         setAIThinking(false);
       }
     },
-    [isAIThinking, stopRecording, addAIMessage, setAIThinking, dispatchAIActions, videoMetadata, videoAnalysis, editorState, session],
+    [
+      isAIThinking,
+      creditBalance,
+      stopRecording,
+      addAIMessage,
+      setAIThinking,
+      dispatchAIActions,
+      videoMetadata,
+      videoAnalysis,
+      editorState,
+      selectedClipId,
+      currentTime,
+      exportSettings.aspectRatio,
+      runId,
+      transcript,
+      captions,
+      silenceSegments,
+      aiSuggestions.viralMoments,
+      session,
+    ],
   );
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -863,12 +1038,24 @@ export function AIPanel() {
   };
 
   const isVideoLoaded = !!videoMetadata;
+  const creditsExhausted = creditBalance !== null && creditBalance <= 0;
+  const canSendChat =
+    isVideoLoaded && !isAIThinking && !creditsExhausted && !!inputText.trim();
 
   // Shared chat body — rendered in exactly one housing at a time
   // (desktop docked column XOR mobile bottom sheet).
   const panelBody = (
     <>
       {/* ── Header ──────────────────────────────────────────────── */}
+      {circuitBanner && (
+        <div
+          className="px-3 py-2 text-[11px] leading-snug border-b border-amber-500/30 bg-amber-500/10 text-amber-100"
+          role="status"
+          aria-live="polite"
+        >
+          {circuitBanner}
+        </div>
+      )}
       <div className="ai-panel-header">
         <div className="ai-header-left">
           {/* Gem badge */}
@@ -1050,38 +1237,115 @@ export function AIPanel() {
       </div>
 
       {/* ── Suggestion chips (grounded + post-reply follow-ups) ─────────── */}
-      {(suggestions.length > 0 || followUpChips.length > 0) && (
-        <div className="suggestions-rail" data-tour-id="ai.suggestions">
-          {followUpChips.map((chip) => (
+      {(suggestions.length > 0 ||
+        followUpChips.length > 0 ||
+        showExportFinalChip) && (
+        <div
+          className="suggestions-rail"
+          data-tour-id="ai.suggestions"
+          role="list"
+          aria-label="Grounded edit suggestions"
+        >
+          {showExportFinalChip && (
             <button
-              key={`follow-${chip}`}
-              className="suggestion-chip"
+              key="export-final"
+              className={cn(
+                "suggestion-chip suggestion-chip--export",
+                reduceMotion && "suggestion-chip--reduced-motion",
+              )}
               type="button"
-              onClick={() => void sendMessage(chip)}
+              role="listitem"
+              onClick={() => {
+                dispatchAIActions([{ type: "EXPORT_CLIP", payload: {} }]);
+                addAIMessage({
+                  role: "assistant",
+                  content: "Opening final export…",
+                  actions: [{ type: "EXPORT_CLIP", payload: {} }],
+                });
+                setShowExportFinalChip(false);
+              }}
               disabled={isAIThinking}
+              aria-label="Export Final"
             >
-              {chip}
+              <span className="suggestion-chip-label">Export Final</span>
+              <span className="suggestion-chip-evidence">
+                Server render · preview stays
+              </span>
             </button>
-          ))}
+          )}
+          {followUpChips.map((chip) => {
+            const isExportChip = /^export\s*final$/i.test(chip.trim());
+            return (
+              <button
+                key={`follow-${chip}`}
+                className={cn(
+                  "suggestion-chip",
+                  isExportChip && "suggestion-chip--export",
+                  reduceMotion && "suggestion-chip--reduced-motion",
+                )}
+                type="button"
+                role="listitem"
+                onClick={() => {
+                  if (isExportChip) {
+                    dispatchAIActions([{ type: "EXPORT_CLIP", payload: {} }]);
+                    addAIMessage({
+                      role: "assistant",
+                      content: "Opening final export…",
+                      actions: [{ type: "EXPORT_CLIP", payload: {} }],
+                    });
+                    return;
+                  }
+                  void sendMessage(chip);
+                }}
+                disabled={isAIThinking}
+                aria-label={chip}
+              >
+                <span className="suggestion-chip-label">{chip}</span>
+              </button>
+            );
+          })}
           {suggestions.map((s) =>
             s.interactive ? (
               <button
                 key={s.suggestion_id}
-                className="suggestion-chip"
+                className={cn(
+                  "suggestion-chip",
+                  reduceMotion && "suggestion-chip--reduced-motion",
+                )}
+                type="button"
+                role="listitem"
                 title={s.evidence.summary}
+                aria-label={`${s.label}. ${s.evidence.summary}`}
                 onClick={() => void applyGroundedSuggestion(s)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    void applyGroundedSuggestion(s);
+                  }
+                }}
                 disabled={isAIThinking}
               >
-                {s.label}
+                <span className="suggestion-chip-label">{s.label}</span>
+                {s.evidence.summary ? (
+                  <span className="suggestion-chip-evidence">{s.evidence.summary}</span>
+                ) : null}
               </button>
             ) : (
               <span
                 key={s.suggestion_id}
-                className="suggestion-chip opacity-60 cursor-default pointer-events-none"
+                className={cn(
+                  "suggestion-chip opacity-60 cursor-default pointer-events-none",
+                  reduceMotion && "suggestion-chip--reduced-motion",
+                )}
+                role="listitem"
                 title={s.evidence.summary}
                 aria-disabled="true"
+                aria-label={`${s.label}. ${s.evidence.summary}`}
               >
-                {s.label}
+                <span className="suggestion-chip-label">{s.label}</span>
+                {s.evidence.summary ? (
+                  <span className="suggestion-chip-evidence">{s.evidence.summary}</span>
+                ) : null}
               </span>
             ),
           )}
@@ -1098,27 +1362,39 @@ export function AIPanel() {
           <textarea
             ref={textareaRef}
             data-tour-id="ai.chat"
+            id="ai-chat-compose"
             className="ai-textarea"
             placeholder={
               !isVideoLoaded
                 ? "Load a video to start editing…"
-                : isRecording
-                  ? "Listening…"
-                  : "Tell me what to edit… (Enter to send)"
+                : creditsExhausted
+                  ? "Out of credits — upgrade to keep chatting…"
+                  : isRecording
+                    ? "Listening…"
+                    : "Tell me what to edit… (Enter to send)"
             }
             value={inputText}
             onChange={handleInput}
             onKeyDown={handleKeyDown}
             rows={1}
-            disabled={isAIThinking || !isVideoLoaded}
+            disabled={isAIThinking || !isVideoLoaded || creditsExhausted}
+            aria-label="Chat edit command"
+            aria-busy={isAIThinking}
+            aria-describedby={creditsExhausted ? "ai-credits-exhausted" : undefined}
           />
 
           <button
             className={`voice-btn ${isRecording ? "voice-btn-active" : ""}`}
             onClick={toggleVoice}
-            disabled={!isVideoLoaded}
+            disabled={!isVideoLoaded || creditsExhausted}
             aria-label={isRecording ? "Stop recording" : "Voice input"}
-            title={isRecording ? "Stop voice input" : "Voice input"}
+            title={
+              creditsExhausted
+                ? "Out of credits"
+                : isRecording
+                  ? "Stop voice input"
+                  : "Voice input"
+            }
           >
             {isRecording ? <MicOff size={14} /> : <Mic size={14} />}
           </button>
@@ -1126,13 +1402,27 @@ export function AIPanel() {
           <button
             className="send-btn"
             onClick={() => sendMessage(inputText)}
-            disabled={isAIThinking || !inputText.trim() || !isVideoLoaded}
+            disabled={!canSendChat}
             aria-label="Send"
-            title="Send (Enter)"
+            title={
+              creditsExhausted
+                ? "Out of credits — upgrade on Pricing"
+                : "Send (Enter)"
+            }
           >
             <Send size={13} />
           </button>
         </div>
+
+        {creditsExhausted && (
+          <p id="ai-credits-exhausted" className="voice-error" role="status">
+            No credits left —{" "}
+            <Link href="/pricing" className="underline font-semibold">
+              upgrade to Pro
+            </Link>{" "}
+            to keep editing. Your timeline is safe.
+          </p>
+        )}
 
         {voiceError && <p className="voice-error">{voiceError}</p>}
 

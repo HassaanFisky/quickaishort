@@ -306,8 +306,10 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
             ))}
           </div>
           <p className="text-[10px] text-fg-muted mt-2 leading-relaxed">
-            Free plan: server export is forced to 720p with a “Made with QuickAI”
-            watermark. Upgrade to Pro for up to 4K without watermark.
+            Preview: local export stays on your device (WebCodecs / MediaRecorder).
+            Final shareable MP4: Server render (Cloud Tasks → private ffmpeg).
+            Free plan server export is forced to 720p with a “Made with QuickAI”
+            watermark — Pro unlocks up to 4K without watermark.
           </p>
         </div>
 
@@ -401,7 +403,8 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
           <div className="mb-4 space-y-2">
             <p className="text-[11px] text-fg-muted flex items-center gap-1.5">
               <Zap size={11} className="text-primary shrink-0" />
-              Hardware-accelerated local export — stays on your device, instant download.
+              Local preview export — stays on your device. Use Server render for the
+              final cloud MP4 (watermark/tier rules apply).
             </p>
             <div className="flex items-center gap-3 text-[9px] text-fg-subtle">
               <span className="flex items-center gap-1">

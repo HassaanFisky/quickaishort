@@ -107,6 +107,13 @@ export default function SettingsPage() {
 
   const [activeTab, setActiveTab] = useState<Tab>("profile");
 
+  useEffect(() => {
+    const tab = new URLSearchParams(window.location.search).get("tab");
+    if (tab === "billing" || tab === "profile" || tab === "appearance" || tab === "export" || tab === "editor" || tab === "shortcuts" || tab === "notifications" || tab === "privacy" || tab === "referral") {
+      setActiveTab(tab as Tab);
+    }
+  }, []);
+
   const [displayName, setDisplayName] = useState(session?.user?.name ?? "");
   // Sync display name from session on first load
   useEffect(() => {
