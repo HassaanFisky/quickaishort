@@ -28,9 +28,7 @@ logger = logging.getLogger(__name__)
 REMOVE_SILENCES_CAPABILITY = "REMOVE_SILENCES"
 DEAD_AIR_PADDING_SEC = 0.05
 
-_DEAD_AIR_OBJECTIVE_EXAMPLE = (
-    "remove unnecessary dead air and tighten the pacing"
-)
+_DEAD_AIR_OBJECTIVE_EXAMPLE = "remove unnecessary dead air and tighten the pacing"
 
 
 def _now() -> datetime:
@@ -67,11 +65,7 @@ def _usable_silence_gaps(blob: Optional[FacetBlob]) -> list[dict[str, float]]:
     if not isinstance(raw, list):
         return []
     gaps = _silence_gaps(raw)
-    return [
-        g
-        for g in gaps
-        if (g["end"] - g["start"]) >= SILENCE_SUGGEST_MIN_SEC
-    ]
+    return [g for g in gaps if (g["end"] - g["start"]) >= SILENCE_SUGGEST_MIN_SEC]
 
 
 def collect_evidence(
@@ -321,9 +315,7 @@ def decide_from_state(
             objective=objective,
             mode="ASK",
             evidence=evidence,
-            missing=[
-                f"silence gaps ≥ {SILENCE_SUGGEST_MIN_SEC}s in ready facet"
-            ],
+            missing=[f"silence gaps ≥ {SILENCE_SUGGEST_MIN_SEC}s in ready facet"],
             rationale=(
                 "Silence facet is ready but no qualifying dead-air gaps were "
                 "observed. Not an ACT."
@@ -427,9 +419,7 @@ async def _find_graph_without_create(
     """Lookup only — must not create a MediaGraph."""
     import asyncio
 
-    return await asyncio.to_thread(
-        svc.store.find_by_project, user_id, project_id
-    )
+    return await asyncio.to_thread(svc.store.find_by_project, user_id, project_id)
 
 
 async def load_project_graph_for_decision(

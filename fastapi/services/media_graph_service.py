@@ -268,9 +268,7 @@ def derive_suggestions(graph: MediaGraph) -> list[SuggestionIntent]:
     # ── Transcript / caption craft ──────────────────────────────────────────
     if transcript_ready and hook is not None:
         hook_q = _quote(hook["text"])
-        hook_label = (
-            f'Trim to hook: "{hook_q}"' if hook_q else "Trim to opening hook"
-        )
+        hook_label = f'Trim to hook: "{hook_q}"' if hook_q else "Trim to opening hook"
         out.append(
             SuggestionIntent(
                 suggestion_id="sug-trim-hook",
@@ -327,9 +325,11 @@ def derive_suggestions(graph: MediaGraph) -> list[SuggestionIntent]:
                 intent_kind="capability",
                 params={"enabled": True},
                 evidence=SuggestionEvidence(
-                    facet_keys=["transcript", "captions_present"]
-                    if captions and captions.status == "ready"
-                    else ["transcript"],
+                    facet_keys=(
+                        ["transcript", "captions_present"]
+                        if captions and captions.status == "ready"
+                        else ["transcript"]
+                    ),
                     summary=(
                         f"Transcript ready ({chunk_count} chunks); captions off"
                         + (f' · starts "{hook_q}"' if hook_q else "")
@@ -364,9 +364,7 @@ def derive_suggestions(graph: MediaGraph) -> list[SuggestionIntent]:
                     params={
                         "text": hook["text"].strip(),
                         "startTime": float(hook["start"]),
-                        "endTime": max(
-                            float(hook["end"]), float(hook["start"]) + 2.5
-                        ),
+                        "endTime": max(float(hook["end"]), float(hook["start"]) + 2.5),
                     },
                     evidence=SuggestionEvidence(
                         facet_keys=["transcript"],
@@ -402,9 +400,7 @@ def derive_suggestions(graph: MediaGraph) -> list[SuggestionIntent]:
     if silence and silence.status == "ready":
         gaps = _silence_gaps(silence.data.get("segments") or [])
         long_silences = [
-            g
-            for g in gaps
-            if (g["end"] - g["start"]) >= SILENCE_SUGGEST_MIN_SEC
+            g for g in gaps if (g["end"] - g["start"]) >= SILENCE_SUGGEST_MIN_SEC
         ]
         long_silences.sort(key=lambda g: g["end"] - g["start"], reverse=True)
         if long_silences:
@@ -514,7 +510,7 @@ def derive_suggestions(graph: MediaGraph) -> list[SuggestionIntent]:
                 SuggestionIntent(
                     suggestion_id="sug-viral-seek",
                     label=(
-                        f'Jump to best moment ({int(top_score)})'
+                        f"Jump to best moment ({int(top_score)})"
                         + (
                             f': "{_quote(top["hook"], 28)}"'
                             if top.get("hook")
@@ -535,7 +531,11 @@ def derive_suggestions(graph: MediaGraph) -> list[SuggestionIntent]:
                     interactive=True,
                 )
             )
-            trim_end = float(top["end"]) if float(top["end"]) > float(top["start"]) else float(top["start"]) + 12.0
+            trim_end = (
+                float(top["end"])
+                if float(top["end"]) > float(top["start"])
+                else float(top["start"]) + 12.0
+            )
             out.append(
                 SuggestionIntent(
                     suggestion_id="sug-viral-trim",
@@ -546,7 +546,7 @@ def derive_suggestions(graph: MediaGraph) -> list[SuggestionIntent]:
                     evidence=SuggestionEvidence(
                         facet_keys=["viral_moments"],
                         summary=(
-                            f'Score {int(top_score)} · '
+                            f"Score {int(top_score)} · "
                             f'{_fmt_time(top["start"])}–{_fmt_time(trim_end)}'
                         ),
                     ),
@@ -586,9 +586,11 @@ def derive_suggestions(graph: MediaGraph) -> list[SuggestionIntent]:
                 intent_kind="capability",
                 params={},
                 evidence=SuggestionEvidence(
-                    facet_keys=["duration"]
-                    if not has_viral_facet
-                    else ["duration", "viral_moments"],
+                    facet_keys=(
+                        ["duration"]
+                        if not has_viral_facet
+                        else ["duration", "viral_moments"]
+                    ),
                     summary=(
                         f"Duration {int(duration_sec)}s with no strong viral moments yet"
                     ),

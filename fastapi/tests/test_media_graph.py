@@ -79,7 +79,9 @@ async def test_transcript_suggests_captions(svc):
     assert caps[0].interactive is True
     assert caps[0].label == "Add subtitles"
     assert "transcript" in caps[0].evidence.facet_keys
-    assert "chunks" in caps[0].evidence.summary.lower() or "1" in caps[0].evidence.summary
+    assert (
+        "chunks" in caps[0].evidence.summary.lower() or "1" in caps[0].evidence.summary
+    )
     dub = [r for r in rows if r.capability_id == "DUB_VIDEO"]
     assert len(dub) == 1
     assert "EN transcript ready" in dub[0].evidence.summary
@@ -117,9 +119,7 @@ async def test_silence_suggests_remove(svc):
     assert len(sil[0].params["segments"]) == 1  # 5.0–5.2 below threshold
     assert "0:" in sil[0].evidence.summary or "1:" in sil[0].evidence.summary
     preview = [
-        r
-        for r in rows
-        if r.capability_id == "SEEK" and "dead air" in r.label.lower()
+        r for r in rows if r.capability_id == "SEEK" and "dead air" in r.label.lower()
     ]
     assert len(preview) == 1
     assert preview[0].params["time"] == 1.0

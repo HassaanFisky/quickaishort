@@ -109,7 +109,9 @@ def router_client(monkeypatch):
     return TestClient(app), kernel
 
 
-def _patch_resolve(monkeypatch, graph: MediaGraph, head: StudioProjectHead | None = None):
+def _patch_resolve(
+    monkeypatch, graph: MediaGraph, head: StudioProjectHead | None = None
+):
     async def _resolve(user_id, text, project_id=None, **kwargs):
         pid = project_id or (head.project_id if head else "p1")
         return decide_from_state(
@@ -158,9 +160,7 @@ def test_orchestrator_gated_act_via_http(router_client, monkeypatch):
     assert body["execution_integrity"]["status"] == "not_executed"
 
 
-def test_orchestrator_client_decision_mode_ignored_via_http(
-    router_client, monkeypatch
-):
+def test_orchestrator_client_decision_mode_ignored_via_http(router_client, monkeypatch):
     client, _ = router_client
     _patch_resolve(monkeypatch, _graph(silence=None))
 
