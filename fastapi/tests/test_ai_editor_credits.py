@@ -122,7 +122,9 @@ async def test_ai_edit_insufficient_credits_402(monkeypatch):
         ),
     ):
         with pytest.raises(HTTPException) as ei:
-            await ai_editor_router.ai_edit(_http_request(), body=_edit_req(), user_id="u1")
+            await ai_editor_router.ai_edit(
+                _http_request(), body=_edit_req(), user_id="u1"
+            )
         assert ei.value.status_code == 402
 
 
@@ -140,7 +142,9 @@ async def test_ai_edit_credit_outage_fail_closed_503(monkeypatch):
         ),
     ):
         with pytest.raises(HTTPException) as ei:
-            await ai_editor_router.ai_edit(_http_request(), body=_edit_req(), user_id="u1")
+            await ai_editor_router.ai_edit(
+                _http_request(), body=_edit_req(), user_id="u1"
+            )
         assert ei.value.status_code == 503
 
 
@@ -157,7 +161,9 @@ async def test_command_credit_outage_fail_closed_503(monkeypatch):
         ),
     ):
         with pytest.raises(HTTPException) as ei:
-            await ai_editor_router.handle_editor_command(_http_request(), body=_cmd_req(), user_id="u1")
+            await ai_editor_router.handle_editor_command(
+                _http_request(), body=_cmd_req(), user_id="u1"
+            )
         assert ei.value.status_code == 503
 
 
@@ -212,7 +218,9 @@ async def test_credit_soft_fail_opt_in_allows_proceed(monkeypatch):
             return_value=fake,
         ),
     ):
-        resp = await ai_editor_router.ai_edit(_http_request(), body=_edit_req(), user_id="u1")
+        resp = await ai_editor_router.ai_edit(
+            _http_request(), body=_edit_req(), user_id="u1"
+        )
         assert resp.model == "gemini-2.5-flash"
 
 
@@ -267,7 +275,9 @@ async def test_command_cache_hit_refunds_credit(monkeypatch):
             side_effect=cached_command,
         ),
     ):
-        resp = await ai_editor_router.handle_editor_command(_http_request(), body=_cmd_req(), user_id="u1")
+        resp = await ai_editor_router.handle_editor_command(
+            _http_request(), body=_cmd_req(), user_id="u1"
+        )
     assert resp.cached is True
     deduct.assert_awaited_once_with("u1", 1)
     refund.assert_awaited_once_with("u1", 1)
@@ -307,7 +317,9 @@ async def test_command_success_keeps_charge(monkeypatch):
         patch("services.stats_service.deduct_credits", deduct),
         patch("services.stats_service.refund_credits", refund),
     ):
-        await ai_editor_router.handle_editor_command(_http_request(), body=_cmd_req(), user_id="u1")
+        await ai_editor_router.handle_editor_command(
+            _http_request(), body=_cmd_req(), user_id="u1"
+        )
     deduct.assert_awaited_once_with("u1", 1)
     refund.assert_not_awaited()
 

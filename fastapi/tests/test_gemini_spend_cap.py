@@ -46,7 +46,9 @@ class _FakeRedis:
 
 
 @pytest.mark.asyncio
-async def test_kill_switch_blocks_before_provider(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_kill_switch_blocks_before_provider(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("GEMINI_SPEND_KILL_SWITCH", "true")
     monkeypatch.delenv("ENVIRONMENT", raising=False)
     monkeypatch.setenv("MOCK_AI_MODE", "false")

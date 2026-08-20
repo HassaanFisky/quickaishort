@@ -248,9 +248,7 @@ class RedisGeminiSpendCap:
                         try:
                             await self._redis.decr(d_key)
                         except Exception:
-                            logger.warning(
-                                "gemini_spend_cap_daily_compensation_failed"
-                            )
+                            logger.warning("gemini_spend_cap_daily_compensation_failed")
                     raise GeminiSpendCapError(
                         reason="hourly_cap",
                         retry_after_seconds=self._seconds_until_next_utc_hour(now),

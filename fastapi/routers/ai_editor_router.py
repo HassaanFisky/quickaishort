@@ -782,9 +782,10 @@ async def health_check_ai():
         status = "spend_capped"
     elif circuit.get("blocked") is True:
         status = "deferred"
-    elif circuit.get("state") in {"unavailable", "invalid"} or spend.get(
-        "state"
-    ) == "unavailable":
+    elif (
+        circuit.get("state") in {"unavailable", "invalid"}
+        or spend.get("state") == "unavailable"
+    ):
         status = "degraded"
     else:
         status = "ok"
