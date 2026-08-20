@@ -653,6 +653,7 @@ Read this file at the start of every session. When this file is updated, acknowl
 
 ## CHANGELOG
 
+- **2026-08-20:** Graft is a **local** context graph (`graft/` gitignored). Public repo must not receive the map. Build with pinned `npx -y @nanonets/graft@0.10.1 build` (`$0`, no `--deep` without founder). MCP uses the same npx pin, not a global `graft` binary.
 - **2026-07-30:** Dropped external contest/submission framing from agent protocol and public About copy. Product focus = SaaS shipping only.
 - **2026-07-26:** **Studio Genius OS Phase 1 (ADR-015)** — Redis durable Orchestrator PlanStore; multi-turn `history` + stream chat path; universal MediaGraph suggestion copy; Dub docked in Studio chat (floating sheet removed); real `ADD_SFX` Web Audio preview + registry emit; registry sync script byte-identical; movie-length dub deferred; ADR-006 FC = Phase 2. Verified: 34 targeted pytest, `tsc --noEmit`.
 - **2026-07-25:** **Dub Video (ADR-014)** implemented: staged translate (Gemini) → Google TTS → align → preview → export mute+replace; capabilities `DUB_VIDEO`/`TRANSLATE_CAPTIONS`; `/api/studio/v1/dub` + worker `/tasks/dub`; FE DubPanel + chat chip; EN-source only; TTS fail → explicit degraded captions. Verified: 8 dub tests, registry sync, `tsc --noEmit`, `pnpm build`. Live smoke blocked on Gemini credits + TTS key.

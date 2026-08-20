@@ -43,3 +43,14 @@ In `next dev`, uploading/ingesting a video on `/editor` crashes with React "Maxi
 - Node: repo pins conflict (`.nvmrc`=20 vs `frontend/package.json` engines `24.x`). The VM's Node 22 works; engines is not enforced (pnpm only warns).
 - `pytest`/`pytest-asyncio` are not in `requirements.txt` (the update script installs them). Two pre-existing tests reference symbols removed from `render_worker.py` (`apply_tier_render_policy`, `check_user_tier`) → 1 collection error + 1 failure; unrelated to environment setup. The rest pass (171 passing).
 - Backend lint tools (`black`, `flake8`) are not in `requirements.txt`; CI pins `black==26.5.1`. `pip install` them in the venv on demand for backend lint.
+
+### Graft context graph (local only — do not commit)
+`graft/` is a regenerable tree-sitter map of this repo. It is gitignored on
+purpose: the GitHub repo is public, and committing the graph would publish a
+copyable architecture. Agents and the founder build it locally and query it.
+
+- If `graft/` is missing: `npx -y @nanonets/graft@0.10.1 build` (or `npm run graft:build`). Structural only, `$0`, no API key.
+- Orient: `npx -y @nanonets/graft@0.10.1 map`. Query: `graft ask "…" --source`. Callers: `graft callers <symbol>`.
+- View: `npx -y @nanonets/graft@0.10.1 viz --no-open` (localhost:4400).
+- Never `graft build --deep` unless the founder explicitly asks — that spends an LLM key.
+- MCP is pinned to `npx -y @nanonets/graft@0.10.1 mcp` in `.cursor/mcp.json` and `.mcp.json` so a global `graft` binary is not required. If you re-run `graft init`, restore that npx command.
