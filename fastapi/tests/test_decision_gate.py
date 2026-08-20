@@ -241,8 +241,10 @@ from services.orchestrator_service import (
     CreatePlanRequest,
     ExecutePlanRequest,
     Plan,
+    PlanStep,
     RedisPlanStore,
     StructuredIntent,
+    _compute_execution_integrity,
     reset_orchestrator_for_tests,
 )
 from services.project_kernel import InMemoryProjectStore, reset_project_kernel_for_tests
@@ -629,3 +631,32 @@ async def test_gated_double_execute_uses_lock(monkeypatch):
     assert any(k.startswith("orch:exec:") for k in lock_keys)
     assert first.status in {"completed", "partial", "failed"}
     assert second.plan_id == first.plan_id
+
+
+def test_gated_execution_ok_requires_kernel_event_ids_for_mutating_steps():
+    """Tier 0: accepted mutating step without event_ids is not execution_ok."""
+    now = datetime.now(timezone.utc)
+    plan = Plan(
+        plan_id="p-ev",
+        owner_user_id="u1",
+        created_at=now,
+        updated_at=now,
+        status="completed",
+        decision_id="dec-1",
+        decision_mode="ACT",
+        steps=[
+            PlanStep(
+                step_id="s1",
+                capability_id=REMOVE_SILENCES_CAPABILITY,
+                status="accepted",
+                event_ids=[],
+            )
+        ],
+    )
+    integrity = _compute_execution_integrity(plan)
+    assert integrity.status == "execution_partial"
+    assert integrity.accepted == [REMOVE_SILENCES_CAPABILITY]
+
+    plan.steps[0].event_ids = ["evt-1"]
+    integrity_ok = _compute_execution_integrity(plan)
+    assert integrity_ok.status == "execution_ok"

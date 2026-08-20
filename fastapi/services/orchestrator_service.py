@@ -238,6 +238,17 @@ def _compute_execution_integrity(plan: Plan) -> ExecutionIntegrity:
     else:
         status = "execution_partial"
 
+    # Gated ACT: mutating Kernel acceptance must bind ProjectEvents (event_ids).
+    if plan.decision_id is not None and status == "execution_ok":
+        for step in plan.steps:
+            if step.status != "accepted":
+                continue
+            cap = get_capability(step.capability_id)
+            if cap and "mutate_project" in (cap.get("side_effects") or []):
+                if not step.event_ids:
+                    status = "execution_partial"
+                    break
+
     return ExecutionIntegrity(
         status=status,
         intended_capabilities=intended,
