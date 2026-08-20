@@ -1,6 +1,6 @@
 # Studio Roadmap (Execution)
 
-**Last updated:** 2026-08-20 (ADR-016 Decision-Gated Edit M0→F on branch)
+**Last updated:** 2026-08-20 (ADR-016 Decision-Gated Edit M0→G on branch; vision not complete)
 
 ## Complete — current cycle
 
@@ -10,7 +10,7 @@
 | Pipeline JWT + credits fail-closed | ✅ |
 | M3 ingest FSM (`useIngestLifecycle`) | ✅ Live — FE Vercel + API `00109+` |
 | Chat → Kernel via structured_steps | ✅ |
-| **Decision-Gated Edit M0→F (ADR-016)** | ✅ **Branch** `75905cf`…`5d60fdc` — not merged to main |
+| **Decision-Gated Edit M0→G (ADR-016)** | ✅ **Branch** — contracts + gated Orchestrator + Tier 0 Kernel-event verify; **not** merged to main; **not** whole Studio vision |
 | CI BE↔FE registry hash | ✅ |
 | Auto-ensure Studio project (chat + export + ingest projectize) | ✅ |
 | Heuristic invent suggestions → 410 | ✅ |
