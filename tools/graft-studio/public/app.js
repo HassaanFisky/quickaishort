@@ -77,7 +77,9 @@ function hitTest(x, y) {
     const n = state.nodes[i];
     const dx = x - n.x;
     const dy = y - n.y;
-    if (dx * dx + dy * dy <= (n.r + 7) * (n.r + 7)) return n;
+    if (dx * dx + dy * dy <= (n.r + 12) * (n.r + 12)) return n;
+    const labelW = Math.max(36, n.label.length * 6.2);
+    if (Math.abs(dx) <= labelW / 2 && y >= n.y + n.r && y <= n.y + n.r + 20) return n;
   }
   return null;
 }
@@ -98,7 +100,7 @@ function setGraph(nodes, edges, regions = [], extra = {}) {
   state.regions = regions;
   state.hiddenIn = extra.hiddenIn || 0;
   state.hiddenOut = extra.hiddenOut || 0;
-  fitCamera(nodes, regions);
+  fitCamera(nodes, regions, extra.maxK);
   state.dirty = true;
 }
 
@@ -123,12 +125,12 @@ function boundsOf(nodes, regions) {
   return { minX, minY, maxX, maxY };
 }
 
-function fitCamera(nodes, regions) {
+function fitCamera(nodes, regions, maxK = 1.2) {
   const r = canvas.getBoundingClientRect();
   const b = boundsOf(nodes, regions);
   const w = b.maxX - b.minX || 1;
   const h = b.maxY - b.minY || 1;
-  const k = Math.min(r.width / (w + 220), r.height / (h + 160), 1.45);
+  const k = Math.min(r.width / (w + 240), r.height / (h + 180), maxK);
   state.target = {
     k,
     x: r.width / 2 - ((b.minX + b.maxX) / 2) * k,
@@ -142,7 +144,7 @@ function showArchitecture() {
   state.clusterId = null;
   state.focusId = null;
   const g = layoutArchitecture(state.model, state.systemFilter);
-  setGraph(g.nodes, g.edges, g.regions);
+  setGraph(g.nodes, g.edges, g.regions, { maxK: 1.05 });
   const spots = hotspots(state.model, 6).filter((c) => !state.systemFilter || c.system === state.systemFilter);
   renderSheet({
     title: state.systemFilter || "Architecture",
@@ -167,7 +169,7 @@ function showCluster(clusterId) {
   state.clusterId = clusterId;
   state.focusId = null;
   const g = layoutCluster(state.model, clusterId);
-  setGraph(g.nodes, g.edges, []);
+  setGraph(g.nodes, g.edges, [], { maxK: 0.88 });
   const c = state.model.clusterById.get(clusterId);
   renderSheet({
     title: c.label,
@@ -190,7 +192,7 @@ function showFocus(id) {
   const clusterId = state.model.fileToCluster.get(state.model.fileOf.get(id));
   if (clusterId) state.clusterId = clusterId;
   const g = layoutNeighborhood(nb, 12);
-  setGraph(g.nodes, g.edges, [], { hiddenIn: g.hiddenIn, hiddenOut: g.hiddenOut });
+  setGraph(g.nodes, g.edges, [], { hiddenIn: g.hiddenIn, hiddenOut: g.hiddenOut, maxK: 1.25 });
   void fillInspector(nb, g);
   $("hudHint").textContent = "Left is inbound (change impact). Right is outbound (what this uses). Esc returns.";
 }
@@ -365,7 +367,7 @@ function draw() {
     if (!a || !b) continue;
     const hot = focus && (e.source === focus || e.target === focus);
     if (dimming && !hot) {
-      ctx.globalAlpha = 0.18;
+      ctx.globalAlpha = 0.1;
     } else {
       ctx.globalAlpha = 1;
     }
@@ -391,8 +393,7 @@ function draw() {
       return "all";
     }
     if (state.level === "cluster") {
-      if (k < 0.7) return "hubs";
-      if (k < 1.15) return "hubs";
+      if (k < 1.2) return "hubs";
       return "all";
     }
     return "all";
@@ -402,7 +403,7 @@ function draw() {
   for (const n of state.nodes) {
     const active = n.id === focus || n.focus;
     const related = !dimming || live.has(n.id);
-    ctx.globalAlpha = related ? 1 : 0.22;
+      ctx.globalAlpha = related ? 1 : 0.16;
     ctx.beginPath();
     if (n.kind === "cluster") roundRect(ctx, n.x - n.r, n.y - n.r * 0.72, n.r * 2, n.r * 1.44, 9);
     else if (n.kind === "file") ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
@@ -632,37 +633,70 @@ async function boot() {
   showArchitecture();
 }
 
-canvas.addEventListener("pointerdown", (ev) => {
-  canvas.setPointerCapture(ev.pointerId);
-  state.moved = false;
-  state.drag = { x: ev.clientX, y: ev.clientY, cx: state.target.x, cy: state.target.y };
-});
-canvas.addEventListener("pointermove", (ev) => {
-  if (state.drag) {
-    const dx = ev.clientX - state.drag.x;
-    const dy = ev.clientY - state.drag.y;
-    if (Math.hypot(dx, dy) > 4) state.moved = true;
-    state.target.x = state.drag.cx + dx;
-    state.target.y = state.drag.cy + dy;
-    state.dirty = true;
-    return;
-  }
-  const w = worldFromEvent(ev);
-  const hit = hitTest(w.x, w.y);
+function setHover(hit, sx, sy) {
   const next = hit?.id || null;
   if (next !== state.hover?.id) {
     state.hover = hit;
     canvas.style.cursor = hit ? "pointer" : "grab";
     state.dirty = true;
   }
+  const tip = $("tip");
+  if (!hit) {
+    tip.hidden = true;
+    return;
+  }
+  const bits = [hit.label];
+  if (hit.data?.fileCount) bits.push(`${hit.data.fileCount} files`);
+  if (hit.sub && hit.kind !== "cluster") bits.push(hit.sub);
+  if (typeof hit.weight === "number" && hit.kind === "cluster") bits.push(`coupling ${hit.weight}`);
+  tip.hidden = false;
+  tip.textContent = bits.filter(Boolean).join(" · ");
+  tip.style.left = `${sx + 14}px`;
+  tip.style.top = `${sy + 14}px`;
+}
+
+canvas.addEventListener("pointerdown", (ev) => {
+  if (ev.button !== 0) return;
+  state.moved = false;
+  state.drag = {
+    x: ev.clientX,
+    y: ev.clientY,
+    cx: state.target.x,
+    cy: state.target.y,
+    armed: false,
+  };
 });
-canvas.addEventListener("pointerup", (ev) => {
-  const drag = state.drag;
+canvas.addEventListener("pointermove", (ev) => {
+  if (state.drag) {
+    const dx = ev.clientX - state.drag.x;
+    const dy = ev.clientY - state.drag.y;
+    if (!state.drag.armed && Math.hypot(dx, dy) < 12) return;
+    if (!state.drag.armed) {
+      state.drag.armed = true;
+      state.moved = true;
+      canvas.setPointerCapture(ev.pointerId);
+      $("tip").hidden = true;
+    }
+    state.target.x = state.drag.cx + dx;
+    state.target.y = state.drag.cy + dy;
+    state.dirty = true;
+    return;
+  }
+  const w = worldFromEvent(ev);
+  setHover(hitTest(w.x, w.y), w.sx, w.sy);
+});
+canvas.addEventListener("pointerup", () => {
   state.drag = null;
-  if (state.moved || !drag) return;
+});
+canvas.addEventListener("click", (ev) => {
+  if (state.moved) return;
   const w = worldFromEvent(ev);
   const hit = hitTest(w.x, w.y);
   if (hit) activate(hit.id);
+});
+canvas.addEventListener("pointerleave", () => {
+  if (state.drag) return;
+  setHover(null, 0, 0);
 });
 canvas.addEventListener("dblclick", (ev) => {
   const w = worldFromEvent(ev);
@@ -762,7 +796,8 @@ $("systems").addEventListener("click", (ev) => {
   if (chip) applySystem(chip.dataset.sys);
 });
 $("fitBtn").addEventListener("click", () => {
-  fitCamera(state.nodes, state.regions);
+  const maxK = state.level === "cluster" ? 0.88 : state.level === "focus" ? 1.25 : 1.05;
+  fitCamera(state.nodes, state.regions, maxK);
   state.dirty = true;
 });
 $("helpBtn").addEventListener("click", () => {
@@ -788,7 +823,8 @@ window.addEventListener("keydown", (ev) => {
   } else if (ev.key === "?" && document.activeElement !== $("search")) {
     $("help").hidden = !$("help").hidden;
   } else if ((ev.key === "f" || ev.key === "F") && document.activeElement !== $("search")) {
-    fitCamera(state.nodes, state.regions);
+    const maxK = state.level === "cluster" ? 0.88 : state.level === "focus" ? 1.25 : 1.05;
+    fitCamera(state.nodes, state.regions, maxK);
     state.dirty = true;
   } else if (ev.key === "ArrowLeft" && document.activeElement !== $("search")) {
     ev.preventDefault();

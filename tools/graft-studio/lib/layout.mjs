@@ -41,15 +41,25 @@ export function layoutArchitecture(model, systemFilter = "") {
       height: rows * cellH + padY * 2,
     };
   });
-  const totalW = prepared.reduce((sum, p) => sum + p.width, 0) + Math.max(0, prepared.length - 1) * colGap;
+  let mains = systemFilter ? prepared : prepared.filter((p) => p.sys.fileCount >= 8);
+  let extras = systemFilter ? [] : prepared.filter((p) => p.sys.fileCount < 8);
+  if (!mains.length) {
+    mains = extras;
+    extras = [];
+  }
+  const extraColW = extras.length ? Math.max(...extras.map((p) => p.width)) : 0;
+  const extraGap = 28;
+  const extraH = extras.reduce((sum, p) => sum + p.height, 0) + Math.max(0, extras.length - 1) * extraGap;
+  const totalW =
+    mains.reduce((sum, p) => sum + p.width, 0) +
+    Math.max(0, mains.length - 1) * colGap +
+    (extras.length ? colGap + extraColW : 0);
   let cursor = -totalW / 2;
   const nodes = [];
   const regions = [];
 
-  for (const item of prepared) {
+  const place = (item, originX, originY) => {
     const { sys, clusters, cols, width, height } = item;
-    const originX = cursor;
-    const originY = -height / 2;
     regions.push({
       key: sys.key,
       label: sys.label,
@@ -79,7 +89,18 @@ export function layoutArchitecture(model, systemFilter = "") {
         data: c,
       });
     });
-    cursor += width + colGap;
+  };
+
+  for (const item of mains) {
+    place(item, cursor, -item.height / 2);
+    cursor += item.width + colGap;
+  }
+  if (extras.length) {
+    let y = -extraH / 2;
+    for (const item of extras) {
+      place(item, cursor, y);
+      y += item.height + extraGap;
+    }
   }
 
   const keep = new Set(nodes.map((n) => n.id));

@@ -114,10 +114,14 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
   border: 1px solid var(--border); border-radius: 10px;
   cursor: pointer;
 }
-.hud.hint {
-  position: absolute; left: 12px; bottom: 12px; margin: 0;
-  color: var(--muted); font-size: 11px; max-width: 46%; pointer-events: none;
+.tip {
+  position: absolute; pointer-events: none; z-index: 6;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  border: 1px solid var(--border); border-radius: 8px;
+  padding: 5px 8px; font-size: 11px; color: var(--text);
+  max-width: 280px; backdrop-filter: blur(12px);
 }
+.tip[hidden] { display: none !important; }
 .sheet {
   position: absolute; top: 12px; right: 12px; width: min(360px, 92vw);
   max-height: calc(100% - 24px); overflow: auto;
