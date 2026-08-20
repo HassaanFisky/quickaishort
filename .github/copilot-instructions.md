@@ -39,5 +39,6 @@ needed detail, and then at the exact file:line the node points to — never
 re-read whole files.
 
 After big code changes, refresh the graph with `npx -y @nanonets/graft@0.10.1 build` (deterministic,
-no API key, $0). Never `graft build --deep` without an explicit founder ask.
+no API key, $0). Browse locally with `npm run graft:viz` (127.0.0.1:4400). Never commit `graft/`.
+Never `graft build --deep` without an explicit founder ask.
 <!-- graft:end -->

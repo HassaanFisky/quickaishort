@@ -51,6 +51,6 @@ copyable architecture. Agents and the founder build it locally and query it.
 
 - If `graft/` is missing: `npx -y @nanonets/graft@0.10.1 build` (or `npm run graft:build`). Structural only, `$0`, no API key.
 - Orient: `npx -y @nanonets/graft@0.10.1 map`. Query: `graft ask "…" --source`. Callers: `graft callers <symbol>`.
-- View: `npx -y @nanonets/graft@0.10.1 viz --no-open` (localhost:4400).
+- View architecture: `npm run graft:viz` → `http://127.0.0.1:4400` (Studio Graph, localhost only). Stock Graft SVG: `npm run graft:viz:stock`.
 - Never `graft build --deep` unless the founder explicitly asks — that spends an LLM key.
 - MCP is pinned to `npx -y @nanonets/graft@0.10.1 mcp` in `.cursor/mcp.json` and `.mcp.json` so a global `graft` binary is not required. If you re-run `graft init`, restore that npx command.

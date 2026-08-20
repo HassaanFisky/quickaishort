@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Studio Graph</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <a class="skip" href="#search">Skip to search</a>
+  <header class="top">
+    <div class="brand">
+      <span class="mark" aria-hidden="true"></span>
+      <div>
+        <strong>Studio Graph</strong>
+        <p id="status">Loading local map…</p>
+      </div>
+    </div>
+    <nav class="crumb" id="crumb" aria-label="Level"></nav>
+    <div class="search">
+      <label class="sr-only" for="search">Search systems, files, and symbols</label>
+      <input id="search" type="search" placeholder="Search a system, file, or symbol" autocomplete="off" spellcheck="false">
+      <kbd>/</kbd>
+      <div id="hits" class="hits" hidden role="listbox"></div>
+    </div>
+    <button class="ghost" id="fitBtn" type="button">Fit</button>
+    <button class="ghost" id="helpBtn" type="button">Help</button>
+  </header>
+
+  <main class="stage">
+    <canvas id="canvas" aria-label="Architecture graph" tabindex="0"></canvas>
+    <aside class="rail" id="rail">
+      <div id="hudMeta" class="meta"></div>
+      <div class="chips" id="systems" role="toolbar" aria-label="Systems"></div>
+      <ul class="legend" aria-label="Legend">
+        <li><span class="swatch box"></span>System</li>
+        <li><span class="swatch circle"></span>File</li>
+        <li><span class="swatch diamond"></span>Symbol</li>
+        <li><span class="swatch in"></span>Depended on by</li>
+        <li><span class="swatch out"></span>Depends on</li>
+      </ul>
+    </aside>
+    <canvas id="mini" class="mini" width="184" height="118" aria-label="Overview"></canvas>
+    <p class="hud hint" id="hudHint">Structure first. Click a system, then a file.</p>
+    <aside class="sheet" id="sheet" hidden></aside>
+    <div class="empty" id="empty" hidden></div>
+  </main>
+
+  <div class="help" id="help" hidden>
+    <div class="help-card" role="dialog" aria-labelledby="helpTitle">
+      <h2 id="helpTitle">Read the architecture, then the code</h2>
+      <ul>
+        <li><b>Default view</b> shows systems as territories. Node size is file count. Stroke weight is real coupling.</li>
+        <li><b>Click</b> a cluster to open its files. Hubs sit toward the center. Dim files wait for zoom or hover.</li>
+        <li><b>Depends on</b> is outbound. <b>Depended on by</b> is inbound — the blast radius of a change.</li>
+        <li><kbd>/</kbd> search becomes an investigation: the graph focuses that neighborhood.</li>
+        <li><kbd>F</kbd> fits. <kbd>Esc</kbd> goes up. Arrows move focus. <kbd>?</kbd> toggles this.</li>
+        <li>This map stays on localhost. It is not the public product.</li>
+      </ul>
+      <button class="ghost" id="helpClose" type="button">Close</button>
+    </div>
+  </div>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

@@ -50,3 +50,5 @@ re-read whole files.
 
 After big code changes, refresh the graph with
 `npx -y @nanonets/graft@0.10.1 build` (deterministic, no API key, $0).
+Browse the architecture locally with `npm run graft:viz` (127.0.0.1 only;
+never commit `graft/`). Stock Graft viewer remains `npm run graft:viz:stock`.
