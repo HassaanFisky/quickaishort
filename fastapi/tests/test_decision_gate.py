@@ -230,3 +230,402 @@ async def test_resolve_injected_state_never_calls_gemini(monkeypatch):
     assert ask.mode == "ASK" and ask.gemini_called is False
     assert research.mode == "RESEARCH" and research.gemini_called is False
     assert nothing.mode == "NOTHING" and nothing.gemini_called is False
+
+
+# ─── Phase B: Orchestrator ↔ Decision Intelligence wiring ───────────────────
+
+
+from models.render_manifest import RenderManifest, RenderTimeline
+from models.studio_project import CreateStudioProjectRequest
+from services.orchestrator_service import (
+    CreatePlanRequest,
+    ExecutePlanRequest,
+    Plan,
+    RedisPlanStore,
+    StructuredIntent,
+    reset_orchestrator_for_tests,
+)
+from services.project_kernel import InMemoryProjectStore, reset_project_kernel_for_tests
+
+
+def _manifest(d: float = 10.0) -> RenderManifest:
+    return RenderManifest(
+        generatedAt=1,
+        timeline=RenderTimeline(fps=30, width=1080, height=1920, duration=d),
+    )
+
+
+@pytest.fixture
+def orch():
+    kernel = reset_project_kernel_for_tests(InMemoryProjectStore())
+    return reset_orchestrator_for_tests(kernel=kernel), kernel
+
+
+def _patch_resolve(monkeypatch, graph, head=None):
+    async def _resolve(user_id, text, project_id=None, **kwargs):
+        return decide_from_state(
+            text,
+            project_id=project_id or "p1",
+            graph=graph,
+            head=head or _head(),
+        )
+
+    monkeypatch.setattr(
+        "services.decision_service.resolve_objective", _resolve, raising=True
+    )
+
+
+@pytest.mark.asyncio
+async def test_gated_ready_silence_act_remove_silences(orch, monkeypatch):
+    service, _ = orch
+    graph = _graph(
+        silence=_ready_silence({"start": 1.0, "end": 2.5, "type": "silence"})
+    )
+    _patch_resolve(monkeypatch, graph)
+
+    plan = await service.create_plan(
+        "u1",
+        CreatePlanRequest(
+            decision_gate=True,
+            intent_text=DEAD_AIR_OBJECTIVE,
+            project_id="p1",
+        ),
+    )
+    assert plan.decision_id
+    assert plan.decision_mode == "ACT"
+    assert len(plan.steps) == 1
+    assert plan.steps[0].capability_id == REMOVE_SILENCES_CAPABILITY
+    assert plan.status == "draft"
+    assert plan.execution_integrity is not None
+    assert plan.execution_integrity.status == "not_executed"
+
+
+@pytest.mark.asyncio
+async def test_gated_mode_is_server_derived_not_client(orch, monkeypatch):
+    service, _ = orch
+    _patch_resolve(monkeypatch, _graph(silence=None))
+
+    plan = await service.create_plan(
+        "u1",
+        CreatePlanRequest(
+            decision_gate=True,
+            intent_text=DEAD_AIR_OBJECTIVE,
+            project_id="p1",
+            decision_mode="ACT",
+        ),
+    )
+    assert plan.decision_mode == "ASK"
+    assert plan.steps == []
+    assert plan.decision_id
+
+
+@pytest.mark.asyncio
+async def test_gated_ask_research_nothing_cannot_execute(orch, monkeypatch):
+    service, kernel = orch
+    head = await kernel.create_project(
+        "u1",
+        CreateStudioProjectRequest(title="T", proposed_manifest=_manifest()),
+    )
+
+    async def _resolve(user_id, text, project_id=None, **kwargs):
+        if "pending" in text:
+            return decide_from_state(
+                DEAD_AIR_OBJECTIVE,
+                project_id=project_id,
+                graph=_graph(silence=FacetBlob(status="pending", data={})),
+            )
+        return decide_from_state(
+            DEAD_AIR_OBJECTIVE, project_id=project_id, graph=_graph(silence=None)
+        )
+
+    monkeypatch.setattr(
+        "services.decision_service.resolve_objective", _resolve, raising=True
+    )
+
+    for intent, expected_mode in [
+        (DEAD_AIR_OBJECTIVE, "ASK"),
+        ("pending marker " + DEAD_AIR_OBJECTIVE, "RESEARCH"),
+    ]:
+        plan = await service.create_plan(
+            "u1",
+            CreatePlanRequest(
+                decision_gate=True,
+                intent_text=intent,
+                project_id=head.project_id,
+            ),
+        )
+        assert plan.decision_mode == expected_mode
+        assert plan.steps == []
+        executed = await service.execute_plan(
+            "u1",
+            ExecutePlanRequest(
+                plan_id=plan.plan_id,
+                project_id=head.project_id,
+                base_revision=0,
+                proposed_manifest=_manifest(),
+            ),
+        )
+        assert executed.decision_mode == expected_mode
+        assert executed.execution_integrity is not None
+        assert executed.execution_integrity.status == "not_executed"
+        assert executed.status == "draft"
+        assert all(s.status == "pending" for s in executed.steps)
+
+    async def _nothing_resolve(user_id, text, project_id=None, **kwargs):
+        return decide_from_state("   ")
+
+    monkeypatch.setattr(
+        "services.decision_service.resolve_objective", _nothing_resolve, raising=True
+    )
+    nothing_plan = await service.create_plan(
+        "u1",
+        CreatePlanRequest(
+            decision_gate=True,
+            intent_text="placeholder for NOTHING decision",
+            project_id=head.project_id,
+        ),
+    )
+    assert nothing_plan.decision_mode == "NOTHING"
+    nothing_exec = await service.execute_plan(
+        "u1",
+        ExecutePlanRequest(
+            plan_id=nothing_plan.plan_id,
+            project_id=head.project_id,
+            base_revision=0,
+            proposed_manifest=_manifest(),
+        ),
+    )
+    assert nothing_exec.execution_integrity is not None
+    assert nothing_exec.execution_integrity.status == "not_executed"
+
+
+@pytest.mark.asyncio
+async def test_gated_missing_evidence_not_act(orch, monkeypatch):
+    service, _ = orch
+    _patch_resolve(monkeypatch, _graph(silence=None))
+
+    plan = await service.create_plan(
+        "u1",
+        CreatePlanRequest(
+            decision_gate=True,
+            intent_text=DEAD_AIR_OBJECTIVE,
+            project_id="p1",
+        ),
+    )
+    assert plan.decision_mode == "ASK"
+    assert plan.steps == []
+
+
+@pytest.mark.asyncio
+async def test_gated_deterministic_no_gemini_via_orchestrator(orch, monkeypatch):
+    service, _ = orch
+    calls: list[object] = []
+
+    async def _boom(*_a, **_k):
+        calls.append(1)
+        raise AssertionError("Gemini must not be called")
+
+    monkeypatch.setattr("services.gemini_client.call_gemini", _boom, raising=True)
+    graph = _graph(
+        silence=_ready_silence({"start": 1.0, "end": 2.5, "type": "silence"})
+    )
+    _patch_resolve(monkeypatch, graph)
+
+    plan = await service.create_plan(
+        "u1",
+        CreatePlanRequest(
+            decision_gate=True,
+            intent_text=DEAD_AIR_OBJECTIVE,
+            project_id="p1",
+        ),
+    )
+    assert calls == []
+    assert plan.decision_mode == "ACT"
+
+
+@pytest.mark.asyncio
+async def test_ungated_structured_suggestion_unchanged(orch):
+    service, _ = orch
+    plan = await service.create_plan(
+        "u1",
+        CreatePlanRequest(
+            source="suggestion",
+            structured=StructuredIntent(
+                capability_id="TOGGLE_CAPTIONS",
+                params={"enabled": True},
+            ),
+        ),
+    )
+    assert plan.decision_id is None
+    assert plan.decision_mode is None
+    assert plan.status == "draft"
+    assert len(plan.steps) == 1
+
+
+@pytest.mark.asyncio
+async def test_old_plan_json_without_decision_fields_loads():
+    from datetime import datetime, timezone
+
+    fake_redis: dict[str, str] = {}
+
+    class _Fake:
+        def setex(self, key, ttl, value):
+            fake_redis[key] = value
+            return True
+
+        def get(self, key):
+            return fake_redis.get(key)
+
+    store = RedisPlanStore(redis_client=_Fake(), ttl_sec=120)
+    now = datetime.now(timezone.utc)
+    legacy = Plan(
+        plan_id="legacy1",
+        owner_user_id="u1",
+        created_at=now,
+        updated_at=now,
+        status="draft",
+        steps=[],
+    )
+    store.put(legacy)
+    loaded = store.get("legacy1")
+    assert loaded is not None
+    assert loaded.decision_id is None
+    assert loaded.decision_mode is None
+    assert loaded.execution_integrity is None
+
+
+@pytest.mark.asyncio
+async def test_gated_act_execute_integrity_not_objective_verified(orch, monkeypatch):
+    service, kernel = orch
+    head = await kernel.create_project(
+        "u1",
+        CreateStudioProjectRequest(title="T", proposed_manifest=_manifest(10)),
+    )
+    graph = _graph(
+        silence=_ready_silence({"start": 1.0, "end": 2.5, "type": "silence"})
+    )
+    graph.project_id = head.project_id
+    _patch_resolve(monkeypatch, graph, head=_head())
+
+    plan = await service.create_plan(
+        "u1",
+        CreatePlanRequest(
+            decision_gate=True,
+            intent_text=DEAD_AIR_OBJECTIVE,
+            project_id=head.project_id,
+        ),
+    )
+    assert plan.decision_mode == "ACT"
+    executed = await service.execute_plan(
+        "u1",
+        ExecutePlanRequest(
+            plan_id=plan.plan_id,
+            project_id=head.project_id,
+            base_revision=0,
+            base_snapshot_hash=head.snapshot_hash,
+            proposed_manifest=_manifest(10),
+        ),
+    )
+    assert executed.status in {"completed", "partial", "failed"}
+    assert executed.execution_integrity is not None
+    assert executed.execution_integrity.status in {
+        "execution_ok",
+        "execution_partial",
+        "execution_failed",
+    }
+    assert executed.execution_integrity.status != "objective_verified"
+    assert "objective_verified" not in executed.model_dump_json()
+
+
+@pytest.mark.asyncio
+async def test_gated_plan_owner_isolation(orch, monkeypatch):
+    service, _ = orch
+    graph = _graph(
+        silence=_ready_silence({"start": 1.0, "end": 2.5, "type": "silence"})
+    )
+    _patch_resolve(monkeypatch, graph)
+
+    plan = await service.create_plan(
+        "u1",
+        CreatePlanRequest(
+            decision_gate=True,
+            intent_text=DEAD_AIR_OBJECTIVE,
+            project_id="p1",
+        ),
+    )
+    assert await service.get_plan(plan.plan_id, "other-user") is None
+
+
+class _LockFakeRedis:
+    def __init__(self) -> None:
+        self.data: dict[str, str] = {}
+        self.set_calls: list[tuple] = []
+
+    def set(self, key, value, nx=False, ex=None):
+        self.set_calls.append((key, value, nx, ex))
+        if nx and key in self.data:
+            return False
+        self.data[key] = str(value)
+        return True
+
+    def get(self, key):
+        return self.data.get(key)
+
+    def setex(self, key, ttl, value):
+        self.data[key] = value
+        return True
+
+
+@pytest.mark.asyncio
+async def test_gated_double_execute_uses_lock(monkeypatch):
+    from services.orchestrator_service import OrchestratorService
+
+    fake = _LockFakeRedis()
+    kernel = reset_project_kernel_for_tests(InMemoryProjectStore())
+    store = RedisPlanStore(redis_client=fake, ttl_sec=120)
+    service = OrchestratorService(store=store, kernel=kernel)
+
+    head = await kernel.create_project(
+        "u1",
+        CreateStudioProjectRequest(title="T", proposed_manifest=_manifest()),
+    )
+    graph = _graph(
+        silence=_ready_silence({"start": 1.0, "end": 2.5, "type": "silence"})
+    )
+
+    async def _resolve(user_id, text, project_id=None, **kwargs):
+        return decide_from_state(
+            text,
+            project_id=project_id,
+            graph=graph,
+            head=_head(),
+        )
+
+    monkeypatch.setattr(
+        "services.decision_service.resolve_objective", _resolve, raising=True
+    )
+    monkeypatch.setattr("services.queue_service.redis_conn", fake, raising=False)
+
+    plan = await service.create_plan(
+        "u1",
+        CreatePlanRequest(
+            decision_gate=True,
+            intent_text=DEAD_AIR_OBJECTIVE,
+            project_id=head.project_id,
+        ),
+    )
+    assert plan.decision_mode == "ACT"
+
+    body = ExecutePlanRequest(
+        plan_id=plan.plan_id,
+        project_id=head.project_id,
+        base_revision=0,
+        base_snapshot_hash=head.snapshot_hash,
+        proposed_manifest=_manifest(),
+    )
+    first = await service.execute_plan("u1", body)
+    second = await service.execute_plan("u1", body)
+    lock_keys = [c[0] for c in fake.set_calls if c[2] is True]
+    assert any(k.startswith("orch:exec:") for k in lock_keys)
+    assert first.status in {"completed", "partial", "failed"}
+    assert second.plan_id == first.plan_id

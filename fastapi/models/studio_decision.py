@@ -36,6 +36,13 @@ DecisionStatus = Literal["decided"]
 ActorKind = Literal["system", "user"]
 ObjectiveClass = Literal["empty", "dead_air_pacing", "unrelated"]
 
+ExecutionIntegrityStatus = Literal[
+    "not_executed",
+    "execution_ok",
+    "execution_partial",
+    "execution_failed",
+]
+
 
 class Objective(BaseModel):
     objective_id: str
@@ -61,6 +68,17 @@ class CandidateAction(BaseModel):
     capability_id: str
     params: dict[str, Any] = Field(default_factory=dict)
     label: Optional[str] = None
+
+
+class ExecutionIntegrity(BaseModel):
+    """Tier 0 execution/result integrity — never objective_verified."""
+
+    status: ExecutionIntegrityStatus
+    intended_capabilities: list[str] = Field(default_factory=list)
+    accepted: list[str] = Field(default_factory=list)
+    rejected: list[str] = Field(default_factory=list)
+    skipped: list[str] = Field(default_factory=list)
+    message: Optional[str] = None
 
 
 class DecisionRecord(BaseModel):
