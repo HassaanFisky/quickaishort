@@ -19,8 +19,11 @@ Living index. Full ADRs live under `docs/studio/adrs/`.
 | ADR-013 | Editor Ingest Parity + Onboarding + ADK CS | **Accepted** | EP-008 + ADK≠Ads correction implemented |
 | ADR-014 | Dub Video Pipeline | **Accepted** | Translate + TTS + mute/replace export |
 | ADR-015 | Studio Genius OS | **Accepted** | Chat-native Phase 1; Luna/Terra profiles; FC = Phase 2 |
+| ADR-016 | Decision-Gated Edit (M0) | **Accepted** | Decision Intelligence WHAT/WHY; Pre-Flight stays optional specialist; Orchestrator HOW; Registry capabilities; Kernel execution; no parallel ABI |
 
 ## Latest binding change
+
+2026-08-20: **ADR-016 Decision-Gated Edit (M0)** accepted — deterministic DecisionRecord in front of Orchestrator; dead-air path uses existing `REMOVE_SILENCES` + MediaGraph silence evidence; 0 Gemini; Pre-Flight is not the brain.
 
 2026-07-26: **ADR-015 Studio Genius OS** accepted — Redis orchestrator plans; multi-turn + stream chat; universal suggestion copy; docked Dub; real ADD_SFX preview; movie-length dub deferred; UI brand = QuickAI only.
 
