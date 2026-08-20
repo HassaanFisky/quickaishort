@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timezone
 
 import pytest
@@ -15,6 +16,7 @@ from services.decision_service import (
     collect_evidence,
     decide_from_state,
     resolve_objective,
+    verify_remove_silences_params_against_graph,
 )
 from services.media_graph_service import SILENCE_SUGGEST_MIN_SEC
 
@@ -45,10 +47,10 @@ def _ready_silence(*segments: dict) -> FacetBlob:
     return FacetBlob(status="ready", data={"segments": list(segments)})
 
 
-def _head() -> StudioProjectHead:
+def _head(project_id: str = "p1") -> StudioProjectHead:
     now = datetime.now(timezone.utc)
     return StudioProjectHead(
-        project_id="p1",
+        project_id=project_id,
         owner_user_id="u1",
         title="Lecture",
         created_at=now,
@@ -232,11 +234,78 @@ async def test_resolve_injected_state_never_calls_gemini(monkeypatch):
     assert nothing.mode == "NOTHING" and nothing.gemini_called is False
 
 
+def test_verify_remove_silences_params_rejects_forged_segments():
+    graph = _graph(
+        silence=_ready_silence({"start": 1.0, "end": 2.5, "type": "silence"})
+    )
+    ok, _ = verify_remove_silences_params_against_graph(
+        {
+            "segments": [{"start": 1.0, "end": 2.5, "type": "silence"}],
+        },
+        graph,
+    )
+    assert ok is True
+
+    forged, detail = verify_remove_silences_params_against_graph(
+        {
+            "segments": [{"start": 99.0, "end": 100.0, "type": "silence"}],
+        },
+        graph,
+    )
+    assert forged is False
+    assert detail == "segment_not_in_evidence"
+
+
+@pytest.mark.asyncio
+async def test_gated_execute_rejects_tampered_plan_segments(orch, monkeypatch):
+    service, kernel, mg_store = orch
+    head = await kernel.create_project(
+        "u1",
+        CreateStudioProjectRequest(title="T", proposed_manifest=_manifest(10)),
+    )
+    graph = _graph(
+        silence=_ready_silence({"start": 1.0, "end": 2.5, "type": "silence"})
+    )
+    await _seed_mediagraph(kernel, mg_store, head, graph)
+    _patch_resolve(monkeypatch, graph, head=_head(head.project_id))
+
+    plan = await service.create_plan(
+        "u1",
+        CreatePlanRequest(
+            decision_gate=True,
+            intent_text=DEAD_AIR_OBJECTIVE,
+            project_id=head.project_id,
+        ),
+    )
+    assert plan.decision_mode == "ACT"
+    plan.steps[0].params["segments"] = [
+        {"start": 99.0, "end": 100.0, "type": "silence"}
+    ]
+    await asyncio.to_thread(service.store.put, plan)
+
+    executed = await service.execute_plan(
+        "u1",
+        ExecutePlanRequest(
+            plan_id=plan.plan_id,
+            project_id=head.project_id,
+            base_revision=0,
+            base_snapshot_hash=head.snapshot_hash,
+            proposed_manifest=_manifest(10),
+        ),
+    )
+    assert executed.status == "failed"
+    assert "evidence_verify_failed" in (executed.message or "")
+    assert executed.execution_integrity is not None
+    assert executed.execution_integrity.status == "execution_failed"
+    assert executed.steps[0].status == "rejected"
+
+
 # ─── Phase B: Orchestrator ↔ Decision Intelligence wiring ───────────────────
 
 
 from models.render_manifest import RenderManifest, RenderTimeline
 from models.studio_project import CreateStudioProjectRequest
+from services.media_graph_service import InMemoryMediaGraphStore, reset_media_graph_service_for_tests
 from services.orchestrator_service import (
     CreatePlanRequest,
     ExecutePlanRequest,
@@ -260,7 +329,27 @@ def _manifest(d: float = 10.0) -> RenderManifest:
 @pytest.fixture
 def orch():
     kernel = reset_project_kernel_for_tests(InMemoryProjectStore())
-    return reset_orchestrator_for_tests(kernel=kernel), kernel
+    mg_store = InMemoryMediaGraphStore()
+    reset_media_graph_service_for_tests(mg_store)
+    service = reset_orchestrator_for_tests(kernel=kernel)
+    return service, kernel, mg_store
+
+
+async def _seed_mediagraph(
+    kernel,
+    mg_store: InMemoryMediaGraphStore,
+    head,
+    graph: MediaGraph,
+) -> MediaGraph:
+    bound = graph.model_copy(
+        update={
+            "project_id": head.project_id,
+            "owner_user_id": head.owner_user_id,
+        }
+    )
+    mg_store.put(bound)
+    await kernel.bind_media_graph_id(head.project_id, head.owner_user_id, bound.graph_id)
+    return bound
 
 
 def _patch_resolve(monkeypatch, graph, head=None):
@@ -279,7 +368,7 @@ def _patch_resolve(monkeypatch, graph, head=None):
 
 @pytest.mark.asyncio
 async def test_gated_ready_silence_act_remove_silences(orch, monkeypatch):
-    service, _ = orch
+    service, _, _ = orch
     graph = _graph(
         silence=_ready_silence({"start": 1.0, "end": 2.5, "type": "silence"})
     )
@@ -304,7 +393,7 @@ async def test_gated_ready_silence_act_remove_silences(orch, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_gated_mode_is_server_derived_not_client(orch, monkeypatch):
-    service, _ = orch
+    service, _, _ = orch
     _patch_resolve(monkeypatch, _graph(silence=None))
 
     plan = await service.create_plan(
@@ -323,7 +412,7 @@ async def test_gated_mode_is_server_derived_not_client(orch, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_gated_ask_research_nothing_cannot_execute(orch, monkeypatch):
-    service, kernel = orch
+    service, kernel, _ = orch
     head = await kernel.create_project(
         "u1",
         CreateStudioProjectRequest(title="T", proposed_manifest=_manifest()),
@@ -403,7 +492,7 @@ async def test_gated_ask_research_nothing_cannot_execute(orch, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_gated_missing_evidence_not_act(orch, monkeypatch):
-    service, _ = orch
+    service, _, _ = orch
     _patch_resolve(monkeypatch, _graph(silence=None))
 
     plan = await service.create_plan(
@@ -420,7 +509,7 @@ async def test_gated_missing_evidence_not_act(orch, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_gated_deterministic_no_gemini_via_orchestrator(orch, monkeypatch):
-    service, _ = orch
+    service, _, _ = orch
     calls: list[object] = []
 
     async def _boom(*_a, **_k):
@@ -447,7 +536,7 @@ async def test_gated_deterministic_no_gemini_via_orchestrator(orch, monkeypatch)
 
 @pytest.mark.asyncio
 async def test_ungated_structured_suggestion_unchanged(orch):
-    service, _ = orch
+    service, _, _ = orch
     plan = await service.create_plan(
         "u1",
         CreatePlanRequest(
@@ -498,7 +587,7 @@ async def test_old_plan_json_without_decision_fields_loads():
 
 @pytest.mark.asyncio
 async def test_gated_act_execute_integrity_not_objective_verified(orch, monkeypatch):
-    service, kernel = orch
+    service, kernel, mg_store = orch
     head = await kernel.create_project(
         "u1",
         CreateStudioProjectRequest(title="T", proposed_manifest=_manifest(10)),
@@ -506,8 +595,8 @@ async def test_gated_act_execute_integrity_not_objective_verified(orch, monkeypa
     graph = _graph(
         silence=_ready_silence({"start": 1.0, "end": 2.5, "type": "silence"})
     )
-    graph.project_id = head.project_id
-    _patch_resolve(monkeypatch, graph, head=_head())
+    await _seed_mediagraph(kernel, mg_store, head, graph)
+    _patch_resolve(monkeypatch, graph, head=_head(head.project_id))
 
     plan = await service.create_plan(
         "u1",
@@ -541,7 +630,7 @@ async def test_gated_act_execute_integrity_not_objective_verified(orch, monkeypa
 
 @pytest.mark.asyncio
 async def test_gated_plan_owner_isolation(orch, monkeypatch):
-    service, _ = orch
+    service, _, _ = orch
     graph = _graph(
         silence=_ready_silence({"start": 1.0, "end": 2.5, "type": "silence"})
     )
@@ -584,6 +673,8 @@ async def test_gated_double_execute_uses_lock(monkeypatch):
 
     fake = _LockFakeRedis()
     kernel = reset_project_kernel_for_tests(InMemoryProjectStore())
+    mg_store = InMemoryMediaGraphStore()
+    reset_media_graph_service_for_tests(mg_store)
     store = RedisPlanStore(redis_client=fake, ttl_sec=120)
     service = OrchestratorService(store=store, kernel=kernel)
 
@@ -594,13 +685,14 @@ async def test_gated_double_execute_uses_lock(monkeypatch):
     graph = _graph(
         silence=_ready_silence({"start": 1.0, "end": 2.5, "type": "silence"})
     )
+    await _seed_mediagraph(kernel, mg_store, head, graph)
 
     async def _resolve(user_id, text, project_id=None, **kwargs):
         return decide_from_state(
             text,
             project_id=project_id,
             graph=graph,
-            head=_head(),
+            head=_head(project_id or head.project_id),
         )
 
     monkeypatch.setattr(

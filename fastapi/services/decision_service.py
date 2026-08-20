@@ -371,7 +371,7 @@ def decide_from_state(
         rationale=(
             f"Ready silence evidence shows {len(gaps)} qualifying gap(s). "
             "Deterministic ACT via existing REMOVE_SILENCES. 0 Gemini, 0 credits. "
-            "No Orchestrator plan created in M0."
+            "Orchestrator gated plan may authorize steps when decision_gate=true."
         ),
         candidates=candidates,
         verification_plan=(
@@ -400,19 +400,9 @@ async def resolve_objective(
 
     # I/O only when caller did not inject state (tests pass graph/head).
     if project_id and graph is None and head is None:
-        from services.project_kernel import get_project_kernel
-
-        loaded_head = await get_project_kernel().get_head(project_id, user_id)
-        from services.media_graph_service import get_media_graph_service
-
-        svc = get_media_graph_service()
-        graph_id = loaded_head.media_graph_id if loaded_head else None
-        if graph_id:
-            loaded_graph = await svc.get(graph_id, user_id)
-        else:
-            loaded_graph = await _find_graph_without_create(
-                svc, user_id, project_id
-            )
+        loaded_head, loaded_graph = await load_project_graph_for_decision(
+            user_id, project_id
+        )
 
     record = decide_from_state(
         text,
@@ -440,3 +430,53 @@ async def _find_graph_without_create(
     return await asyncio.to_thread(
         svc.store.find_by_project, user_id, project_id
     )
+
+
+async def load_project_graph_for_decision(
+    user_id: str,
+    project_id: str,
+    *,
+    head: Optional[StudioProjectHead] = None,
+) -> tuple[Optional[StudioProjectHead], Optional[MediaGraph]]:
+    """Load Kernel head + MediaGraph without ensure_for_project. 0 Gemini."""
+    from services.project_kernel import get_project_kernel
+    from services.media_graph_service import get_media_graph_service
+
+    loaded_head = head
+    if loaded_head is None:
+        loaded_head = await get_project_kernel().get_head(project_id, user_id)
+
+    svc = get_media_graph_service()
+    graph_id = loaded_head.media_graph_id if loaded_head else None
+    if graph_id:
+        loaded_graph = await svc.get(graph_id, user_id)
+    else:
+        loaded_graph = await _find_graph_without_create(svc, user_id, project_id)
+    return loaded_head, loaded_graph
+
+
+def verify_remove_silences_params_against_graph(
+    params: dict[str, Any],
+    graph: Optional[MediaGraph],
+) -> tuple[bool, str]:
+    """Deterministic Tier 0 — every segment must exist in ready silence evidence."""
+    segments = params.get("segments") or []
+    if not isinstance(segments, list):
+        return False, "invalid_segments"
+    if graph is None:
+        return False, "no_mediagraph_for_verify"
+    silence = graph.facets.get("silence")
+    if silence is None or silence.status != "ready":
+        return False, "silence_evidence_unavailable"
+    gaps = _usable_silence_gaps(silence)
+    gap_set = {(round(g["start"], 6), round(g["end"], 6)) for g in gaps}
+    for seg in segments:
+        if not isinstance(seg, dict):
+            return False, "invalid_segment_shape"
+        try:
+            key = (round(float(seg["start"]), 6), round(float(seg["end"]), 6))
+        except (KeyError, TypeError, ValueError):
+            return False, "invalid_segment_times"
+        if key not in gap_set:
+            return False, "segment_not_in_evidence"
+    return True, ""

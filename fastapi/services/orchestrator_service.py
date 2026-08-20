@@ -270,6 +270,31 @@ class OrchestratorService:
     def _kernel(self) -> ProjectKernel:
         return self.kernel or get_project_kernel()
 
+    async def _verify_gated_act_evidence(
+        self, user_id: str, plan: Plan, project_id: str
+    ) -> Optional[str]:
+        """Re-check REMOVE_SILENCES segments against MediaGraph before Kernel execute."""
+        from services.decision_service import (
+            REMOVE_SILENCES_CAPABILITY,
+            load_project_graph_for_decision,
+            verify_remove_silences_params_against_graph,
+        )
+
+        remove_steps = [
+            s for s in plan.steps if s.capability_id == REMOVE_SILENCES_CAPABILITY
+        ]
+        if not remove_steps:
+            return None
+
+        _, graph = await load_project_graph_for_decision(user_id, project_id)
+        for step in remove_steps:
+            ok, detail = verify_remove_silences_params_against_graph(
+                dict(step.params), graph
+            )
+            if not ok:
+                return f"evidence_verify_failed:{detail}"
+        return None
+
     async def _create_decision_gated_plan(
         self, user_id: str, body: CreatePlanRequest, plan: Plan
     ) -> Plan:
@@ -466,6 +491,23 @@ class OrchestratorService:
         plan.project_id = body.project_id
         plan.updated_at = _now()
         await asyncio.to_thread(self.store.put, plan)
+
+        if plan.decision_id is not None and plan.decision_mode == "ACT":
+            evidence_err = await self._verify_gated_act_evidence(
+                user_id, plan, body.project_id
+            )
+            if evidence_err:
+                for step in plan.steps:
+                    if step.status == "pending":
+                        step.status = "rejected"
+                        step.reject_reason = "validation"
+                        step.reject_detail = evidence_err
+                plan.status = "failed"
+                plan.message = evidence_err
+                plan.execution_integrity = _compute_execution_integrity(plan)
+                plan.updated_at = _now()
+                await asyncio.to_thread(self.store.put, plan)
+                return plan
 
         kernel = self._kernel()
         accepted = 0
