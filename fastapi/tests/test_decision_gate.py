@@ -21,7 +21,6 @@ from services.decision_service import (
 )
 from services.media_graph_service import SILENCE_SUGGEST_MIN_SEC
 
-
 DEAD_AIR_OBJECTIVE = "Remove unnecessary dead air and tighten the pacing."
 
 
@@ -75,7 +74,9 @@ def test_ready_silence_act_remove_silences():
             {"start": 5.0, "end": 5.2, "type": "silence"},
         )
     )
-    rec = decide_from_state(DEAD_AIR_OBJECTIVE, project_id="p1", graph=graph, head=_head())
+    rec = decide_from_state(
+        DEAD_AIR_OBJECTIVE, project_id="p1", graph=graph, head=_head()
+    )
     assert rec.mode == "ACT"
     assert rec.gemini_called is False
     assert rec.credits_charged == 0
@@ -89,7 +90,9 @@ def test_ready_silence_act_remove_silences():
     kinds = {e.kind for e in rec.evidence}
     assert "PROJECT_OBSERVATION" in kinds
     assert "UNCERTAINTY" not in {
-        e.kind for e in rec.evidence if e.reference == "silence" and e.kind != "PROJECT_OBSERVATION"
+        e.kind
+        for e in rec.evidence
+        if e.reference == "silence" and e.kind != "PROJECT_OBSERVATION"
     }
     silence_obs = [
         e
@@ -98,7 +101,10 @@ def test_ready_silence_act_remove_silences():
     ]
     assert silence_obs
     assert rec.verification_plan
-    assert "not objective success" in rec.verification_plan.lower() or "not objective" in rec.verification_plan.lower()
+    assert (
+        "not objective success" in rec.verification_plan.lower()
+        or "not objective" in rec.verification_plan.lower()
+    )
 
 
 def test_missing_silence_ask_uncertainty():
@@ -110,7 +116,9 @@ def test_missing_silence_ask_uncertainty():
     assert rec.plan_id is None
     assert rec.gemini_called is False
     assert rec.credits_charged == 0
-    assert any(e.kind == "UNCERTAINTY" and e.reference == "silence" for e in rec.evidence)
+    assert any(
+        e.kind == "UNCERTAINTY" and e.reference == "silence" for e in rec.evidence
+    )
     assert rec.missing_information
     assert any("silence" in m.lower() for m in rec.missing_information)
 
@@ -209,9 +217,7 @@ async def test_resolve_injected_state_never_calls_gemini(monkeypatch):
         raise AssertionError("Gemini must not be called on deterministic paths")
 
     monkeypatch.setattr("services.gemini_client.call_gemini", _boom, raising=True)
-    monkeypatch.setattr(
-        "services.decision_service.call_gemini", _boom, raising=False
-    )
+    monkeypatch.setattr("services.decision_service.call_gemini", _boom, raising=False)
 
     graph = _graph(
         silence=_ready_silence({"start": 1.0, "end": 2.5, "type": "silence"})
@@ -306,7 +312,10 @@ async def test_gated_execute_rejects_tampered_plan_segments(orch, monkeypatch):
 
 from models.render_manifest import RenderManifest, RenderTimeline
 from models.studio_project import CreateStudioProjectRequest
-from services.media_graph_service import InMemoryMediaGraphStore, reset_media_graph_service_for_tests
+from services.media_graph_service import (
+    InMemoryMediaGraphStore,
+    reset_media_graph_service_for_tests,
+)
 from services.orchestrator_service import (
     CreatePlanRequest,
     ExecutePlanRequest,
@@ -349,7 +358,9 @@ async def _seed_mediagraph(
         }
     )
     mg_store.put(bound)
-    await kernel.bind_media_graph_id(head.project_id, head.owner_user_id, bound.graph_id)
+    await kernel.bind_media_graph_id(
+        head.project_id, head.owner_user_id, bound.graph_id
+    )
     return bound
 
 
@@ -627,10 +638,15 @@ async def test_gated_act_execute_integrity_not_objective_verified(orch, monkeypa
     }
     assert executed.execution_integrity.status != "objective_verified"
     assert "objective_verified" not in executed.model_dump_json()
-    if executed.status == "completed" and executed.execution_integrity.status == "execution_ok":
+    if (
+        executed.status == "completed"
+        and executed.execution_integrity.status == "execution_ok"
+    ):
         assert executed.execution_integrity.kernel_events_verified is True
         assert "not_objective" in (executed.execution_integrity.message or "")
-        assert "client_proposed_manifest" in (executed.execution_integrity.message or "")
+        assert "client_proposed_manifest" in (
+            executed.execution_integrity.message or ""
+        )
 
 
 @pytest.mark.asyncio
@@ -786,9 +802,7 @@ def test_candidate_matches_project_event_segments_and_capability():
         op=ProjectOp(type=REMOVE_SILENCES_CAPABILITY, params=dict(intended)),
         affects_manifest=True,
     )
-    ok, _ = candidate_matches_project_event(
-        REMOVE_SILENCES_CAPABILITY, intended, event
-    )
+    ok, _ = candidate_matches_project_event(REMOVE_SILENCES_CAPABILITY, intended, event)
     assert ok is True
 
     event.capability_id = "TRIM"

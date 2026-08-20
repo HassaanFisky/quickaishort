@@ -13,7 +13,11 @@ from uuid import uuid4
 from pydantic import BaseModel, Field
 
 from models.render_manifest import RenderManifest
-from models.studio_decision import DecisionMode, ExecutionIntegrity, ExecutionIntegrityStatus
+from models.studio_decision import (
+    DecisionMode,
+    ExecutionIntegrity,
+    ExecutionIntegrityStatus,
+)
 from models.studio_project import CommandAck, CommandReject, ProjectCommand
 from services.project_kernel import (
     NON_EVENT_CAPABILITIES,
@@ -328,9 +332,7 @@ class OrchestratorService:
             if step.status != "accepted":
                 continue
             cap = get_capability(step.capability_id)
-            mutates = bool(
-                cap and "mutate_project" in (cap.get("side_effects") or [])
-            )
+            mutates = bool(cap and "mutate_project" in (cap.get("side_effects") or []))
             if mutates:
                 accepted_mutating = True
             if not step.command_id:
@@ -351,7 +353,9 @@ class OrchestratorService:
         if accepted_mutating and not matched:
             if integrity.status == "execution_ok":
                 integrity.status = "execution_partial"
-            integrity.message = "kernel_event_mismatch:" + ",".join(notes or ["unknown"])
+            integrity.message = "kernel_event_mismatch:" + ",".join(
+                notes or ["unknown"]
+            )
         elif integrity.status == "execution_ok":
             # Strategy A snapshot is client-proposed — not media proof.
             integrity.message = (
@@ -384,9 +388,7 @@ class OrchestratorService:
         plan.message = record.rationale
         plan.execution_integrity = ExecutionIntegrity(
             status="not_executed",
-            intended_capabilities=[
-                a.capability_id for a in record.candidate_actions
-            ],
+            intended_capabilities=[a.capability_id for a in record.candidate_actions],
             message=f"decision_mode:{record.mode}",
         )
 
@@ -507,7 +509,9 @@ class OrchestratorService:
 
         if plan.decision_id is not None and plan.decision_mode != "ACT":
             plan.execution_integrity = _compute_execution_integrity(plan)
-            plan.message = plan.message or f"decision_not_executable:{plan.decision_mode}"
+            plan.message = (
+                plan.message or f"decision_not_executable:{plan.decision_mode}"
+            )
             plan.updated_at = _now()
             await asyncio.to_thread(self.store.put, plan)
             return plan
