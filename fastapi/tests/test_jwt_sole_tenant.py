@@ -121,3 +121,13 @@ def test_auth_disabled_does_not_bypass_jwt(monkeypatch) -> None:
     with pytest.raises(HTTPException) as exc:
         auth_mod.get_verified_user_id(authorization="")
     assert exc.value.status_code == 401
+
+
+def test_mock_ai_editor_blocked_in_production(monkeypatch) -> None:
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.setenv("MOCK_AI_EDITOR", "true")
+    monkeypatch.setenv("MOCK_AI_MODE", "true")
+    from core.flags import is_mock_ai_editor, is_mock_ai_mode
+
+    assert is_mock_ai_editor() is False
+    assert is_mock_ai_mode() is False
