@@ -71,7 +71,12 @@ class CandidateAction(BaseModel):
 
 
 class ExecutionIntegrity(BaseModel):
-    """Tier 0 execution/result integrity — never objective_verified."""
+    """Tier 0 execution/result integrity — never objective_verified.
+
+    kernel_events_verified is None when events were not read back (ungated
+    or not-yet-executed). False means missing/mismatch — missing ≠ zero.
+    Client proposed_manifest is never treated as proof dead-air is gone.
+    """
 
     status: ExecutionIntegrityStatus
     intended_capabilities: list[str] = Field(default_factory=list)
@@ -79,6 +84,7 @@ class ExecutionIntegrity(BaseModel):
     rejected: list[str] = Field(default_factory=list)
     skipped: list[str] = Field(default_factory=list)
     message: Optional[str] = None
+    kernel_events_verified: Optional[bool] = None
 
 
 class DecisionRecord(BaseModel):

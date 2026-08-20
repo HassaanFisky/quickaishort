@@ -799,3 +799,13 @@ def test_mock_ai_mode_default_is_false() -> None:
     from core import flags
 
     assert flags.MOCK_AI_MODE is False
+
+
+def test_mock_ai_editor_blocked_in_production(monkeypatch) -> None:
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.setenv("MOCK_AI_EDITOR", "true")
+    monkeypatch.setenv("MOCK_AI_MODE", "true")
+    from core.flags import is_mock_ai_editor, is_mock_ai_mode
+
+    assert is_mock_ai_editor() is False
+    assert is_mock_ai_mode() is False

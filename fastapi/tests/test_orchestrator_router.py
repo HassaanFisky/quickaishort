@@ -270,3 +270,13 @@ def test_orchestrator_ungated_structured_via_http(router_client):
     assert body["decision_id"] is None
     assert body["decision_mode"] is None
     assert len(body["steps"]) == 1
+
+
+def test_orchestrator_auth_disabled_still_requires_jwt(router_client, monkeypatch):
+    monkeypatch.setenv("AUTH_DISABLED", "true")
+    client, _ = router_client
+    resp = client.post(
+        "/api/studio/v1/orchestrator/plan",
+        json={"decision_gate": True, "intent_text": DEAD_AIR_OBJECTIVE},
+    )
+    assert resp.status_code == 401

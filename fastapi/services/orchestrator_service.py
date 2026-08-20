@@ -295,6 +295,70 @@ class OrchestratorService:
                 return f"evidence_verify_failed:{detail}"
         return None
 
+    async def _verify_gated_kernel_events(
+        self, user_id: str, plan: Plan
+    ) -> ExecutionIntegrity:
+        """After gated ACT execute: intended steps vs Kernel events. Never objective_verified.
+
+        Does not treat CommandAck, HTTP 200, or client proposed_manifest as
+        proof the creative objective succeeded. Missing events ≠ matched.
+        """
+        from services.decision_service import candidate_matches_project_event
+
+        integrity = _compute_execution_integrity(plan)
+        if plan.decision_mode != "ACT" or integrity.status == "not_executed":
+            return integrity
+
+        project_id = plan.project_id
+        if not project_id:
+            integrity.status = (
+                "execution_partial"
+                if integrity.status == "execution_ok"
+                else integrity.status
+            )
+            integrity.kernel_events_verified = False
+            integrity.message = "kernel_project_id_missing"
+            return integrity
+
+        kernel = self._kernel()
+        notes: list[str] = []
+        matched = True
+        accepted_mutating = False
+        for step in plan.steps:
+            if step.status != "accepted":
+                continue
+            cap = get_capability(step.capability_id)
+            mutates = bool(
+                cap and "mutate_project" in (cap.get("side_effects") or [])
+            )
+            if mutates:
+                accepted_mutating = True
+            if not step.command_id:
+                matched = False
+                notes.append("command_id_missing")
+                continue
+            event = await kernel.get_event_by_command(
+                project_id, user_id, step.command_id
+            )
+            ok, detail = candidate_matches_project_event(
+                step.capability_id, dict(step.params), event
+            )
+            if not ok:
+                matched = False
+                notes.append(detail)
+
+        integrity.kernel_events_verified = matched if accepted_mutating else None
+        if accepted_mutating and not matched:
+            if integrity.status == "execution_ok":
+                integrity.status = "execution_partial"
+            integrity.message = "kernel_event_mismatch:" + ",".join(notes or ["unknown"])
+        elif integrity.status == "execution_ok":
+            # Strategy A snapshot is client-proposed — not media proof.
+            integrity.message = (
+                "execution_ok_not_objective;snapshot=client_proposed_manifest"
+            )
+        return integrity
+
     async def _create_decision_gated_plan(
         self, user_id: str, body: CreatePlanRequest, plan: Plan
     ) -> Plan:
@@ -448,6 +512,25 @@ class OrchestratorService:
             await asyncio.to_thread(self.store.put, plan)
             return plan
 
+        if plan.status in {"completed", "failed", "partial"}:
+            if plan.decision_id is not None and plan.execution_integrity is None:
+                plan.execution_integrity = _compute_execution_integrity(plan)
+            plan.updated_at = _now()
+            await asyncio.to_thread(self.store.put, plan)
+            return plan
+
+        if plan.decision_id is not None:
+            if plan.project_id and body.project_id != plan.project_id:
+                refused = plan.model_copy(deep=True)
+                refused.execution_integrity = ExecutionIntegrity(
+                    status="execution_failed",
+                    intended_capabilities=[s.capability_id for s in plan.steps],
+                    message="project_id_mismatch",
+                    kernel_events_verified=False,
+                )
+                refused.message = "project_id_mismatch"
+                return refused
+
         if not plan.steps:
             plan.status = "failed"
             plan.message = "empty_plan"
@@ -488,13 +571,14 @@ class OrchestratorService:
             )
 
         plan.status = "executing"
-        plan.project_id = body.project_id
+        if not plan.project_id:
+            plan.project_id = body.project_id
         plan.updated_at = _now()
         await asyncio.to_thread(self.store.put, plan)
 
         if plan.decision_id is not None and plan.decision_mode == "ACT":
             evidence_err = await self._verify_gated_act_evidence(
-                user_id, plan, body.project_id
+                user_id, plan, plan.project_id or body.project_id
             )
             if evidence_err:
                 for step in plan.steps:
@@ -597,7 +681,9 @@ class OrchestratorService:
             plan.status = "completed"
         plan.updated_at = _now()
         if plan.decision_id is not None:
-            plan.execution_integrity = _compute_execution_integrity(plan)
+            plan.execution_integrity = await self._verify_gated_kernel_events(
+                user_id, plan
+            )
         await asyncio.to_thread(self.store.put, plan)
         logger.info(
             "orchestrator_execute plan_id=%s status=%s accepted=%s rejected=%s",

@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 _NEXTAUTH_SECRET = os.getenv("NEXTAUTH_SECRET", "")
 _ALGORITHM = "HS256"
+_AUTH_DISABLED_WARNED = False
 
 
 def verify_bearer_token(token: str) -> str:
@@ -60,10 +61,34 @@ def get_verified_user_id(
     Usage in endpoint:
         user_id: str = Depends(get_verified_user_id)
     """
+    _warn_auth_disabled_ignored()
     token = ""
     if authorization.lower().startswith("bearer "):
         token = authorization[7:].strip()
     return verify_bearer_token(token)
+
+
+def _warn_auth_disabled_ignored() -> None:
+    """AUTH_DISABLED is not implemented. JWT is always required.
+
+    If set in production, log once — never skip verification.
+    """
+    global _AUTH_DISABLED_WARNED
+    raw = os.getenv("AUTH_DISABLED", "").strip().lower()
+    if raw not in {"1", "true", "yes", "on"}:
+        return
+    if _AUTH_DISABLED_WARNED:
+        return
+    _AUTH_DISABLED_WARNED = True
+    env = os.getenv("ENVIRONMENT", "").strip().lower()
+    if env == "production":
+        logger.error(
+            "AUTH_DISABLED is set in production — ignored; JWT remains required"
+        )
+    else:
+        logger.warning(
+            "AUTH_DISABLED is set but not implemented — JWT remains required"
+        )
 
 
 # Back-compat alias for older call sites.

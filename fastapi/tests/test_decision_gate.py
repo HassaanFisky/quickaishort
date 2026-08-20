@@ -12,6 +12,7 @@ from models.studio_decision import EvidenceItem
 from models.studio_project import StudioProjectHead
 from services.decision_service import (
     REMOVE_SILENCES_CAPABILITY,
+    candidate_matches_project_event,
     classify_objective,
     collect_evidence,
     decide_from_state,
@@ -626,6 +627,10 @@ async def test_gated_act_execute_integrity_not_objective_verified(orch, monkeypa
     }
     assert executed.execution_integrity.status != "objective_verified"
     assert "objective_verified" not in executed.model_dump_json()
+    if executed.status == "completed" and executed.execution_integrity.status == "execution_ok":
+        assert executed.execution_integrity.kernel_events_verified is True
+        assert "not_objective" in (executed.execution_integrity.message or "")
+        assert "client_proposed_manifest" in (executed.execution_integrity.message or "")
 
 
 @pytest.mark.asyncio
@@ -752,3 +757,221 @@ def test_gated_execution_ok_requires_kernel_event_ids_for_mutating_steps():
     plan.steps[0].event_ids = ["evt-1"]
     integrity_ok = _compute_execution_integrity(plan)
     assert integrity_ok.status == "execution_ok"
+
+
+def test_candidate_matches_project_event_missing_is_not_zero():
+    ok, detail = candidate_matches_project_event(
+        REMOVE_SILENCES_CAPABILITY,
+        {"segments": [{"start": 1.0, "end": 2.5, "type": "silence"}]},
+        None,
+    )
+    assert ok is False
+    assert detail == "kernel_event_missing"
+
+
+def test_candidate_matches_project_event_segments_and_capability():
+    from models.studio_project import Actor, ProjectEvent, ProjectOp
+
+    now = datetime.now(timezone.utc)
+    intended = {"segments": [{"start": 1.0, "end": 2.5, "type": "silence"}]}
+    event = ProjectEvent(
+        event_id="e1",
+        project_id="p1",
+        revision=1,
+        parent_revision=0,
+        ts=now,
+        actor=Actor(kind="agent", user_id="u1"),
+        capability_id=REMOVE_SILENCES_CAPABILITY,
+        command_id="c1",
+        op=ProjectOp(type=REMOVE_SILENCES_CAPABILITY, params=dict(intended)),
+        affects_manifest=True,
+    )
+    ok, _ = candidate_matches_project_event(
+        REMOVE_SILENCES_CAPABILITY, intended, event
+    )
+    assert ok is True
+
+    event.capability_id = "TRIM"
+    bad_cap, detail = candidate_matches_project_event(
+        REMOVE_SILENCES_CAPABILITY, intended, event
+    )
+    assert bad_cap is False
+    assert detail == "kernel_event_capability_mismatch"
+
+    event.capability_id = REMOVE_SILENCES_CAPABILITY
+    event.op = ProjectOp(type=REMOVE_SILENCES_CAPABILITY, params={})
+    missing, missing_detail = candidate_matches_project_event(
+        REMOVE_SILENCES_CAPABILITY, intended, event
+    )
+    assert missing is False
+    assert missing_detail == "kernel_event_segments_missing"
+
+
+@pytest.mark.asyncio
+async def test_gated_act_execute_kernel_events_not_objective(orch, monkeypatch):
+    """Intended CandidateAction vs Kernel events; client manifest is not proof."""
+    service, kernel, mg_store = orch
+    head = await kernel.create_project(
+        "u1",
+        CreateStudioProjectRequest(title="T", proposed_manifest=_manifest(10)),
+    )
+    graph = _graph(
+        silence=_ready_silence({"start": 1.0, "end": 2.5, "type": "silence"})
+    )
+    await _seed_mediagraph(kernel, mg_store, head, graph)
+    _patch_resolve(monkeypatch, graph, head=_head(head.project_id))
+
+    plan = await service.create_plan(
+        "u1",
+        CreatePlanRequest(
+            decision_gate=True,
+            intent_text=DEAD_AIR_OBJECTIVE,
+            project_id=head.project_id,
+        ),
+    )
+    executed = await service.execute_plan(
+        "u1",
+        ExecutePlanRequest(
+            plan_id=plan.plan_id,
+            project_id=head.project_id,
+            base_revision=0,
+            base_snapshot_hash=head.snapshot_hash,
+            proposed_manifest=_manifest(8.5),
+        ),
+    )
+    assert executed.execution_integrity is not None
+    assert executed.execution_integrity.status != "objective_verified"
+    assert "objective_verified" not in executed.model_dump_json()
+    if executed.execution_integrity.status == "execution_ok":
+        assert executed.execution_integrity.kernel_events_verified is True
+        msg = executed.execution_integrity.message or ""
+        assert "not_objective" in msg
+        assert "client_proposed_manifest" in msg
+        assert executed.steps[0].event_ids
+        event = await kernel.get_event_by_command(
+            head.project_id, "u1", executed.steps[0].command_id or ""
+        )
+        assert event is not None
+        assert event.capability_id == REMOVE_SILENCES_CAPABILITY
+
+
+@pytest.mark.asyncio
+async def test_gated_execute_project_id_mismatch_refused(orch, monkeypatch):
+    service, kernel, mg_store = orch
+    head = await kernel.create_project(
+        "u1",
+        CreateStudioProjectRequest(title="T", proposed_manifest=_manifest()),
+    )
+    other = await kernel.create_project(
+        "u1",
+        CreateStudioProjectRequest(title="Other", proposed_manifest=_manifest()),
+    )
+    graph = _graph(
+        silence=_ready_silence({"start": 1.0, "end": 2.5, "type": "silence"})
+    )
+    await _seed_mediagraph(kernel, mg_store, head, graph)
+    _patch_resolve(monkeypatch, graph, head=_head(head.project_id))
+
+    plan = await service.create_plan(
+        "u1",
+        CreatePlanRequest(
+            decision_gate=True,
+            intent_text=DEAD_AIR_OBJECTIVE,
+            project_id=head.project_id,
+        ),
+    )
+    refused = await service.execute_plan(
+        "u1",
+        ExecutePlanRequest(
+            plan_id=plan.plan_id,
+            project_id=other.project_id,
+            base_revision=0,
+            proposed_manifest=_manifest(),
+        ),
+    )
+    assert refused.message == "project_id_mismatch"
+    assert refused.execution_integrity is not None
+    assert refused.execution_integrity.status == "execution_failed"
+    stored = await service.get_plan(plan.plan_id, "u1")
+    assert stored is not None
+    assert stored.status == "draft"
+
+
+@pytest.mark.asyncio
+async def test_gated_terminal_execute_is_idempotent(orch, monkeypatch):
+    service, kernel, mg_store = orch
+    head = await kernel.create_project(
+        "u1",
+        CreateStudioProjectRequest(title="T", proposed_manifest=_manifest(10)),
+    )
+    graph = _graph(
+        silence=_ready_silence({"start": 1.0, "end": 2.5, "type": "silence"})
+    )
+    await _seed_mediagraph(kernel, mg_store, head, graph)
+    _patch_resolve(monkeypatch, graph, head=_head(head.project_id))
+
+    plan = await service.create_plan(
+        "u1",
+        CreatePlanRequest(
+            decision_gate=True,
+            intent_text=DEAD_AIR_OBJECTIVE,
+            project_id=head.project_id,
+        ),
+    )
+    body = ExecutePlanRequest(
+        plan_id=plan.plan_id,
+        project_id=head.project_id,
+        base_revision=0,
+        base_snapshot_hash=head.snapshot_hash,
+        proposed_manifest=_manifest(10),
+    )
+    first = await service.execute_plan("u1", body)
+    assert first.status in {"completed", "partial", "failed"}
+    first_rev = (await kernel.get_head(head.project_id, "u1")).revision
+    second = await service.execute_plan("u1", body)
+    assert second.status == first.status
+    assert second.plan_id == first.plan_id
+    second_rev = (await kernel.get_head(head.project_id, "u1")).revision
+    assert second_rev == first_rev
+
+
+@pytest.mark.asyncio
+async def test_gated_missing_kernel_event_is_partial_not_ok(orch, monkeypatch):
+    service, kernel, mg_store = orch
+    head = await kernel.create_project(
+        "u1",
+        CreateStudioProjectRequest(title="T", proposed_manifest=_manifest(10)),
+    )
+    graph = _graph(
+        silence=_ready_silence({"start": 1.0, "end": 2.5, "type": "silence"})
+    )
+    await _seed_mediagraph(kernel, mg_store, head, graph)
+    _patch_resolve(monkeypatch, graph, head=_head(head.project_id))
+
+    async def _missing(_project_id, _user_id, _command_id):
+        return None
+
+    monkeypatch.setattr(kernel, "get_event_by_command", _missing)
+
+    plan = await service.create_plan(
+        "u1",
+        CreatePlanRequest(
+            decision_gate=True,
+            intent_text=DEAD_AIR_OBJECTIVE,
+            project_id=head.project_id,
+        ),
+    )
+    executed = await service.execute_plan(
+        "u1",
+        ExecutePlanRequest(
+            plan_id=plan.plan_id,
+            project_id=head.project_id,
+            base_revision=0,
+            base_snapshot_hash=head.snapshot_hash,
+            proposed_manifest=_manifest(10),
+        ),
+    )
+    assert executed.execution_integrity is not None
+    assert executed.execution_integrity.status == "execution_partial"
+    assert executed.execution_integrity.kernel_events_verified is False
+    assert executed.execution_integrity.status != "execution_ok"

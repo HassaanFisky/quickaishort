@@ -455,14 +455,32 @@ async def load_project_graph_for_decision(
     return loaded_head, loaded_graph
 
 
+def _segment_key_set(segments: Any) -> Optional[set[tuple[float, float]]]:
+    """Parse silence segments to (start, end) keys. None = unreadable (missing ≠ empty)."""
+    if not isinstance(segments, list):
+        return None
+    keys: set[tuple[float, float]] = set()
+    for seg in segments:
+        if not isinstance(seg, dict):
+            return None
+        try:
+            keys.add((round(float(seg["start"]), 6), round(float(seg["end"]), 6)))
+        except (KeyError, TypeError, ValueError):
+            return None
+    return keys
+
+
 def verify_remove_silences_params_against_graph(
     params: dict[str, Any],
     graph: Optional[MediaGraph],
 ) -> tuple[bool, str]:
     """Deterministic Tier 0 — every segment must exist in ready silence evidence."""
     segments = params.get("segments") or []
-    if not isinstance(segments, list):
+    intended = _segment_key_set(segments)
+    if intended is None:
         return False, "invalid_segments"
+    if not intended:
+        return False, "no_segments_to_remove"
     if graph is None:
         return False, "no_mediagraph_for_verify"
     silence = graph.facets.get("silence")
@@ -470,13 +488,38 @@ def verify_remove_silences_params_against_graph(
         return False, "silence_evidence_unavailable"
     gaps = _usable_silence_gaps(silence)
     gap_set = {(round(g["start"], 6), round(g["end"], 6)) for g in gaps}
-    for seg in segments:
-        if not isinstance(seg, dict):
-            return False, "invalid_segment_shape"
-        try:
-            key = (round(float(seg["start"]), 6), round(float(seg["end"]), 6))
-        except (KeyError, TypeError, ValueError):
-            return False, "invalid_segment_times"
+    for key in intended:
         if key not in gap_set:
             return False, "segment_not_in_evidence"
+    return True, ""
+
+
+def candidate_matches_project_event(
+    capability_id: str,
+    intended_params: dict[str, Any],
+    event: Any,
+) -> tuple[bool, str]:
+    """Compare intended CandidateAction vs a Kernel ProjectEvent. Missing ≠ match.
+
+    Does not read proposed_manifest or invent MediaGraph fields.
+    """
+    if event is None:
+        return False, "kernel_event_missing"
+    ev_cap = getattr(event, "capability_id", None)
+    if ev_cap != capability_id:
+        return False, "kernel_event_capability_mismatch"
+    op = getattr(event, "op", None)
+    op_params = getattr(op, "params", None) if op is not None else None
+    if not isinstance(op_params, dict):
+        return False, "kernel_event_params_missing"
+    if capability_id != REMOVE_SILENCES_CAPABILITY:
+        return True, ""
+    intended = _segment_key_set(intended_params.get("segments"))
+    actual = _segment_key_set(op_params.get("segments"))
+    if intended is None:
+        return False, "intended_segments_unreadable"
+    if actual is None:
+        return False, "kernel_event_segments_missing"
+    if intended != actual:
+        return False, "kernel_event_segments_mismatch"
     return True, ""
