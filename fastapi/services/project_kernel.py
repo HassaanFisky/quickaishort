@@ -451,6 +451,19 @@ class ProjectKernel:
             self.store.get_events_after, project_id, after_revision, limit
         )
 
+    async def get_event_by_command(
+        self, project_id: str, user_id: str, command_id: str
+    ) -> Optional[ProjectEvent]:
+        """Tenant-checked event lookup. Missing event is None — never fabricate."""
+        head = await self.get_project(project_id, user_id)
+        if head is None:
+            return None
+        if not command_id:
+            return None
+        return await asyncio.to_thread(
+            self.store.get_event_by_command, project_id, command_id
+        )
+
     async def soft_delete(self, project_id: str, user_id: str) -> bool:
         return await asyncio.to_thread(self.store.soft_delete, project_id, user_id)
 

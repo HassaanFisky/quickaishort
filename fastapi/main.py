@@ -160,7 +160,7 @@ def _validate_env() -> None:
         "GEMINI_API_KEY": "AI agent pipeline will not function",
         "GOOGLE_CLOUD_PROJECT": "Firestore/GCS features (stats, credits, exports) will be disabled",
         "REDIS_URL": "Background render queue will not function",
-        "NEXTAUTH_SECRET": "All protected endpoints will return 503 (or set AUTH_DISABLED=true for dev)",
+        "NEXTAUTH_SECRET": "All protected endpoints will return 503 (AUTH_DISABLED is not implemented)",
         "EXPORT_SIGNING_SECRET": "Download URL signing will fail — exports unreachable",
         "PUBLIC_API_URL": "Download links sent to users will be relative paths only",
     }

@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import TypeAdapter
 
-from core.flags import is_mock_ai_mode
+from core.flags import is_mock_ai_editor, is_mock_ai_mode
 from core.rate_limit import limiter
 from core.limits import (
     LimitEvaluation,
@@ -416,7 +416,9 @@ async def ai_edit(
     t0 = time.perf_counter()
 
     # Legacy MOCK_AI_EDITOR short-circuit (no DualModelRouter / no credits).
-    if MOCK_ENABLED and not is_mock_ai_mode():
+    # Re-check is_mock_ai_editor() at request time so ENVIRONMENT=production
+    # cannot be bypassed by an import-time MOCK_ENABLED freeze.
+    if MOCK_ENABLED and is_mock_ai_editor() and not is_mock_ai_mode():
         safe_actions, message, suggestions = mock_response(body.current_state)
         elapsed = (time.perf_counter() - t0) * 1000
         logger.info(

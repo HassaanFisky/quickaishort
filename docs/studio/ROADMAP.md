@@ -1,6 +1,6 @@
 # Studio Roadmap (Execution)
 
-**Last updated:** 2026-07-26 (ADR-015 Studio Genius OS Phase 1)
+**Last updated:** 2026-08-20 (ADR-016 Decision-Gated Edit M0→G on branch; vision not complete)
 
 ## Complete — current cycle
 
@@ -10,6 +10,7 @@
 | Pipeline JWT + credits fail-closed | ✅ |
 | M3 ingest FSM (`useIngestLifecycle`) | ✅ Live — FE Vercel + API `00109+` |
 | Chat → Kernel via structured_steps | ✅ |
+| **Decision-Gated Edit M0→G (ADR-016)** | ✅ **Branch** — contracts + gated Orchestrator + Tier 0 Kernel-event verify; **not** merged to main; **not** whole Studio vision |
 | CI BE↔FE registry hash | ✅ |
 | Auto-ensure Studio project (chat + export + ingest projectize) | ✅ |
 | Heuristic invent suggestions → 410 | ✅ |
@@ -60,6 +61,8 @@
 | `GOOGLE_TTS_API_KEY` on API + worker | **Founder** — required for full Dub Video voice |
 | Dub Video live smoke (translate+TTS+export) | After Gemini + TTS secrets |
 | ADR-006 native Gemini FunctionDeclaration (tool-loop) | Phase 2 after ADR-015 |
+| **Decision chat `decision_gate` FE wiring** | After dev ingest fix / founder UX |
+| **Tier 1 media outcome verify** (post-execute observe vs intent) | Product rule + founder |
 | Movie-length (1–2hr) dub EP | Deferred — not ADR-014 shorts |
 | Multiplayer | **Founder** (EP-007) |
 | Legacy Projects / GridFS delete | **Founder** |

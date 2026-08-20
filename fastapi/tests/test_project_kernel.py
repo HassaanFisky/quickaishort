@@ -302,6 +302,12 @@ async def test_events_after(kernel):
     assert len(events) == 1
     assert events[0].capability_id == "ADD_CAPTION"
 
+    by_cmd = await kernel.get_event_by_command(head.project_id, "user-a", "e1")
+    assert by_cmd is not None
+    assert by_cmd.event_id == events[0].event_id
+    assert await kernel.get_event_by_command(head.project_id, "user-b", "e1") is None
+    assert await kernel.get_event_by_command(head.project_id, "user-a", "") is None
+
 
 @pytest.mark.asyncio
 async def test_import_adk_segments_alias(kernel):

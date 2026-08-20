@@ -108,3 +108,26 @@ def test_production_openapi_gate_flag_exists() -> None:
         assert main_mod.app.docs_url is None
         assert main_mod.app.redoc_url is None
         assert main_mod.app.openapi_url is None
+
+
+def test_auth_disabled_does_not_bypass_jwt(monkeypatch) -> None:
+    import services.auth as auth_mod
+
+    monkeypatch.setenv("AUTH_DISABLED", "true")
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.setattr(auth_mod, "_NEXTAUTH_SECRET", "unit-test-secret-not-for-prod")
+    monkeypatch.setattr(auth_mod, "_AUTH_DISABLED_WARNED", False)
+
+    with pytest.raises(HTTPException) as exc:
+        auth_mod.get_verified_user_id(authorization="")
+    assert exc.value.status_code == 401
+
+
+def test_mock_ai_editor_blocked_in_production(monkeypatch) -> None:
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.setenv("MOCK_AI_EDITOR", "true")
+    monkeypatch.setenv("MOCK_AI_MODE", "true")
+    from core.flags import is_mock_ai_editor, is_mock_ai_mode
+
+    assert is_mock_ai_editor() is False
+    assert is_mock_ai_mode() is False
