@@ -443,6 +443,7 @@ function draw() {
       if (k < 0.85) return "hubs";
       return "all";
     }
+    if (state.level === "cluster" && state.nodes.some((n) => n.kind === "folder")) return "all";
     if (state.level === "cluster" || state.level === "folder") {
       if (k < 1.2) return "hubs";
       return "all";
@@ -469,6 +470,7 @@ function draw() {
     const wantLabel =
       active ||
       n.focus ||
+      n.kind === "folder" ||
       budget === "all" ||
       (budget === "hubs" && (n.hub || n.weight > 40));
     if (wantLabel) {
