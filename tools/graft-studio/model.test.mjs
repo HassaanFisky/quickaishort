@@ -7,8 +7,12 @@ import {
   blastRadius,
   searchModel,
   hotspots,
+  folderKey,
+  foldersInCluster,
+  folderEdges,
+  filterNeighborhood,
 } from "./lib/model.mjs";
-import { layoutArchitecture, layoutCluster, layoutNeighborhood, capAdj } from "./lib/layout.mjs";
+import { layoutArchitecture, layoutCluster, layoutFolder, layoutNeighborhood, capAdj } from "./lib/layout.mjs";
 
 const wiring = {
   meta: { version: 1, languages: ["python"] },
@@ -133,4 +137,64 @@ test("hotspots are real coupling, not visual invention", () => {
   const spots = hotspots(m, 3);
   assert.equal(spots.length > 0, true);
   assert.equal(spots[0].coupling > 0, true);
+});
+
+test("folderKey uses the directory under a cluster, not the filename", () => {
+  assert.equal(folderKey("frontend/src/lib", "frontend/src/lib/api.ts"), "(root)");
+  assert.equal(folderKey("frontend/src/lib", "frontend/src/lib/audio/mixGraph.ts"), "audio");
+});
+
+test("folders appear only for large clustered trees and never invent edges", () => {
+  const nodes = [];
+  const edges = [];
+  const addFile = (path) => {
+    nodes.push({ id: path, name: path.split("/").pop(), kind: "file", path, span: "L1-L2" });
+  };
+  for (let i = 0; i < 12; i += 1) addFile(`frontend/src/lib/ui/a${i}.ts`);
+  for (let i = 0; i < 12; i += 1) addFile(`frontend/src/lib/editor/b${i}.ts`);
+  addFile("frontend/src/lib/root.ts");
+  edges.push({ source: "frontend/src/lib/ui/a0.ts", target: "frontend/src/lib/editor/b0.ts", relation: "imports" });
+  edges.push({ source: "frontend/src/lib/ui/a0.ts", target: "frontend/src/lib/ui/a0.ts#fn", relation: "contains" });
+  nodes.push({ id: "frontend/src/lib/ui/a0.ts#fn", name: "fn", kind: "function", path: "frontend/src/lib/ui/a0.ts", span: "L1-L1" });
+  const m = buildStudioModel({ meta: { version: 1, languages: ["typescript"] }, nodes, edges });
+  const clusterId = m.fileToCluster.get("frontend/src/lib/ui/a0.ts");
+  const folders = foldersInCluster(m, clusterId);
+  assert.equal(Boolean(folders), true);
+  assert.equal(folders.some((f) => f.key === "ui" && f.fileCount === 12), true);
+  const fe = folderEdges(m, folders);
+  assert.equal(fe.length, 1);
+  assert.equal(
+    fe.every((e) => folders.some((f) => f.id === e.source) && folders.some((f) => f.id === e.target)),
+    true,
+  );
+  const layout = layoutCluster(m, clusterId);
+  assert.equal(layout.nodes.every((n) => n.kind === "folder"), true);
+  const ui = folders.find((f) => f.key === "ui");
+  const files = layoutFolder(m, clusterId, ui.key);
+  assert.equal(files.nodes.every((n) => n.kind === "file"), true);
+  assert.equal(files.nodes.length, 12);
+});
+
+test("flat clusters stay as files, not fake folders", () => {
+  const nodes = [];
+  for (let i = 0; i < 26; i += 1) {
+    nodes.push({ id: `svc/f${i}.py`, name: `f${i}.py`, kind: "file", path: `svc/f${i}.py`, span: "L1-L1" });
+  }
+  const m = buildStudioModel({ meta: { version: 1, languages: ["python"] }, nodes, edges: [] });
+  const clusterId = m.fileToCluster.get("svc/f0.py");
+  assert.equal(foldersInCluster(m, clusterId), null);
+  const layout = layoutCluster(m, clusterId);
+  assert.equal(layout.nodes.every((n) => n.kind === "file"), true);
+});
+
+test("relation filter keeps only real matching edges", () => {
+  const m = buildStudioModel(wiring);
+  const n = neighborhood(m, "pkg/b.py#bar", 1);
+  const calls = filterNeighborhood(n, "calls");
+  const imports = filterNeighborhood(n, "imports");
+  assert.equal(calls.inbound.some((x) => x.id === "pkg/a.py#foo"), true);
+  assert.equal(imports.outbound.some((x) => x.id === "other/c.py"), true);
+  assert.equal(calls.outbound.length, 0);
+  const g = layoutNeighborhood(n, 12, "imports");
+  assert.equal(g.edges.every((e) => e.relation === "imports"), true);
 });

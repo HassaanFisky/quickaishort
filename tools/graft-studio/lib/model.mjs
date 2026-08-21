@@ -323,6 +323,100 @@ export function blastRadius(model, id) {
   };
 }
 
+export function folderKey(clusterPath, filePath) {
+  const path = String(filePath || "");
+  const prefix = `${clusterPath}/`;
+  const rest = path.startsWith(prefix) ? path.slice(prefix.length) : path.split("/").pop() || path;
+  const parts = rest.split("/").filter(Boolean);
+  if (parts.length <= 1) return "(root)";
+  return parts[0];
+}
+
+export function foldersInCluster(model, clusterId) {
+  const cluster = model.clusterById.get(clusterId);
+  if (!cluster || cluster.fileCount < 24) return null;
+  const buckets = new Map();
+  for (const id of cluster.fileIds) {
+    const file = model.byId.get(id);
+    if (!file) continue;
+    const key = folderKey(cluster.key, file.path || file.id);
+    if (!buckets.has(key)) {
+      buckets.set(key, {
+        key,
+        label: key === "(root)" ? "root files" : key,
+        fileIds: [],
+      });
+    }
+    buckets.get(key).fileIds.push(id);
+  }
+  const keep = [];
+  const tiny = [];
+  for (const bucket of buckets.values()) {
+    if (bucket.key !== "(root)" && bucket.fileIds.length < 3) tiny.push(bucket);
+    else keep.push(bucket);
+  }
+  if (tiny.length) {
+    let other = keep.find((b) => b.key === "(other)");
+    if (!other) {
+      other = { key: "(other)", label: "other", fileIds: [] };
+      keep.push(other);
+    }
+    for (const t of tiny) other.fileIds.push(...t.fileIds);
+  }
+  const named = keep.filter((b) => b.key !== "(root)" && b.key !== "(other)");
+  if (named.length < 2) return null;
+  return keep
+    .map((b) => ({
+      id: `folder:${clusterId}:${b.key}`,
+      key: b.key,
+      label: b.label,
+      fileIds: b.fileIds,
+      fileCount: b.fileIds.length,
+      weight: b.fileIds.reduce((sum, id) => sum + model.degree(id), 0),
+    }))
+    .sort((a, b) => b.fileCount - a.fileCount || a.key.localeCompare(b.key));
+}
+
+export function folderEdges(model, folders) {
+  const fileToFolder = new Map();
+  for (const folder of folders) {
+    for (const id of folder.fileIds) fileToFolder.set(id, folder.id);
+  }
+  const weights = new Map();
+  for (const fe of model.fileEdges) {
+    const a = fileToFolder.get(fe.source);
+    const b = fileToFolder.get(fe.target);
+    if (!a || !b || a === b) continue;
+    const k = `${a}\0${b}`;
+    weights.set(k, (weights.get(k) || 0) + fe.weight);
+  }
+  return [...weights.entries()].map(([k, weight]) => {
+    const [source, target] = k.split("\0");
+    return { source, target, weight };
+  });
+}
+
+export function folderOfFile(model, clusterId, nodeId) {
+  const folders = foldersInCluster(model, clusterId);
+  if (!folders) return null;
+  const fileId = model.fileOf.get(nodeId) || nodeId;
+  return folders.find((f) => f.fileIds.includes(fileId)) || null;
+}
+
+export function filterNeighborhood(nb, relation) {
+  if (!nb || !relation) return nb;
+  const inbound = nb.inbound.filter((x) => x.relation === relation);
+  const outbound = nb.outbound.filter((x) => x.relation === relation);
+  const keep = new Set([nb.center.id, ...inbound.map((x) => x.id), ...outbound.map((x) => x.id)]);
+  return {
+    ...nb,
+    inbound,
+    outbound,
+    nodes: nb.nodes.filter((n) => keep.has(n.id)),
+    edges: nb.edges.filter((e) => e.relation === relation && keep.has(e.source) && keep.has(e.target)),
+  };
+}
+
 export function filesInCluster(model, clusterId) {
   const cluster = model.clusterById.get(clusterId);
   if (!cluster) return [];

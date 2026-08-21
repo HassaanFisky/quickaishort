@@ -1,12 +1,14 @@
 import {
   blastRadius,
   buildStudioModel,
+  folderOfFile,
+  foldersInCluster,
   hotspots,
   neighborhood,
   parseSpan,
   searchModel,
 } from "/lib/model.mjs";
-import { layoutArchitecture, layoutCluster, layoutNeighborhood } from "/lib/layout.mjs";
+import { layoutArchitecture, layoutCluster, layoutFolder, layoutNeighborhood } from "/lib/layout.mjs";
 
 const $ = (id) => document.getElementById(id);
 const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -32,7 +34,9 @@ const state = {
   model: null,
   level: "architecture",
   clusterId: null,
+  folderKey: null,
   focusId: null,
+  relFilter: "",
   systemFilter: new URLSearchParams(location.search).get("system") || "",
   hops: 1,
   query: "",
@@ -142,6 +146,7 @@ function fitCamera(nodes, regions, maxK = 1.2) {
 function showArchitecture() {
   state.level = "architecture";
   state.clusterId = null;
+  state.folderKey = null;
   state.focusId = null;
   const g = layoutArchitecture(state.model, state.systemFilter);
   setGraph(g.nodes, g.edges, g.regions, { maxK: 1.05 });
@@ -167,10 +172,12 @@ function showArchitecture() {
 function showCluster(clusterId) {
   state.level = "cluster";
   state.clusterId = clusterId;
+  state.folderKey = null;
   state.focusId = null;
   const g = layoutCluster(state.model, clusterId);
-  setGraph(g.nodes, g.edges, [], { maxK: 0.88 });
+  setGraph(g.nodes, g.edges, g.regions, { maxK: 0.88 });
   const c = state.model.clusterById.get(clusterId);
+  const folders = foldersInCluster(state.model, clusterId);
   renderSheet({
     title: c.label,
     meta: `${c.system} · ${c.fileCount} files · ${c.symbolCount} symbols`,
@@ -179,9 +186,34 @@ function showCluster(clusterId) {
       ["Inbound coupling", String(c.inWeight)],
       ["Hub file", state.model.byId.get(c.hubFileId)?.name || "—"],
     ],
+    hotspots: (folders || []).map((f) => ({
+      id: f.id,
+      name: f.label,
+      rel: `${f.fileCount} files`,
+    })),
     actions: [{ id: "up", label: "Back to architecture" }],
   });
-  $("hudHint").textContent = "Hubs sit inward. Zoom or hover for quieter files. Click a file to trace impact.";
+  $("hudHint").textContent = folders
+    ? "This system is large, so folders come first. Click a folder to open its files."
+    : "Hubs sit inward. Zoom or hover for quieter files. Click a file to trace impact.";
+}
+
+function showFolder(clusterId, folderKey) {
+  state.level = "folder";
+  state.clusterId = clusterId;
+  state.folderKey = folderKey;
+  state.focusId = null;
+  const g = layoutFolder(state.model, clusterId, folderKey);
+  setGraph(g.nodes, g.edges, [], { maxK: 0.92 });
+  const folders = foldersInCluster(state.model, clusterId) || [];
+  const folder = folders.find((f) => f.key === folderKey);
+  const c = state.model.clusterById.get(clusterId);
+  renderSheet({
+    title: folder?.label || folderKey,
+    meta: `${c?.label || ""} · ${folder?.fileCount || g.nodes.length} files`,
+    actions: [{ id: "up", label: "Back to folders" }],
+  });
+  $("hudHint").textContent = "Files in this folder. Click one to see what depends on it — and what it uses.";
 }
 
 function showFocus(id) {
@@ -190,8 +222,12 @@ function showFocus(id) {
   state.level = "focus";
   state.focusId = id;
   const clusterId = state.model.fileToCluster.get(state.model.fileOf.get(id));
-  if (clusterId) state.clusterId = clusterId;
-  const g = layoutNeighborhood(nb, 12);
+  if (clusterId) {
+    state.clusterId = clusterId;
+    const folder = folderOfFile(state.model, clusterId, id);
+    if (folder) state.folderKey = folder.key;
+  }
+  const g = layoutNeighborhood(nb, 12, state.relFilter);
   setGraph(g.nodes, g.edges, [], { hiddenIn: g.hiddenIn, hiddenOut: g.hiddenOut, maxK: 1.25 });
   void fillInspector(nb, g);
   $("hudHint").textContent = "Left is inbound (change impact). Right is outbound (what this uses). Esc returns.";
@@ -232,8 +268,10 @@ async function fillInspector(nb, layout) {
       rel: x.relation,
     })),
     source,
+    rels: ["", "calls", "imports", "extends"],
+    relFilter: state.relFilter,
     actions: [
-      { id: "up", label: state.clusterId ? "Back to files" : "Back to architecture" },
+      { id: "up", label: state.folderKey ? "Back to folder" : state.clusterId ? "Back to files" : "Back to architecture" },
       { id: "hops", label: state.hops === 1 ? "Show 2 hops" : "Show 1 hop" },
     ],
   });
@@ -263,11 +301,19 @@ function renderSheet(view) {
         `<button class="hot" data-go="${esc(it.id)}"><b>${esc(it.name)}</b><span>${esc(it.rel)}</span></button>`,
     )
     .join("");
+  const rels = (view.rels || [])
+    .map((rel) => {
+      const on = (view.relFilter || "") === rel ? " on" : "";
+      const label = rel || "all";
+      return `<button type="button" class="chip${on}" data-rel="${esc(rel)}">${esc(label)}</button>`;
+    })
+    .join("");
   el.innerHTML = `
     <h2>${esc(view.title)}</h2>
     <div class="meta">${esc(view.meta || "")}</div>
     ${rows}
-    ${spots ? `<div class="lbl">Coupling hotspots</div>${spots}` : ""}
+    ${rels ? `<div class="lbl">Relation</div><div class="chips">${rels}</div>` : ""}
+    ${spots ? `<div class="lbl">${view.hotspots?.some((h) => String(h.id).startsWith("folder:")) ? "Folders" : "Coupling hotspots"}</div>${spots}` : ""}
     ${view.inbound?.length ? `<div class="lbl">Depended on by</div>${flow(view.inbound, "dir-in")}` : ""}
     ${view.outbound?.length ? `<div class="lbl">Depends on</div>${flow(view.outbound, "dir-out")}` : ""}
     ${view.source ? `<div class="lbl">Source</div><pre class="source">${esc(view.source)}</pre>` : ""}
@@ -302,6 +348,11 @@ function crumb() {
   if (state.clusterId) {
     const c = state.model.clusterById.get(state.clusterId);
     parts.push({ id: "cluster", label: c?.label || "cluster" });
+  }
+  if (state.folderKey) {
+    const folders = foldersInCluster(state.model, state.clusterId) || [];
+    const folder = folders.find((f) => f.key === state.folderKey);
+    parts.push({ id: "folder", label: folder?.label || state.folderKey });
   }
   if (state.focusId) {
     parts.push({ id: "focus", label: state.model.byId.get(state.focusId)?.name || "symbol" });
@@ -354,7 +405,7 @@ function draw() {
     ctx.fillText(region.label.toUpperCase(), region.x + 18, region.y + 22 / state.camera.k);
     ctx.font = `${10 / state.camera.k}px Inter, system-ui, sans-serif`;
     ctx.fillText(
-      `${region.fileCount} files · ${region.clusterCount} clusters`,
+      `${region.fileCount} files${region.clusterCount ? ` · ${region.clusterCount} clusters` : ""}`,
       region.x + 18,
       region.y + 38 / state.camera.k,
     );
@@ -392,7 +443,7 @@ function draw() {
       if (k < 0.85) return "hubs";
       return "all";
     }
-    if (state.level === "cluster") {
+    if (state.level === "cluster" || state.level === "folder") {
       if (k < 1.2) return "hubs";
       return "all";
     }
@@ -405,7 +456,7 @@ function draw() {
     const related = !dimming || live.has(n.id);
       ctx.globalAlpha = related ? 1 : 0.16;
     ctx.beginPath();
-    if (n.kind === "cluster") roundRect(ctx, n.x - n.r, n.y - n.r * 0.72, n.r * 2, n.r * 1.44, 9);
+    if (n.kind === "cluster" || n.kind === "folder") roundRect(ctx, n.x - n.r, n.y - n.r * 0.72, n.r * 2, n.r * 1.44, 9);
     else if (n.kind === "file") ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
     else diamond(ctx, n.x, n.y, n.r);
     ctx.fillStyle = PALETTE.node;
@@ -539,18 +590,25 @@ function tick() {
 }
 
 function goUp() {
-  if (state.level === "focus" && state.clusterId) showCluster(state.clusterId);
+  if (state.level === "focus" && state.folderKey && state.clusterId) showFolder(state.clusterId, state.folderKey);
+  else if (state.level === "focus" && state.clusterId) showCluster(state.clusterId);
+  else if (state.level === "folder" && state.clusterId) showCluster(state.clusterId);
   else showArchitecture();
 }
 
 function activate(id) {
+  if (String(id).startsWith("folder:")) {
+    const folders = foldersInCluster(state.model, state.clusterId) || [];
+    const folder = folders.find((f) => f.id === id);
+    if (folder && state.clusterId) showFolder(state.clusterId, folder.key);
+    return;
+  }
   if (state.model.clusterById.has(id)) {
     showCluster(id);
     return;
   }
   if (state.model.byId.has(id)) {
     showFocus(id);
-    return;
   }
 }
 
@@ -648,7 +706,7 @@ function setHover(hit, sx, sy) {
   const bits = [hit.label];
   if (hit.data?.fileCount) bits.push(`${hit.data.fileCount} files`);
   if (hit.sub && hit.kind !== "cluster") bits.push(hit.sub);
-  if (typeof hit.weight === "number" && hit.kind === "cluster") bits.push(`coupling ${hit.weight}`);
+  if (typeof hit.weight === "number" && (hit.kind === "cluster" || hit.kind === "folder")) bits.push(`coupling ${hit.weight}`);
   tip.hidden = false;
   tip.textContent = bits.filter(Boolean).join(" · ");
   tip.style.left = `${sx + 14}px`;
@@ -776,11 +834,20 @@ $("crumb").addEventListener("click", (ev) => {
   if (!btn) return;
   if (btn.dataset.crumb === "arch") showArchitecture();
   if (btn.dataset.crumb === "cluster" && state.clusterId) showCluster(state.clusterId);
+  if (btn.dataset.crumb === "folder" && state.clusterId && state.folderKey) {
+    showFolder(state.clusterId, state.folderKey);
+  }
 });
 $("sheet").addEventListener("click", (ev) => {
   const go = ev.target.closest("[data-go]");
   if (go) {
     activate(go.dataset.go);
+    return;
+  }
+  const rel = ev.target.closest("[data-rel]");
+  if (rel) {
+    state.relFilter = rel.dataset.rel || "";
+    if (state.focusId) showFocus(state.focusId);
     return;
   }
   const act = ev.target.closest("[data-act]");
@@ -796,7 +863,7 @@ $("systems").addEventListener("click", (ev) => {
   if (chip) applySystem(chip.dataset.sys);
 });
 $("fitBtn").addEventListener("click", () => {
-  const maxK = state.level === "cluster" ? 0.88 : state.level === "focus" ? 1.25 : 1.05;
+  const maxK = state.level === "folder" || state.level === "cluster" ? 0.9 : state.level === "focus" ? 1.25 : 1.05;
   fitCamera(state.nodes, state.regions, maxK);
   state.dirty = true;
 });
@@ -823,7 +890,7 @@ window.addEventListener("keydown", (ev) => {
   } else if (ev.key === "?" && document.activeElement !== $("search")) {
     $("help").hidden = !$("help").hidden;
   } else if ((ev.key === "f" || ev.key === "F") && document.activeElement !== $("search")) {
-    const maxK = state.level === "cluster" ? 0.88 : state.level === "focus" ? 1.25 : 1.05;
+    const maxK = state.level === "folder" || state.level === "cluster" ? 0.9 : state.level === "focus" ? 1.25 : 1.05;
     fitCamera(state.nodes, state.regions, maxK);
     state.dirty = true;
   } else if (ev.key === "ArrowLeft" && document.activeElement !== $("search")) {
