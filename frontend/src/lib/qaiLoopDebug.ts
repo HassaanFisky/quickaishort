@@ -124,7 +124,7 @@ export function installQaiLoopTraps(): void {
     store: { setState: (...args: never[]) => unknown; getState: () => object },
   ) => {
     const origSet = store.setState.bind(store) as (...args: unknown[]) => unknown;
-    (store as { setState: (...args: unknown[]) => unknown }).setState = (partial: unknown, ...rest: unknown[]) => {
+    (store as unknown as { setState: (...args: unknown[]) => unknown }).setState = (partial: unknown, ...rest: unknown[]) => {
       const prev = store.getState();
       const keys =
         partial && typeof partial === "object" && !Array.isArray(partial)
