@@ -58,7 +58,7 @@
 | Item | Gate |
 |------|------|
 | Live Gemini `generateContent` | **Founder top-up** |
-| `GOOGLE_TTS_API_KEY` on API + worker | **Founder** — required for full Dub Video voice |
+| `GOOGLE_TTS_API_KEY` on API + worker | **Founder** — optional for **baked** Dub voice. Unset or spend-lock → subtitles + browser voice preview |
 | Dub Video live smoke (translate+TTS+export) | After Gemini + TTS secrets |
 | ADR-006 native Gemini FunctionDeclaration (tool-loop) | Phase 2 after ADR-015 |
 | **Decision chat `decision_gate` FE wiring** | After dev ingest fix / founder UX |

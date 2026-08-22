@@ -59,7 +59,7 @@ Expected shape (historical): `status:ok` with mongo/redis/adk flags — re-verif
 From CLAUDE / PRODUCTION_STATUS:
 - GCP billing delinquent → GCS 403 `accountDisabled`  
 - Invalid `GEMINI_API_KEY` → agents degrade  
-- Missing `GOOGLE_TTS_API_KEY` → silent voiceover  
+- Missing `GOOGLE_TTS_API_KEY` or `GEMINI_SPEND_KILL_SWITCH` → Dub/voiceover **degrade honestly** (subtitles + browser speech preview). Do not treat an empty audio file as success.  
 - Firestore IAM propagation delay after role grants  
 
 Treat as operational checklist, not current status, unless re-verified.

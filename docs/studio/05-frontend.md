@@ -70,7 +70,7 @@ This is the seed of the Studio Tool Runtime on the client.
 
 | Capability | Evidence |
 |------------|----------|
-| Whisper transcription | `@xenova/transformers`, `useMediaPipeline` / workers |
+| On-device transcription | `@xenova/transformers` worker, `useMediaPipeline` / `useTranscription` |
 | Face tracking | `hooks/useFaceTracker.ts` MediaPipe |
 | Scene / beat detection | `lib/sceneDetection.ts`, `lib/beatDetection.ts` |
 | Local preview export | WebCodecs / MediaRecorder (`clientExport.ts`) — device-local |

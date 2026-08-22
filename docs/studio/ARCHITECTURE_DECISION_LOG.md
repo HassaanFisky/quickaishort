@@ -23,6 +23,8 @@ Living index. Full ADRs live under `docs/studio/adrs/`.
 
 ## Latest binding change
 
+2026-08-22: **On-device speech wallet path** — editor ASR is on-device only (paid cloud STT stays 410); chat uses browser voice; Dub/TTS missing key or `GEMINI_SPEND_KILL_SWITCH` degrades to captions + browser speech preview (no silent fake). Not a cloud-exit.
+
 2026-08-20: **ADR-016 Decision-Gated Edit (M0→F)** on branch — `75905cf` contracts; `1c76353` orchestrator `decision_gate` + `execution_integrity`; `10ba9a7` router JWT HTTP tests; `64acb9e` Tier 0 `event_ids`; `5d60fdc` execute-time MediaGraph segment re-verify. Pre-Flight not the brain; no `objective_verified`.
 
 2026-08-20: **ADR-016 Decision-Gated Edit (M0)** accepted — deterministic DecisionRecord in front of Orchestrator; dead-air path uses existing `REMOVE_SILENCES` + MediaGraph silence evidence; 0 Gemini; Pre-Flight is not the brain. Branch follow-ons: gated Orchestrator, `execution_integrity` (never `objective_verified`), JWT HTTP proof, Kernel `event_ids` + post-execute event readback. **Remaining:** see ADR-016 remaining-work A–E. Vision is not complete. Frontend default chat is still ungated DualModelRouter.

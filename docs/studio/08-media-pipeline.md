@@ -7,10 +7,10 @@ Paste URL / upload file
   → useIngestLifecycle (canonical staged FSM)
       identify → validate → acquire_meta → projectize → analyze → ready|failed
   → Kernel ensureStudioProject after acquire_meta (flag on)
-  → IDB analysis artifact cache (skip Whisper+/api/analyze on hit)
+  → IDB analysis artifact cache (skip on-device transcription + /api/analyze on hit)
   → useMediaPipeline (analyze stage only)
       → proxy/audio (/api/audio, /api/proxy*)
-      → Whisper.wasm transcript (browser worker)
+      → on-device transcription (browser worker; paid cloud STT retired 410)
       → POST /api/analyze clip suggestions (existing; not an extra ingest call)
   → AI panel context updated (title + transcript slice)
 ```
@@ -59,14 +59,14 @@ Used by render path `_download_segment` in `render_service.py`.
 
 | Signal | Status |
 |--------|--------|
-| Transcript | Yes (browser Whisper, English `.en`) |
+| Transcript | Yes (on-device browser ASR, English `.en`) |
 | Silence / speech density | Yes (heuristics) |
 | Faces | Hook exists (`useFaceTracker`) — not full orchestration |
 | Scenes | `sceneDetection.ts` — not auto pipeline mandatory |
 | Beats | `beatDetection.ts` |
 | Emotion / objects / composition QA | **Insufficient evidence** of production pipeline |
 | Captions | Generated/applied via AI actions + export burn-in |
-| **Dub Video** | Staged pipeline: translate (Gemini) → TTS (Google) → align → preview → export mute+replace (`ADR-014`). EN source only v1. |
+| **Dub Video** | Staged pipeline: translate (Gemini) → optional cloud TTS → align → preview → export mute+replace (`ADR-014`). EN source via on-device transcription. Missing TTS key or `GEMINI_SPEND_KILL_SWITCH` → `degraded` subtitles + browser speech preview — never a silent fake dub. |
 | Metadata | YouTube `/api/info`, `getVideoInfo` |
 
 **Gap:** Vision wants automatic comprehensive analysis on upload. Today is **partial, client-fragmented**. Blueprint: AnalysisAgent aggregates existing signals first before buying new models.

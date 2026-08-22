@@ -17,10 +17,11 @@ Studio had timed English transcripts (browser Whisper), caption burn-in, and fra
 5. **Audio model:** Mute original speech + overlay synthesized track (not lip-sync). Modes: `full_dub`, `voiceover_only`, `captions_only`.
 6. **Execution:** Redis job state + Cloud Tasks `/tasks/dub` on the existing private request renderer when configured; inline fallback for local/dev. **No third queue.**
 7. **Export:** `mute_source_audio` + `dub_audio_uri` forwarded on `/api/process-video` into `RenderJob` / `render_video`.
-8. **Fallback:** TTS failure → `degraded` with translated subtitles and explicit UX copy. Never fake voice.
+8. **Fallback:** TTS failure, missing key, or spend lock → `degraded` with translated subtitles, explicit UX, and **browser speech preview**. Never fake voice (no empty/silent audio as success). Cloud TTS is optional, not core ingest.
 
 ## Consequences
 
-- Positive: Reuses ingest, Whisper, Gemini, TTS cache, Cloud Tasks worker, Manifest/export, registry honesty.
-- Negative: EN-only source; requires `GOOGLE_TTS_API_KEY` + Gemini credits for full dub.
+- Positive: Reuses ingest, on-device transcription, Gemini, TTS cache, Cloud Tasks worker, Manifest/export, registry honesty. Wallet path when TTS is unset or spend-locked.
+- Negative: EN-only source; **full baked dub audio** still needs `GOOGLE_TTS_API_KEY` + Gemini credits. Browser speech is preview-only and is not the export track.
 - Follow-up: Multilingual ASR; optional lip-sync research (separate ADR).
+- **Not claimed:** cloud-exit. Gemini, Cloud Run, GCS, Redis, Mongo, Vercel remain the production backbone.
