@@ -2,13 +2,15 @@
 ## Graft — repo context graph
 
 This repo is indexed in `graft/`: small linked markdown nodes that explain each
-system and carry exact file:line spans, kept in sync with the code through git.
+system and carry exact file:line spans. `graft/` is a local regenerable cache
+(gitignored) — never commit it. Build with `npx -y @nanonets/graft@0.10.1 build`
+(`$0`, no `--deep` unless the founder explicitly asks).
 
 For ANY task here — understanding how something works, finding where code lives,
 or scoping a change — get context from the graph before grepping or opening
 source files. Re-ask freely (it's cheap) and reuse literal identifiers you
 already have (symbol, error string, file name) as the query. New to this repo?
-Run `graft map` first — a token-budgeted orientation (dir clusters, hubs,
+Run `npx -y @nanonets/graft@0.10.1 map` first — a token-budgeted orientation (dir clusters, hubs,
 hotspots), no LLM, no key.
 
 - Run `graft ask "<your question>" --source` → ranked nodes with the relevant
@@ -36,6 +38,7 @@ range before finalizing. Only open source files when a node genuinely lacks a
 needed detail, and then at the exact file:line the node points to — never
 re-read whole files.
 
-After big code changes, refresh the graph with `graft build` (deterministic,
-no API key, $0).
+After big code changes, refresh the graph with `npx -y @nanonets/graft@0.10.1 build` (deterministic,
+no API key, $0). Browse locally with `npm run graft:viz` (127.0.0.1:4400). Never commit `graft/`.
+Never `graft build --deep` without an explicit founder ask.
 <!-- graft:end -->

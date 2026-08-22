@@ -7,7 +7,13 @@
     "build:frontend": "pnpm --dir frontend run build",
     "dev": "pnpm --dir frontend run dev",
     "lint": "pnpm --dir frontend run lint",
-    "typecheck": "pnpm --dir frontend exec tsc --noEmit"
+    "typecheck": "pnpm --dir frontend exec tsc --noEmit",
+    "graft:build": "npx -y @nanonets/graft@0.10.1 build",
+    "graft:map": "npx -y @nanonets/graft@0.10.1 map",
+    "graft:check": "npx -y @nanonets/graft@0.10.1 check",
+    "graft:viz": "node tools/graft-studio/server.mjs",
+    "graft:viz:stock": "npx -y @nanonets/graft@0.10.1 viz --no-open",
+    "graft:studio:test": "node --test tools/graft-studio/model.test.mjs"
   },
   "engines": {
     "node": ">=20"
