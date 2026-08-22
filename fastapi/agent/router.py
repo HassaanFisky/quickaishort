@@ -14,13 +14,23 @@ import importlib
 import json
 import logging
 import os
-from typing import Annotated, Awaitable, Callable, Literal, Protocol, TypeVar, cast
+from typing import (
+    Annotated,
+    Any,
+    Awaitable,
+    Callable,
+    Literal,
+    Protocol,
+    TypeVar,
+    cast,
+)
 
 from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
     JsonValue,
+    TypeAdapter,
     ValidationError,
     field_validator,
     model_validator,
@@ -454,37 +464,31 @@ class DualModelRouter:
                 limit_decision=static_decision,
             )
 
-        # Zero-cost deterministic semantic planner for high-confidence creative intents
+        # Deterministic fast path. Only fires for intents whose meaning is fully
+        # determined by the wording; anything ambiguous returns None and falls
+        # through to the model below. Output still goes through the normal
+        # sanitiser in the caller, so this is not a validation bypass.
         if request.task == "logic" and issubclass(output_model, TimelinePlanOutput):
-            try:
-                from services.semantic_edit_planner import SemanticEditPlanner
-                sem_plan = SemanticEditPlanner.plan(request.query, request.context)
-                if sem_plan and sem_plan.matched:
-                    from pydantic import TypeAdapter
-                    from models.ai_editor import AiEditorAction
-                    ta: TypeAdapter[Any] = TypeAdapter(AiEditorAction)
-                    valid_actions = [ta.validate_python(a) for a in sem_plan.actions]
-                    output_instance = TimelinePlanOutput(
-                        actions=valid_actions,
-                        message=sem_plan.message,
-                        suggestions=sem_plan.suggestions,
-                        status=sem_plan.status,  # type: ignore[arg-type]
-                    )
-                    payload = _model_payload(output_instance)
-                    await self._cache.store(lookup, payload)
-                    return RouterResponse(
-                        action_intent=RouterActionIntent.EXECUTE,
-                        task=request.task,
-                        message=sem_plan.message,
-                        model_used="semantic-kernel-planner",
-                        profile_used=primary_profile,
-                        fallback_used=False,
-                        cached=False,
-                        payload=payload,
-                        limit_decision=static_decision,
-                    )
-            except Exception as exc:
-                logger.debug("semantic_planner_bypass error=%s", exc)
+            plan = _deterministic_plan(request.query, request.context)
+            if plan is not None:
+                payload = _model_payload(plan)
+                await self._cache.store(lookup, payload)
+                logger.info(
+                    "semantic_planner_hit actions=%d query_len=%d",
+                    len(plan.actions),
+                    len(request.query),
+                )
+                return RouterResponse(
+                    action_intent=RouterActionIntent.EXECUTE,
+                    task=request.task,
+                    message=plan.message,
+                    model_used="semantic-kernel-planner",
+                    profile_used=primary_profile,
+                    fallback_used=False,
+                    cached=False,
+                    payload=payload,
+                    limit_decision=static_decision,
+                )
 
         try:
             deferral = None
@@ -800,6 +804,44 @@ def _validate_cached_payload(
 
 def _model_payload(model: BaseModel) -> dict[str, JsonValue]:
     return cast(dict[str, JsonValue], model.model_dump(mode="json"))
+
+
+def _deterministic_plan(
+    query: str,
+    context: dict[str, JsonValue],
+) -> TimelinePlanOutput | None:
+    """Resolve an unambiguous editing intent without a model call.
+
+    Returns None whenever the planner declines or its actions fail the
+    AiEditorAction schema, so the caller falls through to Gemini.
+    """
+    try:
+        planner = importlib.import_module("services.semantic_edit_planner")
+        plan = planner.SemanticEditPlanner.plan(query, dict(context))
+    except Exception as exc:  # planner must never break the model path
+        logger.warning("semantic_planner_failed error=%s", exc)
+        return None
+
+    if plan is None or not plan.matched or not plan.actions:
+        return None
+
+    adapter: TypeAdapter[Any] = TypeAdapter(AiEditorAction)
+    try:
+        actions = [adapter.validate_python(a) for a in plan.actions]
+    except ValidationError as exc:
+        logger.warning("semantic_planner_schema_reject error=%s", exc)
+        return None
+
+    try:
+        return TimelinePlanOutput(
+            actions=actions,
+            message=plan.message,
+            suggestions=list(plan.suggestions)[:3],
+            status="ok",
+        )
+    except ValidationError as exc:
+        logger.warning("semantic_planner_output_reject error=%s", exc)
+        return None
 
 
 def _limit_response(
