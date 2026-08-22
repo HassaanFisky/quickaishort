@@ -11,24 +11,38 @@ that concatenates timeline clips in order, and applies:
 
 from __future__ import annotations
 
-import json
-import re
-import shlex
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from models.render_manifest import RenderManifest
+
+# Legacy RenderService treats audioBoost 85 as unity gain; both server render
+# paths must share this constant or the same project exports at two volumes.
+AUDIO_BOOST_UNITY = 85.0
+FADE_SECONDS = 0.5
 
 
 class ManifestRenderError(ValueError):
     pass
 
 
+def _clamp(value: float, lo: float, hi: float) -> float:
+    return max(lo, min(hi, value))
+
+
+def _as_float(value: Any, default: float) -> float:
+    try:
+        out = float(value)
+    except (TypeError, ValueError):
+        return default
+    return default if out != out else out  # NaN guard
+
+
 def _escape_drawtext(text: str) -> str:
-    """Escape text for FFmpeg drawtext filter."""
+    """Escape text for the FFmpeg drawtext filter."""
     text = str(text or "")
     text = text.replace("\\", "\\\\")
-    text = text.replace("'", "\u2019")  # replace single quote with right single quote
+    text = text.replace("'", "\u2019")  # single quotes terminate the filter arg
     text = text.replace(":", "\\:")
     text = text.replace("%", "\\%")
     return text
@@ -38,6 +52,7 @@ def compile_manifest_to_ffmpeg(
     manifest_dict: Dict[str, Any],
     workdir: Path,
     input_resolver=None,
+    watermark_text: Optional[str] = None,
 ) -> Tuple[str, Dict[str, Any]]:
     """
     Compile a RenderManifest into an FFmpeg filter_complex.
@@ -115,122 +130,165 @@ def compile_manifest_to_ffmpeg(
     concat_filter = "".join(concat_inputs) + f"concat=n={n}:v=1:a=1[v_concat][a_concat]"
     filter_parts.append(concat_filter)
 
-    # ── Effects Chain on Video ────────────────────────────────────────────────
-    curr_v_label = "v_concat"
-    curr_a_label = "a_concat"
+    # ── Effects chain (single source of truth for manifest-driven renders) ────
+    # Only effect types that frontend compileRenderManifest actually emits are
+    # handled here: frame_filter, export_settings, default_transition.
+    def _effect(*types: str):
+        return next((e for e in manifest.effects if e.type in types), None)
 
-    # Extract effects
-    frame_filter_effect = next(
-        (e for e in manifest.effects if e.type in ("frame_filter", "FRAME_FILTER")),
-        None,
-    )
-    export_settings_effect = next(
-        (e for e in manifest.effects if e.type in ("export_settings", "EXPORT_SETTINGS")),
-        None,
-    )
-    fade_in_effect = next(
-        (e for e in manifest.effects if e.type in ("fade_in", "ADD_FADE_IN")),
-        None,
-    )
-    fade_out_effect = next(
-        (e for e in manifest.effects if e.type in ("fade_out", "ADD_FADE_OUT")),
-        None,
-    )
+    frame_filter_effect = _effect("frame_filter", "FRAME_FILTER")
+    export_settings_effect = _effect("export_settings", "EXPORT_SETTINGS")
 
     v_effects: List[str] = []
     a_effects: List[str] = []
 
-    # 1. Frame filters (brightness, contrast, saturation, hue, blur, crop)
+    # 1. Frame filters — mapped to match the CSS filter chain used by the
+    #    editor preview (VideoCanvas.getCssFilter), not to FFmpeg's own scales.
     if frame_filter_effect and isinstance(frame_filter_effect.payload, dict):
         fp = frame_filter_effect.payload
-        brightness = float(fp.get("brightness", 1.0))
-        contrast = float(fp.get("contrast", 1.0))
-        saturation = float(fp.get("saturation", 1.0))
-        hue = float(fp.get("hue", 0.0))
-        blur = float(fp.get("blur", 0.0))
+        brightness = _as_float(fp.get("brightness"), 1.0)
+        contrast = _as_float(fp.get("contrast"), 1.0)
+        saturation = _as_float(fp.get("saturation"), 1.0)
+        hue = _as_float(fp.get("hue"), 0.0)
+        blur = _as_float(fp.get("blur"), 0.0)
+        opacity = _as_float(fp.get("opacity"), 1.0)
 
+        # CSS brightness()/opacity() are multiplicative; FFmpeg eq=brightness is
+        # an additive offset, so eq would blow out highlights. colorchannelmixer
+        # is the multiplicative equivalent.
+        gain = _clamp(brightness, 0.0, 4.0) * _clamp(opacity, 0.0, 1.0)
+        if abs(gain - 1.0) > 1e-3:
+            v_effects.append(
+                f"colorchannelmixer=rr={gain:.4f}:gg={gain:.4f}:bb={gain:.4f}"
+            )
+
+        # eq contrast/saturation are centred the same way as the CSS functions.
         eq_params = []
-        if brightness != 1.0:
-            # map [0.5, 2.0] where 1.0 is 0 offset to [-0.5, 0.5]
-            eq_params.append(f"brightness={brightness - 1.0:.2f}")
-        if contrast != 1.0:
-            eq_params.append(f"contrast={contrast:.2f}")
-        if saturation != 1.0:
-            eq_params.append(f"saturation={saturation:.2f}")
-
+        if abs(contrast - 1.0) > 1e-3:
+            eq_params.append(f"contrast={_clamp(contrast, 0.0, 4.0):.4f}")
+        if abs(saturation - 1.0) > 1e-3:
+            eq_params.append(f"saturation={_clamp(saturation, 0.0, 4.0):.4f}")
         if eq_params:
             v_effects.append(f"eq={':'.join(eq_params)}")
 
-        if hue != 0.0:
-            v_effects.append(f"hue=h={hue:.1f}")
+        if abs(hue) > 1e-3:
+            v_effects.append(f"hue=h={_clamp(hue, -360.0, 360.0):.3f}")
 
+        # CSS blur() is a Gaussian with std-dev in px — gblur, not boxblur.
         if blur > 0.0:
-            b_val = max(1, min(20, int(blur * 2)))
-            v_effects.append(f"boxblur={b_val}:{b_val}")
+            v_effects.append(f"gblur=sigma={_clamp(blur, 0.0, 50.0):.3f}")
 
-        # Crop / Pan
-        cl = float(fp.get("cropLeft", 0.0))
-        cr = float(fp.get("cropRight", 0.0))
-        ct = float(fp.get("cropTop", 0.0))
-        cb = float(fp.get("cropBottom", 0.0))
-        if cl > 0 or cr > 0 or ct > 0 or cb > 0:
-            remain_w = max(0.1, 1.0 - cl - cr)
-            remain_h = max(0.1, 1.0 - ct - cb)
-            v_effects.append(f"crop=w=iw*{remain_w:.3f}:h=ih*{remain_h:.3f}:x=iw*{cl:.3f}:y=ih*{ct:.3f}")
+        cl = _clamp(_as_float(fp.get("cropLeft"), 0.0), 0.0, 0.49)
+        cr = _clamp(_as_float(fp.get("cropRight"), 0.0), 0.0, 0.49)
+        ct = _clamp(_as_float(fp.get("cropTop"), 0.0), 0.0, 0.49)
+        cb = _clamp(_as_float(fp.get("cropBottom"), 0.0), 0.0, 0.49)
+        if cl or cr or ct or cb:
+            remain_w = max(0.02, 1.0 - cl - cr)
+            remain_h = max(0.02, 1.0 - ct - cb)
+            v_effects.append(
+                f"crop=w=iw*{remain_w:.4f}:h=ih*{remain_h:.4f}"
+                f":x=iw*{cl:.4f}:y=ih*{ct:.4f}"
+            )
 
-    # 2. Export settings visual preset
+    # 2. Export settings — style preset, speed, audio. Baselines must match the
+    #    legacy RenderService path so both server renderers agree.
     if export_settings_effect and isinstance(export_settings_effect.payload, dict):
         ep = export_settings_effect.payload
-        filter_preset = str(ep.get("filter", "None"))
-        if filter_preset == "Urban":
+        preset = str(ep.get("filter", "None"))
+        if preset == "Urban":
             v_effects.append("eq=contrast=1.2:saturation=0.8:gamma=1.1")
-        elif filter_preset == "Retro":
+        elif preset == "Retro":
             v_effects.append("eq=contrast=1.1:saturation=0.85:brightness=-0.05")
-        elif filter_preset == "Cinematic":
-            v_effects.append("eq=contrast=1.15:saturation=1.1:brightness=-0.05")
+        elif preset == "Cinematic":
+            v_effects.append("eq=contrast=1.1:saturation=1.2")
 
-        # Audio boost / Noise suppression
-        audio_boost = float(ep.get("audioBoost", 100))
-        if audio_boost != 100.0 and audio_boost >= 0:
-            vol_factor = audio_boost / 100.0
-            a_effects.append(f"volume={vol_factor:.2f}")
+        # SET_PLAYBACK_SPEED only reaches the renderer through export settings;
+        # without this the preview speeds up but the exported file does not.
+        speed_pct = _as_float(ep.get("playbackSpeed"), 100.0)
+        if abs(speed_pct - 100.0) > 1e-3:
+            speed = _clamp(speed_pct / 100.0, 0.5, 2.0)
+            v_effects.append(f"setpts={1.0 / speed:.6f}*PTS")
+            a_effects.append(f"atempo={speed:.6f}")
 
-        noise_suppression = float(ep.get("noiseSuppression", 0))
-        if noise_suppression > 0:
+        # Legacy RenderService treats 85 as unity gain; keep one contract.
+        audio_boost = _as_float(ep.get("audioBoost"), AUDIO_BOOST_UNITY)
+        if abs(audio_boost - AUDIO_BOOST_UNITY) > 1e-3:
+            vol = _clamp(audio_boost / AUDIO_BOOST_UNITY, 0.0, 4.0)
+            a_effects.append(f"volume={vol:.4f}")
+
+        if _as_float(ep.get("noiseSuppression"), 0.0) > 0:
             a_effects.append("highpass=f=200")
 
-    # 3. Fade In / Out
-    if fade_in_effect and isinstance(fade_in_effect.payload, dict):
-        dur_ms = float(fade_in_effect.payload.get("duration_ms", 500.0))
-        dur_s = max(0.1, dur_ms / 1000.0)
-        v_effects.append(f"fade=t=in:st=0:d={dur_s:.2f}")
-        a_effects.append(f"afade=t=in:st=0:d={dur_s:.2f}")
+        if bool(ep.get("voiceoverEnabled")):
+            a_effects.append("equalizer=f=3000:width_type=h:width=2000:g=5")
 
-    if fade_out_effect and isinstance(fade_out_effect.payload, dict):
-        st_ms = float(fade_out_effect.payload.get("start_ms", 0.0))
-        dur_ms = float(fade_out_effect.payload.get("duration_ms", 500.0))
-        st_s = max(0.0, st_ms / 1000.0)
-        dur_s = max(0.1, dur_ms / 1000.0)
-        v_effects.append(f"fade=t=out:st={st_s:.2f}:d={dur_s:.2f}")
-        a_effects.append(f"afade=t=out:st={st_s:.2f}:d={dur_s:.2f}")
+        # ADD_FADE_IN/ADD_FADE_OUT land on exportSettings.transitionEnabled in the
+        # editor store; that flag is the only fade signal the manifest carries.
+        if bool(ep.get("transitionEnabled")):
+            total = max(0.0, float(manifest.timeline.duration))
+            fade_d = min(FADE_SECONDS, total / 2.0) if total > 0 else FADE_SECONDS
+            if fade_d > 0.01:
+                v_effects.append(f"fade=t=in:st=0:d={fade_d:.3f}")
+                a_effects.append(f"afade=t=in:st=0:d={fade_d:.3f}")
+                if total > fade_d:
+                    out_st = total - fade_d
+                    v_effects.append(f"fade=t=out:st={out_st:.3f}:d={fade_d:.3f}")
+                    a_effects.append(f"afade=t=out:st={out_st:.3f}:d={fade_d:.3f}")
 
-    # 4. Audio Mute / Dub Audio
+    # 3. Colour grade — mirrors VideoCanvas.getCssFilter's clipColorState branch
+    #    so a grade applied in preview also lands in the exported file.
+    clip_color_effect = _effect("clip_color", "CLIP_COLOR")
+    if clip_color_effect and isinstance(clip_color_effect.payload, dict):
+        cp = clip_color_effect.payload
+        exposure = _as_float(cp.get("exposure"), 0.0)
+        if abs(exposure) > 1e-3:
+            gain = _clamp(2.0**exposure, 0.0, 4.0)
+            v_effects.append(
+                f"colorchannelmixer=rr={gain:.4f}:gg={gain:.4f}:bb={gain:.4f}"
+            )
+
+        grade_eq = []
+        c_contrast = _as_float(cp.get("contrast"), 1.0)
+        if abs(c_contrast - 1.0) > 1e-3:
+            grade_eq.append(f"contrast={_clamp(c_contrast, 0.0, 4.0):.4f}")
+        c_saturation = _as_float(cp.get("saturation"), 1.0)
+        if abs(c_saturation - 1.0) > 1e-3:
+            grade_eq.append(f"saturation={_clamp(c_saturation, 0.0, 4.0):.4f}")
+        if grade_eq:
+            v_effects.append(f"eq={':'.join(grade_eq)}")
+
+        hue_shift = _as_float(cp.get("hueShift"), 0.0)
+        # satAdjust/lumAdjust are HSL_SECONDARIES percentages (-100..100).
+        sat_adjust = _clamp(_as_float(cp.get("satAdjust"), 0.0), -100.0, 100.0)
+        lum_adjust = _clamp(_as_float(cp.get("lumAdjust"), 0.0), -100.0, 100.0)
+        hue_args = []
+        if abs(hue_shift) > 1e-3:
+            hue_args.append(f"h={_clamp(hue_shift, -360.0, 360.0):.3f}")
+        if abs(sat_adjust) > 1e-3:
+            hue_args.append(f"s={1.0 + sat_adjust / 100.0:.4f}")
+        if abs(lum_adjust) > 1e-3:
+            hue_args.append(f"b={lum_adjust / 100.0:.4f}")
+        if hue_args:
+            v_effects.append(f"hue={':'.join(hue_args)}")
+
+    # 4. Dub / mute — muteSourceAudio is a first-class manifest field.
     if manifest.muteSourceAudio:
         a_effects.append("volume=0.0")
 
-    # Apply video effects
-    if v_effects:
-        filter_parts.append(f"[{curr_v_label}]{','.join(v_effects)}[vout]")
-    else:
-        # Pass through
-        filter_parts.append(f"[{curr_v_label}]null[vout]")
+    # 5. Tier watermark. The manifest branch bypasses the legacy filtergraph, so
+    #    the Free-tier watermark has to be burned in here or it is lost.
+    if watermark_text:
+        v_effects.append(
+            f"drawtext=text='{_escape_drawtext(watermark_text)}'"
+            f":fontsize=48:fontcolor=white@0.8:x=w-tw-40:y=h-th-40"
+        )
 
-    # Apply audio effects
-    if a_effects:
-        filter_parts.append(f"[{curr_a_label}]{','.join(a_effects)}[aout]")
-    else:
-        # Pass through
-        filter_parts.append(f"[{curr_a_label}]anull[aout]")
+    filter_parts.append(
+        f"[v_concat]{','.join(v_effects)}[vout]" if v_effects else "[v_concat]null[vout]"
+    )
+    filter_parts.append(
+        f"[a_concat]{','.join(a_effects)}[aout]" if a_effects else "[a_concat]anull[aout]"
+    )
 
     filter_complex = ";".join(filter_parts)
 

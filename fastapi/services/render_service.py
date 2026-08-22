@@ -309,8 +309,19 @@ class RenderService:
                 def input_resolver(sid: str) -> Path:
                     return source
 
+                # The manifest branch returns before the legacy filtergraph, so
+                # the trusted-tier watermark must be compiled in here too.
+                watermark_text = (
+                    (job.watermark.text or "Made with QuickAI")
+                    if job.watermark.enabled
+                    else None
+                )
+
                 filter_complex, render_meta = compile_manifest_to_ffmpeg(
-                    job.manifest_meta, workdir=workdir, input_resolver=input_resolver
+                    job.manifest_meta,
+                    workdir=workdir,
+                    input_resolver=input_resolver,
+                    watermark_text=watermark_text,
                 )
 
                 crf_map = {"low": "28", "medium": "23", "high": "18"}
