@@ -5,8 +5,10 @@ import axios from "axios";
 import type { Channel } from "pusher-js";
 import { toast } from "sonner";
 
-import { useEditorStore } from "@/stores/editorStore";
+import { LOOP_COPY } from "@/lib/studio/computePlane";
+import { uploadLocalFileToGcs } from "@/lib/studio/localCloudUpload";
 import { generateSRT } from "@/lib/utils/srtGenerator";
+import { useEditorStore } from "@/stores/editorStore";
 import {
   API_URL,
   buildExportDownloadUrl,
@@ -251,7 +253,6 @@ export function useServerExport({ userId }: UseServerExportArgs) {
         sourceFile,
         sourceUrl,
         sourceGcsPath,
-        cloudUploadFailed,
         selectedClipId,
         suggestions,
         transcript,
@@ -260,13 +261,6 @@ export function useServerExport({ userId }: UseServerExportArgs) {
         compiledManifest,
         rebuildRenderManifest,
       } = useEditorStore.getState();
-
-      if (cloudUploadFailed && sourceFile && !sourceGcsPath) {
-        toast.error(
-          "Cloud upload incomplete — local preview only. Retry upload before server export.",
-        );
-        return;
-      }
 
       // Phase 60: ensure we have a fresh manifest
       let manifest = compiledManifest;
@@ -284,39 +278,34 @@ export function useServerExport({ userId }: UseServerExportArgs) {
         return;
       }
 
-      // GCS path takes priority: local file was uploaded to GCS during pipeline,
-      // so the render worker can read it directly without yt-dlp.
-      const videoId = sourceGcsPath || inferVideoId(sourceUrl, sourceFile?.name);
-      if (!videoId) {
-        // Local file — use client-side MediaRecorder trim
-        if (!sourceFile) {
-          toast.error("No video source found. Please import a video first.");
-          return;
-        }
+      // GCS path takes priority: lazy PUT only on Export final (ingest stays on-device).
+      let cloudPath = sourceGcsPath;
+      if (!cloudPath && sourceFile) {
         setIsExporting(true);
         setExportProgress(0);
-        toast.info("Rendering locally in your browser…");
+        toast.info(LOOP_COPY.uploadForExport);
         try {
-          const { exportLocalClip } = await import("@/lib/clientExport");
-          await exportLocalClip(
-            sourceFile,
-            clip.start,
-            clip.end,
-            `quickai-short-local.mp4`,
-            (pct) => setExportProgress(pct),
-          );
-          setExportProgress(100);
-          toast.success("Export ready — downloading.");
+          cloudPath = await uploadLocalFileToGcs(sourceFile, {
+            onProgress: (pct) => setExportProgress(Math.min(15, Math.round(pct * 0.15))),
+          });
+          useEditorStore.getState().setSourceGcsPath(cloudPath);
         } catch (err) {
-          const msg = err instanceof Error ? err.message : "Local export failed";
-          if (msg.includes("captureStream") || msg.includes("timeout") || msg.includes("CDN")) {
-            toast.error("Browser export engine unavailable — switching to Cloud Render.", { duration: 6000 });
-          } else {
-            toast.error(`Browser export engine unavailable — switching to Cloud Render.`, { duration: 6000 });
-          }
-        } finally {
           setIsExporting(false);
+          const msg = err instanceof Error ? err.message : LOOP_COPY.uploadForExportFailed;
+          toast.error(LOOP_COPY.uploadForExportFailed);
+          if (process.env.NODE_ENV !== "production") {
+            console.warn("[export] lazy GCS upload failed:", msg);
+          }
+          return;
         }
+      }
+
+      // Never infer a YouTube id from a local filename (11-char collision).
+      const videoId = cloudPath || inferVideoId(sourceUrl, null);
+      if (!videoId) {
+        toast.error(
+          sourceFile ? LOOP_COPY.uploadForExportFailed : LOOP_COPY.shareUnsupported,
+        );
         return;
       }
 

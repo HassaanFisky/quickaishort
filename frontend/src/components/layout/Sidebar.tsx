@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
@@ -149,7 +149,9 @@ export default function Sidebar() {
       </div>
 
       <nav className="flex-1 px-2 py-4 space-y-0.5" aria-label="Main navigation">
-        {NAV_ITEMS.map(({ href, label, icon }) => renderNavLink(href, label, icon))}
+        {NAV_ITEMS.map(({ href, label, icon }) => (
+          <Fragment key={href}>{renderNavLink(href, label, icon)}</Fragment>
+        ))}
       </nav>
 
       {session?.user && (

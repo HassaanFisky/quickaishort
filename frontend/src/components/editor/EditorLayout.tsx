@@ -28,7 +28,7 @@ import { parseYouTubeId } from "@/lib/youtube-utils";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useSwipeGesture } from "@/hooks/useTouchGestures";
 import { FALLBACK_INGEST_POLICY } from "@/lib/studio/ingestPolicy";
-import { SPEECH_COPY } from "@/lib/studio/computePlane";
+import { LOOP_COPY, SPEECH_COPY } from "@/lib/studio/computePlane";
 import {
   consumeTourReplay,
   fetchOnboarding,
@@ -779,7 +779,7 @@ export default function EditorLayout() {
                               ? ["On-device transcription…", "Building captions…", "Syncing speech…"]
                               : currentStage === "analyzing"
                                 ? ["Finding high-retention moments…", "Scoring segments…", "Preparing clips…"]
-                                : ["Uploading…", "Reading footage…", "Almost ready…"]
+                                : [LOOP_COPY.ingestReading, "Preparing editor…", "Almost ready…"]
                           }
                         />
                       </div>

@@ -59,7 +59,7 @@ export const INGEST_STAGE_LABELS: Record<IngestStage, string> = {
   idle: "Waiting",
   identify: "Reading your footage…",
   validate: "Checking format…",
-  acquire_meta: "Uploading…",
+  acquire_meta: "Reading footage…",
   projectize: "Setting up project…",
   analyze: "Analysing the transcript…",
   ready: "Ready to edit",

@@ -8,11 +8,7 @@
 
 import { useCallback, useRef } from "react";
 import { toast } from "sonner";
-import {
-  getVideoInfo,
-  requestPresignedUploadUrl,
-  uploadFileToGcs,
-} from "@/lib/api";
+import { getVideoInfo } from "@/lib/api";
 import { parseYouTubeId } from "@/lib/youtube-utils";
 import { trackEvent } from "@/lib/analytics";
 import {
@@ -111,7 +107,6 @@ export function useIngestLifecycle(opts: {
   const {
     setSourceFile,
     setSourceUrl,
-    setSourceGcsPath,
     setProcessing,
     setVideoMetadata,
     setThumbnailUrl,
@@ -375,52 +370,18 @@ export function useIngestLifecycle(opts: {
         return;
       }
       if (file.size > policy.warn_bytes) {
-        toast.warning("Large file — upload may take a while.", { duration: 5000 });
+        toast.warning("Large file — first analysis may take a while.", { duration: 5000 });
       }
 
       setIngestStage("acquire_meta");
       uploadAbortRef.current?.abort();
-      const ac = new AbortController();
-      uploadAbortRef.current = ac;
+      uploadAbortRef.current = new AbortController();
 
       const blobUrl = URL.createObjectURL(file);
       setSourceFile(file, blobUrl);
       trackEvent({ name: "video_loaded", props: { source: "upload", durationSec: 0 } });
 
-      setIngestMeta({ uploadProgress: 0 });
-      try {
-        const { presigned_url, gcs_path } = await requestPresignedUploadUrl(
-          file.name,
-          file.type || "video/mp4",
-        );
-        if (!isCurrent(gen)) return;
-        await uploadFileToGcs(
-          presigned_url,
-          file,
-          file.type || "video/mp4",
-          (pct) => {
-            if (isCurrent(gen)) setIngestMeta({ uploadProgress: pct });
-          },
-          ac.signal,
-        );
-        if (!isCurrent(gen)) return;
-        setSourceGcsPath(gcs_path);
-      } catch (err) {
-        if (!isCurrent(gen)) return;
-        if (err instanceof DOMException && err.name === "AbortError") {
-          failIngest("cancelled", "Upload cancelled.");
-          return;
-        }
-        const msg = err instanceof Error ? err.message : "Upload failed";
-        useEditorStore.getState().setCloudUploadFailed(true);
-        toast.warning(
-          "Cloud upload failed — local preview only. Fix upload before server export.",
-        );
-        if (process.env.NODE_ENV !== "production") {
-          console.warn("[ingest] GCS upload soft-fail:", msg);
-        }
-      }
-
+      // Local-first: skip GCS PUT on ingest (FinOps). Cloud upload waits for Export final.
       if (!isCurrent(gen)) return;
       const fingerprint = fingerprintFile(file);
       setIngestMeta({ fingerprint, uploadProgress: null });
@@ -442,7 +403,6 @@ export function useIngestLifecycle(opts: {
       setIngestMeta,
       setIngestStage,
       setSourceFile,
-      setSourceGcsPath,
     ],
   );
 

@@ -53,6 +53,41 @@ export function planeForSpeech(role: SpeechRole): ComputePlane {
   }
 }
 
+/** Device share vs cloud bake — same loop, not a second export stack. */
+export const LOOP_COPY = {
+  ingestLocalHint:
+    "Stays on this device until you Export final — no cloud upload yet.",
+  ingestReading: "Reading footage on this device…",
+  fileReady: "Ready",
+  shareLabel: "Share",
+  shareHint: "On this device. No cloud render bill.",
+  shareDone: "Ready to share.",
+  shareSaved: "Saved on this device.",
+  shareUnsupported:
+    "This browser can't capture the clip. Try Chrome on Android, or Export final after a cloud upload.",
+  exportFinalLabel: "Export final",
+  exportFinalHint:
+    "Cloud render — uses your plan's watermark and resolution rules.",
+  uploadForExport: "Uploading for cloud render…",
+  uploadForExportFailed:
+    "Cloud upload failed — Share from this device instead.",
+} as const;
+
+export type LoopRole = "ingest_file" | "ingest_youtube" | "share_device" | "export_final";
+
+export function planeForLoop(role: LoopRole): ComputePlane {
+  switch (role) {
+    case "ingest_file":
+      return "on_device";
+    case "share_device":
+      return "browser_platform";
+    case "ingest_youtube":
+      return "free_tier_cloud";
+    case "export_final":
+      return "paid_metered";
+  }
+}
+
 /** True when a degraded dub may use on-browser preview instead of silence. */
 export function canOfferBrowserDubPreview(opts: {
   status: string;
