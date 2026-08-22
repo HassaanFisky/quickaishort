@@ -13,6 +13,7 @@ import { saveIngestArtifact } from "@/lib/studio/ingestArtifacts";
 import { isDirectVideoUrl, type IngestStage } from "@/lib/studio/ingestFsm";
 import { saveIngestSession } from "@/lib/studio/ingestSession";
 import { parseYouTubeId } from "@/lib/youtube-utils";
+import { qaiLoopLog } from "@/lib/qaiLoopDebug";
 
 /**
  * Reduce a Float32Array to 120 amplitude peaks for waveform display.
@@ -356,6 +357,13 @@ export function useMediaPipeline() {
     analysis,
     userId,
   ]);
+  // #region agent log
+  qaiLoopLog("D", "useMediaPipeline.ts:hook", "hook-body", {
+    analysisStatus: analysis.status,
+    txProgress: transcription.progress,
+    txLast: transcription.lastMessage?.type ?? null,
+  });
+  // #endregion
 
   useEffect(() => {
     const error = transcription.error || analysis.error;

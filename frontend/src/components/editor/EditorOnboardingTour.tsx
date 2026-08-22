@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { motion, useReducedMotion } from "framer-motion";
 import { saveOnboarding } from "@/lib/studio/onboarding";
 import { useEditorStore } from "@/stores/editorStore";
+import { qaiLoopLog } from "@/lib/qaiLoopDebug";
 
 const STEPS: { id: string; sentence: string }[] = [
   { id: "ingest.upload", sentence: "Upload a video from your device." },
@@ -39,7 +40,16 @@ export default function EditorOnboardingTour({
     const id = STEPS[step]?.id;
     if (!id) return;
     const el = document.querySelector(`[data-tour-id="${id}"]`);
-    if (el) setRect(el.getBoundingClientRect());
+    const next = el ? el.getBoundingClientRect() : null;
+    // #region agent log
+    qaiLoopLog("E", "EditorOnboardingTour.tsx:measure", "measure", {
+      stepId: id,
+      hasEl: Boolean(el),
+      w: next?.width ?? 0,
+      h: next?.height ?? 0,
+    });
+    // #endregion
+    if (el) setRect(next);
     else setRect(null);
   }, [step]);
 

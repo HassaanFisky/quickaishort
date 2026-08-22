@@ -4,6 +4,7 @@ import * as React from "react"
 import * as TooltipPrimitive from "@radix-ui/react-tooltip"
 
 import { cn } from "@/lib/utils"
+import { qaiLoopRender } from "@/lib/qaiLoopDebug"
 
 function TooltipProvider({
   delayDuration = 0,
@@ -29,6 +30,9 @@ function Tooltip({
 function TooltipTrigger({
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Trigger>) {
+  // #region agent log
+  qaiLoopRender("A", "tooltip.tsx:TooltipTrigger", { asChild: Boolean(props.asChild) });
+  // #endregion
   return <TooltipPrimitive.Trigger data-slot="tooltip-trigger" {...props} />
 }
 

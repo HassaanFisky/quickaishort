@@ -55,6 +55,7 @@ import { WorkspaceComposer, type WorkspaceComposerSubmit } from "@/components/wo
 import ExportDialog from "./ExportDialog";
 import ServerExportHost from "./ServerExportHost";
 import { useServerExportStore } from "@/stores/serverExportStore";
+import { qaiLoopLog, qaiLoopRender } from "@/lib/qaiLoopDebug";
 
 const EditorOnboardingTour = dynamic(
   () => import("./EditorOnboardingTour"),
@@ -74,6 +75,13 @@ export default function EditorLayout() {
     ingestUploadProgress,
     ingestFromCache,
   } = useEditorStore();
+  // #region agent log
+  qaiLoopRender("B", "EditorLayout.tsx:render", {
+    ingestStage,
+    hasSource: Boolean(sourceUrl || sourceFile),
+    isProcessing,
+  });
+  // #endregion
 
   const { runPipeline, cancelPipeline } = useMediaPipeline();
   const { setVideoContext } = useAIPanel();
@@ -94,6 +102,12 @@ export default function EditorLayout() {
   const storeTranscript = useEditorStore((s) => s.transcript);
   const storeVideoMetadata = useEditorStore((s) => s.videoMetadata);
   useEffect(() => {
+    // #region agent log
+    qaiLoopLog("B", "EditorLayout.tsx:videoContext-effect", "effect", {
+      hasTranscript: Boolean(storeTranscript),
+      hasMeta: Boolean(storeVideoMetadata),
+    });
+    // #endregion
     if (!storeTranscript || !storeVideoMetadata) return;
     const transcriptText = storeTranscript.chunks
       .map((c) => c.text)
@@ -234,6 +248,11 @@ export default function EditorLayout() {
 
   // EP-005 / U1 — chat is the control plane once media is loaded
   useEffect(() => {
+    // #region agent log
+    qaiLoopLog("B", "EditorLayout.tsx:setAIPanelOpen-effect", "effect", {
+      hasMeta: Boolean(storeVideoMetadata),
+    });
+    // #endregion
     if (storeVideoMetadata) {
       setAIPanelOpen(true);
     }

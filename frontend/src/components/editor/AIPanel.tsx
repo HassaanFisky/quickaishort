@@ -44,6 +44,7 @@ import { DubPanel } from "@/components/editor/DubPanel";
 import { useUIStore } from "@/stores/uiStore";
 import Link from "next/link";
 import { AuthenticatedFetchError } from "@/lib/authenticatedFetch";
+import { qaiLoopRender } from "@/lib/qaiLoopDebug";
 
 /** Debounce edge facet upserts — transcript/silence/clips churn must not spam Firestore. */
 const FACET_REFRESH_DEBOUNCE_MS = 400;
@@ -155,6 +156,13 @@ export function AIPanel() {
     sourceUrl,
     sourceFile,
   } = useEditorStore();
+  // #region agent log
+  qaiLoopRender("B", "AIPanel.tsx:render", {
+    aiPanelOpen,
+    hasMeta: Boolean(videoMetadata),
+    runId,
+  });
+  // #endregion
 
   const [inputText, setInputText] = useState("");
   const [interimText, setInterimText] = useState("");

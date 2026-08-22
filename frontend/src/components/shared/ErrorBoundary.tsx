@@ -32,6 +32,31 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    // #region agent log
+    try {
+      const payload = JSON.stringify({
+        hypothesisId: "Z",
+        location: "ErrorBoundary.tsx:componentDidCatch",
+        message: "boundary-catch",
+        data: {
+          name: error.name,
+          err: error.message.slice(0, 400),
+          stack: (error.stack || "").split("\n").slice(0, 20),
+          componentStack: (errorInfo.componentStack || "").slice(0, 1500),
+        },
+        timestamp: Date.now(),
+      });
+      console.log("[QAI-LOOP]", payload);
+      void fetch("/api/__qai-loop", {
+        method: "POST",
+        body: payload + "\n",
+        keepalive: true,
+        headers: { "content-type": "application/json" },
+      }).catch(() => {});
+    } catch {
+      /* ignore */
+    }
+    // #endregion
     if (process.env.NODE_ENV !== "production") console.error("[ErrorBoundary] Uncaught render error:", error, errorInfo.componentStack);
     trackEvent({
       name: "editor_error",
