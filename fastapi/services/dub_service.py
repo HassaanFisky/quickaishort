@@ -317,20 +317,25 @@ async def run_synthesize_and_align(job: DubJobStatus) -> DubJobStatus:
             mute_source_audio=False,
         )
 
-    from services.tts_service import get_tts_service
+    from services.tts_service import cloud_tts_skip_reason, get_tts_service
 
     tts = get_tts_service()
-    if not tts.google_api_key and not os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"):
-        # API key path is primary for tts_service; missing key → degrade
-        if not tts.google_api_key:
-            return _update(
-                job,
-                status="degraded",
-                progress=100,
-                message="Voice unavailable — subtitles ready",
-                fallback_reason="tts_unavailable",
-                mute_source_audio=False,
-            )
+    skip = cloud_tts_skip_reason()
+    if skip or not tts.google_api_key:
+        reason = skip or "tts_unavailable"
+        message = (
+            "Voice paused to protect spend — subtitles ready"
+            if reason == "spend_lock"
+            else "Voice unavailable — subtitles ready"
+        )
+        return _update(
+            job,
+            status="degraded",
+            progress=100,
+            message=message,
+            fallback_reason=reason,
+            mute_source_audio=False,
+        )
 
     job = _update(job, status="synthesizing", progress=50, message="Generating voice")
     work = Path(tempfile.mkdtemp(prefix="qai-dub-"))

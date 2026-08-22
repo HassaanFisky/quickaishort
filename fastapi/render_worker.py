@@ -548,12 +548,18 @@ async def _async_process_render_task(
                 voiceover_local_path = await asyncio.to_thread(
                     ScriptAgent().generate_voiceover, script_prompt
                 )
-                if voiceover_local_path:
+                vo_file = Path(voiceover_local_path) if voiceover_local_path else None
+                if vo_file and vo_file.is_file() and vo_file.stat().st_size > 64:
                     production_plan["voiceover_path"] = voiceover_local_path
                     logger.info(
                         "voiceover_synthesized",
                         job_id=job_id,
                         path=voiceover_local_path,
+                    )
+                else:
+                    logger.warning(
+                        "voiceover_skipped_no_audio",
+                        job_id=job_id,
                     )
             except Exception as exc:
                 # Degrade gracefully — render proceeds without the voiceover.

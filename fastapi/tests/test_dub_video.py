@@ -141,6 +141,7 @@ async def test_tts_unavailable_degrades(monkeypatch):
     fake = _FakeRedis()
     monkeypatch.setattr(dub_service, "_redis", lambda: fake)
     monkeypatch.setattr(dub_service, "is_cancelled", lambda _jid: False)
+    monkeypatch.setenv("GEMINI_SPEND_KILL_SWITCH", "false")
     from core import flags
 
     monkeypatch.setattr(flags, "is_mock_ai_mode", lambda: True)
@@ -160,6 +161,47 @@ async def test_tts_unavailable_degrades(monkeypatch):
     assert result.status == "degraded"
     assert result.fallback_reason == "tts_unavailable"
     assert result.translated_srt
+
+
+@pytest.mark.asyncio
+async def test_tts_spend_lock_degrades(monkeypatch):
+    from services import dub_service
+
+    class _FakeRedis:
+        def __init__(self):
+            self.values: dict[str, object] = {}
+
+        def get(self, key: str):
+            return self.values.get(key)
+
+        def setex(self, key: str, _ttl: int, value: object):
+            self.values[key] = value
+            return True
+
+    fake = _FakeRedis()
+    monkeypatch.setattr(dub_service, "_redis", lambda: fake)
+    monkeypatch.setattr(dub_service, "is_cancelled", lambda _jid: False)
+    monkeypatch.setenv("GEMINI_SPEND_KILL_SWITCH", "true")
+    monkeypatch.setenv("GOOGLE_TTS_API_KEY", "present-but-locked")
+    from core import flags
+
+    monkeypatch.setattr(flags, "is_mock_ai_mode", lambda: True)
+
+    fake_tts = MagicMock()
+    fake_tts.google_api_key = "present-but-locked"
+    monkeypatch.setattr("services.tts_service.get_tts_service", lambda: fake_tts)
+
+    req = DubJobCreateRequest(
+        transcript=[DubTranscriptChunk(text="Hello", start=0, end=1)],
+        target_lang="es",
+        mode="full_dub",
+    )
+    job = await dub_service.create_job(req, "user-spend")
+    result = await dub_service.process_dub_job(job.job_id)
+    assert result.status == "degraded"
+    assert result.fallback_reason == "spend_lock"
+    assert result.translated_srt
+    fake_tts.generate.assert_not_called()
 
 
 def test_registry_contains_dub_capabilities():

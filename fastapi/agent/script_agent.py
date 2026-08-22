@@ -26,11 +26,21 @@ client = genai.Client()
 
 class ScriptAgent:
     def __init__(self):
+        self.tts_client = None
         try:
-            self.tts_client = texttospeech.TextToSpeechClient()
-        except Exception as e:
-            logger.warning(f"Google Cloud TTS Client could not be initialized: {e}")
-            self.tts_client = None
+            from services.tts_service import cloud_tts_skip_reason
+
+            skip = cloud_tts_skip_reason()
+        except Exception:
+            skip = "spend_lock"
+        if skip:
+            logger.warning("cloud_tts_client_skipped reason=%s", skip)
+        else:
+            try:
+                self.tts_client = texttospeech.TextToSpeechClient()
+            except Exception as e:
+                logger.warning("Cloud TTS client could not be initialized: %s", e)
+                self.tts_client = None
 
         self.search_api_key = os.getenv("GOOGLE_SEARCH_API_KEY")
         self.search_cx = os.getenv("GOOGLE_SEARCH_CX")
@@ -134,15 +144,20 @@ class ScriptAgent:
         return None
 
     def generate_voiceover(self, text: str) -> str:
-        """Generates TTS voiceover using Google Cloud TTS."""
+        """Cloud TTS when allowed. Returns a real audio path or "" — never a silent fake."""
+        from services.tts_service import cloud_tts_skip_reason
+
+        skip = cloud_tts_skip_reason()
+        if skip or not self.tts_client:
+            logger.warning(
+                "cloud_tts_skipped reason=%s — no silent placeholder",
+                skip or "client_missing",
+            )
+            return ""
+
         temp_dir = Path(tempfile.gettempdir()) / "qais-voiceovers"
         temp_dir.mkdir(parents=True, exist_ok=True)
         output_path = str(temp_dir / f"vo_{uuid.uuid4().hex}.mp3")
-
-        if not self.tts_client:
-            logger.error("TTS Client not available. Creating silent fallback.")
-            Path(output_path).touch()
-            return output_path
 
         try:
             input_text = texttospeech.SynthesisInput(text=text)
@@ -160,12 +175,15 @@ class ScriptAgent:
             with open(output_path, "wb") as out:
                 out.write(response.audio_content)
 
+            if Path(output_path).stat().st_size <= 64:
+                logger.warning("cloud_tts_empty_audio — discarding placeholder")
+                Path(output_path).unlink(missing_ok=True)
+                return ""
             return output_path
         except Exception as e:
-            logger.error(f"TTS generation failed: {e}")
-            # Create an empty file as fallback
-            Path(output_path).touch()
-            return output_path
+            logger.error("TTS generation failed: %s", e)
+            Path(output_path).unlink(missing_ok=True)
+            return ""
 
     async def run(self, user_script: str, clip_paths: List[str]) -> Dict[str, Any]:
         """Executes the full script agent pipeline."""

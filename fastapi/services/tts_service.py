@@ -14,6 +14,23 @@ logger = logging.getLogger(__name__)
 Provider = Literal["google", "elevenlabs"]
 
 
+def cloud_tts_skip_reason() -> Optional[str]:
+    """Wallet gate before any paid TTS HTTP call.
+
+    Returns a stable reason, or None when a new cloud synthesis may be attempted.
+    Spend kill-switch is checked first so a present API key cannot burn credits.
+    """
+    try:
+        from services.gemini_spend_cap import is_gemini_spend_kill_switch
+
+        if is_gemini_spend_kill_switch():
+            return "spend_lock"
+    except Exception:
+        logger.warning("cloud_tts_spend_gate_unavailable — skipping paid TTS")
+        return "spend_lock"
+    return None
+
+
 class TTSService:
     def __init__(self):
         self.google_api_key = os.getenv("GOOGLE_TTS_API_KEY")
@@ -45,7 +62,11 @@ class TTSService:
         provider: Provider = "google",
         speaking_rate: float = 1.0,
     ) -> Optional[str]:
-        """Generate speech audio. Returns gs:// URI (GCS primary, ADR-002)."""
+        """Generate speech audio. Returns gs:// URI (GCS primary, ADR-002).
+
+        Cache hits reuse already-paid audio. Missing key / spend lock skip new
+        paid calls and return None — callers must degrade honestly.
+        """
         if not text:
             return None
 
@@ -56,11 +77,23 @@ class TTSService:
             logger.info("[TTS] Cache hit for %s", voice_id)
             return self._gs_uri(remote_path)
 
+        skip = cloud_tts_skip_reason()
+        if skip:
+            logger.warning("cloud_tts_skipped reason=%s", skip)
+            return None
+
+        if provider == "elevenlabs" and not self.eleven_api_key:
+            logger.warning("optional_tts_provider_key_missing provider=elevenlabs")
+            return None
+        if provider != "elevenlabs" and not self.google_api_key:
+            logger.warning("GOOGLE_TTS_API_KEY not set")
+            return None
+
         with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp:
             tmp_path = Path(tmp.name)
 
         try:
-            if provider == "elevenlabs" and self.eleven_api_key:
+            if provider == "elevenlabs":
                 success_path = await self._generate_elevenlabs(text, voice_id, tmp_path)
             else:
                 success_path = await self._generate_google(
@@ -74,7 +107,6 @@ class TTSService:
                     content_type="audio/mpeg",
                     _bucket_name="uploads",
                 )
-                # Prefer explicit gs:// from storage; fall back to constructed URI
                 if isinstance(gs_uri, str) and gs_uri.startswith("gs://"):
                     return gs_uri
                 return self._gs_uri(remote_path)
@@ -121,7 +153,7 @@ class TTSService:
                 cache_path.write_bytes(audio_bytes)
                 return str(cache_path)
         except Exception as e:
-            logger.error(f"Google TTS failed: {e}")
+            logger.error("Cloud TTS failed: %s", e)
             return None
 
     async def _generate_elevenlabs(
@@ -149,7 +181,7 @@ class TTSService:
                 cache_path.write_bytes(resp.content)
                 return str(cache_path)
         except Exception as e:
-            logger.error(f"ElevenLabs TTS failed: {e}")
+            logger.error("Optional cloud TTS provider failed: %s", e)
             return None
 
 

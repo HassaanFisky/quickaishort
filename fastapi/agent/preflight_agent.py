@@ -197,7 +197,14 @@ if _ADK_OK:
 
 
 async def fetch_trend_context(query: str) -> dict[str, Any]:
-    """Call SerpAPI Google Trends. Falls back gracefully if key is absent."""
+    """Optional trend search. Missing key or spend lock → empty fallback (not required)."""
+    try:
+        from services.gemini_spend_cap import is_gemini_spend_kill_switch
+
+        if is_gemini_spend_kill_switch():
+            return {"source": "fallback", "trends": [], "reason": "spend_lock"}
+    except Exception:
+        pass
     serpapi_key = os.environ.get("SERPAPI_KEY")
     if not serpapi_key:
         return {"source": "fallback", "trends": [], "reason": "SERPAPI_KEY not set"}
