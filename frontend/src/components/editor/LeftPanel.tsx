@@ -16,6 +16,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { motion, AnimatePresence } from "framer-motion";
+import { SPEECH_COPY } from "@/lib/studio/computePlane";
 
 type Tab = "clips" | "text" | "elements" | "transcript";
 
@@ -273,11 +274,11 @@ export default function LeftPanel() {
                     <Zap className="w-10 h-10 text-primary" strokeWidth={1} />
                   </div>
                   <h3 className="text-sm font-black text-foreground tracking-tight mb-2">
-                    {currentStage === "transcribing" ? "Transcribing Audio..." : "Analyzing Video..."}
+                    {currentStage === "transcribing" ? SPEECH_COPY.ingestTitle : "Analyzing Video..."}
                   </h3>
                   <p className="text-[11px] text-muted-foreground font-medium max-w-[180px]">
                     {currentStage === "transcribing"
-                      ? "Running Whisper transcription — this takes 20–60 s."
+                      ? SPEECH_COPY.ingestHint
                       : "Viral Intelligence Engine is scoring your clips."}
                   </p>
                 </div>

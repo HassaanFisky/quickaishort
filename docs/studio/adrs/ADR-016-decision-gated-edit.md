@@ -44,7 +44,7 @@ M0 needs the smallest Decision Intelligence layer that can gate a meaningful edi
 | F Execute evidence re-verify | prior on branch | Gated ACT `REMOVE_SILENCES` segments re-checked against MediaGraph at execute |
 | G Post-execute Kernel event check | this branch | Intended CandidateAction vs tenant-checked Kernel events; missing ≠ match; client snapshot ≠ objective |
 
-**Still out of scope (honest):** frontend chat `decision_gate` wiring (default `/editor` chat stays DualModelRouter; Kernel commit after chat remains ungated `structured_steps`), Tier 1 media outcome observation, Pre-Flight brain, live Gemini, learning/refinement loop.
+**Still out of scope (honest):** default typed `/editor` chat `decision_gate` (DualModelRouter); Kernel commit after chat remains ungated `structured_steps`; Tier 1 media outcome observation; Pre-Flight brain; live Gemini; learning/refinement loop.
 
 Original M0 in-repo scope: contracts + deterministic `resolve_objective` + unit tests. Orchestrator HTTP wiring and Tier 0 execute checks were follow-on milestones on the same ADR, not a parallel ABI.
 
@@ -67,7 +67,7 @@ Grounded in repo evidence. This ADR does **not** claim the Studio vision is comp
 
 ### B — Safe in-repo follow-ons (not this change)
 
-- Optional FE `decision_gate` behind `NEXT_PUBLIC_STUDIO_PROJECT_KERNEL` **with founder copy** — default chat must not switch to gated 0-Gemini path without UX. Left ungated on purpose.
+- **Shipped (same product branch, 2026-08-22):** FE `decision_gate` for MediaGraph **REMOVE_SILENCES** chips only (`intent_text` = chip label). ASK/RESEARCH with chip `params.segments` falls back to the existing structured plan (still 0 Gemini). Typed `/editor` chat stays DualModelRouter.
 - Persist `DecisionRecord` (today only ids/mode live on Plan). Additive store; not required for Tier 0 verify because candidate params are copied onto plan steps.
 - Server-owned snapshot of intended segments at plan-create time if Redis plan TTL expiry becomes a product issue (`ORCH_PLAN_TTL_SEC`).
 
@@ -80,7 +80,7 @@ Grounded in repo evidence. This ADR does **not** claim the Studio vision is comp
 
 - Gemini prepayment top-up → live `generateContent` smoke (analyze, AI chat, key rotate)
 - Deploy this branch (API Cloud Run + Vercel FE) — **do not merge `main` from this ADR**
-- `/editor` ingest crash in `next dev` (Radix `composeRefs` + React 18 StrictMode) — blocks in-browser chat round-trip; backend `POST /api/ai-editor/command` still works under `MOCK_AI_MODE`
+- SUPERSEDED (2026-08-22): empty `/editor` max-update-depth in `next dev` was `ServerExportHost` writing a new `cancelExport` into `serverExportStore` every render — not Radix `composeRefs`. Fixed with stable `useCallback` + no-op store writes. Backend `POST /api/ai-editor/command` under `MOCK_AI_MODE` remains the no-spend AI round-trip.
 - `GOOGLE_TTS_API_KEY` for full Dub Video voice; Dub live smoke after Gemini + TTS
 - Rotate `ADMIN_SECRET` (historical docs exposure)
 - Live smoke of gated ACT on production Kernel + MediaGraph silence facet

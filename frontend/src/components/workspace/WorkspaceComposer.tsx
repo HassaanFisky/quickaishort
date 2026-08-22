@@ -23,6 +23,7 @@ import {
 } from "@/lib/studio/ingestPolicy";
 import { parseYouTubeId } from "@/lib/youtube-utils";
 import { isDirectVideoUrl } from "@/lib/studio/ingestFsm";
+import { LOOP_COPY } from "@/lib/studio/computePlane";
 
 const PROMPT_SUGGESTIONS = [
   "Find 3 high-retention hooks under 60 seconds",
@@ -138,7 +139,7 @@ export function WorkspaceComposer({
         next.push({
           id: `${file.name}-${file.size}-${file.lastModified}-${Math.random().toString(36).slice(2, 7)}`,
           file,
-          status: "pending",
+          status: "ready",
           durationLabel,
         });
       }
@@ -156,7 +157,7 @@ export function WorkspaceComposer({
 
   const retryFile = (id: string) => {
     setAttached((prev) =>
-      prev.map((f) => (f.id === id ? { ...f, status: "pending", error: undefined } : f)),
+      prev.map((f) => (f.id === id ? { ...f, status: "ready", error: undefined } : f)),
     );
     setLocalError(null);
   };
@@ -305,7 +306,7 @@ export function WorkspaceComposer({
                       item.status === "pending" && "text-[hsl(var(--fg-subtle))]",
                     )}
                   >
-                    {item.status}
+                    {item.status === "ready" ? LOOP_COPY.fileReady : item.status}
                   </span>
                   {item.status === "failed" && (
                     <button
@@ -446,7 +447,7 @@ export function WorkspaceComposer({
       </div>
 
       <p className="text-center text-[13px] text-[hsl(var(--fg-subtle))] leading-relaxed">
-        Upload long-form footage and describe the shorts you want to create.
+        {LOOP_COPY.ingestLocalHint}
       </p>
     </div>
   );
