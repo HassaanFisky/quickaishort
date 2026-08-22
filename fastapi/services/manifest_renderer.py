@@ -68,6 +68,7 @@ def compile_manifest_to_ffmpeg(
         raise ManifestRenderError(f"Invalid RenderManifest: {e}")
 
     if input_resolver is None:
+
         def input_resolver(sid: str) -> Path:
             return workdir / sid
 
@@ -284,10 +285,14 @@ def compile_manifest_to_ffmpeg(
         )
 
     filter_parts.append(
-        f"[v_concat]{','.join(v_effects)}[vout]" if v_effects else "[v_concat]null[vout]"
+        f"[v_concat]{','.join(v_effects)}[vout]"
+        if v_effects
+        else "[v_concat]null[vout]"
     )
     filter_parts.append(
-        f"[a_concat]{','.join(a_effects)}[aout]" if a_effects else "[a_concat]anull[aout]"
+        f"[a_concat]{','.join(a_effects)}[aout]"
+        if a_effects
+        else "[a_concat]anull[aout]"
     )
 
     filter_complex = ";".join(filter_parts)

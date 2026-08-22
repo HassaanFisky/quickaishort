@@ -509,6 +509,7 @@ def test_pro_render_policy_allows_4k_without_forced_watermark() -> None:
 
 def test_redis_connection_has_keepalive_and_retry() -> None:
     from services.queue_service import redis_conn
+
     kwargs = redis_conn.connection_pool.connection_kwargs
     assert kwargs.get("socket_keepalive") is True
     assert kwargs.get("retry_on_timeout") is True
@@ -548,7 +549,6 @@ async def test_editor_cache_avoids_duplicate_model_call_and_credit() -> None:
     assert first.cached is False
     assert second.cached is True
     assert len(gateway.models) == 1  # exact single LLM call, second was cache hit
-
 
 
 @pytest.mark.skipif(

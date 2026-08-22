@@ -74,7 +74,9 @@ async def test_body_userid_ignored_uses_jwt():
         patch("services.stats_service.deduct_credits", deduct),
     ):
         with pytest.raises(HTTPException) as ei:
-            await run_pipeline(_DUMMY_REQUEST, _req(userId="spoofed"), verified_user_id="jwt-user")
+            await run_pipeline(
+                _DUMMY_REQUEST, _req(userId="spoofed"), verified_user_id="jwt-user"
+            )
         assert ei.value.status_code == 402
         deduct.assert_awaited_once_with("jwt-user", 20)
 

@@ -196,7 +196,10 @@ class SemanticEditPlanner:
         ) or re.search(r"\brevert\s+(?:the\s+)?(?:colors?|grade|look)\b", c):
             return _result(
                 "reset_visual_adjustments",
-                [{"type": "RESET_FILTER"}, {"type": "SET_VISUAL_FILTER", "filter": "None"}],
+                [
+                    {"type": "RESET_FILTER"},
+                    {"type": "SET_VISUAL_FILTER", "filter": "None"},
+                ],
                 "Cleared colour adjustments and filter presets.",
                 ["Apply a cinematic grade", "Brighten the shot", "Add captions"],
                 confidence=0.95,
@@ -292,9 +295,9 @@ class SemanticEditPlanner:
 
         # Noise cleanup is single-direction: "reduce noise" and "remove noise"
         # both mean more suppression, so no polarity inversion is possible.
-        if re.search(
-            r"\b(?:noise|hiss|hum)\b", c
-        ) and re.search(r"\b(?:clean|remove|reduce|suppress|kill|cut|fix)\b", c):
+        if re.search(r"\b(?:noise|hiss|hum)\b", c) and re.search(
+            r"\b(?:clean|remove|reduce|suppress|kill|cut|fix)\b", c
+        ):
             return _result(
                 "suppress_background_noise",
                 [{"type": "SET_NOISE_REDUCTION", "value": 75}],

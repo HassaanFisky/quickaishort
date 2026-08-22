@@ -278,7 +278,7 @@ def test_watermark_text_cannot_break_out_of_the_filter_argument():
             _make_manifest(1), workdir, watermark_text="a':b%c\\d"
         )
         # No raw single quote may survive, or the drawtext arg terminates early.
-        drawtext = fc[fc.index("drawtext=text='") + len("drawtext=text='"):]
+        drawtext = fc[fc.index("drawtext=text='") + len("drawtext=text='") :]
         assert "'" == drawtext[drawtext.index("'")]  # first quote is the closer
         assert "\\:" in fc
 
@@ -293,10 +293,23 @@ def test_generated_filtergraph_executes_and_brightness_matches_css():
         source = workdir / "input.mp4"
         subprocess.run(
             [
-                "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
-                "-f", "lavfi", "-i", "color=c=0x808080:s=320x240:d=2:r=10",
-                "-f", "lavfi", "-i", "sine=frequency=440:duration=2",
-                "-pix_fmt", "yuv420p", "-shortest", str(source),
+                "ffmpeg",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                "color=c=0x808080:s=320x240:d=2:r=10",
+                "-f",
+                "lavfi",
+                "-i",
+                "sine=frequency=440:duration=2",
+                "-pix_fmt",
+                "yuv420p",
+                "-shortest",
+                str(source),
             ],
             check=True,
         )
@@ -317,12 +330,28 @@ def test_generated_filtergraph_executes_and_brightness_matches_css():
         out = workdir / "out.mp4"
         proc = subprocess.run(
             [
-                "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
-                "-i", str(source),
-                "-filter_complex", fc,
-                "-map", "[vout]", "-map", "[aout]",
-                "-c:v", "libx264", "-crf", "23", "-preset", "ultrafast",
-                "-c:a", "aac", str(out),
+                "ffmpeg",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-y",
+                "-i",
+                str(source),
+                "-filter_complex",
+                fc,
+                "-map",
+                "[vout]",
+                "-map",
+                "[aout]",
+                "-c:v",
+                "libx264",
+                "-crf",
+                "23",
+                "-preset",
+                "ultrafast",
+                "-c:a",
+                "aac",
+                str(out),
             ],
             capture_output=True,
         )
@@ -331,9 +360,19 @@ def test_generated_filtergraph_executes_and_brightness_matches_css():
 
         probe = subprocess.run(
             [
-                "ffmpeg", "-hide_banner", "-v", "info", "-i", str(out),
-                "-vf", "signalstats,metadata=print:key=lavfi.signalstats.YAVG:file=-",
-                "-frames:v", "1", "-f", "null", "-",
+                "ffmpeg",
+                "-hide_banner",
+                "-v",
+                "info",
+                "-i",
+                str(out),
+                "-vf",
+                "signalstats,metadata=print:key=lavfi.signalstats.YAVG:file=-",
+                "-frames:v",
+                "1",
+                "-f",
+                "null",
+                "-",
             ],
             capture_output=True,
         )
