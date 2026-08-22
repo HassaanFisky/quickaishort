@@ -1872,8 +1872,8 @@ nav:has(.nav-link:hover) .nav-link:not(:hover) {
 }
 
 .voice-btn {
-  width: 2.125rem;
-  height: 2.125rem;
+  width: 2.75rem;
+  height: 2.75rem;
   background: hsl(var(--bg-muted) / 0.55);
   border: 1px solid hsl(var(--border));
   border-radius: 0.625rem;
@@ -1885,6 +1885,11 @@ nav:has(.nav-link:hover) .nav-link:not(:hover) {
   flex-shrink: 0;
   color: hsl(var(--fg-muted));
   transition: all var(--studio-transition-fast, 0.1s ease);
+}
+
+.voice-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .voice-btn:hover {
@@ -1909,6 +1914,12 @@ nav:has(.nav-link:hover) .nav-link:not(:hover) {
 
   50% {
     box-shadow: 0 0 0 5px hsl(0 84% 60% / 0.18);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .voice-btn-active {
+    animation: none;
   }
 }
 

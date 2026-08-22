@@ -24,6 +24,7 @@ import {
 import { mapAiEditorError } from "@/lib/aiEditorErrors";
 import { useSession } from "next-auth/react";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
+import { SPEECH_COPY } from "@/lib/studio/computePlane";
 import { cn } from "@/lib/utils";
 import {
   buildEdgeFacets,
@@ -356,8 +357,13 @@ export function AIPanel() {
     }
   }, []);
 
-  const { isRecording, startRecording, stopRecording, error: voiceError } =
-    useVoiceInput(handleTranscript);
+  const {
+    isRecording,
+    startRecording,
+    stopRecording,
+    error: voiceError,
+    available: browserVoiceAvailable,
+  } = useVoiceInput(handleTranscript);
 
   const toggleVoice = () => (isRecording ? stopRecording() : startRecording());
 
@@ -1370,7 +1376,7 @@ export function AIPanel() {
                 : creditsExhausted
                   ? "Out of credits — upgrade to keep chatting…"
                   : isRecording
-                    ? "Listening…"
+                    ? SPEECH_COPY.chatVoiceListening
                     : "Tell me what to edit… (Enter to send)"
             }
             value={inputText}
@@ -1386,14 +1392,27 @@ export function AIPanel() {
           <button
             className={`voice-btn ${isRecording ? "voice-btn-active" : ""}`}
             onClick={toggleVoice}
-            disabled={!isVideoLoaded || creditsExhausted}
-            aria-label={isRecording ? "Stop recording" : "Voice input"}
+            disabled={
+              !isVideoLoaded ||
+              creditsExhausted ||
+              (!browserVoiceAvailable && !isRecording)
+            }
+            aria-pressed={isRecording}
+            aria-label={
+              isRecording
+                ? "Stop browser voice"
+                : browserVoiceAvailable
+                  ? SPEECH_COPY.chatVoiceLabel
+                  : SPEECH_COPY.chatVoiceUnsupported
+            }
             title={
               creditsExhausted
                 ? "Out of credits"
-                : isRecording
-                  ? "Stop voice input"
-                  : "Voice input"
+                : !browserVoiceAvailable
+                  ? SPEECH_COPY.chatVoiceUnsupported
+                  : isRecording
+                    ? "Stop browser voice"
+                    : SPEECH_COPY.chatVoiceLabel
             }
           >
             {isRecording ? <MicOff size={14} /> : <Mic size={14} />}

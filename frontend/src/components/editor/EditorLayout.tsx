@@ -28,6 +28,7 @@ import { parseYouTubeId } from "@/lib/youtube-utils";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useSwipeGesture } from "@/hooks/useTouchGestures";
 import { FALLBACK_INGEST_POLICY } from "@/lib/studio/ingestPolicy";
+import { SPEECH_COPY } from "@/lib/studio/computePlane";
 import {
   consumeTourReplay,
   fetchOnboarding,
@@ -762,7 +763,7 @@ export default function EditorLayout() {
                             <Loader2 className="w-3.5 h-3.5 text-primary animate-spin shrink-0" />
                             <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-foreground whitespace-nowrap">
                               {currentStage === "transcribing"
-                                ? "Analysing the transcript"
+                                ? SPEECH_COPY.ingestProgress
                                 : currentStage === "analyzing"
                                   ? "Finding high-retention moments"
                                   : "Preparing footage"}
@@ -775,7 +776,7 @@ export default function EditorLayout() {
                         <TimelineLoader
                           phases={
                             currentStage === "transcribing"
-                              ? ["Analysing the transcript…", "Building captions…", "Syncing speech…"]
+                              ? ["On-device transcription…", "Building captions…", "Syncing speech…"]
                               : currentStage === "analyzing"
                                 ? ["Finding high-retention moments…", "Scoring segments…", "Preparing clips…"]
                                 : ["Uploading…", "Reading footage…", "Almost ready…"]

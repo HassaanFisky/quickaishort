@@ -1,8 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Languages, Loader2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Languages, Loader2, Square, Volume2 } from "lucide-react";
+import { useBrowserSpeechPreview } from "@/hooks/useBrowserSpeechPreview";
 import { useDubVideo } from "@/hooks/useDubVideo";
+import {
+  canOfferBrowserDubPreview,
+  SPEECH_COPY,
+} from "@/lib/studio/computePlane";
 import {
   DUB_LANG_OPTIONS,
   isDubTerminal,
@@ -23,10 +28,23 @@ function readLastDubLang(): DubTargetLang {
 export function DubPanel() {
   const { dubJob, startDub, cancelDub, clearDub, stageLabel } = useDubVideo();
   const hasTranscript = useEditorStore((s) => !!s.transcript?.chunks?.length);
+  const captions = useEditorStore((s) => s.captions);
   const [lang, setLang] = useState<DubTargetLang>(readLastDubLang);
   const [mode, setMode] = useState<DubMode>("full_dub");
   const [showAdvanced, setShowAdvanced] = useState(false);
   const busy = !isDubTerminal(dubJob.status) && dubJob.status !== "idle";
+  const speech = useBrowserSpeechPreview();
+  const previewLang = (dubJob.targetLang as DubTargetLang | null) ?? lang;
+  const speechLines = useMemo(
+    () => captions.map((c) => ({ text: c.text })),
+    [captions],
+  );
+  const offerBrowserPreview = canOfferBrowserDubPreview({
+    status: dubJob.status,
+    fallbackReason: dubJob.fallbackReason,
+    captionCount: captions.length,
+    previewAudioUrl: dubJob.previewAudioUrl,
+  });
 
   useEffect(() => {
     try {
@@ -137,9 +155,10 @@ export function DubPanel() {
       </button>
       {showAdvanced && (
         <p className="text-12 text-muted-foreground leading-relaxed">
-          Source speech must be English (current transcription model). Voice uses
-          Google Neural2. Failed voice falls back to translated subtitles with a
-          clear notice — never a fake dub.
+          Source speech must be English (current on-device transcription).
+          Export voice is cloud TTS only after billing + key approval. If voice
+          is unavailable, translated subtitles stay — never a fake dub. You can
+          still hear a browser voice preview.
         </p>
       )}
 
@@ -173,8 +192,56 @@ export function DubPanel() {
           </div>
           {dubJob.fallbackReason && (
             <p className="text-12 text-amber-300/90" role="alert">
-              Voice unavailable — showing translated subtitles.
+              {SPEECH_COPY.dubDegraded}
             </p>
+          )}
+          {dubJob.previewAudioUrl && (
+            <audio
+              className="w-full mt-1"
+              controls
+              preload="none"
+              src={dubJob.previewAudioUrl}
+              aria-label={SPEECH_COPY.dubCloudAudioLabel}
+            />
+          )}
+          {offerBrowserPreview && (
+            <div className="pt-1 space-y-1.5">
+              <button
+                type="button"
+                className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs font-semibold hover:bg-foreground/5 disabled:opacity-40"
+                aria-pressed={speech.status === "playing"}
+                aria-label={
+                  speech.status === "playing"
+                    ? "Stop browser voice preview"
+                    : SPEECH_COPY.dubPreviewLabel
+                }
+                disabled={!speech.available && speech.status !== "playing"}
+                onClick={() => {
+                  if (speech.status === "playing") {
+                    speech.stop();
+                    return;
+                  }
+                  void speech.play(speechLines, previewLang);
+                }}
+              >
+                {speech.status === "playing" ? (
+                  <Square className="h-3.5 w-3.5" aria-hidden />
+                ) : (
+                  <Volume2 className="h-3.5 w-3.5" aria-hidden />
+                )}
+                {speech.status === "playing"
+                  ? "Stop preview"
+                  : SPEECH_COPY.dubPreviewLabel}
+              </button>
+              <p className="text-12 text-muted-foreground leading-relaxed">
+                {SPEECH_COPY.dubPreviewHint}
+              </p>
+              {speech.error && (
+                <p className="text-12 text-red-400" role="alert">
+                  {speech.error}
+                </p>
+              )}
+            </div>
           )}
           {dubJob.error && (
             <p className="text-12 text-red-400" role="alert">
@@ -197,7 +264,10 @@ export function DubPanel() {
           <button
             type="button"
             disabled={!hasTranscript}
-            onClick={() => void startDub({ targetLang: lang, mode })}
+            onClick={() => {
+              speech.stop();
+              void startDub({ targetLang: lang, mode });
+            }}
             className="flex-1 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:opacity-40"
           >
             {dubJob.status === "ready" || dubJob.status === "degraded"
@@ -210,7 +280,10 @@ export function DubPanel() {
           dubJob.status === "failed") && (
             <button
               type="button"
-              onClick={clearDub}
+              onClick={() => {
+                speech.stop();
+                clearDub();
+              }}
               className="rounded-lg border border-border px-3 py-2 text-xs font-semibold hover:bg-foreground/5"
             >
               Clear
