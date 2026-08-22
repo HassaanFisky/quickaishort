@@ -10,7 +10,14 @@ import {
 } from "./renderManifest";
 
 // Import types dynamically or use compatible interfaces to avoid circular dependency runtime issues
-import type { VideoMetadata, Caption, EditorElement, FrameFilter, ExportSettings } from "@/stores/editorStore";
+import type {
+  VideoMetadata,
+  Caption,
+  EditorElement,
+  FrameFilter,
+  ExportSettings,
+  ClipColorState,
+} from "@/stores/editorStore";
 
 // Let's define a compatible structure for EditorState to prevent strict circular issues.
 interface CompileEditorState {
@@ -27,6 +34,7 @@ interface CompileEditorState {
   exportSettings: ExportSettings;
   defaultTransition: string;
   splitScreenPresetId: string | null;
+  clipColorState?: ClipColorState | null;
 }
 
 export function compileRenderManifest(state: CompileEditorState): RenderManifest {
@@ -181,6 +189,17 @@ export function compileRenderManifest(state: CompileEditorState): RenderManifest
       id: "effect-export-settings",
       type: "export_settings",
       payload: state.exportSettings as unknown as Record<string, unknown>,
+    });
+  }
+
+  // Colour grading (COLOR_WHEELS / HSL_SECONDARIES / APPLY_LUT) lives outside
+  // frameFilters. Without this effect the grade shows in preview but is absent
+  // from the exported file.
+  if (state.clipColorState) {
+    effects.push({
+      id: "effect-clip-color",
+      type: "clip_color",
+      payload: state.clipColorState as unknown as Record<string, unknown>,
     });
   }
 

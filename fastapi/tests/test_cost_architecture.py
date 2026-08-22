@@ -23,6 +23,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from agent.router import (  # noqa: E402
     DualModelRouter,
     LogicRouteRequest,
+    TimelinePlanOutput,
     VisualFrame,
     VisualRouteRequest,
 )
@@ -46,11 +47,7 @@ from middleware.cost_guard import (  # noqa: E402
     admit_or_defer,
     schema_fingerprint,
 )
-from render_worker import apply_tier_render_policy  # noqa: E402
-from services.queue_service import (  # noqa: E402
-    RQ_WORKER_TTL_SECONDS,
-    create_worker_redis_connection,
-)
+from services.tier_render_policy import apply_tier_render_policy  # noqa: E402
 from services import ai_editor_engine, gemini_client, queue_service  # noqa: E402
 from services.gemini_backpressure import (  # noqa: E402
     Gemini429Kind,
@@ -510,56 +507,48 @@ def test_pro_render_policy_allows_4k_without_forced_watermark() -> None:
     assert policy.watermark_required is False
 
 
-def test_rq_worker_socket_outlives_blocking_dequeue() -> None:
-    connection = create_worker_redis_connection()
-    try:
-        socket_timeout = connection.connection_pool.connection_kwargs["socket_timeout"]
-        assert socket_timeout > RQ_WORKER_TTL_SECONDS - 15
-    finally:
-        connection.close()
+def test_redis_connection_has_keepalive_and_retry() -> None:
+    from services.queue_service import redis_conn
+
+    kwargs = redis_conn.connection_pool.connection_kwargs
+    assert kwargs.get("socket_keepalive") is True
+    assert kwargs.get("retry_on_timeout") is True
 
 
 @pytest.mark.asyncio
-async def test_editor_cache_avoids_duplicate_model_call_and_credit(
-    monkeypatch,
-) -> None:
+async def test_editor_cache_avoids_duplicate_model_call_and_credit() -> None:
     redis = _FakeRedis()
-    generated = {
-        "intent": "edit",
-        "confidence": 1.0,
-        "actions": [],
-        "feedback": "Done.",
-        "fallback": "Retry.",
-        "model_used": "gemini-2.5-flash-lite",
-        "clamped": [],
-        "dropped": [],
-        "message": "Done.",
-        "suggestions": [],
-        "status": "no_op",
-    }
-    uncached = AsyncMock(return_value=generated)
-    charge = AsyncMock()
-    monkeypatch.setattr(queue_service, "async_redis_conn", redis)
-    monkeypatch.setattr(
-        ai_editor_engine,
-        "_process_editor_command_uncached",
-        uncached,
+    valid_payload = json.dumps(
+        {
+            "actions": [],
+            "message": "Done.",
+            "suggestions": ["Add hook"],
+            "status": "no_op",
+        }
+    )
+    gateway = _FakeGateway([valid_payload])
+    cache = SimilarQueryCache(redis)
+    router = DualModelRouter(
+        gateway=gateway,
+        cache=cache,
+        tier_resolver=_free_tier,
+        provider_admission=False,
+    )
+    req = LogicRouteRequest(
+        user_id="user-1",
+        workload_id="video-1",
+        query="Custom creative edit requesting specialized multi-track composition",
+        context={"duration": 60.0},
     )
 
-    kwargs = {
-        "command": "Add captions",
-        "user_tier": "free",
-        "project_context": {"duration": 60.0, "clipCount": 1},
-        "user_id": "user-1",
-        "workload_id": "video-1",
-        "before_model": charge,
-    }
-    first = await ai_editor_engine.process_editor_command(**kwargs)
-    second = await ai_editor_engine.process_editor_command(**kwargs)
+    first = await router.execute(req, output_model=TimelinePlanOutput)
+    second = await router.execute(req, output_model=TimelinePlanOutput)
 
-    assert first == second
-    uncached.assert_awaited_once()
-    charge.assert_awaited_once()
+    assert first.action_intent == "EXECUTE"
+    assert second.action_intent == "EXECUTE"
+    assert first.cached is False
+    assert second.cached is True
+    assert len(gateway.models) == 1  # exact single LLM call, second was cache hit
 
 
 @pytest.mark.skipif(

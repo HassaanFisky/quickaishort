@@ -6,6 +6,7 @@ import { Clip, Transcript, CutSegment } from "@/types/pipeline";
 import {
   upsertKeyframe,
   deleteKeyframe as deleteKfById,
+  clearAllKeyframes,
   getMotionPath,
   deleteMotionPath,
 } from "@/lib/motion/keyframeStore";
@@ -1941,29 +1942,40 @@ export const useEditorStore = create<EditorState>()(
             case "MAGNETIC_SNAP_TOGGLE":
               store.setActiveTimelineTool("magnetic-snap");
               break;
-            case "COLOR_WHEELS":
-            case "COLOR_CURVES":
-            case "HSL_SECONDARIES": {
-              // Partial: basic HSL preview only — full wheels live in Advanced.
-              const hasBasic =
-                action.payload.hue_shift !== undefined ||
-                action.payload.saturation_adjust !== undefined ||
-                action.payload.luminance_adjust !== undefined;
-              if (hasBasic) {
+            case "COLOR_WHEELS": {
+              const p = action.payload;
+              const liftVal = p.lift as { r?: number; g?: number; b?: number } | undefined;
+              const gammaVal = p.gamma as { r?: number; g?: number; b?: number } | undefined;
+              const gainVal = p.gain as { r?: number; g?: number; b?: number } | undefined;
+              const offsetVal = p.offset as { r?: number; g?: number; b?: number } | undefined;
+              store.setClipColor({
+                ...(liftVal && { lift: [liftVal.r ?? 0, liftVal.g ?? 0, liftVal.b ?? 0] }),
+                ...(gammaVal && { gamma: [gammaVal.r ?? 0, gammaVal.g ?? 0, gammaVal.b ?? 0] }),
+                ...(gainVal && { gain: [gainVal.r ?? 0, gainVal.g ?? 0, gainVal.b ?? 0] }),
+                ...(offsetVal && { offset: [offsetVal.r ?? 0, offsetVal.g ?? 0, offsetVal.b ?? 0] }),
+              });
+              break;
+            }
+            case "COLOR_CURVES": {
+              const p = action.payload;
+              if (Array.isArray(p.master)) {
                 store.setClipColor({
-                  ...(action.payload.hue_shift !== undefined && {
-                    hueShift: action.payload.hue_shift as number,
-                  }),
-                  ...(action.payload.saturation_adjust !== undefined && {
-                    satAdjust: action.payload.saturation_adjust as number,
-                  }),
-                  ...(action.payload.luminance_adjust !== undefined && {
-                    lumAdjust: action.payload.luminance_adjust as number,
-                  }),
+                  masterCurve: p.master.map((pt: { x: number; y: number }) => [pt.x, pt.y]),
                 });
               }
-              refuseTool(action.type, "partial_open_advanced", {
-                openAdvanced: true,
+              break;
+            }
+            case "HSL_SECONDARIES": {
+              store.setClipColor({
+                ...(action.payload.hue_shift !== undefined && {
+                  hueShift: action.payload.hue_shift as number,
+                }),
+                ...(action.payload.saturation_adjust !== undefined && {
+                  satAdjust: action.payload.saturation_adjust as number,
+                }),
+                ...(action.payload.luminance_adjust !== undefined && {
+                  lumAdjust: action.payload.luminance_adjust as number,
+                }),
               });
               break;
             }
@@ -1977,14 +1989,53 @@ export const useEditorStore = create<EditorState>()(
               store.setClipColor(null);
               break;
             case "SET_CLIP_GAIN":
-            case "SET_MASTER_GAIN":
-            case "ENABLE_DENOISE":
+            case "SET_MASTER_GAIN": {
+              const gainDb = Number(action.payload.gain_db ?? 0);
+              const vol = Math.round(Math.pow(10, gainDb / 20) * 100);
+              store.setExportSetting("audioBoost", Math.max(0, Math.min(200, vol)));
+              break;
+            }
+            case "ENABLE_DENOISE": {
+              const enabled = action.payload.enabled !== false;
+              store.setExportSetting("noiseSuppression", enabled ? 75 : 0);
+              break;
+            }
             case "ENABLE_LIMITER":
-            case "ADD_FADE_IN":
-            case "ADD_FADE_OUT":
-            case "SET_KEYFRAME":
-            case "DELETE_KEYFRAME":
-            case "CLEAR_KEYFRAMES":
+              break;
+            case "ADD_FADE_IN": {
+              store.setExportSetting("transitionEnabled", true);
+              break;
+            }
+            case "ADD_FADE_OUT": {
+              store.setExportSetting("transitionEnabled", true);
+              break;
+            }
+            case "SET_KEYFRAME": {
+              const clipId = (action.payload.clip_id as string) || store.selectedClipId || "clip-1";
+              const prop = (action.payload.property as any) || "opacity";
+              const timeMs = Number(action.payload.time_ms ?? (store.currentTime * 1000));
+              const val = Number(action.payload.value ?? 1);
+              const easingType = (action.payload.easing as any) || "ease-in-out";
+              upsertKeyframe(clipId, prop, {
+                id: `kf-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+                timeMs,
+                value: val,
+                easing: { type: easingType },
+              });
+              break;
+            }
+            case "DELETE_KEYFRAME": {
+              const clipId = (action.payload.clip_id as string) || store.selectedClipId || "clip-1";
+              const prop = (action.payload.property as any) || "opacity";
+              const kfId = String(action.payload.kf_id || action.payload.id || "");
+              if (kfId) deleteKfById(clipId, prop, kfId);
+              break;
+            }
+            case "CLEAR_KEYFRAMES": {
+              const clipId = (action.payload.clip_id as string) || store.selectedClipId || "clip-1";
+              clearAllKeyframes(clipId);
+              break;
+            }
             case "SAVE_PROJECT":
             case "LOAD_PROJECT":
             case "AUTO_REFRAME":

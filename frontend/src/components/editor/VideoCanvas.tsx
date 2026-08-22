@@ -98,6 +98,8 @@ export default function VideoCanvas() {
     compiledManifest,
     timelineRevision,
     dubJob,
+    frameFilters,
+    clipColorState,
   } = useEditorStore();
 
   const dubPreviewUrl =
@@ -228,11 +230,69 @@ export default function VideoCanvas() {
   }, [exportSettings.playbackSpeed, displayUrl]);
 
   const getCssFilter = () => {
+    const filters: string[] = [];
     const filter = exportSettings.filter;
-    if (filter === "Urban") return "contrast(1.2) saturate(0.9)";
-    if (filter === "Retro") return "sepia(0.4) contrast(1.1) brightness(0.95)";
-    if (filter === "Cinematic") return "contrast(1.15) brightness(0.9) saturate(1.1)";
-    return "none";
+    if (filter === "Urban") filters.push("contrast(1.2) saturate(0.9)");
+    else if (filter === "Retro") filters.push("sepia(0.4) contrast(1.1) brightness(0.95)");
+    else if (filter === "Cinematic") filters.push("contrast(1.15) brightness(0.9) saturate(1.1)");
+
+    if (frameFilters) {
+      if (typeof frameFilters.brightness === "number" && frameFilters.brightness !== 1) {
+        filters.push(`brightness(${frameFilters.brightness})`);
+      }
+      if (typeof frameFilters.contrast === "number" && frameFilters.contrast !== 1) {
+        filters.push(`contrast(${frameFilters.contrast})`);
+      }
+      if (typeof frameFilters.saturation === "number" && frameFilters.saturation !== 1) {
+        filters.push(`saturate(${frameFilters.saturation})`);
+      }
+      if (typeof frameFilters.hue === "number" && frameFilters.hue !== 0) {
+        filters.push(`hue-rotate(${frameFilters.hue}deg)`);
+      }
+      if (typeof frameFilters.blur === "number" && frameFilters.blur > 0) {
+        filters.push(`blur(${frameFilters.blur}px)`);
+      }
+      if (typeof frameFilters.opacity === "number" && frameFilters.opacity < 1) {
+        filters.push(`opacity(${frameFilters.opacity})`);
+      }
+    }
+
+    if (clipColorState) {
+      if (typeof clipColorState.exposure === "number" && clipColorState.exposure !== 0) {
+        const b = Math.pow(2, clipColorState.exposure);
+        filters.push(`brightness(${b.toFixed(2)})`);
+      }
+      if (typeof clipColorState.contrast === "number" && clipColorState.contrast !== 1) {
+        filters.push(`contrast(${clipColorState.contrast})`);
+      }
+      if (typeof clipColorState.saturation === "number" && clipColorState.saturation !== 1) {
+        filters.push(`saturate(${clipColorState.saturation})`);
+      }
+      if (typeof clipColorState.hueShift === "number" && clipColorState.hueShift !== 0) {
+        filters.push(`hue-rotate(${clipColorState.hueShift}deg)`);
+      }
+    }
+
+    return filters.length > 0 ? filters.join(" ") : "none";
+  };
+
+  const getTransformStyle = () => {
+    const cl = frameFilters?.cropLeft ?? 0;
+    const cr = frameFilters?.cropRight ?? 0;
+    const ct = frameFilters?.cropTop ?? 0;
+    const cb = frameFilters?.cropBottom ?? 0;
+    const px = frameFilters?.panX ?? 0;
+    const py = frameFilters?.panY ?? 0;
+
+    const clipPath = (cl > 0 || cr > 0 || ct > 0 || cb > 0)
+      ? `inset(${(ct * 100).toFixed(1)}% ${(cr * 100).toFixed(1)}% ${(cb * 100).toFixed(1)}% ${(cl * 100).toFixed(1)}%)`
+      : undefined;
+
+    const transform = (px !== 0 || py !== 0)
+      ? `translate(${(px * 100).toFixed(1)}%, ${(py * 100).toFixed(1)}%)`
+      : undefined;
+
+    return { clipPath, transform };
   };
 
   useEffect(() => {
@@ -567,7 +627,12 @@ export default function VideoCanvas() {
                     "w-full h-full object-cover will-change-[object-position] transition-all duration-500",
                     isBuffering && "blur-md scale-105 opacity-50"
                   )}
-                  style={{ objectPosition: getObjectPosition(), filter: getCssFilter() }}
+                  style={{
+                    objectPosition: getObjectPosition(),
+                    filter: getCssFilter(),
+                    clipPath: getTransformStyle().clipPath,
+                    transform: getTransformStyle().transform,
+                  }}
                   controls={false}
                   loop
                   preload="auto"
