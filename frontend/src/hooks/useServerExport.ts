@@ -85,6 +85,34 @@ export function useServerExport({ userId }: UseServerExportArgs) {
     setExportProgress(0);
   }, []);
 
+  const activeJobIdRef = useRef(activeJobId);
+  activeJobIdRef.current = activeJobId;
+
+  const cancelExport = useCallback(async () => {
+    const jobId = activeJobIdRef.current;
+    cleanup();
+    setIsExporting(false);
+    setExportProgress(0);
+    setActiveJobId(null);
+    if (!jobId) {
+      toast.info("Export cancelled.");
+      return;
+    }
+    try {
+      await cancelExportJob(jobId);
+      toast.success("Export cancelled.");
+    } catch (err: unknown) {
+      if (axios.isAxiosError(err)) {
+        toast.error(
+          formatApiDetail(err.response?.data?.detail, err.response?.status ?? 500) ||
+            "Could not cancel export on server.",
+        );
+      } else {
+        toast.error("Could not cancel export on server.");
+      }
+    }
+  }, [cleanup]);
+
   const finishSuccess = useCallback(
     (jobId: string, downloadUrl: string) => {
       setIsExporting(false);
@@ -395,30 +423,7 @@ export function useServerExport({ userId }: UseServerExportArgs) {
 
   return {
     exportClip,
-    cancelExport: async () => {
-      const jobId = activeJobId;
-      cleanup();
-      setIsExporting(false);
-      setExportProgress(0);
-      setActiveJobId(null);
-      if (!jobId) {
-        toast.info("Export cancelled.");
-        return;
-      }
-      try {
-        await cancelExportJob(jobId);
-        toast.success("Export cancelled.");
-      } catch (err: unknown) {
-        if (axios.isAxiosError(err)) {
-          toast.error(
-            formatApiDetail(err.response?.data?.detail, err.response?.status ?? 500) ||
-            "Could not cancel export on server.",
-          );
-        } else {
-          toast.error("Could not cancel export on server.");
-        }
-      }
-    },
+    cancelExport,
     isExporting,
     exportProgress,
     activeJobId,

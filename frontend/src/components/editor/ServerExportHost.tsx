@@ -10,6 +10,7 @@ import { useSession } from "next-auth/react";
 import { useServerExport } from "@/hooks/useServerExport";
 import { useEditorStore } from "@/stores/editorStore";
 import { useServerExportStore } from "@/stores/serverExportStore";
+import { qaiLoopLog } from "@/lib/qaiLoopDebug";
 
 export default function ServerExportHost() {
   const { data: session } = useSession();
@@ -49,6 +50,11 @@ export default function ServerExportHost() {
   ]);
 
   useEffect(() => {
+    // #region agent log
+    qaiLoopLog("B", "ServerExportHost.tsx:setControllers", "effect", {
+      runId: "post-fix",
+    });
+    // #endregion
     setControllers({ cancelExport, resetExportState });
   }, [cancelExport, resetExportState, setControllers]);
 

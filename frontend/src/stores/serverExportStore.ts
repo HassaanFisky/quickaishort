@@ -37,7 +37,24 @@ export const useServerExportStore = create<ServerExportState>((set) => ({
   lastDownloadUrl: null,
   cancelExport: null,
   resetExportState: null,
-  setSnapshot: (patch) => set(patch),
+  setSnapshot: (patch) =>
+    set((s) => {
+      if (
+        s.isExporting === patch.isExporting &&
+        s.exportProgress === patch.exportProgress &&
+        s.activeJobId === patch.activeJobId &&
+        s.exportError === patch.exportError &&
+        s.exportDone === patch.exportDone &&
+        s.lastDownloadUrl === patch.lastDownloadUrl
+      ) {
+        return s;
+      }
+      return patch;
+    }),
   setControllers: (c) =>
-    set({ cancelExport: c.cancelExport, resetExportState: c.resetExportState }),
+    set((s) =>
+      s.cancelExport === c.cancelExport && s.resetExportState === c.resetExportState
+        ? s
+        : { cancelExport: c.cancelExport, resetExportState: c.resetExportState },
+    ),
 }));
