@@ -24,7 +24,7 @@ export const DUB_STAGE_LABELS: Record<DubStage, string> = {
   aligning: "Aligning timing…",
   subtitling: "Preparing subtitles…",
   ready: "Dub ready",
-  degraded: "Subtitles ready (voice unavailable)",
+  degraded: "Subtitles ready (browser voice preview)",
   failed: "Dub failed",
   cancelled: "Cancelled",
 };

@@ -9,7 +9,7 @@ async function loadWhisper(model: string = "Xenova/whisper-tiny.en") {
   self.postMessage({
     type: "status",
     stage: "download",
-    payload: { message: `Loading ${model}...` },
+    payload: { message: "Loading on-device transcription…" },
   });
 
   transcriber = await pipeline("automatic-speech-recognition", model, {
@@ -42,7 +42,7 @@ async function transcribe(audioData: Float32Array) {
   self.postMessage({
     type: "status",
     stage: "process",
-    payload: { message: "Transcribing..." },
+    payload: { message: "On-device transcription…" },
   });
 
   const result = await whisper(audioData, {
@@ -65,7 +65,7 @@ self.onmessage = async (e: MessageEvent) => {
         self.postMessage({
           type: "complete",
           stage: "load",
-          payload: { message: "Whisper loaded" },
+          payload: { message: "On-device transcription ready" },
         });
         break;
 

@@ -182,7 +182,7 @@ export default function IngestSurface({
   const stageIdx = ingestStageIndex(ingestStage);
   const stageLabel =
     ingestStage === "analyze" && currentStage === "transcribing"
-      ? "Transcribing…"
+      ? "On-device transcription…"
       : ingestStage === "analyze" && currentStage === "analyzing"
         ? "Finding clips…"
         : INGEST_STAGE_LABELS[ingestStage];

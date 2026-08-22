@@ -273,11 +273,11 @@ export default function LeftPanel() {
                     <Zap className="w-10 h-10 text-primary" strokeWidth={1} />
                   </div>
                   <h3 className="text-sm font-black text-foreground tracking-tight mb-2">
-                    {currentStage === "transcribing" ? "Transcribing Audio..." : "Analyzing Video..."}
+                    {currentStage === "transcribing" ? "On-device transcription…" : "Analyzing Video..."}
                   </h3>
                   <p className="text-[11px] text-muted-foreground font-medium max-w-[180px]">
                     {currentStage === "transcribing"
-                      ? "Running Whisper transcription — this takes 20–60 s."
+                      ? "On-device transcription — this takes 20–60 s. Nothing is sent to a speech API."
                       : "Viral Intelligence Engine is scoring your clips."}
                   </p>
                 </div>

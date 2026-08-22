@@ -194,7 +194,7 @@ export function useMediaPipeline() {
 
         setProcessing(true, "transcribing");
         setAgentState("transcription", { status: "working", progress: 0 });
-        toast.info("Reading video content...");
+        toast.info("On-device transcription…");
         activeRunIdRef.current = crypto.randomUUID();
         transcription.init();
         transcription.transcribe(audioData, sampleRate);

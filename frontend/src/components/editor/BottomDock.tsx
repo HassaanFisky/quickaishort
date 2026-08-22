@@ -561,7 +561,11 @@ export default function BottomDock() {
   const handleVoiceover = useCallback(() => {
     const nextVal = !exportSettings.voiceoverEnabled;
     setExportSetting("voiceoverEnabled", nextVal);
-    toast.success(nextVal ? "AI Voiceover enabled." : "Voiceover disabled.");
+    toast.success(
+      nextVal
+        ? "Vocal EQ enabled on export. Cloud narration is Dub Video."
+        : "Voiceover EQ disabled.",
+    );
   }, [exportSettings.voiceoverEnabled, setExportSetting]);
 
   const handleTimelineWheel = useCallback((e: React.WheelEvent) => {

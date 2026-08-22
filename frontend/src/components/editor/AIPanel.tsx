@@ -1387,13 +1387,13 @@ export function AIPanel() {
             className={`voice-btn ${isRecording ? "voice-btn-active" : ""}`}
             onClick={toggleVoice}
             disabled={!isVideoLoaded || creditsExhausted}
-            aria-label={isRecording ? "Stop recording" : "Voice input"}
+            aria-label={isRecording ? "Stop browser voice" : "Browser voice"}
             title={
               creditsExhausted
                 ? "Out of credits"
                 : isRecording
-                  ? "Stop voice input"
-                  : "Voice input"
+                  ? "Stop browser voice"
+                  : "Browser voice"
             }
           >
             {isRecording ? <MicOff size={14} /> : <Mic size={14} />}

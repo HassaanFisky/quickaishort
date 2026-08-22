@@ -125,7 +125,10 @@ function toastTerminal(status: DubStage, message?: string, error?: string | null
   if (status === "ready") {
     toast.success("Dub Video ready — preview updated.");
   } else if (status === "degraded") {
-    toast.warning(message || "Subtitles ready. Voice could not be generated.");
+    toast.warning(
+      message ||
+        "Subtitles ready. Cloud voice was skipped — use browser voice preview.",
+    );
   } else if (status === "failed") {
     toast.error(error || message || "Dub Video failed.");
   }
@@ -282,7 +285,10 @@ export function useDubVideo() {
               : "Dub Video ready — preview updated.",
           );
         } else if (data.status === "degraded") {
-          toast.warning(data.message || "Subtitles ready.");
+          toast.warning(
+            data.message ||
+              "Subtitles ready. Cloud voice was skipped — use browser voice preview.",
+          );
         }
       } catch (err: unknown) {
         stopWatching();

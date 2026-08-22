@@ -9,7 +9,13 @@ import {
   type DubMode,
   type DubTargetLang,
 } from "@/lib/studio/dubFsm";
+import {
+  bcp47ForDubLang,
+  speakBrowserVoice,
+  stopBrowserVoice,
+} from "@/lib/voiceover/browserSpeech";
 import { useEditorStore } from "@/stores/editorStore";
+import { toast } from "sonner";
 
 function readLastDubLang(): DubTargetLang {
   if (typeof window === "undefined") return "es";
@@ -23,10 +29,15 @@ function readLastDubLang(): DubTargetLang {
 export function DubPanel() {
   const { dubJob, startDub, cancelDub, clearDub, stageLabel } = useDubVideo();
   const hasTranscript = useEditorStore((s) => !!s.transcript?.chunks?.length);
+  const captions = useEditorStore((s) => s.captions);
   const [lang, setLang] = useState<DubTargetLang>(readLastDubLang);
   const [mode, setMode] = useState<DubMode>("full_dub");
   const [showAdvanced, setShowAdvanced] = useState(false);
   const busy = !isDubTerminal(dubJob.status) && dubJob.status !== "idle";
+
+  useEffect(() => {
+    return () => stopBrowserVoice();
+  }, []);
 
   useEffect(() => {
     try {
@@ -137,9 +148,9 @@ export function DubPanel() {
       </button>
       {showAdvanced && (
         <p className="text-12 text-muted-foreground leading-relaxed">
-          Source speech must be English (current transcription model). Voice uses
-          Google Neural2. Failed voice falls back to translated subtitles with a
-          clear notice — never a fake dub.
+          Source speech must be English (on-device transcription). Cloud voice
+          is optional. If it is missing or spend-locked, you get translated
+          subtitles plus a browser voice preview — never a silent fake dub.
         </p>
       )}
 
@@ -173,8 +184,29 @@ export function DubPanel() {
           </div>
           {dubJob.fallbackReason && (
             <p className="text-12 text-amber-300/90" role="alert">
-              Voice unavailable — showing translated subtitles.
+              {dubJob.fallbackReason === "spend_lock"
+                ? "Voice paused to protect spend — translated subtitles are ready. Preview uses browser speech."
+                : "Voice unavailable — translated subtitles are ready. Preview uses browser speech."}
             </p>
+          )}
+          {dubJob.status === "degraded" && (
+            <button
+              type="button"
+              className="text-12 font-semibold text-primary hover:underline"
+              onClick={() => {
+                const text = captions.map((c) => c.text).filter(Boolean).join(". ");
+                const ok = speakBrowserVoice(text, bcp47ForDubLang(dubJob.targetLang || lang));
+                if (ok) {
+                  toast.message("Browser voice preview — not a cloud dub.");
+                } else {
+                  toast.error(
+                    "Browser voice is not supported here. Translated subtitles stay on the timeline.",
+                  );
+                }
+              }}
+            >
+              Preview with browser voice
+            </button>
           )}
           {dubJob.error && (
             <p className="text-12 text-red-400" role="alert">

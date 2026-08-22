@@ -55,6 +55,10 @@ import LoudnessMeter from "@/components/editor/LoudnessMeter";
 import { WGSL_TRANSITIONS } from "@/lib/transitions/wgslTransitions";
 import { SPLIT_PRESETS } from "@/lib/splitScreenPresets";
 import { DubPanel } from "@/components/editor/DubPanel";
+import {
+  speakBrowserVoice,
+  stopBrowserVoice,
+} from "@/lib/voiceover/browserSpeech";
 
 const QUALITY_OPTIONS = ["low", "medium", "high"] as const;
 const FILTER_OPTIONS = ["None", "Urban", "Retro", "Cinematic"] as const;
@@ -474,6 +478,36 @@ function TransitionsPanel() {
 
 const VOICE_STYLES = ["Natural", "Dramatic", "Upbeat", "News"] as const;
 
+function VoiceoverBrowserPreview() {
+  const captions = useEditorStore((s) => s.captions);
+  const chunks = useEditorStore((s) => s.transcript?.chunks);
+  const previewText = captions.length
+    ? captions.map((c) => c.text).join(". ")
+    : (chunks ?? []).map((c) => c.text).join(". ");
+
+  React.useEffect(() => () => stopBrowserVoice(), []);
+
+  return (
+    <button
+      type="button"
+      disabled={!previewText.trim()}
+      onClick={() => {
+        const ok = speakBrowserVoice(previewText, "en-US");
+        if (ok) {
+          toast.message("Browser voice preview — not included in export.");
+        } else {
+          toast.error(
+            "Browser voice is not supported here. Export will not invent a silent voice track.",
+          );
+        }
+      }}
+      className="h-9 rounded-lg text-[9px] font-black uppercase tracking-widest border border-border bg-muted text-fg-muted hover:text-foreground hover:border-border disabled:opacity-40"
+    >
+      Preview with browser voice
+    </button>
+  );
+}
+
 function VoiceoverPanel() {
   const { exportSettings, setExportSetting } = useEditorStore();
   const [style, setStyle] = React.useState<typeof VOICE_STYLES[number]>("Natural");
@@ -483,7 +517,7 @@ function VoiceoverPanel() {
     <div className="flex flex-col gap-4">
       <ToggleRow
         label="AI Voiceover"
-        sub="Synthetic narration track"
+        sub="Vocal EQ on export — not a cloud voice track"
         enabled={exportSettings.voiceoverEnabled}
         onToggle={() => {
           const next = !exportSettings.voiceoverEnabled;
@@ -494,6 +528,12 @@ function VoiceoverPanel() {
       />
       {exportSettings.voiceoverEnabled && (
         <>
+          <p className="text-[11px] text-muted-foreground leading-relaxed" role="note">
+            This boosts vocal frequencies on export. Cloud narration is Dub Video.
+            Preview uses browser speech and is not baked into the file unless a
+            cloud voice track actually exists.
+          </p>
+          <VoiceoverBrowserPreview />
           <div className="flex flex-col gap-1.5">
             <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">Voice Style</span>
             <div className="grid grid-cols-2 gap-1.5">
@@ -868,7 +908,7 @@ export default function RightPanel() {
                   />
                   <ToggleRow
                     label="AI Voiceover"
-                    sub="Synthetic narration"
+                    sub="Vocal EQ on export — not a cloud voice track"
                     enabled={exportSettings.voiceoverEnabled}
                     onToggle={() =>
                       setExportSetting("voiceoverEnabled", !exportSettings.voiceoverEnabled)

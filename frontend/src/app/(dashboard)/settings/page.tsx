@@ -743,7 +743,7 @@ function ShortcutsTab() {
 
 const STAYS_LOCAL = [
   "Raw video & audio — decoded and trimmed in-browser",
-  "Whisper transcription & caption text",
+  "On-device transcription & caption text",
   "Face-tracking and silence-detection passes",
   "Your editor preferences, themes & shortcuts",
 ];
@@ -791,8 +791,8 @@ function PrivacyTab() {
             <div className="space-y-1.5">
               <p className="text-lg font-bold tracking-tight text-foreground">Zero-Trust processing</p>
               <p className="text-sm font-medium text-muted-foreground leading-relaxed">
-                FFmpeg, Whisper, and the vision models run as local Web Workers in your browser. Your raw
-                source media is never uploaded to our servers.
+                On-device transcription, local export tools, and vision models run as Web Workers in your
+                browser. Your raw source media is never uploaded to our servers.
               </p>
             </div>
           </div>
