@@ -43,6 +43,11 @@ export const metadata: Metadata = {
     shortcut: "/qs-logo.png",
     apple: "/qs-logo.png",
   },
+  appleWebApp: {
+    capable: true,
+    title: "QuickAI Short",
+    statusBarStyle: "black-translucent",
+  },
   openGraph: {
     type: "website",
     url: "https://quickaishort.online",

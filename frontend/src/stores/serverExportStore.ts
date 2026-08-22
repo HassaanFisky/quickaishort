@@ -37,7 +37,27 @@ export const useServerExportStore = create<ServerExportState>((set) => ({
   lastDownloadUrl: null,
   cancelExport: null,
   resetExportState: null,
-  setSnapshot: (patch) => set(patch),
+  // Returning `s` on no-op keeps the same object identity. A fresh object
+  // every write re-renders EditorLayout (it selects cancelExport) which
+  // remounts ServerExportHost's effect and used to throw max-update-depth.
+  setSnapshot: (patch) =>
+    set((s) => {
+      if (
+        s.isExporting === patch.isExporting &&
+        s.exportProgress === patch.exportProgress &&
+        s.activeJobId === patch.activeJobId &&
+        s.exportError === patch.exportError &&
+        s.exportDone === patch.exportDone &&
+        s.lastDownloadUrl === patch.lastDownloadUrl
+      ) {
+        return s;
+      }
+      return patch;
+    }),
   setControllers: (c) =>
-    set({ cancelExport: c.cancelExport, resetExportState: c.resetExportState }),
+    set((s) =>
+      s.cancelExport === c.cancelExport && s.resetExportState === c.resetExportState
+        ? s
+        : { cancelExport: c.cancelExport, resetExportState: c.resetExportState },
+    ),
 }));

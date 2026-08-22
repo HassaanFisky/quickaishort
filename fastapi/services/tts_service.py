@@ -60,8 +60,21 @@ class TTSService:
             tmp_path = Path(tmp.name)
 
         try:
-            if provider == "elevenlabs" and self.eleven_api_key:
-                success_path = await self._generate_elevenlabs(text, voice_id, tmp_path)
+            if provider == "elevenlabs":
+                # Extra paid SaaS — fail closed unless founder explicitly enables.
+                if os.getenv("ELEVENLABS_ENABLED", "").strip().lower() not in (
+                    "1",
+                    "true",
+                    "yes",
+                ):
+                    logger.warning(
+                        "elevenlabs_blocked_unapproved — set ELEVENLABS_ENABLED to use"
+                    )
+                    success_path = None
+                else:
+                    success_path = await self._generate_elevenlabs(
+                        text, voice_id, tmp_path
+                    )
             else:
                 success_path = await self._generate_google(
                     text, voice_id, tmp_path, speaking_rate=rate

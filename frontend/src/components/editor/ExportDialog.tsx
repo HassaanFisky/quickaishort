@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
-import { Download, Server, Zap } from "lucide-react";
+import { Download, Server, Share2, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useEditorStore } from "@/stores/editorStore";
@@ -18,6 +18,12 @@ import { extractAudioBuffer, audioBufferToChunks } from "@/lib/export/audioExtra
 import { formatTime } from "@/lib/utils/formatTime";
 import { getExportContextFromManifest } from "@/lib/export/renderManifestExportContext";
 import { trackEvent } from "@/lib/analytics";
+import { LOOP_COPY } from "@/lib/studio/computePlane";
+import {
+  canCaptureStream,
+  exportLocalClip,
+  exportPreviewRange,
+} from "@/lib/clientExport";
 import {
   Dialog,
   DialogContent,
@@ -42,6 +48,7 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
   const suggestions = useEditorStore((s) => s.suggestions);
 
   const [clientSupported, setClientSupported] = useState<boolean | null>(null);
+  const [deviceShareOk, setDeviceShareOk] = useState(false);
   const [audioSupported] = useState(() => WebCodecsExporter.hasAudioSupport());
   const [selectedPreset, setSelectedPreset] = useState<ExportPreset>(EXPORT_PRESETS[0]);
   const [exporting, setExporting] = useState(false);
@@ -66,6 +73,7 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
   useEffect(() => {
     if (!open) return;
     WebCodecsExporter.isSupported().then(setClientSupported);
+    setDeviceShareOk(canCaptureStream());
   }, [open]);
 
   // Sync format to store whenever user changes it
@@ -90,9 +98,41 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
   const handleServerExport = useCallback(() => {
     trackEvent({ name: "export_started", props: { presetId: `server:${selectedPreset.label}`, durationSec: Math.round(rangeDuration) } });
     dispatchAIActions([{ type: "EXPORT_CLIP", payload: {} }]);
-    toast.info("Server render queued — you'll get a download link when ready.");
+    toast.info(LOOP_COPY.exportFinalHint);
     onClose();
   }, [dispatchAIActions, onClose, selectedPreset, rangeDuration]);
+
+  const handleDeviceShare = useCallback(async () => {
+    if (!canCaptureStream()) {
+      toast.error(LOOP_COPY.shareUnsupported);
+      return;
+    }
+    const file = useEditorStore.getState().sourceFile;
+    const storeVideo = videoElementRef?.current;
+    const video = storeVideo ?? (document.querySelector("video") as HTMLVideoElement | null);
+    const title = useEditorStore.getState().videoMetadata?.title ?? "clip";
+    const safeName = title.replace(/[^a-zA-Z0-9_\- ]/g, "").trim().slice(0, 60) || "clip";
+    const filename = `${safeName}_share.webm`;
+
+    setExporting(true);
+    try {
+      const result = file
+        ? await exportLocalClip(file, rangeStart, rangeEnd, filename)
+        : video && video.readyState >= 2
+          ? await exportPreviewRange(video, rangeStart, rangeEnd, filename)
+          : null;
+      if (!result) {
+        toast.error(LOOP_COPY.shareUnsupported);
+        return;
+      }
+      toast.success(result === "shared" ? LOOP_COPY.shareDone : LOOP_COPY.shareSaved);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : LOOP_COPY.shareUnsupported;
+      toast.error(msg);
+    } finally {
+      setExporting(false);
+    }
+  }, [videoElementRef, rangeStart, rangeEnd]);
 
   const handleClientExport = useCallback(async () => {
     const storeState = useEditorStore.getState();
@@ -258,7 +298,7 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
             Export
           </DialogTitle>
           <DialogDescription className="text-12 text-fg-muted">
-            Choose format and resolution, then export locally or via server render.
+            {LOOP_COPY.shareHint} {LOOP_COPY.exportFinalHint}
           </DialogDescription>
         </DialogHeader>
 
@@ -306,9 +346,9 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
             ))}
           </div>
           <p className="text-[10px] text-fg-muted mt-2 leading-relaxed">
-            Preview: local export stays on your device (WebCodecs / MediaRecorder).
-            Final shareable MP4: Server render (Cloud Tasks → private ffmpeg).
-            Free plan server export is forced to 720p with a “Made with QuickAI”
+            {LOOP_COPY.shareHint} WebCodecs save stays on this device.
+            {LOOP_COPY.exportFinalHint}
+            Free plan cloud export is forced to 720p with a “Made with QuickAI”
             watermark — Pro unlocks up to 4K without watermark.
           </p>
         </div>
@@ -403,8 +443,8 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
           <div className="mb-4 space-y-2">
             <p className="text-[11px] text-fg-muted flex items-center gap-1.5">
               <Zap size={11} className="text-primary shrink-0" />
-              Local preview export — stays on your device. Use Server render for the
-              final cloud MP4 (watermark/tier rules apply).
+              Local preview export — stays on your device. Use {LOOP_COPY.exportFinalLabel} for
+              the cloud MP4 (watermark/tier rules apply).
             </p>
             <div className="flex items-center gap-3 text-[9px] text-fg-subtle">
               <span className="flex items-center gap-1">
@@ -422,18 +462,36 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
           <p className="text-[11px] text-fg-muted mb-4">
             {duration > MAX_CLIP_SECONDS
               ? `Clip is ${Math.round(duration)}s (> ${MAX_CLIP_SECONDS}s) — use shorter clip or server render.`
-              : "WebCodecs not available in this browser — try Chrome 94+ or use server render."}
+              : "WebCodecs not available in this browser — use Share on this device, or Export final after a cloud upload."}
           </p>
         )}
 
         {/* Actions */}
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          {!exporting && (
+            <button
+              type="button"
+              onClick={() => void handleDeviceShare()}
+              disabled={!manifestValid || duration <= 0 || !deviceShareOk}
+              title={
+                !deviceShareOk
+                  ? LOOP_COPY.shareUnsupported
+                  : !manifestValid
+                    ? manifestErrors.join(", ")
+                    : LOOP_COPY.shareHint
+              }
+              className="flex-1 min-w-[7.5rem] flex items-center justify-center gap-2 h-9 rounded-xl border border-border text-xs font-semibold text-fg-muted hover:text-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Share2 size={13} />
+              {LOOP_COPY.shareLabel}
+            </button>
+          )}
           {canUseClientExport && !exporting && (
             <button
               onClick={handleClientExport}
               disabled={!manifestValid}
               title={!manifestValid ? manifestErrors.join(", ") : undefined}
-              className="flex-1 flex items-center justify-center gap-2 h-9 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 min-w-[7.5rem] flex items-center justify-center gap-2 h-9 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Download size={13} />
               Export locally
@@ -452,14 +510,14 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
               type="button"
               onClick={handleServerExport}
               disabled={!manifestValid}
-              title={!manifestValid ? manifestErrors.join(", ") : undefined}
+              title={!manifestValid ? manifestErrors.join(", ") : LOOP_COPY.exportFinalHint}
               className={cn(
                 "flex items-center justify-center gap-2 h-9 rounded-xl border border-border text-xs font-semibold text-fg-muted hover:text-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
-                canUseClientExport ? "px-4" : "flex-1",
+                canUseClientExport ? "px-4" : "flex-1 min-w-[7.5rem]",
               )}
             >
               <Server size={13} />
-              Server render
+              {LOOP_COPY.exportFinalLabel}
             </button>
           )}
         </div>

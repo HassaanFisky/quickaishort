@@ -24,6 +24,7 @@ import {
 import { mapAiEditorError } from "@/lib/aiEditorErrors";
 import { useSession } from "next-auth/react";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
+import { SPEECH_COPY } from "@/lib/studio/computePlane";
 import { cn } from "@/lib/utils";
 import {
   buildEdgeFacets,
@@ -46,6 +47,57 @@ import { AuthenticatedFetchError } from "@/lib/authenticatedFetch";
 
 /** Debounce edge facet upserts — transcript/silence/clips churn must not spam Firestore. */
 const FACET_REFRESH_DEBOUNCE_MS = 400;
+
+type OrchestratorPlanResult = {
+  plan_id?: string;
+  decision_mode?: string;
+  message?: string;
+  steps?: Array<{ capability_id: EditorAction["type"]; params?: Record<string, unknown> }>;
+};
+
+/**
+ * Silence chips go through decision_gate (0 Gemini). Typed chat stays DualModelRouter.
+ * ASK/RESEARCH with chip segments falls back to the existing structured plan.
+ */
+async function planGroundedSuggestion(
+  s: SuggestionIntent,
+  projectId: string | null,
+): Promise<OrchestratorPlanResult> {
+  const capabilityId = s.capability_id;
+  if (!capabilityId) {
+    return { message: "unsupported_suggestion", steps: [] };
+  }
+
+  const structured = {
+    source: "suggestion" as const,
+    project_id: projectId,
+    structured: {
+      capability_id: capabilityId,
+      params: s.params ?? {},
+      label: s.label,
+      suggestion_id: s.suggestion_id,
+    },
+  };
+
+  if (capabilityId !== "REMOVE_SILENCES") {
+    return (await orchestratorPlan(structured)) as OrchestratorPlanResult;
+  }
+
+  const gated = (await orchestratorPlan({
+    source: "suggestion",
+    decision_gate: true,
+    intent_text: s.label,
+    project_id: projectId,
+  })) as OrchestratorPlanResult;
+
+  if (gated?.decision_mode === "ACT") return gated;
+
+  const segments = Array.isArray(s.params?.segments) ? s.params.segments : [];
+  if (segments.length > 0) {
+    return (await orchestratorPlan(structured)) as OrchestratorPlanResult;
+  }
+  return gated;
+}
 
 /* ─── Sub-components ───────────────────────────────────────────────────────── */
 
@@ -356,8 +408,13 @@ export function AIPanel() {
     }
   }, []);
 
-  const { isRecording, startRecording, stopRecording, error: voiceError } =
-    useVoiceInput(handleTranscript);
+  const {
+    isRecording,
+    startRecording,
+    stopRecording,
+    error: voiceError,
+    available: browserVoiceAvailable,
+  } = useVoiceInput(handleTranscript);
 
   const toggleVoice = () => (isRecording ? stopRecording() : startRecording());
 
@@ -595,16 +652,25 @@ export function AIPanel() {
       addAIMessage({ role: "user", content: s.label });
       setAIThinking(true);
       try {
-        const plan = await orchestratorPlan({
-          source: "suggestion",
-          project_id: useEditorStore.getState().studioProjectId,
-          structured: {
-            capability_id: s.capability_id,
-            params: s.params ?? {},
-            label: s.label,
-            suggestion_id: s.suggestion_id,
-          },
-        });
+        const plan = await planGroundedSuggestion(
+          s,
+          useEditorStore.getState().studioProjectId,
+        );
+        if (
+          s.capability_id === "REMOVE_SILENCES" &&
+          plan?.decision_mode &&
+          plan.decision_mode !== "ACT" &&
+          !plan.steps?.length
+        ) {
+          addAIMessage({
+            role: "assistant",
+            content:
+              plan.message ||
+              "Need silence evidence before cutting dead air.",
+            actions: [],
+          });
+          return;
+        }
         const step = plan?.steps?.[0];
         if (step?.capability_id) {
           dispatchAIActions([
@@ -1370,7 +1436,7 @@ export function AIPanel() {
                 : creditsExhausted
                   ? "Out of credits — upgrade to keep chatting…"
                   : isRecording
-                    ? "Listening…"
+                    ? SPEECH_COPY.chatVoiceListening
                     : "Tell me what to edit… (Enter to send)"
             }
             value={inputText}
@@ -1386,14 +1452,27 @@ export function AIPanel() {
           <button
             className={`voice-btn ${isRecording ? "voice-btn-active" : ""}`}
             onClick={toggleVoice}
-            disabled={!isVideoLoaded || creditsExhausted}
-            aria-label={isRecording ? "Stop recording" : "Voice input"}
+            disabled={
+              !isVideoLoaded ||
+              creditsExhausted ||
+              (!browserVoiceAvailable && !isRecording)
+            }
+            aria-pressed={isRecording}
+            aria-label={
+              isRecording
+                ? "Stop browser voice"
+                : browserVoiceAvailable
+                  ? SPEECH_COPY.chatVoiceLabel
+                  : SPEECH_COPY.chatVoiceUnsupported
+            }
             title={
               creditsExhausted
                 ? "Out of credits"
-                : isRecording
-                  ? "Stop voice input"
-                  : "Voice input"
+                : !browserVoiceAvailable
+                  ? SPEECH_COPY.chatVoiceUnsupported
+                  : isRecording
+                    ? "Stop browser voice"
+                    : SPEECH_COPY.chatVoiceLabel
             }
           >
             {isRecording ? <MicOff size={14} /> : <Mic size={14} />}

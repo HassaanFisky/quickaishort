@@ -24,6 +24,7 @@ import {
   type MediaIngestPolicy,
   validateFileAgainstPolicy,
 } from "@/lib/studio/ingestPolicy";
+import { LOOP_COPY } from "@/lib/studio/computePlane";
 import {
   INGEST_PROGRESS_STEPS,
   INGEST_STAGE_LABELS,
@@ -197,7 +198,9 @@ export default function IngestSurface({
 
   const progressHint =
     ingestStage === "acquire_meta"
-      ? "Uploading securely…"
+      ? ingestUploadProgress != null
+        ? "Uploading securely…"
+        : LOOP_COPY.ingestReading
       : ingestStage === "projectize"
         ? "Preparing your editor…"
         : ingestStage === "analyze"

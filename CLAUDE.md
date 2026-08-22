@@ -653,6 +653,7 @@ Read this file at the start of every session. When this file is updated, acknowl
 
 ## CHANGELOG
 
+- **2026-08-22:** Local-first phone loop on the speech-plane branch: skip GCS PUT on file ingest; lazy upload only on Export final; device Share (MediaRecorder + Web Share) with honest Safari fallback; REMOVE_SILENCES chips use `decision_gate` (typed chat unchanged). Empty `/editor` max-update-depth was `ServerExportHost` writing a new `cancelExport` into `serverExportStore` every render (not Radix `composeRefs`). Fixed with stable `useCallback` + no-op store writes. On-device speech plane (browser voice / on-device transcription copy, no paid STT fallback) remains on the same branch.
 - **2026-08-20:** Studio Graph viewer is local-only (`npm run graft:viz` → 127.0.0.1:4400). Architecture territories + focus+context over `graft/.graph/wiring.json`. Never commit `graft/`.
 - **2026-08-20:** Graft is a **local** context graph (`graft/` gitignored). Public repo must not receive the map. Build with pinned `npx -y @nanonets/graft@0.10.1 build` (`$0`, no `--deep` without founder). MCP uses the same npx pin, not a global `graft` binary.
 - **2026-07-30:** Dropped external contest/submission framing from agent protocol and public About copy. Product focus = SaaS shipping only.
