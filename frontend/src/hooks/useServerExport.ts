@@ -88,6 +88,9 @@ export function useServerExport({ userId }: UseServerExportArgs) {
   const activeJobIdRef = useRef(activeJobId);
   activeJobIdRef.current = activeJobId;
 
+  // Must stay identity-stable. An inline cancelExport in the hook return
+  // made ServerExportHost call setControllers every render → empty /editor
+  // max-update-depth under StrictMode.
   const cancelExport = useCallback(async () => {
     const jobId = activeJobIdRef.current;
     cleanup();

@@ -80,7 +80,7 @@ Grounded in repo evidence. This ADR does **not** claim the Studio vision is comp
 
 - Gemini prepayment top-up → live `generateContent` smoke (analyze, AI chat, key rotate)
 - Deploy this branch (API Cloud Run + Vercel FE) — **do not merge `main` from this ADR**
-- `/editor` ingest crash in `next dev` (Radix `composeRefs` + React 18 StrictMode) — blocks in-browser chat round-trip; backend `POST /api/ai-editor/command` still works under `MOCK_AI_MODE`
+- SUPERSEDED (2026-08-22): empty `/editor` max-update-depth in `next dev` was `ServerExportHost` writing a new `cancelExport` into `serverExportStore` every render — not Radix `composeRefs`. Fixed with stable `useCallback` + no-op store writes. Backend `POST /api/ai-editor/command` under `MOCK_AI_MODE` remains the no-spend AI round-trip.
 - `GOOGLE_TTS_API_KEY` for full Dub Video voice; Dub live smoke after Gemini + TTS
 - Rotate `ADMIN_SECRET` (historical docs exposure)
 - Live smoke of gated ACT on production Kernel + MediaGraph silence facet
