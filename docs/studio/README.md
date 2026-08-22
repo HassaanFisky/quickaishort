@@ -79,6 +79,15 @@ Also: [ARCHITECTURE_DECISION_LOG](./ARCHITECTURE_DECISION_LOG.md) · [TECHNICAL_
 
 Contracts: `docs/studio/contracts/` + runtime `fastapi/capabilities/`.
 
+### Research (non-binding)
+
+| # | Document | Purpose |
+|---|----------|---------|
+| 40 | [NLE MCP Arena pack](./40-nle-mcp-arena-research-pack.md) | Premiere/Resolve/Kinocut taxonomy → EP-001 |
+| 41 | [AI-native video + image platform](./41-ai-native-media-platform-research.md) | 2026-08-22 ecosystem + Creative Kernel recommendation |
+
+Research docs do not change production contracts. Implementation still requires an ADR.
+
 ---
 
 ## Quick verdict
