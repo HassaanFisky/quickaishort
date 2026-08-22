@@ -18,6 +18,7 @@ ProjectStatus = Literal["active", "archived", "deleted"]
 ActorKind = Literal["user", "agent", "system"]
 CommandKind = Literal["capability", "system"]
 CommandSource = Literal["chat", "ui_direct", "orchestrator", "automation"]
+EditOrigin = Literal["ai", "manual", "system"]
 RejectReason = Literal[
     "auth", "conflict", "emit_blocked", "validation", "unknown_capability"
 ]
@@ -29,6 +30,7 @@ SystemOpType = Literal[
     "import_adk_segments",  # alias → import_assets + source=adk_segments
     "set_title",
     "attach_primary_asset",
+    "commit_snapshot",  # manual UI materialization (Strategy A)
 ]
 
 
@@ -95,6 +97,7 @@ class ProjectEvent(BaseModel):
     parent_revision: int
     ts: datetime
     actor: Actor
+    origin: EditOrigin = "manual"
     capability_id: Optional[str] = None
     capability_version: Optional[int] = None
     command_id: str
@@ -149,8 +152,12 @@ class CommandAck(BaseModel):
     command_id: str
     event_ids: list[str]
     new_revision: int
+    parent_revision: int = 0
+    origin: EditOrigin = "manual"
     snapshot_manifest: Optional[RenderManifest] = None
     snapshot_hash: Optional[str] = None
+    undo_depth: int = 0
+    redo_depth: int = 0
 
 
 class CommandReject(BaseModel):

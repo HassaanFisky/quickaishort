@@ -143,7 +143,7 @@ async def test_cloud_task_has_named_id_oidc_and_bounded_deadline(
     assert task.http_request.oidc_token.audience == "https://renderer.example.run.app"
     assert task.dispatch_deadline.seconds == 900
     assert json.loads(task.http_request.body)["job_id"] == "job-1"
-    assert fake_redis.hashes["render:meta:job-1"]["status"] == "queued"
+    assert fake_redis.hashes["render:meta:job-1"]["status"] == "accepted"
     assert fake_redis.values["render:runid:job-1"] == "run-1"
 
 

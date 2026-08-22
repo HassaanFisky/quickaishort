@@ -32,8 +32,12 @@ export interface CommandAck {
   command_id: string;
   event_ids: string[];
   new_revision: number;
+  parent_revision?: number;
+  origin?: "ai" | "manual" | "system";
   snapshot_manifest?: RenderManifest | null;
   snapshot_hash?: string | null;
+  undo_depth?: number;
+  redo_depth?: number;
 }
 
 export interface CommandRejectDetail {
@@ -159,3 +163,25 @@ export async function commitCapability(opts: {
 }
 
 export { newCommandId };
+
+export async function commitSystemOp(opts: {
+  projectId: string;
+  baseRevision: number;
+  systemOp: "undo" | "redo" | "revert_to_revision" | "commit_snapshot";
+  proposedManifest?: RenderManifest | null;
+  baseSnapshotHash?: string | null;
+  params?: Record<string, unknown>;
+  source?: CommandSource;
+}): Promise<CommandAck> {
+  return postStudioCommand({
+    command_id: newCommandId(),
+    project_id: opts.projectId,
+    base_revision: opts.baseRevision,
+    kind: "system",
+    system_op: opts.systemOp,
+    params: opts.params ?? {},
+    source: opts.source ?? "ui_direct",
+    proposed_manifest: opts.proposedManifest ?? null,
+    base_snapshot_hash: opts.baseSnapshotHash ?? null,
+  });
+}

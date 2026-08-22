@@ -559,6 +559,9 @@ interface EditorState {
   studioProjectId: string | null;
   studioAckedRevision: number;
   studioSnapshotHash: string | null;
+  studioUndoDepth: number;
+  studioRedoDepth: number;
+  studioProjectionByHash: Record<string, AiSnapshot>;
 
   // M2 — staged ingest lifecycle (URL + upload)
   ingestStage: IngestStage;
@@ -813,6 +816,9 @@ export const useEditorStore = create<EditorState>()(
       studioProjectId: null,
       studioAckedRevision: 0,
       studioSnapshotHash: null,
+      studioUndoDepth: 0,
+      studioRedoDepth: 0,
+      studioProjectionByHash: {},
       ingestStage: "idle",
       ingestSourceKind: null,
       ingestFingerprint: null,
@@ -946,6 +952,9 @@ export const useEditorStore = create<EditorState>()(
           studioProjectId: null,
           studioAckedRevision: 0,
           studioSnapshotHash: null,
+          studioUndoDepth: 0,
+          studioRedoDepth: 0,
+          studioProjectionByHash: {},
           suggestions: [],
           captions: [],
           transcript: null,
@@ -975,6 +984,9 @@ export const useEditorStore = create<EditorState>()(
           studioProjectId: null,
           studioAckedRevision: 0,
           studioSnapshotHash: null,
+          studioUndoDepth: 0,
+          studioRedoDepth: 0,
+          studioProjectionByHash: {},
           suggestions: [],
           captions: [],
           transcript: null,
@@ -2325,6 +2337,13 @@ export const useEditorStore = create<EditorState>()(
 
       undoAiEdit: () => {
         const s = useEditorStore.getState();
+        // Kernel revision is authoritative. Local AI stacks are projections.
+        if (
+          s.studioProjectId &&
+          process.env.NEXT_PUBLIC_STUDIO_PROJECT_KERNEL === "1"
+        ) {
+          return false;
+        }
         if (s.aiUndoStack.length === 0) return false;
         const snapshot = s.aiUndoStack[s.aiUndoStack.length - 1];
         // Capture current for redo
@@ -2361,6 +2380,12 @@ export const useEditorStore = create<EditorState>()(
 
       redoAiEdit: () => {
         const s = useEditorStore.getState();
+        if (
+          s.studioProjectId &&
+          process.env.NEXT_PUBLIC_STUDIO_PROJECT_KERNEL === "1"
+        ) {
+          return false;
+        }
         if (s.aiRedoStack.length === 0) return false;
         const snapshot = s.aiRedoStack[s.aiRedoStack.length - 1];
         const current: AiSnapshot = {
@@ -2432,6 +2457,9 @@ export const useEditorStore = create<EditorState>()(
           studioProjectId: null,
           studioAckedRevision: 0,
           studioSnapshotHash: null,
+          studioUndoDepth: 0,
+          studioRedoDepth: 0,
+          studioProjectionByHash: {},
           suggestions: [],
           captions: [],
           transcript: null,
@@ -2474,6 +2502,9 @@ export const useEditorStore = create<EditorState>()(
           studioProjectId: null,
           studioAckedRevision: 0,
           studioSnapshotHash: null,
+          studioUndoDepth: 0,
+          studioRedoDepth: 0,
+          studioProjectionByHash: {},
           duration: 0,
           resolution: null,
           isProcessing: false,

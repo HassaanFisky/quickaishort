@@ -742,6 +742,30 @@ export function AIPanel() {
                 base_snapshot_hash: st.studioSnapshotHash,
                 proposed_manifest: st.compiledManifest,
               });
+              const { fetchStudioHead } = await import(
+                "@/lib/studio/projectKernel"
+              );
+              const { applyKernelAck } = await import(
+                "@/lib/studio/canonicalHistory"
+              );
+              if (st.studioProjectId) {
+                const head = await fetchStudioHead(st.studioProjectId);
+                applyKernelAck({
+                  status: "accepted",
+                  command_id: plan.plan_id,
+                  event_ids: [],
+                  new_revision: head.revision,
+                  snapshot_hash: head.snapshot_hash,
+                  snapshot_manifest: head.snapshot_manifest,
+                  undo_depth: Array.isArray(head.undo_stack)
+                    ? head.undo_stack.length
+                    : 0,
+                  redo_depth: Array.isArray(head.redo_stack)
+                    ? head.redo_stack.length
+                    : 0,
+                  origin: "ai",
+                });
+              }
             }
           } catch (syncErr: unknown) {
             const { formatApiDetail } = await import("@/lib/authenticatedFetch");
@@ -941,9 +965,23 @@ export function AIPanel() {
                   proposed_manifest: st.compiledManifest,
                 });
                 const head = await fetchStudioHead(projectId);
-                useEditorStore.setState({
-                  studioAckedRevision: head.revision,
-                  studioSnapshotHash: head.snapshot_hash,
+                const { applyKernelAck } = await import(
+                  "@/lib/studio/canonicalHistory"
+                );
+                applyKernelAck({
+                  status: "accepted",
+                  command_id: plan.plan_id,
+                  event_ids: [],
+                  new_revision: head.revision,
+                  snapshot_hash: head.snapshot_hash,
+                  snapshot_manifest: head.snapshot_manifest,
+                  undo_depth: Array.isArray(head.undo_stack)
+                    ? head.undo_stack.length
+                    : 0,
+                  redo_depth: Array.isArray(head.redo_stack)
+                    ? head.redo_stack.length
+                    : 0,
+                  origin: "ai",
                 });
                 const accepted = (executed?.steps ?? []).filter(
                   (s: { status?: string }) => s.status === "accepted",

@@ -54,6 +54,90 @@ class StorageService:
         blob.upload_from_filename(str(local_path), content_type=content_type)
         return f"gs://{get_gcs_bucket().name}/{remote_path}"
 
+    def inspect_blob(
+        self,
+        remote_path: str,
+        *,
+        job_id: str = "",
+        project_id: str = "",
+        project_revision: str = "",
+        manifest_hash: str = "",
+        _bucket_name: BucketType = "exports",
+    ):
+        """Reload object metadata from GCS. Missing objects return exists=False."""
+        from services.render_lifecycle import ArtifactEvidence
+
+        if not is_ready():
+            return ArtifactEvidence(path=remote_path, exists=False, job_id=job_id)
+        blob = self._blob(remote_path)
+        try:
+            blob.reload()
+        except Exception as exc:
+            name = type(exc).__name__
+            msg = str(exc)
+            if name == "NotFound" or "404" in msg or "Not Found" in msg:
+                return ArtifactEvidence(
+                    path=remote_path,
+                    exists=False,
+                    job_id=job_id,
+                    project_id=project_id,
+                    project_revision=project_revision,
+                    manifest_hash=manifest_hash,
+                )
+            raise
+        generation = getattr(blob, "generation", None)
+        md5 = getattr(blob, "md5_hash", None) or ""
+        crc = getattr(blob, "crc32c", None) or ""
+        if isinstance(md5, (bytes, bytearray)):
+            md5 = md5.decode("ascii", errors="replace")
+        if isinstance(crc, (bytes, bytearray)):
+            crc = crc.decode("ascii", errors="replace")
+        return ArtifactEvidence(
+            path=remote_path,
+            exists=True,
+            size=int(getattr(blob, "size", 0) or 0),
+            generation=str(generation or ""),
+            content_type=str(getattr(blob, "content_type", "") or ""),
+            md5_hash=str(md5),
+            crc32c=str(crc),
+            job_id=job_id,
+            project_id=project_id,
+            project_revision=project_revision,
+            manifest_hash=manifest_hash,
+        )
+
+    async def inspect_blob_async(self, remote_path: str, **kwargs):
+        return await asyncio.to_thread(self.inspect_blob, remote_path, **kwargs)
+
+    def verify_export_artifact(
+        self,
+        remote_path: str,
+        *,
+        job_id: str = "",
+        project_id: str = "",
+        project_revision: str = "",
+        manifest_hash: str = "",
+    ):
+        from services.render_lifecycle import verify_artifact_evidence
+
+        evidence = self.inspect_blob(
+            remote_path,
+            job_id=job_id,
+            project_id=project_id,
+            project_revision=project_revision,
+            manifest_hash=manifest_hash,
+        )
+        return verify_artifact_evidence(
+            evidence,
+            expected_path=remote_path,
+            expected_job_id=job_id,
+        )
+
+    async def verify_export_artifact_async(self, remote_path: str, **kwargs):
+        return await asyncio.to_thread(
+            self.verify_export_artifact, remote_path, **kwargs
+        )
+
     # ---------------------------------------------------------------- download
 
     async def download_file_async(

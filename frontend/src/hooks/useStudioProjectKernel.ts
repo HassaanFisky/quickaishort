@@ -79,6 +79,8 @@ export function useStudioProjectKernel() {
         useEditorStore.setState({
           studioAckedRevision: ack.new_revision,
           studioSnapshotHash: ack.snapshot_hash ?? null,
+          studioUndoDepth: ack.undo_depth ?? 0,
+          studioRedoDepth: ack.redo_depth ?? 0,
         });
         return ack;
       } catch (err: unknown) {

@@ -346,3 +346,262 @@ def test_export_request_project_fields():
     assert req.project_revision == 3
     legacy = ExportRequest(videoId="v1", start_sec=0, end_sec=5, user_id="u1")
     assert legacy.project_id is None
+
+
+@pytest.mark.asyncio
+async def test_ai_edit_creates_ai_origin_revision(kernel):
+    head = await kernel.create_project(
+        "user-a",
+        CreateStudioProjectRequest(title="T", proposed_manifest=_manifest(10.0)),
+    )
+    ack = await kernel.accept_command(
+        "user-a",
+        ProjectCommand(
+            command_id="ai-1",
+            project_id=head.project_id,
+            base_revision=0,
+            kind="capability",
+            capability_id="ADD_CAPTION",
+            source="chat",
+            proposed_manifest=_manifest(12.0),
+            params={"text": "hook"},
+        ),
+    )
+    assert isinstance(ack, CommandAck)
+    assert ack.origin == "ai"
+    assert ack.parent_revision == 0
+    assert ack.new_revision == 1
+    events = await kernel.get_events(head.project_id, "user-a", 0)
+    assert events is not None
+    assert events[0].origin == "ai"
+    assert events[0].actor.kind == "agent"
+    assert events[0].parent_revision == 0
+
+
+@pytest.mark.asyncio
+async def test_manual_edit_creates_manual_origin_revision(kernel):
+    head = await kernel.create_project(
+        "user-a",
+        CreateStudioProjectRequest(title="T", proposed_manifest=_manifest(10.0)),
+    )
+    ack = await kernel.accept_command(
+        "user-a",
+        ProjectCommand(
+            command_id="man-1",
+            project_id=head.project_id,
+            base_revision=0,
+            kind="system",
+            system_op="commit_snapshot",
+            source="ui_direct",
+            proposed_manifest=_manifest(11.0),
+        ),
+    )
+    assert isinstance(ack, CommandAck)
+    assert ack.origin == "manual"
+    assert ack.parent_revision == 0
+    assert ack.new_revision == 1
+    head2 = await kernel.get_head(head.project_id, "user-a")
+    assert head2 is not None
+    assert head2.snapshot_manifest is not None
+    assert head2.snapshot_manifest.timeline.duration == 11.0
+
+
+@pytest.mark.asyncio
+async def test_consecutive_edits_form_revision_lineage(kernel):
+    head = await kernel.create_project(
+        "user-a",
+        CreateStudioProjectRequest(title="T", proposed_manifest=_manifest(10.0)),
+    )
+    ai = await kernel.accept_command(
+        "user-a",
+        ProjectCommand(
+            command_id="ai-lin",
+            project_id=head.project_id,
+            base_revision=0,
+            kind="capability",
+            capability_id="ADD_CAPTION",
+            source="orchestrator",
+            proposed_manifest=_manifest(12.0),
+        ),
+    )
+    manual = await kernel.accept_command(
+        "user-a",
+        ProjectCommand(
+            command_id="man-lin",
+            project_id=head.project_id,
+            base_revision=1,
+            kind="system",
+            system_op="commit_snapshot",
+            source="ui_direct",
+            proposed_manifest=_manifest(13.0),
+        ),
+    )
+    assert isinstance(ai, CommandAck) and isinstance(manual, CommandAck)
+    assert (ai.parent_revision, ai.new_revision) == (0, 1)
+    assert (manual.parent_revision, manual.new_revision) == (1, 2)
+    events = await kernel.get_events(head.project_id, "user-a", -1)
+    assert events is not None
+    assert [e.origin for e in events] == ["ai", "manual"]
+    assert [e.parent_revision for e in events] == [0, 1]
+
+
+@pytest.mark.asyncio
+async def test_commit_snapshot_identity_does_not_fork(kernel):
+    m0 = _manifest(10.0)
+    head = await kernel.create_project(
+        "user-a",
+        CreateStudioProjectRequest(title="T", proposed_manifest=m0),
+    )
+    ack = await kernel.accept_command(
+        "user-a",
+        ProjectCommand(
+            command_id="ident-1",
+            project_id=head.project_id,
+            base_revision=0,
+            kind="system",
+            system_op="commit_snapshot",
+            source="ui_direct",
+            proposed_manifest=m0,
+        ),
+    )
+    assert isinstance(ack, CommandAck)
+    assert ack.new_revision == 0
+    assert ack.event_ids == []
+    head2 = await kernel.get_head(head.project_id, "user-a")
+    assert head2 is not None
+    assert head2.revision == 0
+
+
+@pytest.mark.asyncio
+async def test_mixed_ai_manual_undo_restores_authoritative_state(kernel):
+    m0 = _manifest(10.0)
+    head = await kernel.create_project(
+        "user-a",
+        CreateStudioProjectRequest(title="T", proposed_manifest=m0),
+    )
+    await kernel.accept_command(
+        "user-a",
+        ProjectCommand(
+            command_id="ai-u",
+            project_id=head.project_id,
+            base_revision=0,
+            kind="capability",
+            capability_id="ADD_CAPTION",
+            source="chat",
+            proposed_manifest=_manifest(12.0),
+        ),
+    )
+    await kernel.accept_command(
+        "user-a",
+        ProjectCommand(
+            command_id="man-u",
+            project_id=head.project_id,
+            base_revision=1,
+            kind="system",
+            system_op="commit_snapshot",
+            source="ui_direct",
+            proposed_manifest=_manifest(14.0),
+        ),
+    )
+    undo_manual = await kernel.accept_command(
+        "user-a",
+        ProjectCommand(
+            command_id="undo-man",
+            project_id=head.project_id,
+            base_revision=2,
+            kind="system",
+            system_op="undo",
+            source="ui_direct",
+        ),
+    )
+    assert isinstance(undo_manual, CommandAck)
+    assert undo_manual.origin == "system"
+    restored = await kernel.get_head(head.project_id, "user-a")
+    assert restored is not None
+    assert restored.snapshot_manifest is not None
+    assert restored.snapshot_manifest.timeline.duration == 12.0
+    undo_ai = await kernel.accept_command(
+        "user-a",
+        ProjectCommand(
+            command_id="undo-ai",
+            project_id=head.project_id,
+            base_revision=3,
+            kind="system",
+            system_op="undo",
+            source="ui_direct",
+        ),
+    )
+    assert isinstance(undo_ai, CommandAck)
+    original = await kernel.get_head(head.project_id, "user-a")
+    assert original is not None
+    assert original.snapshot_manifest is not None
+    assert original.snapshot_manifest.timeline.duration == 10.0
+
+
+@pytest.mark.asyncio
+async def test_revision_snapshots_survive_store_rehydrate(kernel):
+    head = await kernel.create_project(
+        "user-a",
+        CreateStudioProjectRequest(title="T", proposed_manifest=_manifest(10.0)),
+    )
+    await kernel.accept_command(
+        "user-a",
+        ProjectCommand(
+            command_id="persist-1",
+            project_id=head.project_id,
+            base_revision=0,
+            kind="capability",
+            capability_id="ADD_CAPTION",
+            source="ui_direct",
+            proposed_manifest=_manifest(12.0),
+        ),
+    )
+    live = kernel.store.get_project(head.project_id)
+    assert live is not None
+    dumped = live.model_dump(mode="json")
+    from models.studio_project import StudioProjectHead
+
+    restored = StudioProjectHead.model_validate(dumped)
+    assert restored.revision == 1
+    assert "0" in restored.revision_snapshots
+    assert "1" in restored.revision_snapshots
+    assert restored.revision_snapshots["1"]["hash"] == restored.snapshot_hash
+
+
+@pytest.mark.asyncio
+async def test_client_projection_cannot_bypass_stale_revision(kernel):
+    """Client stacks are not truth: a stale base_revision is rejected."""
+    head = await kernel.create_project(
+        "user-a",
+        CreateStudioProjectRequest(title="T", proposed_manifest=_manifest(10.0)),
+    )
+    await kernel.accept_command(
+        "user-a",
+        ProjectCommand(
+            command_id="first",
+            project_id=head.project_id,
+            base_revision=0,
+            kind="capability",
+            capability_id="ADD_CAPTION",
+            source="chat",
+            proposed_manifest=_manifest(12.0),
+        ),
+    )
+    stale_local_undo = await kernel.accept_command(
+        "user-a",
+        ProjectCommand(
+            command_id="stale-undo",
+            project_id=head.project_id,
+            base_revision=0,
+            kind="system",
+            system_op="undo",
+            source="ui_direct",
+        ),
+    )
+    assert isinstance(stale_local_undo, CommandReject)
+    assert stale_local_undo.reason == "conflict"
+    head2 = await kernel.get_head(head.project_id, "user-a")
+    assert head2 is not None
+    assert head2.revision == 1
+    assert head2.snapshot_manifest is not None
+    assert head2.snapshot_manifest.timeline.duration == 12.0

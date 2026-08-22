@@ -1070,6 +1070,30 @@ async def export_video(
         "project_id": request.project_id,
         "project_revision": bake_project_revision,
     }
+    if bake_manifest is not None:
+        from services.project_kernel import hash_manifest as _hash_manifest
+
+        options["manifest_hash"] = _hash_manifest(bake_manifest)
+
+    try:
+        from services.render_queue import set_render_meta
+
+        set_render_meta(
+            job_id,
+            {
+                "job_id": job_id,
+                "user_id": user_id,
+                "status": "validated",
+                "lifecycle": "validated",
+                "bound_project_id": str(request.project_id or ""),
+                "bound_revision": (
+                    "" if bake_project_revision is None else str(bake_project_revision)
+                ),
+                "bound_manifest_hash": str(options.get("manifest_hash") or ""),
+            },
+        )
+    except Exception as exc:
+        logger.warning("render_validated_stamp_failed job_id=%s err=%s", job_id, exc)
 
     try:
         await dispatch_render_task(
@@ -1126,22 +1150,22 @@ async def export_status(
     if user_id != verified_user_id:
         raise HTTPException(status_code=403, detail="User identity mismatch")
 
+    from services.render_lifecycle import public_export_status
+
     internal_status = meta.get("status", "unknown")
-    status_map = {
-        "queued": "queued",
-        "retry_pending": "queued",
-        "processing": "started",
-        "success": "finished",
-        "dead": "failed",
-        "cancelled": "canceled",
-        "superseded": "canceled",
-        # Duplicate means another worker already owns the upload — terminal for FE.
-        "duplicate": "failed",
+    status = public_export_status(internal_status)
+    response: dict = {
+        "status": status,
+        "job_id": job_id,
+        "lifecycle": meta.get("lifecycle") or internal_status,
+        "failure_class": meta.get("failure_class") or None,
+        "bound_revision": meta.get("bound_revision") or None,
+        "verified": internal_status in {"verified", "success"},
     }
-    status = status_map.get(internal_status, "unknown")
-    response: dict = {"status": status, "job_id": job_id}
     if status == "finished":
         response["download_url"] = _build_download_url(job_id, verified_user_id)
+        response["artifact_generation"] = meta.get("artifact_generation") or None
+        response["artifact_size"] = meta.get("artifact_size") or None
     elif status == "failed":
         response["error"] = meta.get("error") or (
             "duplicate_job" if internal_status == "duplicate" else "failed"
@@ -1224,7 +1248,7 @@ async def cancel_render(
     # Refund only when work was not delivered and we have not refunded already.
     refunded = False
     prior_status = (meta.get("status") or "").strip().lower()
-    if prior_status != "success":
+    if prior_status not in {"success", "verified"}:
         try:
             charged_raw = meta.get("credits_charged") or "0"
             charged = int(float(charged_raw))

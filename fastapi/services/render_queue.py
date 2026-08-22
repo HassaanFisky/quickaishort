@@ -95,6 +95,7 @@ def push_result(
     error: Optional[str] = None,
     duration_ms: Optional[float] = None,
     attempt: int = 1,
+    failure_class: Optional[str] = None,
 ) -> None:
     """
     Record a terminal job outcome.
@@ -105,7 +106,7 @@ def push_result(
     meta_key = _META_KEY.format(job_id)
     now = str(time.time())
 
-    if status == "success":
+    if status in {"success", "verified"}:
         redis_conn.xadd(
             STREAM_RESULTS,
             {
@@ -114,18 +115,20 @@ def push_result(
                 "rendered_url": rendered_url or "",
                 "duration_ms": str(duration_ms or 0),
                 "completed_at": now,
+                "lifecycle": "verified",
             },
         )
         redis_conn.hset(
             meta_key,
             mapping={
-                "status": "success",
+                "status": "verified",
+                "lifecycle": "verified",
                 "rendered_url": rendered_url or "",
                 "completed_at": now,
             },
         )
         redis_conn.expire(meta_key, _META_TTL)
-        logger.info("render_result_pushed_success job_id=%s", job_id)
+        logger.info("render_result_pushed_verified job_id=%s", job_id)
 
     elif status == "failed":
         if attempt >= MAX_RETRIES:
@@ -143,6 +146,8 @@ def push_result(
                 meta_key,
                 mapping={
                     "status": "dead",
+                    "lifecycle": "failed",
+                    "failure_class": (failure_class or "execution")[:64],
                     "error": (error or "")[:500],
                     "attempt_count": str(attempt),
                     "failed_at": now,
@@ -163,6 +168,7 @@ def push_result(
                     "status": "retry_pending",
                     "attempt": str(attempt),
                     "error": (error or "")[:500],
+                    "failure_class": (failure_class or "execution")[:64],
                     "next_retry_at": str(time.time() + backoff),
                 },
             )
@@ -181,7 +187,20 @@ def get_render_status(job_id: str) -> dict[str, Any]:
     raw = redis_conn.hgetall(meta_key)
     if not raw:
         return {"job_id": job_id, "status": "unknown"}
-    return {k.decode(): v.decode() for k, v in raw.items()}
+
+    def _as_str(value: Any) -> str:
+        if isinstance(value, (bytes, bytearray)):
+            return value.decode()
+        return str(value)
+
+    return {_as_str(k): _as_str(v) for k, v in raw.items()}
+
+
+def set_render_meta(job_id: str, mapping: dict[str, str]) -> None:
+    """Merge render:meta fields. Does not by itself mark a job verified."""
+    meta_key = _META_KEY.format(job_id)
+    redis_conn.hset(meta_key, mapping=mapping)
+    redis_conn.expire(meta_key, _META_TTL)
 
 
 def get_dead_jobs(max_count: int = 100) -> list[dict[str, Any]]:

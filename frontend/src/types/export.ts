@@ -72,6 +72,12 @@ export interface ExportStatusResponse {
   job_id: string;
   download_url?: string;
   error?: string;
+  verified?: boolean;
+  lifecycle?: string;
+  failure_class?: string | null;
+  bound_revision?: string | null;
+  artifact_generation?: string | null;
+  artifact_size?: string | null;
   meta?: {
     duration_sec?: number;
     file_size_bytes?: number;

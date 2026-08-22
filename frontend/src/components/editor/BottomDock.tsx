@@ -3,6 +3,11 @@
 import { useRef, useState, useCallback, useEffect } from "react";
 import { useEditorStore } from "@/stores/editorStore";
 import { useUIStore, type EditorTool } from "@/stores/uiStore";
+import {
+  redoCanonicalHistory,
+  undoCanonicalHistory,
+} from "@/lib/studio/canonicalHistory";
+import { isStudioProjectKernelEnabled } from "@/lib/studio/projectKernel";
 import { Button } from "@/components/ui/button";
 import type { Clip } from "@/types/pipeline";
 import {
@@ -284,8 +289,6 @@ export default function BottomDock() {
     silenceSegments,
     undoStack,
     redoStack,
-    undo,
-    redo,
     deleteClip,
     markIn,
     markOut,
@@ -293,8 +296,26 @@ export default function BottomDock() {
     addTimelineMarker,
     videoElementRef,
     thumbnailUrl,
+    studioUndoDepth,
+    studioRedoDepth,
+    studioProjectId,
   } = useEditorStore();
 
+  const kernelHistory =
+    isStudioProjectKernelEnabled() && Boolean(studioProjectId);
+  const canUndo = kernelHistory ? studioUndoDepth > 0 : undoStack.length > 0;
+  const canRedo = kernelHistory ? studioRedoDepth > 0 : redoStack.length > 0;
+
+  const handleUndo = useCallback(() => {
+    void undoCanonicalHistory().catch(() => {
+      /* conflict: projector reconciles on next kernel fetch */
+    });
+  }, []);
+  const handleRedo = useCallback(() => {
+    void redoCanonicalHistory().catch(() => {
+      /* conflict: projector reconciles on next kernel fetch */
+    });
+  }, []);
   const { activeTool, setActiveTool, timelineZoom, setTimelineZoom, snapLine } = useUIStore();
   const [detectingScenes, setDetectingScenes] = useState(false);
   const [detectingBeats, setDetectingBeats] = useState(false);
@@ -643,10 +664,10 @@ export default function BottomDock() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => undo()}
+            onClick={handleUndo}
             title="Undo — Ctrl+Z"
             aria-label="Undo"
-            disabled={undoStack.length === 0}
+            disabled={!canUndo}
             className={cn(
               "undo-btn text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed touch-manipulation",
               isMobile ? "h-12 w-12" : "h-8 w-8",
@@ -657,10 +678,10 @@ export default function BottomDock() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => redo()}
+            onClick={handleRedo}
             title="Redo — Ctrl+Shift+Z"
             aria-label="Redo"
-            disabled={redoStack.length === 0}
+            disabled={!canRedo}
             className={cn(
               "redo-btn text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed touch-manipulation",
               isMobile ? "h-12 w-12" : "h-8 w-8",

@@ -14,6 +14,10 @@ import { WebGpuPreviewLayer } from "@/components/editor/WebGpuPreviewLayer";
 import { matchShortcut } from "@/lib/shortcuts";
 import { toast } from "sonner";
 import { formatTime } from "@/lib/utils/formatTime";
+import {
+  redoCanonicalHistory,
+  undoCanonicalHistory,
+} from "@/lib/studio/canonicalHistory";
 
 export default function EditorPage() {
   const analysis = useAnalysis();
@@ -127,12 +131,12 @@ export default function EditorPage() {
       }
       if (matchEvent(e, b.undo)) {
         e.preventDefault();
-        store.undo();
+        void undoCanonicalHistory();
         return;
       }
       if (matchEvent(e, b.redo)) {
         e.preventDefault();
-        store.redo();
+        void redoCanonicalHistory();
         return;
       }
       // Skip: match the key but ignore Shift so it can scale the nudge (1s → 5s).

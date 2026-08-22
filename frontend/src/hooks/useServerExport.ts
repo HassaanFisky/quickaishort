@@ -180,7 +180,10 @@ export function useServerExport({ userId }: UseServerExportArgs) {
             jobId,
             userId,
           );
-          if (status.status === "finished" && status.download_url) {
+          if (
+            (status.status === "finished" || status.verified) &&
+            status.download_url
+          ) {
             finishSuccess(jobId, status.download_url);
             return;
           }
@@ -339,7 +342,10 @@ export function useServerExport({ userId }: UseServerExportArgs) {
             active_run_id: useEditorStore.getState().runId,
             proposed_manifest: manifest,
           });
-          studioProjectRevision = useEditorStore.getState().studioAckedRevision;
+          const { commitManualSnapshotIfNeeded } = await import(
+            "@/lib/studio/canonicalHistory"
+          );
+          studioProjectRevision = await commitManualSnapshotIfNeeded(manifest);
         } catch {
           toast.warning(
             "Studio project bind failed — exporting without Kernel pin.",

@@ -23,6 +23,7 @@ from models.studio_project import (
     CommandAck,
     CommandReject,
     CreateStudioProjectRequest,
+    EditOrigin,
     InverseSpec,
     MediaAsset,
     ProjectCommand,
@@ -72,6 +73,24 @@ def hash_manifest(manifest: RenderManifest) -> str:
     payload = manifest.model_dump(mode="json")
     raw = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(raw).hexdigest()
+
+
+def infer_origin(command: ProjectCommand) -> EditOrigin:
+    """Map command source/op onto the canonical edit origin.
+
+    Server Project Kernel is the only mutable history. Origin is metadata
+    on that history — not a second stack.
+    """
+
+    if command.kind == "system" and command.system_op in {
+        "undo",
+        "redo",
+        "revert_to_revision",
+    }:
+        return "system"
+    if command.source in {"chat", "orchestrator", "automation"}:
+        return "ai"
+    return "manual"
 
 
 def _now() -> datetime:
@@ -512,13 +531,7 @@ class ProjectKernel:
                 self.store.get_event_by_command, command.project_id, command.command_id
             )
             if prior:
-                return CommandAck(
-                    command_id=command.command_id,
-                    event_ids=[prior.event_id],
-                    new_revision=head.revision,
-                    snapshot_manifest=head.snapshot_manifest,
-                    snapshot_hash=head.snapshot_hash,
-                )
+                return self._build_command_ack(command, head, [prior])
 
         if command.kind == "capability":
             reject = self._validate_capability_command(command)
@@ -562,6 +575,16 @@ class ProjectKernel:
                 detail="base_snapshot_hash_mismatch",
                 head_revision=head.revision,
             )
+
+        # Identical manual snapshot is not a new revision (no silent fork).
+        if (
+            command.kind == "system"
+            and command.system_op == "commit_snapshot"
+            and command.proposed_manifest is not None
+            and head.snapshot_hash is not None
+            and hash_manifest(command.proposed_manifest) == head.snapshot_hash
+        ):
+            return self._build_command_ack(command, head, [])
 
         def mutate(
             h: StudioProjectHead,
@@ -613,12 +636,26 @@ class ProjectKernel:
             command.command_id,
             new_head.revision,
         )
+        return self._build_command_ack(command, new_head, events)
+
+    def _build_command_ack(
+        self,
+        command: ProjectCommand,
+        head: StudioProjectHead,
+        events: list[ProjectEvent],
+    ) -> CommandAck:
+        origin: EditOrigin = events[0].origin if events else infer_origin(command)
+        parent = events[0].parent_revision if events else head.revision
         return CommandAck(
             command_id=command.command_id,
             event_ids=[e.event_id for e in events],
-            new_revision=new_head.revision,
-            snapshot_manifest=new_head.snapshot_manifest,
-            snapshot_hash=new_head.snapshot_hash,
+            new_revision=head.revision,
+            parent_revision=parent,
+            origin=origin,
+            snapshot_manifest=head.snapshot_manifest,
+            snapshot_hash=head.snapshot_hash,
+            undo_depth=len(head.undo_stack),
+            redo_depth=len(head.redo_stack),
         )
 
     def _validate_capability_command(
@@ -652,6 +689,13 @@ class ProjectKernel:
         if not op:
             return CommandReject(reason="validation", detail="system_op_required")
         if op in {"undo", "redo", "revert_to_revision"}:
+            return None
+        if op == "commit_snapshot":
+            if command.proposed_manifest is None:
+                return CommandReject(
+                    reason="validation",
+                    detail="proposed_manifest_required",
+                )
             return None
         if op in {
             "import_assets",
@@ -724,6 +768,7 @@ class ProjectKernel:
             parent_revision=parent,
             ts=now,
             actor=actor,
+            origin=infer_origin(command),
             capability_id=cap_id if command.kind == "capability" else None,
             capability_version=cap_ver,
             command_id=command.command_id,
@@ -780,6 +825,18 @@ class ProjectKernel:
                 head.redo_stack = []
                 return "import_assets", params, True, h
             return "import_assets", params, False, head.snapshot_hash
+
+        if op == "commit_snapshot":
+            if command.proposed_manifest is None:
+                raise ValueError("proposed_manifest_required")
+            head.snapshot_manifest = command.proposed_manifest
+            h = hash_manifest(command.proposed_manifest)
+            head.snapshot_hash = h
+            head.snapshot_revision = new_rev
+            self._remember_snapshot(head, new_rev)
+            head.undo_stack = [*head.undo_stack, parent][-MAX_REVISION_SNAPSHOTS:]
+            head.redo_stack = []
+            return "commit_snapshot", params, True, h
 
         if op == "undo":
             if not head.undo_stack:

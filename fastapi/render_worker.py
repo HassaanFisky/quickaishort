@@ -10,7 +10,7 @@ import tempfile
 import threading
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 # Ensure the current directory is in sys.path for reliable module resolution
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -313,6 +313,100 @@ def process_render_task(
     )
 
 
+def _artifact_bind(job_id: str, options: dict) -> dict[str, str]:
+    rev = options.get("project_revision")
+    return {
+        "job_id": job_id,
+        "project_id": str(options.get("project_id") or ""),
+        "project_revision": "" if rev is None else str(rev),
+        "manifest_hash": str(options.get("manifest_hash") or ""),
+    }
+
+
+async def _verified_existing_artifact(
+    storage: Any,
+    remote_filename: str,
+    job_id: str,
+    user_id: str,
+    options: dict,
+) -> Optional[dict]:
+    """Retry path: reuse the object only after artifact evidence passes."""
+    from services.render_lifecycle import ArtifactVerificationError
+    from services.render_queue import set_render_meta
+
+    try:
+        evidence = await storage.verify_export_artifact_async(
+            remote_filename, **_artifact_bind(job_id, options)
+        )
+    except ArtifactVerificationError:
+        return None
+    except Exception as exc:
+        logger.warning(
+            "gcs_verify_existing_failed job_id=%s error=%s — will re-render",
+            job_id,
+            str(exc)[:200],
+        )
+        return None
+
+    stale = await _revision_freshness_meta(user_id, options)
+    set_render_meta(
+        job_id,
+        {
+            "status": "verified",
+            "lifecycle": "verified",
+            **evidence.as_meta(),
+            **stale,
+        },
+    )
+    payload = {
+        "job_id": job_id,
+        "user_id": user_id,
+        "storage_path": remote_filename,
+        "status": "verified",
+        "idempotency_hit": True,
+    }
+    publish(CHANNEL_EXPORT_COMPLETE, payload)
+    try:
+        _rq_push_result(
+            job_id,
+            user_id,
+            "verified",
+            rendered_url=remote_filename,
+        )
+    except Exception as redis_err:
+        logger.warning("redis_verified_publish_failed", error=str(redis_err))
+    log_metric(
+        "render_idempotency_hit",
+        1,
+        user_id=user_id,
+        metadata={"job_id": job_id, "verified": True},
+    )
+    return payload
+
+
+async def _revision_freshness_meta(user_id: str, options: dict) -> dict[str, str]:
+    project_id = options.get("project_id")
+    bound = options.get("project_revision")
+    if not project_id or bound is None:
+        return {}
+    try:
+        from services.project_kernel import get_project_kernel
+
+        head = await get_project_kernel().get_project(str(project_id), user_id)
+    except Exception:
+        return {}
+    if head is None:
+        return {"stale_for_project_head": "unknown"}
+    try:
+        stale = int(bound) < int(head.revision)
+    except (TypeError, ValueError):
+        stale = False
+    return {
+        "head_revision_at_verify": str(head.revision),
+        "stale_for_project_head": "1" if stale else "0",
+    }
+
+
 async def _async_process_render_task(
     job_id: str,
     video_id: str,
@@ -455,34 +549,13 @@ async def _async_process_render_task(
         remote_filename = f"exports/{user_id}/{job_id}.mp4"
 
         # Check if this job was already successfully processed (e.g. retry of a successful job)
-        # O3: never block the render on a failed existence probe (GCS 403 from
-        # billing/IAM, transient errors) — assume not-exists and proceed.
-        try:
-            _already_done = await storage.exists_async(remote_filename)
-        except Exception as exc:
-            logger.warning(
-                "gcs_exists_check_failed job_id=%s error=%s — assuming not exists",
-                job_id,
-                str(exc)[:200],
-            )
-            _already_done = False
-        if _already_done:
-            logger.info("render_job_idempotency_hit", job_id=job_id)
-            payload = {
-                "job_id": job_id,
-                "user_id": user_id,
-                "storage_path": remote_filename,
-                "status": "success",
-                "idempotency_hit": True,
-            }
-            publish(CHANNEL_EXPORT_COMPLETE, payload)
-            log_metric(
-                "render_idempotency_hit",
-                1,
-                user_id=user_id,
-                metadata={"job_id": job_id},
-            )
-            return payload
+        # Existence alone is not success — only verified artifact evidence is.
+        existing = await _verified_existing_artifact(
+            storage, remote_filename, job_id, user_id, options
+        )
+        if existing:
+            logger.info("render_job_idempotency_hit job_id=%s", job_id)
+            return existing
 
         # O4/O1: record crash-recovery args + 'processing' status AFTER the
         # idempotency check, so an idempotency hit never leaves a stale
@@ -506,7 +579,12 @@ async def _async_process_render_task(
             )
             redis_conn.hset(
                 _META_KEY.format(job_id),
-                mapping={"status": "processing", "started_at": str(started_at)},
+                mapping={
+                    "status": "processing",
+                    "lifecycle": "processing",
+                    "started_at": str(started_at),
+                    **_artifact_bind(job_id, options),
+                },
             )
             redis_conn.expire(_META_KEY.format(job_id), _RECOVERY_TTL)
             if run_id:
@@ -649,6 +727,16 @@ async def _async_process_render_task(
                 remote_path=remote_filename,
                 content_type="video/mp4",
             )
+            from services.render_queue import set_render_meta
+
+            set_render_meta(
+                job_id,
+                {
+                    "status": "rendered",
+                    "lifecycle": "rendered",
+                    "artifact_path": remote_filename,
+                },
+            )
 
             # Phase 62: persist manifest
             try:
@@ -682,7 +770,35 @@ async def _async_process_render_task(
             "storage_path": remote_filename,
             "duration_sec": duration_sec,
             "elapsed_sec": time.time() - started_at,
+            "status": "verified",
         }
+
+        from services.render_lifecycle import ArtifactVerificationError
+        from services.render_queue import set_render_meta as _set_meta
+
+        try:
+            evidence = await storage.verify_export_artifact_async(
+                remote_filename, **_artifact_bind(job_id, options)
+            )
+        except ArtifactVerificationError as exc:
+            logger.error(
+                "render_artifact_unverified job_id=%s code=%s",
+                job_id,
+                exc.code,
+            )
+            _set_meta(
+                job_id,
+                {
+                    "status": "failed",
+                    "lifecycle": "failed",
+                    "failure_class": "verification",
+                    "error": str(exc)[:500],
+                },
+            )
+            raise
+
+        stale = await _revision_freshness_meta(user_id, options)
+        _set_meta(job_id, {**evidence.as_meta(), **stale})
 
         # Phase 64: render duration metric
         if options.get("render_manifest"):
@@ -700,7 +816,7 @@ async def _async_process_render_task(
             _rq_push_result(
                 job_id,
                 user_id,
-                "success",
+                "verified",
                 rendered_url=f"exports/{user_id}/{job_id}.mp4",
                 duration_ms=(time.time() - started_at) * 1000,
             )
@@ -732,9 +848,20 @@ async def _async_process_render_task(
             },
         )
 
-        return {"status": "success", **payload}
+        return {"status": "verified", **payload}
 
     except Exception as exc:
+        from services.render_lifecycle import (
+            ArtifactVerificationError,
+            FAILURE_EXECUTION,
+            FAILURE_VERIFICATION,
+        )
+
+        failure_class = (
+            FAILURE_VERIFICATION
+            if isinstance(exc, ArtifactVerificationError)
+            else FAILURE_EXECUTION
+        )
         logger.exception("render_job_failed", job_id=job_id, error=str(exc))
         publish(
             CHANNEL_EXPORT_FAILED,
@@ -746,10 +873,18 @@ async def _async_process_render_task(
             from rq import get_current_job as _gcj
 
             _rq_job = _gcj()
-            _attempt = (_rq_job.retries_left if _rq_job else 0) or 0
-            _attempt_number = 3 - _attempt  # retries_left counts down from max
+            if _rq_job is not None:
+                _attempt = (_rq_job.retries_left if _rq_job else 0) or 0
+                _attempt_number = 3 - _attempt
+            else:
+                _attempt_number = attempt_number
             _rq_push_result(
-                job_id, user_id, "failed", error=str(exc), attempt=_attempt_number
+                job_id,
+                user_id,
+                "failed",
+                error=str(exc),
+                attempt=_attempt_number,
+                failure_class=failure_class,
             )
         except Exception as redis_err:
             logger.warning("redis_dlq_publish_failed", error=str(redis_err))
@@ -765,6 +900,8 @@ async def _async_process_render_task(
             metadata={"job_id": job_id, "error": str(exc)[:200]},
         )
 
+        if isinstance(exc, ArtifactVerificationError):
+            raise
         return {"status": "error", "job_id": job_id, "error": str(exc)}
 
     finally:
@@ -810,7 +947,7 @@ def recover_stale_jobs() -> None:
                     )
                     for k, v in raw.items()
                 }
-                if meta.get("status") != "processing":
+                if meta.get("status") not in {"processing", "rendered"}:
                     continue
                 try:
                     started_at = float(meta.get("started_at", now))

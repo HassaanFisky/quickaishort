@@ -37,7 +37,14 @@ _PENDING_KEY = "render:pending"
 _RECORD_TTL_SECONDS = 7 * 24 * 3600
 _MAX_TASK_BODY_BYTES = 750 * 1024
 _TASK_ID_PATTERN = re.compile(r"[^A-Za-z0-9_-]+")
-_TERMINAL_STATUSES = {"success", "dead", "cancelled", "superseded", "duplicate"}
+_TERMINAL_STATUSES = {
+    "success",
+    "verified",
+    "dead",
+    "cancelled",
+    "superseded",
+    "duplicate",
+}
 
 
 class RenderDispatchUnavailable(RuntimeError):
@@ -152,7 +159,17 @@ def _record_dispatch(
             "submitted_at": str(now),
         }
         if not raw_status:
-            mapping["status"] = "queued"
+            mapping["status"] = "accepted"
+            mapping["lifecycle"] = "accepted"
+        bound_rev = payload.options.get("project_revision")
+        bound_hash = payload.options.get("manifest_hash")
+        bound_project = payload.options.get("project_id")
+        if bound_project is not None:
+            mapping["bound_project_id"] = str(bound_project)
+        if bound_rev is not None:
+            mapping["bound_revision"] = str(bound_rev)
+        if bound_hash:
+            mapping["bound_manifest_hash"] = str(bound_hash)
         redis_conn.hset(
             meta_key,
             mapping=mapping,
