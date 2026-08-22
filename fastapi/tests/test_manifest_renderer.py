@@ -54,14 +54,56 @@ def test_compile_single_clip():
         assert meta["width"] == 1080
 
 
-def test_compile_three_clips():
+def test_compile_manifest_with_visual_and_audio_effects():
     with tempfile.TemporaryDirectory() as td:
         workdir = Path(td)
         (workdir / "input.mp4").touch()
-        manifest = _make_manifest(3)
+        manifest = _make_manifest(1)
+        manifest["effects"] = [
+            {
+                "id": "e1",
+                "type": "frame_filter",
+                "payload": {
+                    "brightness": 1.2,
+                    "contrast": 1.1,
+                    "saturation": 1.3,
+                    "hue": 15.0,
+                    "blur": 2.0,
+                    "cropLeft": 0.1,
+                    "cropRight": 0.1,
+                },
+            },
+            {
+                "id": "e2",
+                "type": "export_settings",
+                "payload": {
+                    "filter": "Cinematic",
+                    "audioBoost": 140,
+                    "noiseSuppression": 80,
+                },
+            },
+            {
+                "id": "e3",
+                "type": "fade_in",
+                "payload": {"duration_ms": 500.0},
+            },
+            {
+                "id": "e4",
+                "type": "fade_out",
+                "payload": {"start_ms": 1500.0, "duration_ms": 500.0},
+            },
+        ]
+        manifest["muteSourceAudio"] = True
         fc, meta = compile_manifest_to_ffmpeg(manifest, workdir)
-        assert "concat=n=3" in fc
-        assert meta["clip_count"] == 3
+        assert "eq=brightness=0.20:contrast=1.10:saturation=1.30" in fc
+        assert "hue=h=15.0" in fc
+        assert "boxblur=4:4" in fc
+        assert "crop=" in fc
+        assert "eq=contrast=1.15:saturation=1.1:brightness=-0.05" in fc
+        assert "fade=t=in" in fc
+        assert "fade=t=out" in fc
+        assert "volume=0.0" in fc
+        assert meta["clip_count"] == 1
 
 
 def test_missing_source_raises():

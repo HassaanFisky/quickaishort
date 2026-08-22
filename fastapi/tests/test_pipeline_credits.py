@@ -7,11 +7,21 @@ import sys
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from routers.pipeline_router import PipelineRunRequest, run_pipeline
+
+_DUMMY_REQUEST = Request(
+    scope={
+        "type": "http",
+        "method": "POST",
+        "path": "/api/pipeline/run",
+        "headers": [],
+        "client": ("127.0.0.1", 12345),
+    }
+)
 
 
 def _req(**kwargs):
@@ -36,7 +46,7 @@ async def test_insufficient_credits_402():
         ),
     ):
         with pytest.raises(HTTPException) as ei:
-            await run_pipeline(_req(), verified_user_id="jwt-user")
+            await run_pipeline(_DUMMY_REQUEST, _req(), verified_user_id="jwt-user")
         assert ei.value.status_code == 402
 
 
@@ -51,7 +61,7 @@ async def test_credit_service_outage_fail_closed_503():
         ),
     ):
         with pytest.raises(HTTPException) as ei:
-            await run_pipeline(_req(), verified_user_id="jwt-user")
+            await run_pipeline(_DUMMY_REQUEST, _req(), verified_user_id="jwt-user")
         assert ei.value.status_code == 503
 
 
@@ -64,7 +74,7 @@ async def test_body_userid_ignored_uses_jwt():
         patch("services.stats_service.deduct_credits", deduct),
     ):
         with pytest.raises(HTTPException) as ei:
-            await run_pipeline(_req(userId="spoofed"), verified_user_id="jwt-user")
+            await run_pipeline(_DUMMY_REQUEST, _req(userId="spoofed"), verified_user_id="jwt-user")
         assert ei.value.status_code == 402
         deduct.assert_awaited_once_with("jwt-user", 20)
 
@@ -95,7 +105,7 @@ async def test_analysis_failure_refunds_credits():
         ),
     ):
         with pytest.raises(HTTPException) as ei:
-            await run_pipeline(_req(), verified_user_id="jwt-user")
+            await run_pipeline(_DUMMY_REQUEST, _req(), verified_user_id="jwt-user")
         assert ei.value.status_code == 500
         refund.assert_awaited()
         assert refund.await_args.kwargs.get("reason") == "analysis_failed"

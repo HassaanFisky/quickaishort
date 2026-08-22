@@ -454,6 +454,38 @@ class DualModelRouter:
                 limit_decision=static_decision,
             )
 
+        # Zero-cost deterministic semantic planner for high-confidence creative intents
+        if request.task == "logic" and issubclass(output_model, TimelinePlanOutput):
+            try:
+                from services.semantic_edit_planner import SemanticEditPlanner
+                sem_plan = SemanticEditPlanner.plan(request.query, request.context)
+                if sem_plan and sem_plan.matched:
+                    from pydantic import TypeAdapter
+                    from models.ai_editor import AiEditorAction
+                    ta: TypeAdapter[Any] = TypeAdapter(AiEditorAction)
+                    valid_actions = [ta.validate_python(a) for a in sem_plan.actions]
+                    output_instance = TimelinePlanOutput(
+                        actions=valid_actions,
+                        message=sem_plan.message,
+                        suggestions=sem_plan.suggestions,
+                        status=sem_plan.status,  # type: ignore[arg-type]
+                    )
+                    payload = _model_payload(output_instance)
+                    await self._cache.store(lookup, payload)
+                    return RouterResponse(
+                        action_intent=RouterActionIntent.EXECUTE,
+                        task=request.task,
+                        message=sem_plan.message,
+                        model_used="semantic-kernel-planner",
+                        profile_used=primary_profile,
+                        fallback_used=False,
+                        cached=False,
+                        payload=payload,
+                        limit_decision=static_decision,
+                    )
+            except Exception as exc:
+                logger.debug("semantic_planner_bypass error=%s", exc)
+
         try:
             deferral = None
             if self._provider_admission:

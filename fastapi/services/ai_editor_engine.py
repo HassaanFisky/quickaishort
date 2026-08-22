@@ -76,6 +76,35 @@ async def process_editor_command(
     project_context: Optional[dict] = None,
 ) -> dict[str, Any]:
     """NL command → canonical actions (Capability Registry ABI)."""
+    # ── Fast deterministic semantic planner (zero-token) ───────────────
+    from services.semantic_edit_planner import SemanticEditPlanner
+
+    sem_plan = SemanticEditPlanner.plan(command, project_context)
+    if sem_plan and sem_plan.matched:
+        state = _state_from_project_context(project_context)
+        ta: TypeAdapter[Any] = TypeAdapter(AiEditorAction)
+        valid_actions: list[AiEditorAction] = []
+        for a in sem_plan.actions:
+            try:
+                valid_actions.append(ta.validate_python(a))
+            except Exception:
+                pass
+        safe_actions, clamped_report, dropped_clamp = sanitise(valid_actions, state)
+        canonical = [a.model_dump(mode="json") for a in safe_actions]
+        return {
+            "intent": sem_plan.intent,
+            "confidence": sem_plan.confidence,
+            "actions": canonical,
+            "feedback": sem_plan.message,
+            "fallback": "Try rephrasing your command.",
+            "model_used": "semantic-kernel-planner",
+            "clamped": clamped_report,
+            "dropped": dropped_clamp,
+            "message": sem_plan.message,
+            "suggestions": sem_plan.suggestions[:3],
+            "status": sem_plan.status if canonical else "no_op",
+        }
+
     tier = UserTier.PRO if user_tier == "pro" else UserTier.FREE
     model_config = get_model_for_task(
         task_type=TaskType.EDITOR_COMMAND, user_tier=tier, command=command
