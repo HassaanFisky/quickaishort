@@ -25,9 +25,7 @@ async def test_elevenlabs_blocked_without_founder_flag(monkeypatch):
         side_effect=AssertionError("must not call extra paid TTS")
     )
 
-    result = await svc.generate(
-        "hello", voice_id="voice-a", provider="elevenlabs"
-    )
+    result = await svc.generate("hello", voice_id="voice-a", provider="elevenlabs")
     assert result is None
     svc._generate_elevenlabs.assert_not_awaited()
 
@@ -37,9 +35,7 @@ async def test_google_tts_missing_key_returns_none(monkeypatch, tmp_path):
     monkeypatch.delenv("GOOGLE_TTS_API_KEY", raising=False)
     svc = TTSService()
     svc.google_api_key = None
-    out = await svc._generate_google(
-        "hello", "en-US-Neural2-D", tmp_path / "x.mp3"
-    )
+    out = await svc._generate_google("hello", "en-US-Neural2-D", tmp_path / "x.mp3")
     assert out is None
 
 
@@ -55,8 +51,6 @@ async def test_elevenlabs_allowed_when_founder_flag(monkeypatch):
     )
     svc._generate_elevenlabs = AsyncMock(return_value="/tmp/fake.mp3")
 
-    result = await svc.generate(
-        "hello", voice_id="voice-a", provider="elevenlabs"
-    )
+    result = await svc.generate("hello", voice_id="voice-a", provider="elevenlabs")
     assert result == "gs://bucket/tts_cache/x.mp3"
     svc._generate_elevenlabs.assert_awaited_once()
