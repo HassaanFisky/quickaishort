@@ -36,8 +36,8 @@ Email/password (NextAuth CredentialsProvider) works locally without Google OAuth
 `cd fastapi && set -a; . ./.env; set +a; export REDIS_URL="redis://redis-local:6379"; ./venv/bin/python render_worker.py`
 It logs `DB init failed ... Application Default Credentials` (no GCS locally) but still starts and listens on `render_queue`; real exports need GCP ADC.
 
-### Known dev-mode editor caveat (pre-existing app/tooling bug, NOT an env issue)
-In `next dev`, uploading/ingesting a video on `/editor` crashes with React "Maximum update depth exceeded" during the ingest phase. Root cause is a Radix `@radix-ui/react-compose-refs` `composeRefs` ref-update loop surfaced under React 18 StrictMode (dev double-invoke); the ErrorBoundary replaces the editor before media loads. It reproduces regardless of `STUDIO_PROJECT_KERNEL` and before transcription. Because the AI chat input is gated on a loaded video, this blocks the in-browser AI round-trip. To exercise the core conversational-AI-editor end-to-end locally, call the backend directly: `POST /api/ai-editor/command` (or `/api/ai-edit`) with a valid HS256 JWT — returns a multi-track edit plan under `MOCK_AI_MODE`.
+### Known dev-mode editor caveat (fixed 2026-08-22)
+Empty `/editor` in `next dev` (React 18 StrictMode) used to throw "Maximum update depth exceeded" and ErrorBoundary replaced the shell. Runtime stack was `ServerExportHost` → `serverExportStore.setControllers`, not Radix `composeRefs`. `useServerExport` returned a new `cancelExport` function every render; `EditorLayout` subscribed to that function and re-rendered the host. Fix: `useCallback` + no-op store writes. Ingest-time crashes should be re-checked against this path first. Backend `POST /api/ai-editor/command` under `MOCK_AI_MODE` remains the no-spend AI round-trip.
 
 ### Other notes
 - Node: repo pins conflict (`.nvmrc`=20 vs `frontend/package.json` engines `24.x`). The VM's Node 22 works; engines is not enforced (pnpm only warns).

@@ -23,7 +23,6 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/stores/uiStore";
-import { qaiLoopRender } from "@/lib/qaiLoopDebug";
 
 const NAV_ITEMS = [
   { href: "/editor", label: "New edit", icon: Plus },
@@ -53,14 +52,6 @@ export default function Sidebar() {
   const { data: session } = useSession();
   const [menuOpen, setMenuOpen] = useState(false);
   const { isSidebarCollapsed, toggleSidebar } = useUIStore();
-  // #region agent log
-  qaiLoopRender(isSidebarCollapsed ? "A" : "C", "Sidebar.tsx:render", {
-    collapsed: isSidebarCollapsed,
-    pathname,
-    tooltipPath: Boolean(isSidebarCollapsed),
-    layoutIdPath: pathname === "/editor" && !isSidebarCollapsed,
-  });
-  // #endregion
 
   const initial = session?.user?.name?.[0]?.toUpperCase() ?? "U";
 

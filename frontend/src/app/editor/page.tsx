@@ -14,19 +14,9 @@ import { WebGpuPreviewLayer } from "@/components/editor/WebGpuPreviewLayer";
 import { matchShortcut } from "@/lib/shortcuts";
 import { toast } from "sonner";
 import { formatTime } from "@/lib/utils/formatTime";
-import { installQaiLoopTraps, qaiLoopLog, qaiLoopRender } from "@/lib/qaiLoopDebug";
-
-installQaiLoopTraps();
 
 export default function EditorPage() {
   const analysis = useAnalysis();
-  // #region agent log
-  qaiLoopRender("D", "editor/page.tsx:EditorPage", {
-    detectSilenceType: typeof analysis.detectSilence,
-    lastMessageType: analysis.lastMessage?.type ?? null,
-    status: analysis.status,
-  });
-  // #endregion
   const [shortcutOverlayOpen, setShortcutOverlayOpen] = useState(false);
   const closeOverlay = useCallback(() => setShortcutOverlayOpen(false), []);
 
@@ -220,11 +210,6 @@ export default function EditorPage() {
 
   // Push detected silence segments into store
   useEffect(() => {
-    // #region agent log
-    qaiLoopLog("D", "editor/page.tsx:silence-effect", "effect", {
-      lastMessageType: analysis.lastMessage?.type ?? null,
-    });
-    // #endregion
     if (analysis.lastMessage?.type === "silence_detected") {
       const segments = analysis.lastMessage.payload.segments;
       if (segments) setSilenceSegments(segments);
