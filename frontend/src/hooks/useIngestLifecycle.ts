@@ -129,6 +129,7 @@ export function useIngestLifecycle(opts: {
     resetIngestLifecycle();
     useEditorStore.getState().setProcessing(false, "idle");
     setIngestStage("identify");
+    return ingestGenRef.current;
   }, [cancelPipeline, resetIngestLifecycle, setIngestStage]);
 
   const bumpGen = useCallback(() => {
@@ -212,8 +213,7 @@ export function useIngestLifecycle(opts: {
 
       lastFileRef.current = null;
       lastAttemptRef.current = { kind: "url", url };
-      const gen = bumpGen();
-      beginIngest();
+      const gen = beginIngest();
       if (!isCurrent(gen)) return;
       setIngestMeta({ sourceKind: null, fromCache: false, uploadProgress: null });
 
@@ -361,7 +361,6 @@ export function useIngestLifecycle(opts: {
     },
     [
       beginIngest,
-      bumpGen,
       failIngest,
       isCurrent,
       runPipeline,
@@ -379,8 +378,7 @@ export function useIngestLifecycle(opts: {
     async (file: File) => {
       lastFileRef.current = file;
       lastAttemptRef.current = { kind: "file", file };
-      const gen = bumpGen();
-      beginIngest();
+      const gen = beginIngest();
       if (!isCurrent(gen)) return;
       armIngestHardTimeout(gen);
       setIngestMeta({
@@ -429,7 +427,6 @@ export function useIngestLifecycle(opts: {
     },
     [
       beginIngest,
-      bumpGen,
       failIngest,
       isCurrent,
       runPipeline,
