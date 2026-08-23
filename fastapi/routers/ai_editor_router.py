@@ -208,20 +208,67 @@ def _state_from_context(
     )
 
 
-def _actions_from_payload(payload: dict[str, Any] | None) -> list[AiEditorAction]:
+def _actions_from_payload(
+    payload: dict[str, Any] | None,
+) -> tuple[list[AiEditorAction], list[str]]:
     raw = (payload or {}).get("actions") or []
     if not isinstance(raw, list):
-        return []
+        return [], ["malformed:actions_not_list"]
     ta: TypeAdapter[Any] = TypeAdapter(AiEditorAction)
     valid: list[AiEditorAction] = []
+    dropped: list[str] = []
     for item in raw:
         if not isinstance(item, dict):
+            dropped.append("malformed:non_object")
             continue
         try:
             valid.append(ta.validate_python(item))
         except Exception as exc:
+            kind = str(item.get("type") or "unknown")
+            dropped.append(f"malformed:{kind}")
             logger.debug("dual_router dropped malformed action %s: %s", item, exc)
-    return valid
+    return valid, dropped
+
+
+def compose_command_feedback(
+    *,
+    canonical: list[Any],
+    clamped: list[str],
+    dropped: list[str],
+    payload_message: str,
+    result_message: str,
+) -> tuple[str, str]:
+    """Honest user-facing message. Never default to 'Done.' on empty apply."""
+    has_actions = bool(canonical)
+    status = "ok" if has_actions else "no_op"
+    raw = (payload_message or result_message or "").strip()
+    fake_done = not raw or raw.lower() in {"done.", "done", "ok", "ok."}
+
+    notes: list[str] = []
+    if clamped:
+        notes.append("Clamped: " + "; ".join(clamped))
+    if dropped:
+        notes.append("Dropped: " + "; ".join(dropped))
+
+    if has_actions:
+        types = []
+        for a in canonical:
+            t = a.get("type") if isinstance(a, dict) else getattr(a, "type", None)
+            if t:
+                types.append(str(t))
+        base = raw if not fake_done else f"Applied {', '.join(types) or 'edits'}."
+        if notes:
+            return f"{base} {' '.join(notes)}".strip(), status
+        return base, status
+
+    if notes:
+        return f"No edits applied. {' '.join(notes)}", "no_op"
+    if not fake_done:
+        return raw, "no_op"
+    return (
+        "No edits applied — the model returned no valid timeline actions. Rephrase the command.",
+        "no_op",
+    )
 
 
 async def _execute_via_dual_router(
@@ -305,14 +352,20 @@ async def _execute_via_dual_router(
         )
 
     payload = result.payload if isinstance(result.payload, dict) else {}
-    actions = _actions_from_payload(payload)
+    parsed, parse_dropped = _actions_from_payload(payload)
     state = _state_from_context(project_context, editor_state)
-    safe_actions, clamped, dropped = sanitise(actions, state)
+    safe_actions, clamped, sanitiser_dropped = sanitise(parsed, state)
     canonical = [a.model_dump(mode="json") for a in safe_actions]
-    status = str(payload.get("status") or ("ok" if canonical else "no_op"))
+    dropped = parse_dropped + list(sanitiser_dropped)
+    message, status = compose_command_feedback(
+        canonical=canonical,
+        clamped=list(clamped),
+        dropped=dropped,
+        payload_message=str(payload.get("message") or ""),
+        result_message=str(result.message or ""),
+    )
     if status not in {"ok", "clarification_needed", "no_op", "blocked"}:
         status = "ok" if canonical else "no_op"
-    message = str(payload.get("message") or result.message or "Done.")
     suggestions = list(payload.get("suggestions") or [])[:3]
     # Attach multi-track execution sheet when present (white-label timeline graph).
     sheet = payload.get("execution_sheet")

@@ -127,12 +127,14 @@ export default function EditorPage() {
       }
       if (matchEvent(e, b.undo)) {
         e.preventDefault();
-        store.undo();
+        if (store.aiUndoStack.length) store.undoAiEdit();
+        else store.undo();
         return;
       }
       if (matchEvent(e, b.redo)) {
         e.preventDefault();
-        store.redo();
+        if (store.aiRedoStack.length) store.redoAiEdit();
+        else store.redo();
         return;
       }
       // Skip: match the key but ignore Shift so it can scale the nudge (1s → 5s).

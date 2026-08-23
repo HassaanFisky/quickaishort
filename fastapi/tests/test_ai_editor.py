@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
@@ -1198,3 +1199,87 @@ def test_set_transition_passthrough():  # T71
     assert len(safe) == 1
     assert dropped == []
     assert safe[0].transition == "glitch"
+
+
+# ─── P0 golden-path command honesty ──────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_dual_router_surfaces_malformed_and_clamped_actions():
+    from routers.ai_editor_router import _execute_via_dual_router
+
+    routed = SimpleNamespace(
+        action_intent="EXECUTE",
+        message="Done.",
+        payload={
+            "actions": [
+                {"type": "NOT_A_TOOL", "value": 1},
+                {"type": "TRIM", "start": -5.0, "end": 999.0},
+                {
+                    "type": "ADD_CAPTION",
+                    "text": "Visible hook",
+                    "startTime": 0.0,
+                    "endTime": 3.0,
+                },
+            ],
+            "message": "Done.",
+            "suggestions": [],
+            "status": "ok",
+        },
+        model_used="mock-ai-mode",
+        cached=False,
+        retry_after_seconds=None,
+    )
+    with patch("agent.router.execute", new=AsyncMock(return_value=routed)):
+        response = await _execute_via_dual_router(
+            user_id="p0-test",
+            command="make a short with a hook caption",
+            workload_id="p0-run",
+            user_tier="free",
+            project_context={"videoDuration": 30.0},
+        )
+
+    assert [action["type"] for action in response.actions] == [
+        "TRIM",
+        "ADD_CAPTION",
+    ]
+    assert response.actions[0]["start"] == 0.0
+    assert response.actions[0]["end"] == 30.0
+    assert "malformed:NOT_A_TOOL" in response.dropped
+    assert response.clamped
+    assert "Clamped:" in response.feedback
+    assert "Dropped:" in response.feedback
+    assert response.feedback != "Done."
+
+
+@pytest.mark.asyncio
+async def test_dual_router_empty_malformed_plan_is_honest_no_op():
+    from routers.ai_editor_router import _execute_via_dual_router
+
+    routed = SimpleNamespace(
+        action_intent="EXECUTE",
+        message="Done.",
+        payload={
+            "actions": [{"type": "NOT_A_TOOL"}],
+            "message": "Done.",
+            "suggestions": [],
+            "status": "ok",
+        },
+        model_used="mock-ai-mode",
+        cached=False,
+        retry_after_seconds=None,
+    )
+    with patch("agent.router.execute", new=AsyncMock(return_value=routed)):
+        response = await _execute_via_dual_router(
+            user_id="p0-test",
+            command="do an unsupported edit",
+            workload_id="p0-run",
+            user_tier="free",
+            project_context={"videoDuration": 30.0},
+        )
+
+    assert response.actions == []
+    assert response.status == "no_op"
+    assert "No edits applied" in response.feedback
+    assert "malformed:NOT_A_TOOL" in response.feedback
+    assert response.feedback != "Done."

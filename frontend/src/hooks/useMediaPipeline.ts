@@ -332,15 +332,14 @@ export function useMediaPipeline() {
             err?.response?.data?.message ||
             err?.message ||
             "Analysis failed";
-          toast.error(typeof msg === "string" ? msg : "Analysis failed. Please try again.");
+          toast.warning(
+            typeof msg === "string"
+              ? `Clip analysis failed — transcript is still ready. ${msg}`
+              : "Clip analysis failed — transcript is still ready. You can chat and export.",
+          );
           setAgentState("viralAnalysis", { status: "error" });
-          setProcessing(false, "idle");
-          useEditorStore
-            .getState()
-            .failIngest(
-              "analysis_failed",
-              typeof msg === "string" ? msg : "Analysis failed. Retry to continue.",
-            );
+          setProcessing(false, "ready");
+          await persistArtifactsAndReady({ suggestions: [] });
         });
     } else if (transcription.progress) {
       setAgentState("transcription", { progress: transcription.progress });
@@ -358,13 +357,29 @@ export function useMediaPipeline() {
   ]);
 
   useEffect(() => {
-    const error = transcription.error || analysis.error;
-    if (error) {
-      toast.error(error);
-      if (transcription.error) setAgentState("transcription", { status: "error" });
-      if (analysis.error) setAgentState("viralAnalysis", { status: "error" });
+    if (transcription.error) {
+      toast.error(transcription.error);
+      setAgentState("transcription", { status: "error" });
       setProcessing(false, "idle");
-      useEditorStore.getState().failIngest("analysis_failed", error);
+      useEditorStore.getState().failIngest("analysis_failed", transcription.error);
+      return;
+    }
+    if (analysis.error) {
+      const store = useEditorStore.getState();
+      const hasTranscript = (store.transcript?.chunks?.length ?? 0) > 0;
+      toast.warning(
+        hasTranscript
+          ? "Clip analysis failed — transcript is still ready. You can chat and export."
+          : analysis.error,
+      );
+      setAgentState("viralAnalysis", { status: "error" });
+      if (hasTranscript) {
+        setProcessing(false, "ready");
+        void persistArtifactsAndReady({ suggestions: [] });
+      } else {
+        setProcessing(false, "idle");
+        store.failIngest("analysis_failed", analysis.error);
+      }
     }
   }, [transcription.error, analysis.error, setProcessing, setAgentState]);
 

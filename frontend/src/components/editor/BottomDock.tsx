@@ -286,6 +286,10 @@ export default function BottomDock() {
     redoStack,
     undo,
     redo,
+    aiUndoStack,
+    aiRedoStack,
+    undoAiEdit,
+    redoAiEdit,
     deleteClip,
     markIn,
     markOut,
@@ -643,10 +647,13 @@ export default function BottomDock() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => undo()}
+            onClick={() => {
+              if (aiUndoStack.length) undoAiEdit();
+              else undo();
+            }}
             title="Undo — Ctrl+Z"
             aria-label="Undo"
-            disabled={undoStack.length === 0}
+            disabled={undoStack.length === 0 && aiUndoStack.length === 0}
             className={cn(
               "undo-btn text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed touch-manipulation",
               isMobile ? "h-12 w-12" : "h-8 w-8",
@@ -657,10 +664,13 @@ export default function BottomDock() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => redo()}
+            onClick={() => {
+              if (aiRedoStack.length) redoAiEdit();
+              else redo();
+            }}
             title="Redo — Ctrl+Shift+Z"
             aria-label="Redo"
-            disabled={redoStack.length === 0}
+            disabled={redoStack.length === 0 && aiRedoStack.length === 0}
             className={cn(
               "redo-btn text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed touch-manipulation",
               isMobile ? "h-12 w-12" : "h-8 w-8",

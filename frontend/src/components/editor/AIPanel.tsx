@@ -44,6 +44,10 @@ import { DubPanel } from "@/components/editor/DubPanel";
 import { useUIStore } from "@/stores/uiStore";
 import Link from "next/link";
 import { AuthenticatedFetchError } from "@/lib/authenticatedFetch";
+import {
+  formatCommandFeedback,
+  shouldSkipCreditGate,
+} from "@/lib/aiCommandHonesty";
 
 /** Debounce edge facet upserts — transcript/silence/clips churn must not spam Firestore. */
 const FACET_REFRESH_DEBOUNCE_MS = 400;
@@ -186,6 +190,7 @@ export function AIPanel() {
     isAIThinking,
     setAIThinking,
     dispatchAIActions,
+    applyAiEdits,
     videoMetadata,
     videoAnalysis,
     // Editor state for context
@@ -266,8 +271,18 @@ export function AIPanel() {
         content = `${label} is only partial in chat — open Advanced for full controls.`;
       } else if (reason === "not_implemented_in_preview") {
         content = `${label} isn't chat-ready yet — open Advanced to finish that edit.`;
-      } else if (reason === "missing_time_sec" || reason === "invalid_range") {
+      } else if (reason === "missing_time_sec") {
         content = `Couldn't apply ${label} — need a clear time or in/out range.`;
+      } else if (reason === "no_duration") {
+        content = "Couldn't remove silences — video duration isn't ready yet.";
+      } else if (reason === "no_silences") {
+        content = "No silence segments found to cut.";
+      } else if (reason === "keep_too_short") {
+        content = "Couldn't remove silences — that cut would leave nothing usable.";
+      } else if (reason === "over_80_percent") {
+        content = "Refused — removing those silences would drop more than 80% of the video.";
+      } else if (reason === "invalid_range") {
+        content = "Couldn't apply trim — need a valid in/out range.";
       } else if (reason === "no_clip") {
         content = "No clip selected for that mark — pick a clip first.";
       } else {
@@ -303,6 +318,7 @@ export function AIPanel() {
 
   // Honest Gemini circuit — poll lightly while chat is open (no fake success).
   const [circuitBanner, setCircuitBanner] = useState<string | null>(null);
+  const [mockAiMode, setMockAiMode] = useState(false);
   useEffect(() => {
     if (!aiPanelOpen) return;
     let cancelled = false;
@@ -310,6 +326,7 @@ export function AIPanel() {
       try {
         const health = await getAiEditorHealth();
         if (cancelled) return;
+        setMockAiMode(Boolean(health.mock_ai_mode));
         const circuit = health.gemini_circuit;
         if (health.status === "deferred" || circuit?.blocked === true) {
           const ra = circuit?.retry_after_seconds;
@@ -673,6 +690,7 @@ export function AIPanel() {
         }
         const step = plan?.steps?.[0];
         if (step?.capability_id) {
+          useEditorStore.getState().pushAiSnapshot("AI suggestion");
           dispatchAIActions([
             {
               type: step.capability_id,
@@ -774,7 +792,11 @@ export function AIPanel() {
         }
         addAIMessage({
           role: "assistant",
-          content: `${plan?.message || "Done — preview updated."}${pride}`,
+          content: `${
+            step
+              ? plan?.message || `Applied ${step.capability_id.replace(/_/g, " ").toLowerCase()}.`
+              : plan?.message || "No edit applied — that suggestion returned no executable action."
+          }${pride}`,
           actions: step
             ? [{ type: step.capability_id, payload: step.params ?? {} }]
             : [],
@@ -798,8 +820,19 @@ export function AIPanel() {
       const trimmed = text.trim();
       if (!trimmed || isAIThinking) return;
 
+      const transcriptReady = (transcript?.chunks?.length ?? 0) > 0;
+      if (!transcriptReady) {
+        addAIMessage({
+          role: "assistant",
+          content: "Transcript is still running — wait until captions land, then send the command.",
+          actions: [],
+        });
+        return;
+      }
+
       // Fail-closed before network: zero credits must never burn Gemini prepaid.
-      if (creditBalance !== null && creditBalance <= 0) {
+      // MOCK_AI_MODE skips the client gate — backend already skips the charge.
+      if (!shouldSkipCreditGate(mockAiMode) && creditBalance !== null && creditBalance <= 0) {
         addAIMessage({
           role: "assistant",
           content:
@@ -879,19 +912,19 @@ export function AIPanel() {
         // Server normalizes legacy {tool,params} → canonical {type} (EP-001).
         // Drop any non-canonical wire shape rather than client-side dialect translation.
         const rawActions = result.actions || [];
-        const dispatchActions = rawActions
-          .filter(
+        const rawCanonical = rawActions.filter(
             (a): a is CanonicalEditorAction =>
               Boolean(a) &&
               typeof a === "object" &&
               typeof (a as CanonicalEditorAction).type === "string",
-          )
+          );
+        const dispatchActions = rawCanonical
           .map((a) => canonicalToDispatchEnvelope(a));
 
-        if (dispatchActions.length > 0) {
-          dispatchAIActions(dispatchActions);
+        if (rawCanonical.length > 0) {
+          applyAiEdits(rawCanonical);
           setRecentActions((prev) =>
-            [...prev, ...dispatchActions.map((x: { type: string }) => x.type)].slice(-8),
+            [...prev, ...rawCanonical.map((x) => x.type)].slice(-8),
           );
         }
 
@@ -974,9 +1007,16 @@ export function AIPanel() {
           setKernelSyncState("preview");
         }
 
+        const honest = formatCommandFeedback({
+          appliedTypes: rawCanonical.map((a) => a.type),
+          message: result.feedback || result.message,
+          clamped: result.clamped,
+          dropped: result.dropped,
+          status: result.status,
+        });
         addAIMessage({
           role: "assistant",
-          content: `${result.feedback || result.message || "Done."}${receipt}`,
+          content: `${honest}${receipt}`,
           actions: dispatchActions,
         });
 
@@ -1047,6 +1087,8 @@ export function AIPanel() {
     [
       isAIThinking,
       creditBalance,
+      mockAiMode,
+      applyAiEdits,
       stopRecording,
       addAIMessage,
       setAIThinking,
@@ -1104,9 +1146,15 @@ export function AIPanel() {
   };
 
   const isVideoLoaded = !!videoMetadata;
-  const creditsExhausted = creditBalance !== null && creditBalance <= 0;
+  const transcriptReady = (transcript?.chunks?.length ?? 0) > 0;
+  const creditsExhausted =
+    !shouldSkipCreditGate(mockAiMode) && creditBalance !== null && creditBalance <= 0;
   const canSendChat =
-    isVideoLoaded && !isAIThinking && !creditsExhausted && !!inputText.trim();
+    isVideoLoaded &&
+    transcriptReady &&
+    !isAIThinking &&
+    !creditsExhausted &&
+    !!inputText.trim();
 
   // Shared chat body — rendered in exactly one housing at a time
   // (desktop docked column XOR mobile bottom sheet).

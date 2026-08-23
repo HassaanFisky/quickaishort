@@ -19,6 +19,7 @@ import { formatTime } from "@/lib/utils/formatTime";
 import { getExportContextFromManifest } from "@/lib/export/renderManifestExportContext";
 import { trackEvent } from "@/lib/analytics";
 import { LOOP_COPY } from "@/lib/studio/computePlane";
+import { resolveExportRange } from "@/lib/aiCommandHonesty";
 import {
   canCaptureStream,
   exportLocalClip,
@@ -44,6 +45,7 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
   const dispatchAIActions = useEditorStore((s) => s.dispatchAIActions);
   const markIn = useEditorStore((s) => s.markIn);
   const markOut = useEditorStore((s) => s.markOut);
+  const trimMarker = useEditorStore((s) => s.trimMarker);
   const selectedClipId = useEditorStore((s) => s.selectedClipId);
   const suggestions = useEditorStore((s) => s.suggestions);
 
@@ -82,16 +84,22 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
     setExportSetting("format", f);
   };
 
-  // Compute export range for display — same logic runs inside handleClientExport via getState()
-  let rangeStart = 0;
-  let rangeEnd = duration;
-  if (markIn !== null && markOut !== null && markOut > markIn) {
-    rangeStart = Math.min(markIn, markOut);
-    rangeEnd = Math.max(markIn, markOut);
-  } else if (selectedClipId) {
-    const clip = suggestions.find((c) => c.id === selectedClipId);
-    if (clip) { rangeStart = clip.start; rangeEnd = clip.end; }
-  }
+  const selectedClip = selectedClipId
+    ? suggestions.find((c) => c.id === selectedClipId) ?? null
+    : null;
+  const resolvedRange = resolveExportRange({
+    markIn,
+    markOut,
+    trimMarker: trimMarker
+      ? { startTime: trimMarker.startTime, endTime: trimMarker.endTime }
+      : null,
+    selectedClip: selectedClip
+      ? { start: selectedClip.start, end: selectedClip.end }
+      : null,
+    duration,
+  });
+  const rangeStart = resolvedRange.start;
+  const rangeEnd = resolvedRange.end;
   const range = { start: rangeStart, end: rangeEnd };
   const rangeDuration = rangeEnd - rangeStart;
 
@@ -145,7 +153,7 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
     const storeVideo = videoElementRef?.current;
     const video = storeVideo ?? (document.querySelector("video") as HTMLVideoElement | null);
     if (!video || video.readyState < 2) {
-      toast.error("No video loaded — paste a YouTube URL first.");
+      toast.error("No video loaded — upload an MP4 first.");
       return;
     }
 
@@ -167,6 +175,7 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
       const {
         markIn: mi,
         markOut: mo,
+        trimMarker: tm,
         selectedClipId: selId,
         suggestions: clips,
         duration: dur,
@@ -177,15 +186,16 @@ export default function ExportDialog({ open, onClose }: ExportDialogProps) {
 
       exporter.setFrameContext(frameFilters, captions, exportFilterPreset);
 
-      let start = 0;
-      let end = dur;
-      if (mi !== null && mo !== null && mo > mi) {
-        start = Math.min(mi, mo);
-        end = Math.max(mi, mo);
-      } else if (selId) {
-        const clip = clips.find((c) => c.id === selId);
-        if (clip) { start = clip.start; end = clip.end; }
-      }
+      const selected = selId ? clips.find((c) => c.id === selId) ?? null : null;
+      const resolved = resolveExportRange({
+        markIn: mi,
+        markOut: mo,
+        trimMarker: tm ? { startTime: tm.startTime, endTime: tm.endTime } : null,
+        selectedClip: selected ? { start: selected.start, end: selected.end } : null,
+        duration: dur,
+      });
+      const start = resolved.start;
+      const end = resolved.end;
 
       const exportDuration = end - start;
       const totalFrames = Math.ceil(exportDuration * fps);
