@@ -30,6 +30,10 @@ import {
 } from "@/lib/studio/projectKernel";
 import { useEditorStore } from "@/stores/editorStore";
 import { useAIPanel } from "@/stores/aiPanelStore";
+import {
+  enterReadyPreservingMedia,
+  PIPELINE_HARD_TIMEOUT_MS,
+} from "@/hooks/useMediaPipeline";
 
 export type LastIngestAttempt =
   | { kind: "file"; file: File }
@@ -100,6 +104,8 @@ export function useIngestLifecycle(opts: {
   const uploadAbortRef = useRef<AbortController | null>(null);
   const lastFileRef = useRef<File | null>(null);
   const lastAttemptRef = useRef<LastIngestAttempt | null>(null);
+  /** Hard bound covering the whole ingest (policy fetch, projectize, pipeline). */
+  const ingestHardTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Bumped on every new ingest / cancel so stale awaits cannot mutate store. */
   const ingestGenRef = useRef(0);
   const { setVideoContext } = useAIPanel();
@@ -132,12 +138,37 @@ export function useIngestLifecycle(opts: {
 
   const isCurrent = useCallback((gen: number) => gen === ingestGenRef.current, []);
 
+  const clearIngestHardTimeout = useCallback(() => {
+    if (ingestHardTimeoutRef.current) {
+      clearTimeout(ingestHardTimeoutRef.current);
+      ingestHardTimeoutRef.current = null;
+    }
+  }, []);
+
+  const armIngestHardTimeout = useCallback(
+    (gen: number) => {
+      clearIngestHardTimeout();
+      ingestHardTimeoutRef.current = setTimeout(() => {
+        ingestHardTimeoutRef.current = null;
+        if (ingestGenRef.current !== gen) return;
+        const st = useEditorStore.getState();
+        if (st.ingestStage === "ready" || st.ingestStage === "failed") return;
+        cancelPipeline();
+        enterReadyPreservingMedia(
+          "Auto-analysis timed out. Video is ready — retry transcript or export. AI chat waits for captions.",
+        );
+      }, PIPELINE_HARD_TIMEOUT_MS);
+    },
+    [cancelPipeline, clearIngestHardTimeout],
+  );
+
   const cancelUpload = useCallback(() => {
     bumpGen();
+    clearIngestHardTimeout();
     uploadAbortRef.current?.abort();
     cancelPipeline();
     failIngest("cancelled", "Ingest cancelled.");
-  }, [bumpGen, cancelPipeline, failIngest]);
+  }, [bumpGen, cancelPipeline, failIngest, clearIngestHardTimeout]);
 
   /** Re-run analyze only — requires media already loaded (LeftPanel retry, etc.). */
   const retryAnalyze = useCallback(() => {
@@ -351,6 +382,7 @@ export function useIngestLifecycle(opts: {
       const gen = bumpGen();
       beginIngest();
       if (!isCurrent(gen)) return;
+      armIngestHardTimeout(gen);
       setIngestMeta({
         sourceKind: "file",
         fromCache: false,
@@ -404,16 +436,18 @@ export function useIngestLifecycle(opts: {
       setIngestMeta,
       setIngestStage,
       setSourceFile,
+      armIngestHardTimeout,
     ],
   );
 
   const cancelAnalyze = useCallback(() => {
     bumpGen();
+    clearIngestHardTimeout();
     uploadAbortRef.current?.abort();
     cancelPipeline();
     failIngest("cancelled", "Processing cancelled.");
     toast.info("Processing cancelled.");
-  }, [bumpGen, cancelPipeline, failIngest]);
+  }, [bumpGen, cancelPipeline, failIngest, clearIngestHardTimeout]);
 
   const retryLastIngest = useCallback(() => {
     const attempt = lastAttemptRef.current;

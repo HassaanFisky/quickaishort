@@ -20,7 +20,7 @@ const WHISPER_TRANSCRIBE_TIMEOUT_MS = 45_000;
 /** decodeAudioData does not honor AbortSignal — race it or local ingest hangs. */
 const AUDIO_EXTRACT_TIMEOUT_MS = 20_000;
 /** Whole-pipeline bound: a hung decode/worker must never trap the editor. */
-const PIPELINE_HARD_TIMEOUT_MS = 75_000;
+export const PIPELINE_HARD_TIMEOUT_MS = 75_000;
 
 function raceTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -42,7 +42,7 @@ function raceTimeout<T>(promise: Promise<T>, ms: number, message: string): Promi
   });
 }
 
-function enterReadyPreservingMedia(message: string): void {
+export function enterReadyPreservingMedia(message: string): void {
   const store = useEditorStore.getState();
   const hasMedia = Boolean(store.sourceFile || store.sourceUrl);
   if (!shouldPreserveEditorSession(hasMedia)) {
