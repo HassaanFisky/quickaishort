@@ -17,6 +17,28 @@ import { shouldPreserveEditorSession } from "@/lib/aiCommandHonesty";
 
 /** Whisper model fetch/transcribe can hang with no worker error. Bound it. */
 const WHISPER_TRANSCRIBE_TIMEOUT_MS = 45_000;
+/** decodeAudioData does not honor AbortSignal — race it or local ingest hangs. */
+const AUDIO_EXTRACT_TIMEOUT_MS = 30_000;
+
+function raceTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const id = setTimeout(() => {
+      const err = new Error(message);
+      err.name = "AbortError";
+      reject(err);
+    }, ms);
+    promise.then(
+      (value) => {
+        clearTimeout(id);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(id);
+        reject(error);
+      },
+    );
+  });
+}
 
 function enterReadyPreservingMedia(message: string): void {
   const store = useEditorStore.getState();
@@ -209,7 +231,11 @@ export function useMediaPipeline() {
     setProgress(10);
     toast.info("Preparing content for analysis…");
 
-    void extractAudioData(source, controller.signal)
+    void raceTimeout(
+      extractAudioData(source, controller.signal),
+      AUDIO_EXTRACT_TIMEOUT_MS,
+      "Audio extract timed out",
+    )
       .then(({ audioData, sampleRate, duration }) => {
         clearTimeout(timeoutId);
         setWaveformPeaks(computeWaveformPeaks(audioData));

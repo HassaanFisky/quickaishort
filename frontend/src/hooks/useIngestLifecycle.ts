@@ -121,6 +121,7 @@ export function useIngestLifecycle(opts: {
     uploadAbortRef.current?.abort();
     cancelPipeline();
     resetIngestLifecycle();
+    useEditorStore.getState().setProcessing(false, "idle");
     setIngestStage("identify");
   }, [cancelPipeline, resetIngestLifecycle, setIngestStage]);
 
