@@ -410,6 +410,15 @@ export function useIngestLifecycle(opts: {
 
       const blobUrl = URL.createObjectURL(file);
       setSourceFile(file, blobUrl);
+      setVideoMetadata({
+        id: fingerprintFile(file),
+        url: blobUrl,
+        title: file.name || "Upload",
+        duration: 0,
+        nativeWidth: 0,
+        nativeHeight: 0,
+        fps: 0,
+      });
       trackEvent({ name: "video_loaded", props: { source: "upload", durationSec: 0 } });
 
       // Local-first: skip GCS PUT on ingest (FinOps). Cloud upload waits for Export final.
