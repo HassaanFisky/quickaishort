@@ -18,7 +18,9 @@ import { shouldPreserveEditorSession } from "@/lib/aiCommandHonesty";
 /** Whisper model fetch/transcribe can hang with no worker error. Bound it. */
 const WHISPER_TRANSCRIBE_TIMEOUT_MS = 45_000;
 /** decodeAudioData does not honor AbortSignal — race it or local ingest hangs. */
-const AUDIO_EXTRACT_TIMEOUT_MS = 30_000;
+const AUDIO_EXTRACT_TIMEOUT_MS = 20_000;
+/** Whole-pipeline bound: a hung decode/worker must never trap the editor. */
+const PIPELINE_HARD_TIMEOUT_MS = 75_000;
 
 function raceTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -150,6 +152,7 @@ export function useMediaPipeline() {
 
   const abortControllerRef = useRef<AbortController | null>(null);
   const whisperTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pipelineTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const transcriptionRef = useRef(transcription);
   useEffect(() => {
@@ -165,19 +168,38 @@ export function useMediaPipeline() {
     }
   }, []);
 
+  const clearPipelineTimeout = useCallback(() => {
+    if (pipelineTimeoutRef.current) {
+      clearTimeout(pipelineTimeoutRef.current);
+      pipelineTimeoutRef.current = null;
+    }
+  }, []);
+
+  const clearPipelineTimeoutRef = useRef(clearPipelineTimeout);
+  useEffect(() => {
+    clearPipelineTimeoutRef.current = clearPipelineTimeout;
+  });
+
+  const clearWhisperTimeoutRef = useRef(clearWhisperTimeout);
+  useEffect(() => {
+    clearWhisperTimeoutRef.current = clearWhisperTimeout;
+  });
+
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => () => {
     clearWhisperTimeout();
+    clearPipelineTimeout();
     transcriptionRef.current.terminate();
-  }, [clearWhisperTimeout]);
+  }, [clearWhisperTimeout, clearPipelineTimeout]);
 
   const cancelPipeline = useCallback(() => {
     abortControllerRef.current?.abort();
     abortControllerRef.current = null;
     activeRunIdRef.current = null;
     clearWhisperTimeout();
+    clearPipelineTimeout();
     transcriptionRef.current.terminate();
-  }, [clearWhisperTimeout]);
+  }, [clearWhisperTimeout, clearPipelineTimeout]);
 
   const runPipeline = useCallback(async () => {
     if (useEditorStore.getState().isProcessing) return;
@@ -230,6 +252,19 @@ export function useMediaPipeline() {
     setAgentState("ingestion", { status: "working", progress: 10 });
     setProgress(10);
     toast.info("Preparing content for analysis…");
+
+    clearPipelineTimeoutRef.current();
+    pipelineTimeoutRef.current = setTimeout(() => {
+      pipelineTimeoutRef.current = null;
+      abortControllerRef.current?.abort();
+      abortControllerRef.current = null;
+      activeRunIdRef.current = null;
+      clearWhisperTimeoutRef.current();
+      transcriptionRef.current.terminate();
+      enterReadyPreservingMedia(
+        "Auto-analysis timed out. Video is ready — retry transcript or export. AI chat waits for captions.",
+      );
+    }, PIPELINE_HARD_TIMEOUT_MS);
 
     void raceTimeout(
       extractAudioData(source, controller.signal),
@@ -387,10 +422,12 @@ export function useMediaPipeline() {
 
           setProcessing(false, "ready");
           setProgress(100);
+          clearPipelineTimeoutRef.current();
           await persistArtifactsAndReady({ suggestions: mapped });
         })
         .catch(async (err: AnalysisError) => {
           if (activeRunIdRef.current !== capturedRunId) return;
+          clearPipelineTimeoutRef.current();
           const msg =
             err?.response?.data?.detail ||
             err?.response?.data?.message ||
