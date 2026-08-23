@@ -784,6 +784,40 @@ async def test_router_mock_ai_mode_returns_timeline_without_gateway(
     assert gateway.models == []
 
 
+@pytest.mark.asyncio
+async def test_router_mock_ai_mode_does_not_require_redis(monkeypatch) -> None:
+    monkeypatch.setenv("MOCK_AI_MODE", "true")
+    monkeypatch.setenv("ENVIRONMENT", "staging")
+    gateway = _FakeGateway([])
+    unavailable_cache = SimpleNamespace(
+        lookup=AsyncMock(side_effect=RuntimeError("Redis unavailable")),
+    )
+    router = DualModelRouter(
+        gateway=gateway,
+        cache=unavailable_cache,
+        tier_resolver=_free_tier,
+        provider_admission=False,
+    )
+
+    result = await router.route(
+        LogicRouteRequest(
+            user_id="user-1",
+            workload_id="local-mp4",
+            query="Trim and add a caption",
+        ),
+        output_model=TimelinePlanOutput,
+    )
+
+    assert result.model_used == "mock-ai-mode"
+    assert result.payload is not None
+    assert [action["type"] for action in result.payload["actions"][:2]] == [
+        "TRIM",
+        "ADD_CAPTION",
+    ]
+    unavailable_cache.lookup.assert_not_awaited()
+    assert gateway.models == []
+
+
 def test_mock_ai_mode_default_is_false() -> None:
     from core import flags
 

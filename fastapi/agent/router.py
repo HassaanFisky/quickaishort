@@ -409,6 +409,29 @@ class DualModelRouter:
                 raise_resource_ceiling(static_decision)
             return _limit_response(request, static_decision)
 
+        primary_profile = _primary_profile(request)
+
+        # Zero-cost local sandbox: schema-valid fixture, no Google HTTP and no
+        # Redis dependency. Production mode can never enter this branch.
+        flags = importlib.import_module("core.flags")
+        if flags.is_mock_ai_mode():
+            gemini_mock = importlib.import_module("services.gemini_mock")
+            validated = gemini_mock.build_mock_output_model(
+                output_model,
+                task=request.task,
+            )
+            return RouterResponse(
+                action_intent=RouterActionIntent.EXECUTE,
+                task=request.task,
+                message="Mock AI mode completed without calling Gemini.",
+                model_used="mock-ai-mode",
+                profile_used=primary_profile,
+                fallback_used=False,
+                cached=False,
+                payload=_model_payload(validated),
+                limit_decision=static_decision,
+            )
+
         descriptor = _build_cache_descriptor(request, tier, output_model)
         lookup = await self._cache.lookup(descriptor)
         if lookup.status is CacheLookupStatus.HIT:
@@ -433,34 +456,6 @@ class DualModelRouter:
                 action_intent=RouterActionIntent.RETRY_LATER,
                 task=request.task,
                 message="An identical request is already processing.",
-                limit_decision=static_decision,
-            )
-
-        primary_profile = _primary_profile(request)
-
-        # Zero-cost local sandbox: schema-valid fixture, no Google HTTP.
-        flags = importlib.import_module("core.flags")
-        if flags.is_mock_ai_mode():
-            gemini_mock = importlib.import_module("services.gemini_mock")
-            try:
-                validated = gemini_mock.build_mock_output_model(
-                    output_model,
-                    task=request.task,
-                )
-                payload = _model_payload(validated)
-                await self._cache.store(lookup, payload)
-            except Exception:
-                await self._cache.release(lookup)
-                raise
-            return RouterResponse(
-                action_intent=RouterActionIntent.EXECUTE,
-                task=request.task,
-                message="Mock AI mode completed without calling Gemini.",
-                model_used="mock-ai-mode",
-                profile_used=primary_profile,
-                fallback_used=False,
-                cached=False,
-                payload=payload,
                 limit_decision=static_decision,
             )
 
