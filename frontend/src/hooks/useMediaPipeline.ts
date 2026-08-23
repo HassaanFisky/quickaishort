@@ -423,6 +423,9 @@ export function useMediaPipeline() {
 
   useEffect(() => {
     if (transcription.error) {
+      // A worker that never spawned has no active run — nothing to unwind.
+      if (!activeRunIdRef.current) return;
+      activeRunIdRef.current = null;
       clearWhisperTimeout();
       enterReadyPreservingMedia(
         `On-device transcript failed. Video is ready — retry or export. ${transcription.error}`,
