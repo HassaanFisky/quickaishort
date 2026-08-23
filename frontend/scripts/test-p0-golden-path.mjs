@@ -62,6 +62,12 @@ try {
     "MOCK_AI_MODE alone bypasses the client credit gate",
   );
 
+  assert(
+    honesty.shouldPreserveEditorSession(true) &&
+      !honesty.shouldPreserveEditorSession(false),
+    "loaded media survives optional transcript failure",
+  );
+
   const store = storeModule.useEditorStore;
   store.setState({
     duration: 60,

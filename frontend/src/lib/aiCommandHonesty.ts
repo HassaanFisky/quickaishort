@@ -98,3 +98,8 @@ export function resolveExportRange(input: ExportRangeInput): ExportRange {
 export function shouldSkipCreditGate(mockAiMode: boolean): boolean {
   return mockAiMode === true;
 }
+
+/** Loaded local/URL media must survive optional transcript / analysis failure. */
+export function shouldPreserveEditorSession(hasLoadedMedia: boolean): boolean {
+  return hasLoadedMedia === true;
+}

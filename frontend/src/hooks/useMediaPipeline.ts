@@ -13,6 +13,27 @@ import { saveIngestArtifact } from "@/lib/studio/ingestArtifacts";
 import { isDirectVideoUrl, type IngestStage } from "@/lib/studio/ingestFsm";
 import { saveIngestSession } from "@/lib/studio/ingestSession";
 import { parseYouTubeId } from "@/lib/youtube-utils";
+import { shouldPreserveEditorSession } from "@/lib/aiCommandHonesty";
+
+/** Whisper model fetch/transcribe can hang with no worker error. Bound it. */
+const WHISPER_TRANSCRIBE_TIMEOUT_MS = 45_000;
+
+function enterReadyPreservingMedia(message: string): void {
+  const store = useEditorStore.getState();
+  const hasMedia = Boolean(store.sourceFile || store.sourceUrl);
+  if (!shouldPreserveEditorSession(hasMedia)) {
+    toast.error(message);
+    store.failIngest("analysis_failed", message);
+    return;
+  }
+  toast.warning(message);
+  store.setAgentState("transcription", { status: "error" });
+  store.setProcessing(false, "ready");
+  if (store.ingestStage === "failed") {
+    store.setIngestStage("analyze");
+  }
+  void persistArtifactsAndReady({ suggestions: [] });
+}
 
 /**
  * Reduce a Float32Array to 120 amplitude peaks for waveform display.
@@ -106,6 +127,7 @@ export function useMediaPipeline() {
   const analysis = useAnalysis();
 
   const abortControllerRef = useRef<AbortController | null>(null);
+  const whisperTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const transcriptionRef = useRef(transcription);
   useEffect(() => {
@@ -114,15 +136,26 @@ export function useMediaPipeline() {
 
   const activeRunIdRef = useRef<string | null>(null);
 
+  const clearWhisperTimeout = useCallback(() => {
+    if (whisperTimeoutRef.current) {
+      clearTimeout(whisperTimeoutRef.current);
+      whisperTimeoutRef.current = null;
+    }
+  }, []);
+
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => () => transcriptionRef.current.terminate(), []);
+  useEffect(() => () => {
+    clearWhisperTimeout();
+    transcriptionRef.current.terminate();
+  }, [clearWhisperTimeout]);
 
   const cancelPipeline = useCallback(() => {
     abortControllerRef.current?.abort();
     abortControllerRef.current = null;
     activeRunIdRef.current = null;
+    clearWhisperTimeout();
     transcriptionRef.current.terminate();
-  }, []);
+  }, [clearWhisperTimeout]);
 
   const runPipeline = useCallback(async () => {
     if (useEditorStore.getState().isProcessing) return;
@@ -140,13 +173,9 @@ export function useMediaPipeline() {
     }
 
     const stageNow = useEditorStore.getState().ingestStage;
-    if (stageNow === "projectize") {
+    if (stageNow === "projectize" || stageNow === "failed") {
       useEditorStore.getState().setIngestStage("analyze");
-    } else if (
-      stageNow !== "analyze" &&
-      stageNow !== "ready" &&
-      stageNow !== "failed"
-    ) {
+    } else if (stageNow !== "analyze" && stageNow !== "ready") {
       useEditorStore.getState().setIngestStage("analyze");
     }
 
@@ -198,6 +227,14 @@ export function useMediaPipeline() {
         activeRunIdRef.current = crypto.randomUUID();
         transcription.init();
         transcription.transcribe(audioData, sampleRate);
+        clearWhisperTimeout();
+        whisperTimeoutRef.current = setTimeout(() => {
+          whisperTimeoutRef.current = null;
+          transcriptionRef.current.terminate();
+          enterReadyPreservingMedia(
+            "On-device transcript timed out. Video is ready — retry transcript or export. AI chat waits for captions.",
+          );
+        }, WHISPER_TRANSCRIBE_TIMEOUT_MS);
       })
       .catch((audioError: unknown) => {
         clearTimeout(timeoutId);
@@ -205,19 +242,19 @@ export function useMediaPipeline() {
         const lowerMsg = msg.toLowerCase();
 
         let infoMsg =
-          "Video loaded — AI analysis unavailable. Mark clips manually or upload an MP4 for full analysis.";
+          "Video loaded — transcript unavailable. Export works; AI chat waits for a transcript retry.";
 
         if (audioError instanceof Error && audioError.name === "AbortError") {
-          infoMsg = "Analysis timed out — video is ready for manual editing.";
+          infoMsg = "Transcript timed out. Video is ready — retry or export without AI chat.";
         } else if (
           lowerMsg.includes("bot detection") ||
           lowerMsg.includes("sign in") ||
           lowerMsg.includes("audio extraction failed")
         ) {
           infoMsg =
-            "Auto-analysis unavailable for this video (server-side restriction). The video is still loaded — mark clips manually or upload an MP4.";
+            "Auto-analysis unavailable for this video. The video is still loaded — retry or export.";
         } else if (lowerMsg.includes("network error") || lowerMsg.includes("unreachable")) {
-          infoMsg = "Could not reach the server — check your connection and try again.";
+          infoMsg = "Could not reach the server — video is still loaded. Retry when online.";
         } else if (lowerMsg.includes("private")) {
           infoMsg = "This video is private. Try a public YouTube video.";
         } else if (lowerMsg.includes("video unavailable") || lowerMsg.includes("yt-dlp")) {
@@ -225,20 +262,20 @@ export function useMediaPipeline() {
             "This video is unavailable — it may be region-locked. Try uploading the MP4 directly.";
         }
 
-        toast.info(infoMsg, { duration: 6000 });
         setAgentState("ingestion", { status: "error" });
-        setProcessing(false, "idle");
-        useEditorStore
-          .getState()
-          .failIngest(
-            "analysis_failed",
-            "Auto-analysis unavailable. Retry analysis or upload an MP4.",
-          );
+        enterReadyPreservingMedia(infoMsg);
       });
 
     // GCS upload is owned by useIngestLifecycle.ingestFile (canonical path).
     // Do not duplicate presigned PUT here — avoids double GCS ops / cost.
-  }, [setProcessing, setProgress, setAgentState, setWaveformPeaks, transcription]);
+  }, [
+    setProcessing,
+    setProgress,
+    setAgentState,
+    setWaveformPeaks,
+    transcription,
+    clearWhisperTimeout,
+  ]);
 
   useEffect(() => {
     if (
@@ -253,6 +290,7 @@ export function useMediaPipeline() {
       };
       type XenovaTranscript = { text?: string; chunks?: XenovaChunk[] };
       if (!activeRunIdRef.current) return;
+      clearWhisperTimeout();
 
       const raw = transcription.lastMessage.payload.transcript as unknown as
         | XenovaTranscript
@@ -354,14 +392,15 @@ export function useMediaPipeline() {
     setProgress,
     analysis,
     userId,
+    clearWhisperTimeout,
   ]);
 
   useEffect(() => {
     if (transcription.error) {
-      toast.error(transcription.error);
-      setAgentState("transcription", { status: "error" });
-      setProcessing(false, "idle");
-      useEditorStore.getState().failIngest("analysis_failed", transcription.error);
+      clearWhisperTimeout();
+      enterReadyPreservingMedia(
+        `On-device transcript failed. Video is ready — retry or export. ${transcription.error}`,
+      );
       return;
     }
     if (analysis.error) {
@@ -377,11 +416,13 @@ export function useMediaPipeline() {
         setProcessing(false, "ready");
         void persistArtifactsAndReady({ suggestions: [] });
       } else {
-        setProcessing(false, "idle");
-        store.failIngest("analysis_failed", analysis.error);
+        enterReadyPreservingMedia(
+          analysis.error ||
+            "Clip analysis failed. Video is ready — retry transcript or export.",
+        );
       }
     }
-  }, [transcription.error, analysis.error, setProcessing, setAgentState]);
+  }, [transcription.error, analysis.error, setProcessing, setAgentState, clearWhisperTimeout]);
 
   return {
     runPipeline,
