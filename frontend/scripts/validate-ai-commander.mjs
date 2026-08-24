@@ -102,7 +102,10 @@ assert(has(geminiEditor, "/api/ai-editor/command"), "POSTs to /api/ai-editor/com
 assert(!/export\s+(const|function|class)\s+EDITOR_SYSTEM_PROMPT/.test(geminiEditor), "orphan client EDITOR_SYSTEM_PROMPT export removed");
 const aiPanel = read("components/editor/AIPanel.tsx");
 assert(aiPanel !== null, "components/editor/AIPanel.tsx exists");
-assert(has(aiPanel, "sendEditorCommand"), "AIPanel calls sendEditorCommand");
+assert(
+  has(aiPanel, "streamEditorCommand") || has(aiPanel, "sendEditorCommand"),
+  "AIPanel calls the canonical editor command client",
+);
 assert(has(aiPanel, "dispatchAIActions"), "AIPanel applies structured edits via dispatchAIActions");
 assert(has(aiPanel, "data-tour-id=\"ai.suggestions\""), "AI suggestions tour anchor");
 assert(has(aiPanel, "data-tour-id=\"ai.chat\""), "AI chat tour anchor");
@@ -115,7 +118,12 @@ assert(has(storeForAi, "aiUndoStack"), "editorStore.aiUndoStack present");
 assert(has(storeForAi, "aiRedoStack"), "editorStore.aiRedoStack present");
 assert(has(geminiEditor, "CanonicalEditorAction"), "CanonicalEditorAction type exported");
 assert(has(aiPanel, "suggestions-rail") || has(aiPanel, "ai.suggestions"), "suggestions rail present");
-assert(has(geminiEditor, "Authorization") || has(geminiEditor, "backendToken"), "command path attaches auth headers");
+assert(
+  has(geminiEditor, "authenticatedFetch") ||
+    has(geminiEditor, "Authorization") ||
+    has(geminiEditor, "backendToken"),
+  "command path uses authenticated transport",
+);
 
 // ── stores/editorStore.ts — AI undo + dispatcher ─────────────────────────────
 console.log("\n[4] stores/editorStore.ts (Pillar-3 additions)");
@@ -168,7 +176,10 @@ assert(has(route, "Authorization"), "forwards Authorization header");
 console.log("\n[7] components/editor/AICopilot.tsx (retired → AIPanel)");
 const copilot = read("components/editor/AICopilot.tsx");
 assert(copilot === null, "AICopilot.tsx removed — chat-primary shell is AIPanel");
-assert(has(aiPanel, "sendEditorCommand"), "AIPanel is command entrypoint");
+assert(
+  has(aiPanel, "streamEditorCommand") || has(aiPanel, "sendEditorCommand"),
+  "AIPanel is command entrypoint",
+);
 assert(has(aiPanel, "aiPanelOpen"), "AIPanel gated by aiPanelOpen");
 assert(has(aiPanel, "undoAiEdit") || has(storeForAi, "undoAiEdit"), "undo path available");
 assert(has(aiPanel, "redoAiEdit") || has(storeForAi, "redoAiEdit"), "redo path available");
@@ -214,7 +225,10 @@ const editorPage = read("app/editor/page.tsx");
 assert(editorPage !== null, "app/editor/page.tsx exists");
 assert(has(editorPage, "EditorLayout") || has(editorPage, "useAIPanel"), "editor page mounts editor shell");
 assert(has(aiPanel, "setAIPanelOpen") || has(storeForAi, "setAIPanelOpen"), "AI panel open/close API present");
-assert(has(aiPanel, "sendEditorCommand"), "AIPanel remains NL→action entrypoint");
+assert(
+  has(aiPanel, "streamEditorCommand") || has(aiPanel, "sendEditorCommand"),
+  "AIPanel remains NL→action entrypoint",
+);
 assert(has(catalog, "searchTools"), "searchTools helper retained for future palette");
 assert(has(catalog, "execMode"), "catalog entries have execMode field");
 

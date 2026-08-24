@@ -85,6 +85,8 @@ export default function VideoCanvas() {
     currentTime,
     isPlaying,
     pendingSeek,
+    markIn,
+    markOut,
     exportSettings,
     videoMetadata,
     setCurrentTime,
@@ -409,8 +411,17 @@ export default function VideoCanvas() {
   }, [isPlaying]);
 
   const togglePlay = useCallback(() => {
+    if (
+      videoRef.current &&
+      markIn !== null &&
+      markOut !== null &&
+      (videoRef.current.currentTime < markIn || videoRef.current.currentTime >= markOut)
+    ) {
+      videoRef.current.currentTime = markIn;
+      setCurrentTime(markIn);
+    }
     setIsPlaying(!isPlaying);
-  }, [isPlaying, setIsPlaying]);
+  }, [isPlaying, markIn, markOut, setCurrentTime, setIsPlaying]);
 
   const handleSeek = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -657,7 +668,19 @@ export default function VideoCanvas() {
                   onPause={() => setIsPlaying(false)}
                   onTimeUpdate={() => {
                     if (videoRef.current) {
-                      const t = videoRef.current.currentTime;
+                      let t = videoRef.current.currentTime;
+                      if (
+                        isPlaying &&
+                        markOut !== null &&
+                        markIn !== null &&
+                        markOut > markIn &&
+                        t >= markOut
+                      ) {
+                        videoRef.current.pause();
+                        videoRef.current.currentTime = markOut;
+                        t = markOut;
+                        setIsPlaying(false);
+                      }
                       setCurrentTime(t);
                       if (previewContextRef.current) {
                         activeManifestCaptionIdsRef.current = previewContextRef.current.activeCaptionIdsAt(t);

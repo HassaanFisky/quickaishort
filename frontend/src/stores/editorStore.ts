@@ -465,6 +465,10 @@ export interface AiSnapshot {
   exportSettings: ExportSettings;
   captionsEnabled: boolean;
   currentTime: number;
+  markIn: number | null;
+  markOut: number | null;
+  suggestions: Clip[];
+  silenceSegments: CutSegment[];
 }
 
 export interface TimelineMarker {
@@ -1404,13 +1408,19 @@ export const useEditorStore = create<EditorState>()(
               break;
 
             // ── Clip tools ────────────────────────────────────────────────
-            case "TRIM":
-              store.setTrimMarker({
-                startTime: action.payload.start as number,
-                endTime: action.payload.end as number,
-              });
-              if (videoEl) videoEl.currentTime = action.payload.start as number;
+            case "TRIM": {
+              const start = Number(action.payload.start);
+              const end = Number(action.payload.end);
+              if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+                refuseTool("TRIM", "invalid_range");
+                break;
+              }
+              store.setTrimMarker({ startTime: start, endTime: end });
+              store.setMarkIn(start);
+              store.setMarkOut(end);
+              if (videoEl) videoEl.currentTime = start;
               break;
+            }
             case "SPLIT_CLIP": {
               const splitTime = action.payload.time as number;
               if (typeof splitTime === "number") store.splitClipAtTime(splitTime);
@@ -1670,7 +1680,10 @@ export const useEditorStore = create<EditorState>()(
               const paddingSec =
                 typeof p.padding_sec === "number" ? p.padding_sec : 0.08;
               const { duration } = store;
-              if (!duration || duration <= 0) break;
+              if (!duration || duration <= 0) {
+                refuseTool("REMOVE_SILENCES", "no_duration");
+                break;
+              }
 
               type SilenceLike = { start: number; end: number; type?: string };
               const raw: SilenceLike[] = Array.isArray(p.segments)
@@ -1696,7 +1709,10 @@ export const useEditorStore = create<EditorState>()(
                 .filter((s) => s.end > s.start)
                 .sort((a, b) => a.start - b.start);
 
-              if (!silences.length) break;
+              if (!silences.length) {
+                refuseTool("REMOVE_SILENCES", "no_silences");
+                break;
+              }
 
               // Merge overlapping silence intervals
               const merged: { start: number; end: number }[] = [];
@@ -1723,14 +1739,20 @@ export const useEditorStore = create<EditorState>()(
               }
 
               const meaningful = keeps.filter((k) => k.end - k.start >= 0.25);
-              if (!meaningful.length) break;
+              if (!meaningful.length) {
+                refuseTool("REMOVE_SILENCES", "keep_too_short");
+                break;
+              }
 
               const keepDuration = meaningful.reduce(
                 (acc, k) => acc + (k.end - k.start),
                 0,
               );
               // 80 % safety rail — don't remove more than 80 % of the video
-              if (keepDuration < duration * 0.2) break;
+              if (keepDuration < duration * 0.2) {
+                refuseTool("REMOVE_SILENCES", "over_80_percent");
+                break;
+              }
 
               store.setSilenceSegments(
                 merged.map((s) => ({
@@ -1743,6 +1765,8 @@ export const useEditorStore = create<EditorState>()(
                 startTime: meaningful[0].start,
                 endTime: meaningful[meaningful.length - 1].end,
               });
+              store.setMarkIn(meaningful[0].start);
+              store.setMarkOut(meaningful[meaningful.length - 1].end);
 
               // Mid-gap cuts → surface keep windows as timeline clips (honest preview)
               if (meaningful.length > 1 || merged.some((s) => s.start > 0.15 && s.end < duration - 0.15)) {
@@ -2316,6 +2340,14 @@ export const useEditorStore = create<EditorState>()(
           exportSettings: { ...s.exportSettings },
           captionsEnabled: s.captionsEnabled,
           currentTime: s.currentTime,
+          markIn: s.markIn,
+          markOut: s.markOut,
+          suggestions: typeof structuredClone !== "undefined"
+            ? structuredClone(s.suggestions)
+            : JSON.parse(JSON.stringify(s.suggestions)),
+          silenceSegments: typeof structuredClone !== "undefined"
+            ? structuredClone(s.silenceSegments)
+            : JSON.parse(JSON.stringify(s.silenceSegments)),
         };
         set((state) => ({
           aiUndoStack: [...state.aiUndoStack.slice(-(_MAX_AI_STACK - 1)), snapshot],
@@ -2343,6 +2375,14 @@ export const useEditorStore = create<EditorState>()(
           exportSettings: { ...s.exportSettings },
           captionsEnabled: s.captionsEnabled,
           currentTime: s.currentTime,
+          markIn: s.markIn,
+          markOut: s.markOut,
+          suggestions: typeof structuredClone !== "undefined"
+            ? structuredClone(s.suggestions)
+            : JSON.parse(JSON.stringify(s.suggestions)),
+          silenceSegments: typeof structuredClone !== "undefined"
+            ? structuredClone(s.silenceSegments)
+            : JSON.parse(JSON.stringify(s.silenceSegments)),
         };
         set((state) => ({
           aiUndoStack: state.aiUndoStack.slice(0, -1),
@@ -2355,7 +2395,13 @@ export const useEditorStore = create<EditorState>()(
           exportSettings: snapshot.exportSettings,
           captionsEnabled: snapshot.captionsEnabled,
           currentTime: snapshot.currentTime,
+          pendingSeek: snapshot.currentTime,
+          markIn: snapshot.markIn,
+          markOut: snapshot.markOut,
+          suggestions: snapshot.suggestions,
+          silenceSegments: snapshot.silenceSegments,
         }));
+        useEditorStore.getState().rebuildRenderManifest();
         return true;
       },
 
@@ -2378,6 +2424,14 @@ export const useEditorStore = create<EditorState>()(
           exportSettings: { ...s.exportSettings },
           captionsEnabled: s.captionsEnabled,
           currentTime: s.currentTime,
+          markIn: s.markIn,
+          markOut: s.markOut,
+          suggestions: typeof structuredClone !== "undefined"
+            ? structuredClone(s.suggestions)
+            : JSON.parse(JSON.stringify(s.suggestions)),
+          silenceSegments: typeof structuredClone !== "undefined"
+            ? structuredClone(s.silenceSegments)
+            : JSON.parse(JSON.stringify(s.silenceSegments)),
         };
         set((state) => ({
           aiRedoStack: state.aiRedoStack.slice(0, -1),
@@ -2390,7 +2444,13 @@ export const useEditorStore = create<EditorState>()(
           exportSettings: snapshot.exportSettings,
           captionsEnabled: snapshot.captionsEnabled,
           currentTime: snapshot.currentTime,
+          pendingSeek: snapshot.currentTime,
+          markIn: snapshot.markIn,
+          markOut: snapshot.markOut,
+          suggestions: snapshot.suggestions,
+          silenceSegments: snapshot.silenceSegments,
         }));
+        useEditorStore.getState().rebuildRenderManifest();
         return true;
       },
 

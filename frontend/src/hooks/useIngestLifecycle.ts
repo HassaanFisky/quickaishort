@@ -30,6 +30,10 @@ import {
 } from "@/lib/studio/projectKernel";
 import { useEditorStore } from "@/stores/editorStore";
 import { useAIPanel } from "@/stores/aiPanelStore";
+import {
+  enterReadyPreservingMedia,
+  PIPELINE_HARD_TIMEOUT_MS,
+} from "@/hooks/useMediaPipeline";
 
 export type LastIngestAttempt =
   | { kind: "file"; file: File }
@@ -100,6 +104,8 @@ export function useIngestLifecycle(opts: {
   const uploadAbortRef = useRef<AbortController | null>(null);
   const lastFileRef = useRef<File | null>(null);
   const lastAttemptRef = useRef<LastIngestAttempt | null>(null);
+  /** Hard bound covering the whole ingest (policy fetch, projectize, pipeline). */
+  const ingestHardTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Bumped on every new ingest / cancel so stale awaits cannot mutate store. */
   const ingestGenRef = useRef(0);
   const { setVideoContext } = useAIPanel();
@@ -121,7 +127,9 @@ export function useIngestLifecycle(opts: {
     uploadAbortRef.current?.abort();
     cancelPipeline();
     resetIngestLifecycle();
+    useEditorStore.getState().setProcessing(false, "idle");
     setIngestStage("identify");
+    return ingestGenRef.current;
   }, [cancelPipeline, resetIngestLifecycle, setIngestStage]);
 
   const bumpGen = useCallback(() => {
@@ -131,12 +139,37 @@ export function useIngestLifecycle(opts: {
 
   const isCurrent = useCallback((gen: number) => gen === ingestGenRef.current, []);
 
+  const clearIngestHardTimeout = useCallback(() => {
+    if (ingestHardTimeoutRef.current) {
+      clearTimeout(ingestHardTimeoutRef.current);
+      ingestHardTimeoutRef.current = null;
+    }
+  }, []);
+
+  const armIngestHardTimeout = useCallback(
+    (gen: number) => {
+      clearIngestHardTimeout();
+      ingestHardTimeoutRef.current = setTimeout(() => {
+        ingestHardTimeoutRef.current = null;
+        if (ingestGenRef.current !== gen) return;
+        const st = useEditorStore.getState();
+        if (st.ingestStage === "ready" || st.ingestStage === "failed") return;
+        cancelPipeline();
+        enterReadyPreservingMedia(
+          "Auto-analysis timed out. Video is ready — retry transcript or export. AI chat waits for captions.",
+        );
+      }, PIPELINE_HARD_TIMEOUT_MS);
+    },
+    [cancelPipeline, clearIngestHardTimeout],
+  );
+
   const cancelUpload = useCallback(() => {
     bumpGen();
+    clearIngestHardTimeout();
     uploadAbortRef.current?.abort();
     cancelPipeline();
     failIngest("cancelled", "Ingest cancelled.");
-  }, [bumpGen, cancelPipeline, failIngest]);
+  }, [bumpGen, cancelPipeline, failIngest, clearIngestHardTimeout]);
 
   /** Re-run analyze only — requires media already loaded (LeftPanel retry, etc.). */
   const retryAnalyze = useCallback(() => {
@@ -180,8 +213,7 @@ export function useIngestLifecycle(opts: {
 
       lastFileRef.current = null;
       lastAttemptRef.current = { kind: "url", url };
-      const gen = bumpGen();
-      beginIngest();
+      const gen = beginIngest();
       if (!isCurrent(gen)) return;
       setIngestMeta({ sourceKind: null, fromCache: false, uploadProgress: null });
 
@@ -329,7 +361,6 @@ export function useIngestLifecycle(opts: {
     },
     [
       beginIngest,
-      bumpGen,
       failIngest,
       isCurrent,
       runPipeline,
@@ -347,9 +378,9 @@ export function useIngestLifecycle(opts: {
     async (file: File) => {
       lastFileRef.current = file;
       lastAttemptRef.current = { kind: "file", file };
-      const gen = bumpGen();
-      beginIngest();
+      const gen = beginIngest();
       if (!isCurrent(gen)) return;
+      armIngestHardTimeout(gen);
       setIngestMeta({
         sourceKind: "file",
         fromCache: false,
@@ -379,6 +410,15 @@ export function useIngestLifecycle(opts: {
 
       const blobUrl = URL.createObjectURL(file);
       setSourceFile(file, blobUrl);
+      setVideoMetadata({
+        id: fingerprintFile(file),
+        url: blobUrl,
+        title: file.name || "Upload",
+        duration: 0,
+        nativeWidth: 0,
+        nativeHeight: 0,
+        fps: 0,
+      });
       trackEvent({ name: "video_loaded", props: { source: "upload", durationSec: 0 } });
 
       // Local-first: skip GCS PUT on ingest (FinOps). Cloud upload waits for Export final.
@@ -396,23 +436,24 @@ export function useIngestLifecycle(opts: {
     },
     [
       beginIngest,
-      bumpGen,
       failIngest,
       isCurrent,
       runPipeline,
       setIngestMeta,
       setIngestStage,
       setSourceFile,
+      armIngestHardTimeout,
     ],
   );
 
   const cancelAnalyze = useCallback(() => {
     bumpGen();
+    clearIngestHardTimeout();
     uploadAbortRef.current?.abort();
     cancelPipeline();
     failIngest("cancelled", "Processing cancelled.");
     toast.info("Processing cancelled.");
-  }, [bumpGen, cancelPipeline, failIngest]);
+  }, [bumpGen, cancelPipeline, failIngest, clearIngestHardTimeout]);
 
   const retryLastIngest = useCallback(() => {
     const attempt = lastAttemptRef.current;

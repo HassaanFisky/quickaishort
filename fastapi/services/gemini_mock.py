@@ -46,10 +46,6 @@ _MOCK_SILENCE_PACK: list[dict[str, Any]] = [
         "type": "REMOVE_SILENCES",
         "min_silence_sec": 0.6,
         "padding_sec": 0.08,
-        "segments": [
-            {"start": 4.2, "end": 6.8, "type": "silence"},
-            {"start": 18.0, "end": 21.5, "type": "silence"},
-        ],
     },
     {"type": "SEEK", "time": 4.0},
     {

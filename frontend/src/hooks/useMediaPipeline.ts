@@ -13,6 +13,51 @@ import { saveIngestArtifact } from "@/lib/studio/ingestArtifacts";
 import { isDirectVideoUrl, type IngestStage } from "@/lib/studio/ingestFsm";
 import { saveIngestSession } from "@/lib/studio/ingestSession";
 import { parseYouTubeId } from "@/lib/youtube-utils";
+import { shouldPreserveEditorSession } from "@/lib/aiCommandHonesty";
+
+/** Whisper model fetch/transcribe can hang with no worker error. Bound it. */
+const WHISPER_TRANSCRIBE_TIMEOUT_MS = 45_000;
+/** decodeAudioData does not honor AbortSignal — race it or local ingest hangs. */
+const AUDIO_EXTRACT_TIMEOUT_MS = 20_000;
+/** Whole-pipeline bound: a hung decode/worker must never trap the editor. */
+export const PIPELINE_HARD_TIMEOUT_MS = 75_000;
+
+function raceTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const id = setTimeout(() => {
+      const err = new Error(message);
+      err.name = "AbortError";
+      reject(err);
+    }, ms);
+    promise.then(
+      (value) => {
+        clearTimeout(id);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(id);
+        reject(error);
+      },
+    );
+  });
+}
+
+export function enterReadyPreservingMedia(message: string): void {
+  const store = useEditorStore.getState();
+  const hasMedia = Boolean(store.sourceFile || store.sourceUrl);
+  if (!shouldPreserveEditorSession(hasMedia)) {
+    toast.error(message);
+    store.failIngest("analysis_failed", message);
+    return;
+  }
+  toast.warning(message);
+  store.setAgentState("transcription", { status: "error" });
+  store.setProcessing(false, "ready");
+  if (store.ingestStage === "failed") {
+    store.setIngestStage("analyze");
+  }
+  void persistArtifactsAndReady({ suggestions: [] });
+}
 
 /**
  * Reduce a Float32Array to 120 amplitude peaks for waveform display.
@@ -106,6 +151,8 @@ export function useMediaPipeline() {
   const analysis = useAnalysis();
 
   const abortControllerRef = useRef<AbortController | null>(null);
+  const whisperTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pipelineTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const transcriptionRef = useRef(transcription);
   useEffect(() => {
@@ -114,15 +161,45 @@ export function useMediaPipeline() {
 
   const activeRunIdRef = useRef<string | null>(null);
 
+  const clearWhisperTimeout = useCallback(() => {
+    if (whisperTimeoutRef.current) {
+      clearTimeout(whisperTimeoutRef.current);
+      whisperTimeoutRef.current = null;
+    }
+  }, []);
+
+  const clearPipelineTimeout = useCallback(() => {
+    if (pipelineTimeoutRef.current) {
+      clearTimeout(pipelineTimeoutRef.current);
+      pipelineTimeoutRef.current = null;
+    }
+  }, []);
+
+  const clearPipelineTimeoutRef = useRef(clearPipelineTimeout);
+  useEffect(() => {
+    clearPipelineTimeoutRef.current = clearPipelineTimeout;
+  });
+
+  const clearWhisperTimeoutRef = useRef(clearWhisperTimeout);
+  useEffect(() => {
+    clearWhisperTimeoutRef.current = clearWhisperTimeout;
+  });
+
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => () => transcriptionRef.current.terminate(), []);
+  useEffect(() => () => {
+    clearWhisperTimeout();
+    clearPipelineTimeout();
+    transcriptionRef.current.terminate();
+  }, [clearWhisperTimeout, clearPipelineTimeout]);
 
   const cancelPipeline = useCallback(() => {
     abortControllerRef.current?.abort();
     abortControllerRef.current = null;
     activeRunIdRef.current = null;
+    clearWhisperTimeout();
+    clearPipelineTimeout();
     transcriptionRef.current.terminate();
-  }, []);
+  }, [clearWhisperTimeout, clearPipelineTimeout]);
 
   const runPipeline = useCallback(async () => {
     if (useEditorStore.getState().isProcessing) return;
@@ -140,13 +217,9 @@ export function useMediaPipeline() {
     }
 
     const stageNow = useEditorStore.getState().ingestStage;
-    if (stageNow === "projectize") {
+    if (stageNow === "projectize" || stageNow === "failed") {
       useEditorStore.getState().setIngestStage("analyze");
-    } else if (
-      stageNow !== "analyze" &&
-      stageNow !== "ready" &&
-      stageNow !== "failed"
-    ) {
+    } else if (stageNow !== "analyze" && stageNow !== "ready") {
       useEditorStore.getState().setIngestStage("analyze");
     }
 
@@ -180,7 +253,24 @@ export function useMediaPipeline() {
     setProgress(10);
     toast.info("Preparing content for analysis…");
 
-    void extractAudioData(source, controller.signal)
+    clearPipelineTimeoutRef.current();
+    pipelineTimeoutRef.current = setTimeout(() => {
+      pipelineTimeoutRef.current = null;
+      abortControllerRef.current?.abort();
+      abortControllerRef.current = null;
+      activeRunIdRef.current = null;
+      clearWhisperTimeoutRef.current();
+      transcriptionRef.current.terminate();
+      enterReadyPreservingMedia(
+        "Auto-analysis timed out. Video is ready — retry transcript or export. AI chat waits for captions.",
+      );
+    }, PIPELINE_HARD_TIMEOUT_MS);
+
+    void raceTimeout(
+      extractAudioData(source, controller.signal),
+      AUDIO_EXTRACT_TIMEOUT_MS,
+      "Audio extract timed out",
+    )
       .then(({ audioData, sampleRate, duration }) => {
         clearTimeout(timeoutId);
         setWaveformPeaks(computeWaveformPeaks(audioData));
@@ -198,6 +288,14 @@ export function useMediaPipeline() {
         activeRunIdRef.current = crypto.randomUUID();
         transcription.init();
         transcription.transcribe(audioData, sampleRate);
+        clearWhisperTimeout();
+        whisperTimeoutRef.current = setTimeout(() => {
+          whisperTimeoutRef.current = null;
+          transcriptionRef.current.terminate();
+          enterReadyPreservingMedia(
+            "On-device transcript timed out. Video is ready — retry transcript or export. AI chat waits for captions.",
+          );
+        }, WHISPER_TRANSCRIBE_TIMEOUT_MS);
       })
       .catch((audioError: unknown) => {
         clearTimeout(timeoutId);
@@ -205,19 +303,19 @@ export function useMediaPipeline() {
         const lowerMsg = msg.toLowerCase();
 
         let infoMsg =
-          "Video loaded — AI analysis unavailable. Mark clips manually or upload an MP4 for full analysis.";
+          "Video loaded — transcript unavailable. Export works; AI chat waits for a transcript retry.";
 
         if (audioError instanceof Error && audioError.name === "AbortError") {
-          infoMsg = "Analysis timed out — video is ready for manual editing.";
+          infoMsg = "Transcript timed out. Video is ready — retry or export without AI chat.";
         } else if (
           lowerMsg.includes("bot detection") ||
           lowerMsg.includes("sign in") ||
           lowerMsg.includes("audio extraction failed")
         ) {
           infoMsg =
-            "Auto-analysis unavailable for this video (server-side restriction). The video is still loaded — mark clips manually or upload an MP4.";
+            "Auto-analysis unavailable for this video. The video is still loaded — retry or export.";
         } else if (lowerMsg.includes("network error") || lowerMsg.includes("unreachable")) {
-          infoMsg = "Could not reach the server — check your connection and try again.";
+          infoMsg = "Could not reach the server — video is still loaded. Retry when online.";
         } else if (lowerMsg.includes("private")) {
           infoMsg = "This video is private. Try a public YouTube video.";
         } else if (lowerMsg.includes("video unavailable") || lowerMsg.includes("yt-dlp")) {
@@ -225,20 +323,20 @@ export function useMediaPipeline() {
             "This video is unavailable — it may be region-locked. Try uploading the MP4 directly.";
         }
 
-        toast.info(infoMsg, { duration: 6000 });
         setAgentState("ingestion", { status: "error" });
-        setProcessing(false, "idle");
-        useEditorStore
-          .getState()
-          .failIngest(
-            "analysis_failed",
-            "Auto-analysis unavailable. Retry analysis or upload an MP4.",
-          );
+        enterReadyPreservingMedia(infoMsg);
       });
 
     // GCS upload is owned by useIngestLifecycle.ingestFile (canonical path).
     // Do not duplicate presigned PUT here — avoids double GCS ops / cost.
-  }, [setProcessing, setProgress, setAgentState, setWaveformPeaks, transcription]);
+  }, [
+    setProcessing,
+    setProgress,
+    setAgentState,
+    setWaveformPeaks,
+    transcription,
+    clearWhisperTimeout,
+  ]);
 
   useEffect(() => {
     if (
@@ -253,6 +351,7 @@ export function useMediaPipeline() {
       };
       type XenovaTranscript = { text?: string; chunks?: XenovaChunk[] };
       if (!activeRunIdRef.current) return;
+      clearWhisperTimeout();
 
       const raw = transcription.lastMessage.payload.transcript as unknown as
         | XenovaTranscript
@@ -323,24 +422,25 @@ export function useMediaPipeline() {
 
           setProcessing(false, "ready");
           setProgress(100);
+          clearPipelineTimeoutRef.current();
           await persistArtifactsAndReady({ suggestions: mapped });
         })
         .catch(async (err: AnalysisError) => {
           if (activeRunIdRef.current !== capturedRunId) return;
+          clearPipelineTimeoutRef.current();
           const msg =
             err?.response?.data?.detail ||
             err?.response?.data?.message ||
             err?.message ||
             "Analysis failed";
-          toast.error(typeof msg === "string" ? msg : "Analysis failed. Please try again.");
+          toast.warning(
+            typeof msg === "string"
+              ? `Clip analysis failed — transcript is still ready. ${msg}`
+              : "Clip analysis failed — transcript is still ready. You can chat and export.",
+          );
           setAgentState("viralAnalysis", { status: "error" });
-          setProcessing(false, "idle");
-          useEditorStore
-            .getState()
-            .failIngest(
-              "analysis_failed",
-              typeof msg === "string" ? msg : "Analysis failed. Retry to continue.",
-            );
+          setProcessing(false, "ready");
+          await persistArtifactsAndReady({ suggestions: [] });
         });
     } else if (transcription.progress) {
       setAgentState("transcription", { progress: transcription.progress });
@@ -355,18 +455,40 @@ export function useMediaPipeline() {
     setProgress,
     analysis,
     userId,
+    clearWhisperTimeout,
   ]);
 
   useEffect(() => {
-    const error = transcription.error || analysis.error;
-    if (error) {
-      toast.error(error);
-      if (transcription.error) setAgentState("transcription", { status: "error" });
-      if (analysis.error) setAgentState("viralAnalysis", { status: "error" });
-      setProcessing(false, "idle");
-      useEditorStore.getState().failIngest("analysis_failed", error);
+    if (transcription.error) {
+      // A worker that never spawned has no active run — nothing to unwind.
+      if (!activeRunIdRef.current) return;
+      activeRunIdRef.current = null;
+      clearWhisperTimeout();
+      enterReadyPreservingMedia(
+        `On-device transcript failed. Video is ready — retry or export. ${transcription.error}`,
+      );
+      return;
     }
-  }, [transcription.error, analysis.error, setProcessing, setAgentState]);
+    if (analysis.error) {
+      const store = useEditorStore.getState();
+      const hasTranscript = (store.transcript?.chunks?.length ?? 0) > 0;
+      toast.warning(
+        hasTranscript
+          ? "Clip analysis failed — transcript is still ready. You can chat and export."
+          : analysis.error,
+      );
+      setAgentState("viralAnalysis", { status: "error" });
+      if (hasTranscript) {
+        setProcessing(false, "ready");
+        void persistArtifactsAndReady({ suggestions: [] });
+      } else {
+        enterReadyPreservingMedia(
+          analysis.error ||
+            "Clip analysis failed. Video is ready — retry transcript or export.",
+        );
+      }
+    }
+  }, [transcription.error, analysis.error, setProcessing, setAgentState, clearWhisperTimeout]);
 
   return {
     runPipeline,

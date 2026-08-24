@@ -40,7 +40,12 @@ export function useWorker(workerFactory: () => Worker) {
       w.onerror = (e) => {
         if (process.env.NODE_ENV !== "production") console.error("Worker error:", e);
         setStatus("error");
-        setError("Worker crashed or failed to load");
+        const detail = (e as ErrorEvent).message;
+        setError(
+          detail
+            ? `Worker crashed or failed to load (${detail})`
+            : "Worker crashed or failed to load",
+        );
       };
 
       workerRef.current = w;
