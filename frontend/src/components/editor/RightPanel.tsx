@@ -666,7 +666,9 @@ export default function RightPanel() {
           </AnimatePresence>
           <div className="flex-1 flex items-center justify-center p-6">
             <p className="text-[10px] text-muted-foreground font-medium text-center max-w-[160px] leading-relaxed">
-              Import a video to enable clip-level properties
+              {hasVideo
+                ? "Clip-level properties unlock once analysis finds moments"
+                : "Import a video to enable clip-level properties"}
             </p>
           </div>
         </div>
@@ -678,9 +680,23 @@ export default function RightPanel() {
           <div className="w-10 h-10 rounded-xl bg-foreground/5 flex items-center justify-center">
             <Sparkles className="w-4 h-4 text-muted-foreground" />
           </div>
+          {/* A loaded video with no clips is a real state (analysis still running,
+              or it failed and the editor stayed usable) — never tell the user to
+              import footage they already imported. */}
           <p className="text-xs text-muted-foreground font-medium leading-relaxed max-w-[180px]">
-            Select a tool or import a video to get started
+            {hasVideo
+              ? "No clips yet. Timeline tools work now — clip properties appear once analysis finds moments."
+              : "Select a tool or import a video to get started"}
           </p>
+          {hasVideo && (
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new CustomEvent("retry-analysis"))}
+              className="h-8 px-3 rounded-lg bg-primary/10 border border-primary/25 text-[10px] font-black uppercase tracking-widest text-primary hover:bg-primary/15 transition-colors"
+            >
+              Retry analysis
+            </button>
+          )}
         </div>
       </div>
     );
