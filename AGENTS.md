@@ -7,6 +7,14 @@ operating notes for automated agents.
 
 ## Cursor Cloud specific instructions
 
+### Testing policy on Cloud Agents (founder directive, 2026-08-24)
+Default = NO testing. Implement the change, commit, push, open/update the PR, and stop.
+Do not run lint, `tsc`, builds, pytest, dev servers, browser/computer-use sessions, or
+screen recordings — they consume Cloud Agent time the founder is deliberately saving.
+Run verification ONLY when the founder explicitly asks for it in that same turn
+(e.g. "test this", "run the suite", "record a demo"). When skipping, state plainly in
+the summary that the change is untested. CI on the PR remains the safety net.
+
 ### Services (dev) and where the standard commands live
 - Frontend (`frontend/`, pnpm): `pnpm dev` (http://localhost:3000), `pnpm lint`, `npx tsc --noEmit`, `pnpm build`. No frontend test runner exists.
 - Backend API (`fastapi/`, venv at `fastapi/venv`): `./venv/bin/uvicorn main:app --port 8000` (health `GET /health`, docs `/docs`).
