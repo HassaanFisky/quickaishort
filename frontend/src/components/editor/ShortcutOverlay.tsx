@@ -5,11 +5,14 @@ import { AnimatePresence, motion } from "framer-motion";
 import { X, Keyboard } from "lucide-react";
 import { SHORTCUT_ACTIONS, comboToChips, useShortcutsStore } from "@/stores/shortcutsStore";
 
+/** Non-rebindable shortcuts. Every entry here must have a live handler in
+ *  `app/editor/page.tsx` — this list is user-facing documentation. */
 const FIXED_SHORTCUTS = [
-  { label: "Cut at Playhead", chips: ["C"] },
   { label: "Rewind 10s", chips: ["J"] },
   { label: "Play / Pause", chips: ["K"] },
   { label: "Forward 10s", chips: ["L"] },
+  { label: "Mark In / Out", chips: ["I", "O"] },
+  { label: "Add Marker", chips: ["M"] },
   { label: "Show Shortcuts", chips: ["?"] },
   { label: "Toggle Chat", chips: ["Shift", "Alt", "A"] },
 ];

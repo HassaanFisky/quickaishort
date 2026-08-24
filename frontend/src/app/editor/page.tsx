@@ -15,6 +15,9 @@ import { matchShortcut } from "@/lib/shortcuts";
 import { toast } from "sonner";
 import { formatTime } from "@/lib/utils/formatTime";
 
+/** J / L transport jump, matching the shortcut overlay's documented behaviour. */
+const TRANSPORT_SKIP_SECONDS = 10;
+
 export default function EditorPage() {
   const analysis = useAnalysis();
   const [shortcutOverlayOpen, setShortcutOverlayOpen] = useState(false);
@@ -165,6 +168,24 @@ export default function EditorPage() {
         e.preventDefault();
         if (store.suggestions.length > 0) store.splitClipAtTime(store.currentTime);
         return;
+      }
+      // J / K / L — NLE transport. Checked after the bindings above so a user
+      // who rebinds one of these keys keeps their own binding.
+      if (!e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+        const transport = e.key.toLowerCase();
+        if (transport === "j" || transport === "l") {
+          e.preventDefault();
+          const delta = transport === "j" ? -TRANSPORT_SKIP_SECONDS : TRANSPORT_SKIP_SECONDS;
+          store.setPendingSeek(
+            Math.max(0, Math.min(store.duration, store.currentTime + delta)),
+          );
+          return;
+        }
+        if (transport === "k") {
+          e.preventDefault();
+          store.setIsPlaying(!store.isPlaying);
+          return;
+        }
       }
       // ? — show/hide keyboard shortcut overlay
       if (e.key === "?" && !e.ctrlKey && !e.metaKey && !e.altKey) {

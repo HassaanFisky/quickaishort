@@ -472,56 +472,37 @@ function TransitionsPanel() {
   );
 }
 
-const VOICE_STYLES = ["Natural", "Dramatic", "Upbeat", "News"] as const;
-
 function VoiceoverPanel() {
   const { exportSettings, setExportSetting } = useEditorStore();
-  const [style, setStyle] = React.useState<typeof VOICE_STYLES[number]>("Natural");
-  const [mixLevel, setMixLevel] = React.useState(70);
 
   return (
     <div className="flex flex-col gap-4">
       <ToggleRow
-        label="AI Voiceover"
-        sub="Synthetic narration track"
+        label="Vocal EQ"
+        sub="Boosts voice frequencies on export"
         enabled={exportSettings.voiceoverEnabled}
         onToggle={() => {
           const next = !exportSettings.voiceoverEnabled;
           setExportSetting("voiceoverEnabled", next);
           if (next) setExportSetting("audioBoost", 150);
         }}
-        ariaLabel="Toggle voiceover"
+        ariaLabel="Toggle vocal EQ"
       />
-      {exportSettings.voiceoverEnabled && (
-        <>
-          <div className="flex flex-col gap-1.5">
-            <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">Voice Style</span>
-            <div className="grid grid-cols-2 gap-1.5">
-              {VOICE_STYLES.map((s) => (
-                <button
-                  key={s}
-                  onClick={() => setStyle(s)}
-                  className={cn(
-                    "h-9 rounded-lg text-[9px] font-black uppercase tracking-widest border transition-colors",
-                    style === s
-                      ? "bg-primary/15 border-primary/30 text-primary"
-                      : "bg-muted border-border text-fg-muted hover:text-foreground hover:border-border"
-                  )}
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="flex flex-col gap-2">
-            <div className="flex justify-between">
-              <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">Voice / Original Mix</span>
-              <span className="text-[9px] font-bold text-primary tabular-nums">{mixLevel}%</span>
-            </div>
-            <Slider value={[mixLevel]} min={0} max={100} step={5} onValueChange={([v]: [number]) => setMixLevel(v)} className="py-1" />
-          </div>
-        </>
-      )}
+      <p className="text-[10px] leading-relaxed text-muted-foreground">
+        Synthetic narration is not part of this control. For a generated voice in
+        another language, use{" "}
+        <button
+          type="button"
+          onClick={() => {
+            useUIStore.getState().setActiveTool("dub");
+            useEditorStore.getState().setAIPanelOpen(true);
+          }}
+          className="font-bold text-primary hover:underline"
+        >
+          Dub Video
+        </button>
+        .
+      </p>
     </div>
   );
 }
@@ -685,7 +666,9 @@ export default function RightPanel() {
           </AnimatePresence>
           <div className="flex-1 flex items-center justify-center p-6">
             <p className="text-[10px] text-muted-foreground font-medium text-center max-w-[160px] leading-relaxed">
-              Import a video to enable clip-level properties
+              {hasVideo
+                ? "Clip-level properties unlock once analysis finds moments"
+                : "Import a video to enable clip-level properties"}
             </p>
           </div>
         </div>
@@ -697,9 +680,23 @@ export default function RightPanel() {
           <div className="w-10 h-10 rounded-xl bg-foreground/5 flex items-center justify-center">
             <Sparkles className="w-4 h-4 text-muted-foreground" />
           </div>
+          {/* A loaded video with no clips is a real state (analysis still running,
+              or it failed and the editor stayed usable) — never tell the user to
+              import footage they already imported. */}
           <p className="text-xs text-muted-foreground font-medium leading-relaxed max-w-[180px]">
-            Select a tool or import a video to get started
+            {hasVideo
+              ? "No clips yet. Timeline tools work now — clip properties appear once analysis finds moments."
+              : "Select a tool or import a video to get started"}
           </p>
+          {hasVideo && (
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new CustomEvent("retry-analysis"))}
+              className="h-8 px-3 rounded-lg bg-primary/10 border border-primary/25 text-[10px] font-black uppercase tracking-widest text-primary hover:bg-primary/15 transition-colors"
+            >
+              Retry analysis
+            </button>
+          )}
         </div>
       </div>
     );
