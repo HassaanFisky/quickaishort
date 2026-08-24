@@ -283,6 +283,8 @@ export function AIPanel() {
         content = "Refused — removing those silences would drop more than 80% of the video.";
       } else if (reason === "invalid_range") {
         content = "Couldn't apply trim — need a valid in/out range.";
+      } else if (reason === "preview_only_not_exported") {
+        content = `${label} plays in the preview only — it is not mixed into the exported file yet.`;
       } else if (reason === "no_clip") {
         content = "No clip selected for that mark — pick a clip first.";
       } else {

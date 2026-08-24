@@ -196,34 +196,7 @@ export const LOCKED_SHORTCUTS = {
   aiChat: { combo: "Shift+Alt+A", mac: "Cmd+Shift+A", label: "Chat" },
 } as const;
 
-/** Default editor shortcuts */
-export const DEFAULT_SHORTCUTS = {
-  playPause:    "Space",
-  split:        "S",
-  addText:      "T",
-  deleteClip:   "Delete",
-  undo:         "Ctrl+Z",
-  redo:         "Ctrl+Shift+Z",
-  skipBack:     "ArrowLeft",
-  skipForward:  "ArrowRight",
-  preflight:    "Shift+Alt+F",
-  export:       "Shift+Alt+E",
-  cutClip:      "C",
-} as const;
-
-/** All shortcut entries for overlay display */
-export const SHORTCUT_MAP = [
-  { key: "Space",        label: "Play / Pause" },
-  { key: "S",            label: "Split at Playhead" },
-  { key: "C",            label: "Cut at Playhead" },
-  { key: "T",            label: "Add Text" },
-  { key: "Del",          label: "Delete Clip" },
-  { key: "Ctrl+Z",       label: "Undo" },
-  { key: "Ctrl+Shift+Z", label: "Redo" },
-  { key: "←/→",          label: "Skip 1s" },
-  { key: "Shift+←/→",   label: "Skip 5s" },
-  { key: "Shift+Alt+A",  label: "AI Editor" },
-  { key: "Shift+Alt+F",  label: "Pre-Flight" },
-  { key: "Shift+Alt+E",  label: "Export" },
-  { key: "?",            label: "Shortcut Overlay" },
-] as const;
+// Rebindable editor shortcuts and their overlay rows live in
+// `stores/shortcutsStore.ts` — the single source of truth the live keyboard
+// handler reads. Duplicating them here drifted (export was documented as
+// Shift+Alt+E while the handler ran Mod+E).

@@ -472,56 +472,37 @@ function TransitionsPanel() {
   );
 }
 
-const VOICE_STYLES = ["Natural", "Dramatic", "Upbeat", "News"] as const;
-
 function VoiceoverPanel() {
   const { exportSettings, setExportSetting } = useEditorStore();
-  const [style, setStyle] = React.useState<typeof VOICE_STYLES[number]>("Natural");
-  const [mixLevel, setMixLevel] = React.useState(70);
 
   return (
     <div className="flex flex-col gap-4">
       <ToggleRow
-        label="AI Voiceover"
-        sub="Synthetic narration track"
+        label="Vocal EQ"
+        sub="Boosts voice frequencies on export"
         enabled={exportSettings.voiceoverEnabled}
         onToggle={() => {
           const next = !exportSettings.voiceoverEnabled;
           setExportSetting("voiceoverEnabled", next);
           if (next) setExportSetting("audioBoost", 150);
         }}
-        ariaLabel="Toggle voiceover"
+        ariaLabel="Toggle vocal EQ"
       />
-      {exportSettings.voiceoverEnabled && (
-        <>
-          <div className="flex flex-col gap-1.5">
-            <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">Voice Style</span>
-            <div className="grid grid-cols-2 gap-1.5">
-              {VOICE_STYLES.map((s) => (
-                <button
-                  key={s}
-                  onClick={() => setStyle(s)}
-                  className={cn(
-                    "h-9 rounded-lg text-[9px] font-black uppercase tracking-widest border transition-colors",
-                    style === s
-                      ? "bg-primary/15 border-primary/30 text-primary"
-                      : "bg-muted border-border text-fg-muted hover:text-foreground hover:border-border"
-                  )}
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="flex flex-col gap-2">
-            <div className="flex justify-between">
-              <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">Voice / Original Mix</span>
-              <span className="text-[9px] font-bold text-primary tabular-nums">{mixLevel}%</span>
-            </div>
-            <Slider value={[mixLevel]} min={0} max={100} step={5} onValueChange={([v]: [number]) => setMixLevel(v)} className="py-1" />
-          </div>
-        </>
-      )}
+      <p className="text-[10px] leading-relaxed text-muted-foreground">
+        Synthetic narration is not part of this control. For a generated voice in
+        another language, use{" "}
+        <button
+          type="button"
+          onClick={() => {
+            useUIStore.getState().setActiveTool("dub");
+            useEditorStore.getState().setAIPanelOpen(true);
+          }}
+          className="font-bold text-primary hover:underline"
+        >
+          Dub Video
+        </button>
+        .
+      </p>
     </div>
   );
 }

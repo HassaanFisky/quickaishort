@@ -55,6 +55,7 @@ import { WorkspaceComposer, type WorkspaceComposerSubmit } from "@/components/wo
 import ExportDialog from "./ExportDialog";
 import ServerExportHost from "./ServerExportHost";
 import { useServerExportStore } from "@/stores/serverExportStore";
+import { comboToChips, useShortcutsStore } from "@/stores/shortcutsStore";
 
 const EditorOnboardingTour = dynamic(
   () => import("./EditorOnboardingTour"),
@@ -115,6 +116,14 @@ export default function EditorLayout() {
   }, [storeTranscript, storeVideoMetadata, setVideoContext]);
 
   const [exportOpen, setExportOpen] = useState(false);
+  // Read the live binding so the tooltip can never drift from the handler.
+  const exportBinding = useShortcutsStore((s) => s.bindings.export);
+  // Resolved after mount — `navigator` during SSR would desync hydration.
+  const [isMacPlatform, setIsMacPlatform] = useState(false);
+  useEffect(() => {
+    setIsMacPlatform(/Mac|iPhone|iPad/.test(navigator.platform));
+  }, []);
+  const exportShortcutLabel = comboToChips(exportBinding, isMacPlatform).join(" ");
   const isServerExporting = useServerExportStore((s) => s.isExporting);
   const serverExportProgress = useServerExportStore((s) => s.exportProgress);
   const cancelServerExport = useServerExportStore((s) => s.cancelExport);
@@ -168,10 +177,12 @@ export default function EditorLayout() {
   const hasAutoImportedRef = useRef(false);
   const aiPanelOpen = useEditorStore((s) => s.aiPanelOpen);
 
-  // Mobile inspector bottom-sheet — lightweight (non-advanced-mode) replacement
-  // for the desktop inline RightPanel, since RightPanel is otherwise only
-  // mounted inside isAdvancedMode-gated sections below.
+  // Mobile inspector bottom-sheet — the small-screen form of the inspector.
+  // On desktop the same panels mount as inline grid columns (see showLeftColumn /
+  // showRightColumn) so the stage resizes instead of being overlaid.
   const isMobile = useMediaQuery("(max-width: 768px)");
+  // Matches Tailwind `lg:` — the breakpoint the inline panel columns render at.
+  const isDesktop = useMediaQuery("(min-width: 1024px)");
   // Mobile chat-primary: once ingest is ready, open Studio chat sheet.
   useEffect(() => {
     if (ingestStage === "ready" && isMobile) {
@@ -189,12 +200,16 @@ export default function EditorLayout() {
     },
   });
 
+  // Single inspector entry point for every surface: bottom sheet on mobile,
+  // inline column (or slide-over in advanced mode) everywhere else.
   useEffect(() => {
-    if (!isMobile || isAdvancedMode) return;
-    const openSheet = () => setMobileInspectorOpen(true);
-    window.addEventListener("qai:mobile-inspector-open", openSheet);
-    return () => window.removeEventListener("qai:mobile-inspector-open", openSheet);
-  }, [isMobile, isAdvancedMode]);
+    const openInspector = () => {
+      if (isMobile && !isAdvancedMode) setMobileInspectorOpen(true);
+      else setRightPanelOpen(true);
+    };
+    window.addEventListener("qai:inspector-open", openInspector);
+    return () => window.removeEventListener("qai:inspector-open", openInspector);
+  }, [isMobile, isAdvancedMode, setRightPanelOpen]);
 
   useEffect(() => {
     if (!isMobile || isAdvancedMode) return;
@@ -238,6 +253,12 @@ export default function EditorLayout() {
       setAIPanelOpen(true);
     }
   }, [storeVideoMetadata, setAIPanelOpen]);
+
+  // Advanced mode pins both columns open; otherwise they are user-toggled from
+  // the header so trim, colour, export settings and Pre-Flight stay reachable
+  // on desktop without the `?advanced=1` URL.
+  const showLeftColumn = isAdvancedMode || (isDesktop && leftPanelOpen);
+  const showRightColumn = isAdvancedMode || (isDesktop && rightPanelOpen);
 
   const [timelineExpanded, setTimelineExpanded] = useState(false);
   useEffect(() => {
@@ -601,24 +622,39 @@ export default function EditorLayout() {
         </div>
 
         <div className="flex items-center gap-3">
-          {isAdvancedMode && (
-            <>
-              <button
-                onClick={() => setLeftPanelOpen(!leftPanelOpen)}
-                aria-label="Toggle clips panel"
-                className="h-9 w-9 rounded-xl flex items-center justify-center bg-card border border-border text-fg-muted hover:text-foreground transition-all duration-200 lg:hidden"
-              >
-                <PanelLeft size={15} />
-              </button>
-              <button
-                onClick={() => setRightPanelOpen(!rightPanelOpen)}
-                aria-label="Toggle properties panel"
-                className="h-9 w-9 rounded-xl flex items-center justify-center bg-card border border-border text-fg-muted hover:text-foreground transition-all duration-200 lg:hidden"
-              >
-                <PanelRight size={15} />
-              </button>
-            </>
-          )}
+          {/* Panel toggles. Advanced mode pins the desktop columns, so there the
+              buttons only drive the small-screen drawers; in default mode they
+              are the desktop entry point to the clip list and inspector. */}
+          <button
+            onClick={() => setLeftPanelOpen(!leftPanelOpen)}
+            title={leftPanelOpen ? "Hide clips" : "Show clips"}
+            aria-label="Toggle clips panel"
+            aria-pressed={leftPanelOpen}
+            className={cn(
+              "h-9 w-9 rounded-xl items-center justify-center bg-card border transition-all duration-200",
+              isAdvancedMode ? "flex lg:hidden" : "hidden md:flex",
+              leftPanelOpen && !isAdvancedMode
+                ? "border-primary/30 text-primary"
+                : "border-border text-fg-muted hover:text-foreground",
+            )}
+          >
+            <PanelLeft size={15} />
+          </button>
+          <button
+            onClick={() => setRightPanelOpen(!rightPanelOpen)}
+            title={rightPanelOpen ? "Hide inspector" : "Show inspector"}
+            aria-label="Toggle properties panel"
+            aria-pressed={rightPanelOpen}
+            className={cn(
+              "h-9 w-9 rounded-xl items-center justify-center bg-card border transition-all duration-200",
+              isAdvancedMode ? "flex lg:hidden" : "hidden md:flex",
+              rightPanelOpen && !isAdvancedMode
+                ? "border-primary/30 text-primary"
+                : "border-border text-fg-muted hover:text-foreground",
+            )}
+          >
+            <PanelRight size={15} />
+          </button>
 
           {isServerExporting ? (
             <div
@@ -646,7 +682,7 @@ export default function EditorLayout() {
               disabled={!sourceUrl || isProcessing}
               title={
                 sourceUrl && !isProcessing
-                  ? "Export — Shift+Alt+E"
+                  ? `Export — ${exportShortcutLabel}`
                   : isProcessing
                     ? "Export is disabled while your video is processing"
                     : "Load a video to enable export"
@@ -719,11 +755,13 @@ export default function EditorLayout() {
       <div className="flex-1 min-h-0 flex overflow-hidden">
         <main className={cn(
           "flex-1 min-w-0 min-h-0 grid grid-cols-1 gap-4 overflow-hidden",
-          isAdvancedMode && "lg:grid-cols-[minmax(220px,18%)_1fr_minmax(260px,22%)]"
+          showLeftColumn && showRightColumn && "lg:grid-cols-[minmax(220px,18%)_1fr_minmax(260px,22%)]",
+          showLeftColumn && !showRightColumn && "lg:grid-cols-[minmax(220px,18%)_1fr]",
+          !showLeftColumn && showRightColumn && "lg:grid-cols-[1fr_minmax(260px,22%)]",
         )}>
 
-          {/* Left — Viral Suggestions (desktop inline, advanced mode only) */}
-          {isAdvancedMode && (
+          {/* Left — Viral Suggestions (desktop inline column) */}
+          {showLeftColumn && (
             <section className="hidden lg:flex bg-card border border-border rounded-2xl flex-col overflow-hidden min-h-0">
               <div className="flex-1 overflow-y-auto p-4 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-foreground/10 [&::-webkit-scrollbar-thumb]:rounded-full">
                 <LeftPanel />
@@ -849,8 +887,8 @@ export default function EditorLayout() {
             </div>
           </section>
 
-          {/* Right — Property Inspector (desktop inline, advanced mode only) */}
-          {isAdvancedMode && (
+          {/* Right — Property Inspector (desktop inline column) */}
+          {showRightColumn && (
             <section className="hidden lg:flex bg-card border border-border rounded-2xl flex-col overflow-hidden min-h-0">
               <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-foreground/10 [&::-webkit-scrollbar-thumb]:rounded-full">
                 <RightPanel />
@@ -907,9 +945,9 @@ export default function EditorLayout() {
         )}
       </footer>
 
-      {/* Mobile/tablet — Left panel slide-over drawer (advanced mode only) */}
+      {/* Mobile/tablet — Left panel slide-over drawer (below lg; desktop uses the inline column) */}
       <AnimatePresence>
-        {isAdvancedMode && leftPanelOpen && (
+        {leftPanelOpen && (
           <>
             <motion.div
               key="left-backdrop"
@@ -946,9 +984,9 @@ export default function EditorLayout() {
         )}
       </AnimatePresence>
 
-      {/* Mobile/tablet — Right panel slide-over drawer (advanced mode only) */}
+      {/* Mobile/tablet — Right panel slide-over drawer (below lg; desktop uses the inline column) */}
       <AnimatePresence>
-        {isAdvancedMode && rightPanelOpen && (
+        {rightPanelOpen && (
           <>
             <motion.div
               key="right-backdrop"

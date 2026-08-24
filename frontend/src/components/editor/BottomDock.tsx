@@ -402,8 +402,14 @@ export default function BottomDock() {
   );
 
   const handleOpenInspector = useCallback(() => {
-    window.dispatchEvent(new CustomEvent("qai:mobile-inspector-open"));
+    window.dispatchEvent(new CustomEvent("qai:inspector-open"));
   }, []);
+
+  /** Trim has no timeline-drag affordance yet, so the tool targets a clip and
+   *  the inspector's in/out controls do the work. Empty state is honest there. */
+  const handleTrim = useCallback(() => {
+    if (!selectedClipId && suggestions[0]) selectClip(suggestions[0].id);
+  }, [selectedClipId, suggestions, selectClip]);
 
   const duplicateClip = useCallback(
     (clipId: string) => {
@@ -565,7 +571,8 @@ export default function BottomDock() {
   const handleVoiceover = useCallback(() => {
     const nextVal = !exportSettings.voiceoverEnabled;
     setExportSetting("voiceoverEnabled", nextVal);
-    toast.success(nextVal ? "AI Voiceover enabled." : "Voiceover disabled.");
+    // Not TTS — this boosts vocal frequencies on export. Copy must match.
+    toast.success(nextVal ? "Vocal EQ on — voice frequencies boosted." : "Vocal EQ off.");
   }, [exportSettings.voiceoverEnabled, setExportSetting]);
 
   const handleTimelineWheel = useCallback((e: React.WheelEvent) => {
@@ -594,8 +601,8 @@ export default function BottomDock() {
         icon: Scissors,
         label: "Trim",
         toolId: "trim",
-        action: () => toast.info("Drag clip edges on the timeline to trim."),
-        tooltip: "Trim — Drag clip edges to resize",
+        action: handleTrim,
+        tooltip: "Trim — Adjust clip in/out in the inspector",
       },
       {
         icon: Type,
@@ -620,7 +627,7 @@ export default function BottomDock() {
       },
       {
         icon: Mic,
-        label: "Voiceover",
+        label: "Vocal EQ",
         toolId: "voiceover",
         action: handleVoiceover,
         tooltip: "Vocal EQ — Toggle vocal frequency boost (not Dub Video)",
@@ -716,7 +723,7 @@ export default function BottomDock() {
                 <DropdownMenuItem
                   key={label}
                   title={tooltip}
-                  onClick={() => { action(); setActiveTool(toolId); }}
+                  onClick={() => { action(); setActiveTool(toolId); if (toolId !== "dub") handleOpenInspector(); }}
                   className={cn(activeTool === toolId && "text-primary")}
                 >
                   <Icon className="w-4 h-4 mr-2" aria-hidden="true" />
@@ -732,7 +739,7 @@ export default function BottomDock() {
               return (
                 <button
                   key={label}
-                  onClick={() => { action(); setActiveTool(toolId); }}
+                  onClick={() => { action(); setActiveTool(toolId); if (toolId !== "dub") handleOpenInspector(); }}
                   title={tooltip}
                   aria-label={tooltip}
                   aria-pressed={isActive}
@@ -1087,8 +1094,13 @@ export default function BottomDock() {
           {[
             {
               label: "Trim",
-              sub: "Drag clip edges",
-              onClick: () => { toast.info("Drag the clip edges on the timeline to trim."); setContextMenu(null); },
+              sub: "Set in / out",
+              onClick: () => {
+                selectClip(contextMenu.clipId);
+                setActiveTool("trim");
+                handleOpenInspector();
+                setContextMenu(null);
+              },
             },
             {
               label: "Duplicate",

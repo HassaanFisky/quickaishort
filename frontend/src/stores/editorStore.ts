@@ -2092,6 +2092,9 @@ export const useEditorStore = create<EditorState>()(
                   durationMs: entry.durationMs,
                 });
                 void playSfx(sfxId, volume);
+                // sfxClips are Web Audio preview only — compileRenderManifest
+                // has no SFX track, so the export would silently drop them.
+                refuseTool("ADD_SFX", "preview_only_not_exported");
               });
               break;
             }
