@@ -571,7 +571,11 @@ async def handle_editor_command(
     body: EditorCommandRequest,
     user_id: str = Depends(get_verified_user_id),
 ):
-    """Natural-language command → multi-track action JSON via DualModelRouter."""
+    """Natural-language command → actions.
+
+    Dead-air / shorts-packaging / restore-opening hit Decision Intelligence
+    first (0 Gemini, 0 credits). Unrelated commands use DualModelRouter.
+    """
     _ = request
     if not body.command.strip():
         raise HTTPException(status_code=400, detail="Command cannot be empty")
@@ -583,6 +587,16 @@ async def handle_editor_command(
     )
     if not evaluation.decision.allowed:
         return _blocked_command_response(evaluation)
+
+    from services.director_loop import try_deterministic_director_command
+
+    director = await try_deterministic_director_command(
+        user_id=user_id,
+        command=body.command,
+        project_context=body.project_context,
+    )
+    if director is not None:
+        return director
 
     charged = False
     if not is_mock_ai_mode():
@@ -676,6 +690,22 @@ async def handle_editor_command_stream(
     )
     if not evaluation.decision.allowed:
         raise_resource_ceiling(evaluation.decision)
+
+    from services.director_loop import try_deterministic_director_command
+
+    director = await try_deterministic_director_command(
+        user_id=user_id,
+        command=body.command,
+        project_context=body.project_context,
+    )
+    if director is not None:
+
+        async def director_stream():
+            yield 'data: {"stage":"planning","message":"Reading your cut…"}\n\n'
+            yield 'data: {"stage":"applying","message":"Updating the preview…"}\n\n'
+            yield f"data: {director.model_dump_json()}\n\n"
+
+        return StreamingResponse(director_stream(), media_type="text/event-stream")
 
     charged = False
     if not is_mock_ai_mode():

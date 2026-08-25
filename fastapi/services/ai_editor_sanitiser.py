@@ -43,6 +43,7 @@ from models.ai_editor import (  # noqa: F401
     AddVideoOverlayAction,
     RemoveOverlayAction,  # noqa: F401 — used as inline type comment
     RemoveSilencesAction,
+    SilenceCutSegment,
     BladeSplitAction,
     RippleTrimAction,
     RollingTrimAction,
@@ -398,16 +399,41 @@ def sanitise(
             a = action  # type: RemoveSilencesAction
             nm = _clamp(a.min_silence_sec, 0.2, 5.0)
             np_ = _clamp(a.padding_sec, 0.0, 1.0)
-            changed = nm != a.min_silence_sec or np_ != a.padding_sec
+            orig_segments = list(getattr(a, "segments", None) or [])
+            kept_segments = []
+            for seg in orig_segments:
+                try:
+                    start = float(seg.start)
+                    end = float(seg.end)
+                except (TypeError, ValueError, AttributeError):
+                    continue
+                start = _clamp_time(start, dur) if dur > 0 else start
+                end = _clamp_time(end, dur) if dur > 0 else end
+                if end <= start:
+                    continue
+                kept_segments.append(
+                    SilenceCutSegment(
+                        start=start, end=end, type=getattr(seg, "type", "silence")
+                    )
+                )
+            times_changed = len(kept_segments) != len(orig_segments) or any(
+                abs(float(k.start) - float(o.start)) > 1e-9
+                or abs(float(k.end) - float(o.end)) > 1e-9
+                for k, o in zip(kept_segments, orig_segments)
+            )
+            changed = (
+                nm != a.min_silence_sec or np_ != a.padding_sec or times_changed
+            )
+            action = RemoveSilencesAction(
+                type="REMOVE_SILENCES",
+                min_silence_sec=nm,
+                padding_sec=np_,
+                segments=kept_segments,
+            )
             if changed:
                 clamped.append(
                     f"REMOVE_SILENCES min_silence_sec {a.min_silence_sec:.2f}→{nm:.2f}"
                     f" padding_sec {a.padding_sec:.2f}→{np_:.2f}"
-                )
-                action = RemoveSilencesAction(
-                    type="REMOVE_SILENCES",
-                    min_silence_sec=nm,
-                    padding_sec=np_,
                 )
 
         # ── POINTER_SELECT — pass-through (no numeric fields) ─────────────────
