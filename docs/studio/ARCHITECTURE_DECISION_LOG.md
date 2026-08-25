@@ -23,6 +23,8 @@ Living index. Full ADRs live under `docs/studio/adrs/`.
 
 ## Latest binding change
 
+2026-08-25: **Typed-chat director loop** on ADR-016 — `/api/ai-editor/command` intercepts dead-air / shorts-packaging / restore-opening before DualModelRouter and credit charge. Redis latest DecisionRecord enables “keep the original opening” on the same project. Unrelated chat remains DualModelRouter. `AUTO_REFRAME` stays emit=false.
+
 2026-08-20: **ADR-016 Decision-Gated Edit (M0→F)** on branch — `75905cf` contracts; `1c76353` orchestrator `decision_gate` + `execution_integrity`; `10ba9a7` router JWT HTTP tests; `64acb9e` Tier 0 `event_ids`; `5d60fdc` execute-time MediaGraph segment re-verify. Pre-Flight not the brain; no `objective_verified`.
 
 2026-08-20: **ADR-016 Decision-Gated Edit (M0)** accepted — deterministic DecisionRecord in front of Orchestrator; dead-air path uses existing `REMOVE_SILENCES` + MediaGraph silence evidence; 0 Gemini; Pre-Flight is not the brain. Branch follow-ons: gated Orchestrator, `execution_integrity` (never `objective_verified`), JWT HTTP proof, Kernel `event_ids` + post-execute event readback. **Remaining:** see ADR-016 remaining-work A–E. Vision is not complete. Frontend default chat is still ungated DualModelRouter.

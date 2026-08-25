@@ -62,6 +62,9 @@ Also: [ARCHITECTURE_DECISION_LOG](./ARCHITECTURE_DECISION_LOG.md) · [TECHNICAL_
 | [011](./adrs/ADR-011-chat-primary-shell.md) | Chat-primary shell |
 | [012](./adrs/ADR-012-bake-from-kernel-snapshot.md) | Bake from Kernel snapshot |
 | [013](./adrs/ADR-013-editor-ingest-onboarding-adk.md) | Ingest parity + ADK Coming Soon |
+| [014](./adrs/ADR-014-dub-video.md) | Dub Video |
+| [015](./adrs/ADR-015-studio-genius-os.md) | Studio Genius OS Phase 1 |
+| [016](./adrs/ADR-016-decision-gated-edit.md) | Decision-Gated Edit (typed chat director loop 2026-08-25) |
 
 ### Engineering packages
 

@@ -1,6 +1,6 @@
 # Canonical Project Memory
 
-**Last rebuilt:** 2026-07-25 (M3 ingest FSM integration)  
+**Last rebuilt:** 2026-08-25 (typed-chat director loop)  
 **Authority:** Latest accepted EPs / ADRs / founder decisions only
 
 ## Product
@@ -51,3 +51,5 @@ Editor is the product surface. AI performs edits via tools. Chat-primary UX dire
 ## Non-negotiables
 
 Never bypass EP-001. Never second source of truth for capabilities. Never hidden state. Never weaken deterministic replay / audit / observability. Suggestions = MediaGraph only. Never document Coming Soon ADK UI as shipped.
+
+Typed chat for dead-air / shorts packaging / restore-opening is Decision Intelligence first (0 Gemini). DualModelRouter remains the path for unrelated/creative commands.

@@ -1,6 +1,6 @@
 # Studio Roadmap (Execution)
 
-**Last updated:** 2026-08-20 (ADR-016 Decision-Gated Edit M0→G on branch; vision not complete)
+**Last updated:** 2026-08-25 (typed-chat director loop + manifest trim/caption fidelity)
 
 ## Complete — current cycle
 
@@ -10,7 +10,8 @@
 | Pipeline JWT + credits fail-closed | ✅ |
 | M3 ingest FSM (`useIngestLifecycle`) | ✅ Live — FE Vercel + API `00109+` |
 | Chat → Kernel via structured_steps | ✅ |
-| **Decision-Gated Edit M0→G (ADR-016)** | ✅ **Branch** — contracts + gated Orchestrator + Tier 0 Kernel-event verify; **not** merged to main; **not** whole Studio vision |
+| **Decision-Gated Edit M0→G (ADR-016)** | ✅ Main — contracts + gated Orchestrator + Tier 0 Kernel-event verify |
+| **Typed-chat director loop** | ✅ Dead-air / shorts-packaging / restore-opening intercept **before** DualModelRouter + credits; Redis latest DecisionRecord; unresolved clauses stay ASK |
 | CI BE↔FE registry hash | ✅ |
 | Auto-ensure Studio project (chat + export + ingest projectize) | ✅ |
 | Heuristic invent suggestions → 410 | ✅ |
@@ -61,8 +62,8 @@
 | `GOOGLE_TTS_API_KEY` on API + worker | **Founder** — required for full Dub Video voice |
 | Dub Video live smoke (translate+TTS+export) | After Gemini + TTS secrets |
 | ADR-006 native Gemini FunctionDeclaration (tool-loop) | Phase 2 after ADR-015 |
-| **Typed-chat `decision_gate` FE wiring** | Founder UX — chips already gated |
 | **Tier 1 media outcome verify** (post-execute observe vs intent) | Product rule + founder |
+| Speaker `AUTO_REFRAME` | Not emit-allowed; preview refuses — do not fake |
 | Movie-length (1–2hr) dub EP | Deferred — not ADR-014 shorts |
 | Multiplayer | **Founder** (EP-007) |
 | Legacy Projects / GridFS delete | **Founder** |

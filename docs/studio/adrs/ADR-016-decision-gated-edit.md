@@ -44,57 +44,49 @@ M0 needs the smallest Decision Intelligence layer that can gate a meaningful edi
 | F Execute evidence re-verify | prior on branch | Gated ACT `REMOVE_SILENCES` segments re-checked against MediaGraph at execute |
 | G Post-execute Kernel event check | this branch | Intended CandidateAction vs tenant-checked Kernel events; missing ≠ match; client snapshot ≠ objective |
 
-**Still out of scope (honest):** default typed `/editor` chat `decision_gate` (DualModelRouter); Kernel commit after chat remains ungated `structured_steps`; Tier 1 media outcome observation; Pre-Flight brain; live Gemini; learning/refinement loop.
+**Still out of scope (honest):** unrelated/creative typed chat still DualModelRouter; Kernel commit on that path remains ungated `structured_steps`; director typed chat now uses `decision_gate`; Tier 1 media outcome observation; Pre-Flight brain; live Gemini; learning/refinement loop.
 
 Original M0 in-repo scope: contracts + deterministic `resolve_objective` + unit tests. Orchestrator HTTP wiring and Tier 0 execute checks were follow-on milestones on the same ADR, not a parallel ABI.
 
 Out of scope: Pre-Flight integration, new agents, semantic pacing, learning/calibration, live Gemini.
 
-## Remaining work (complete inventory — 2026-08-20)
+## Remaining work (complete inventory — 2026-08-25)
 
 Grounded in repo evidence. This ADR does **not** claim the Studio vision is complete.
 
-### A — Shipped (this branch, not merged to `main`)
+### A — Shipped
 
-- M0 Decision Intelligence: `models/studio_decision.py`, `services/decision_service.py`, `tests/test_decision_gate.py`
-- Phase B: optional `decision_id` / `decision_mode` on Plan; `decision_gate`; gated `create_plan` uses `resolve_objective`; client `decision_mode` ignored; only ACT creates executable steps; ASK/RESEARCH/NOTHING = 0-step draft; execute refuses non-ACT gated
-- Phase C: `ExecutionIntegrity` never `objective_verified`
-- Phase D: `tests/test_orchestrator_router.py` JWT + `decision_gate` HTTP
-- Phase E: gated ACT mutating accepted without `event_ids` → cannot claim `execution_ok`
-- Phase F: execute-time MediaGraph segment re-verify (`verify_remove_silences_params_against_graph`)
-- Phase G: post-execute Kernel event readback (`candidate_matches_project_event`); gated `project_id` bind; terminal execute idempotency
-- Registry frozen (`REMOVE_SILENCES` only for deterministic ACT). Pre-Flight not called from `decision_service`.
+- M0 Decision Intelligence: `models/studio_decision.py`, `services/decision_service.py`
+- Orchestrator `decision_gate` + Tier 0 Kernel event verify (REMOVE_SILENCES)
+- FE `decision_gate` for MediaGraph REMOVE_SILENCES chips
+- **Typed-chat director loop (2026-08-25):** `director_loop.py` intercepts dead-air / shorts-packaging / restore-opening **before** DualModelRouter and **before** credit charge. Compound ACT uses existing emit-allowed capabilities only (`REMOVE_SILENCES`, `TOGGLE_CAPTIONS`, `TRIM`, `ADD_CAPTION`). Unresolved clauses stay ASK. Follow-up “keep the original opening” revises the last DecisionRecord / marks instead of a second unrelated plan. Redis `decision_store` latest-per-project. 0 Gemini on this path.
+- RenderManifest now encodes trim/marks as clip windows and burns captions in `manifest_renderer` when present.
 
-### B — Safe in-repo follow-ons (not this change)
+### B — Safe in-repo follow-ons
 
-- **Shipped (same product branch, 2026-08-22):** FE `decision_gate` for MediaGraph **REMOVE_SILENCES** chips only (`intent_text` = chip label). ASK/RESEARCH with chip `params.segments` falls back to the existing structured plan (still 0 Gemini). Typed `/editor` chat stays DualModelRouter.
-- Persist `DecisionRecord` (today only ids/mode live on Plan). Additive store; not required for Tier 0 verify because candidate params are copied onto plan steps.
-- Server-owned snapshot of intended segments at plan-create time if Redis plan TTL expiry becomes a product issue (`ORCH_PLAN_TTL_SEC`).
+- Tier 1 media outcome observation (post-cut silence re-measure)
+- Server-owned snapshot of intended segments if Redis plan TTL expiry becomes a product issue
 
-### C — Security residuals (watch; several closed this change)
+### C — Still residual
 
-- Closed here: gated execute `project_id` mismatch; terminal re-execute replay; Kernel event lookup is tenant-checked; `AUTH_DISABLED` cannot bypass JWT; `MOCK_AI_EDITOR` re-checked at request time in production.
-- Still residual: public `/api/proxy*`, `/api/audio`, `/api/info` rate-limit/auth (founder); GCS public ACL live check (founder); CSP report-only → enforce (after console clean); `AUTH_DISABLED` leftover in `.env.example` / worker build import (documented unused).
+- Public `/api/proxy*`, `/api/audio`, `/api/info` rate-limit/auth (founder)
+- GCS public ACL live check (founder)
+- CSP report-only → enforce
+- `AUTO_REFRAME` remains emit=false / preview `not_implemented` — speaker reframe is honest ASK
 
 ### D — Blocked on founder / credits / deploy / live
 
-- Gemini prepayment top-up → live `generateContent` smoke (analyze, AI chat, key rotate)
-- Deploy this branch (API Cloud Run + Vercel FE) — **do not merge `main` from this ADR**
-- SUPERSEDED (2026-08-22): empty `/editor` max-update-depth in `next dev` was `ServerExportHost` writing a new `cancelExport` into `serverExportStore` every render — not Radix `composeRefs`. Fixed with stable `useCallback` + no-op store writes. Backend `POST /api/ai-editor/command` under `MOCK_AI_MODE` remains the no-spend AI round-trip.
-- `GOOGLE_TTS_API_KEY` for full Dub Video voice; Dub live smoke after Gemini + TTS
-- Rotate `ADMIN_SECRET` (historical docs exposure)
-- Live smoke of gated ACT on production Kernel + MediaGraph silence facet
+- Gemini prepayment top-up → live `generateContent` smoke
+- Deploy API + FE revision that includes this branch
+- `GOOGLE_TTS_API_KEY` for full Dub Video voice
+- Rotate `ADMIN_SECRET`
 
 ### E — Out of scope until later ADRs
 
-- ADR-006 native FunctionDeclaration (Phase 2)
+- ADR-006 native FunctionDeclaration as the default planner (canary remains flag-gated)
 - Multiplayer (EP-007)
-- Movie-length (1–2hr) dub
-- Image-native editing
-- New LLM provider
-- Learning / calibration / MEMORY expansion
-- Extra agents; Pre-Flight as the brain
-- Shorts-generator identity / clipper core
+- Movie-length dub
+- New LLM provider / Pre-Flight as the brain
 - New registry capabilities
 
 ### Founder still owns for global launch (not local-setup)
