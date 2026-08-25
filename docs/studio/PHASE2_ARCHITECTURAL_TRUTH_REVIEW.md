@@ -3,6 +3,7 @@
 **Document type:** Definitive engineering decision record  
 **Product:** QuickAI Studio (evolution of QuickAI Short)  
 **Date:** 2026-07-18  
+**Current reality addendum:** 2026-08-25 — typed `/editor` chat for dead-air, shorts-packaging, and restore-opening is Decision Intelligence first (0 Gemini). Unrelated/creative chat remains DualModelRouter. This does not complete the OS kernel; it closes the largest chat-bypass gap for those objectives. Speaker reframe (`AUTO_REFRAME`) is still not an emit-allowed capability.  
 **Audience:** Founder, AntiGravity agents, future staff engineers  
 **Prerequisite knowledge:** Entire `docs/studio/` tree (Phase 1 audit platform)  
 **Scope:** Product architecture decisions only — not a re-audit, not a doc regen  

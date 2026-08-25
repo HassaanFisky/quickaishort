@@ -35,6 +35,84 @@ interface CompileEditorState {
   defaultTransition: string;
   splitScreenPresetId: string | null;
   clipColorState?: ClipColorState | null;
+  trimMarker?: { startTime: number; endTime: number } | null;
+  markIn?: number | null;
+  markOut?: number | null;
+  captionsEnabled?: boolean;
+}
+
+function resolveEditWindow(
+  state: CompileEditorState,
+): { start: number; end: number } | null {
+  const duration = state.duration || state.videoMetadata?.duration || 0;
+  const marker = state.trimMarker;
+  if (
+    marker &&
+    Number.isFinite(marker.startTime) &&
+    Number.isFinite(marker.endTime) &&
+    marker.endTime > marker.startTime
+  ) {
+    return {
+      start: Math.max(0, marker.startTime),
+      end: duration > 0 ? Math.min(duration, marker.endTime) : marker.endTime,
+    };
+  }
+  const markIn = state.markIn;
+  const markOut = state.markOut;
+  if (
+    markIn != null &&
+    markOut != null &&
+    Number.isFinite(markIn) &&
+    Number.isFinite(markOut) &&
+    markOut > markIn
+  ) {
+    return {
+      start: Math.max(0, markIn),
+      end: duration > 0 ? Math.min(duration, markOut) : markOut,
+    };
+  }
+  return null;
+}
+
+function applyWindowToClips(
+  clips: RenderClip[],
+  window: { start: number; end: number } | null,
+): RenderClip[] {
+  if (!window) return clips;
+  const next: RenderClip[] = [];
+  let timelineCursor = 0;
+  for (const clip of clips) {
+    const srcStart = Math.max(clip.startSec, window.start);
+    const srcEnd = Math.min(clip.endSec, window.end);
+    if (!(srcEnd - srcStart > 0.05)) continue;
+    const durationVal = srcEnd - srcStart;
+    next.push({
+      ...clip,
+      startSec: srcStart,
+      endSec: srcEnd,
+      timelineStartSec: timelineCursor,
+    });
+    timelineCursor += durationVal / (clip.speed || 1);
+  }
+  return next;
+}
+
+function remapCaptions(
+  captions: RenderCaption[],
+  window: { start: number; end: number } | null,
+  captionsEnabled: boolean,
+): RenderCaption[] {
+  if (!captionsEnabled) return [];
+  if (!window) return captions;
+  const span = window.end - window.start;
+  return captions
+    .map((c) => {
+      const start = Math.max(c.startTime, window.start) - window.start;
+      const end = Math.min(c.endTime, window.end) - window.start;
+      if (!(end - start > 0.05) || start >= span) return null;
+      return { ...c, startTime: start, endTime: Math.min(span, end) };
+    })
+    .filter((c): c is RenderCaption => c != null);
 }
 
 export function compileRenderManifest(state: CompileEditorState): RenderManifest {
@@ -129,14 +207,82 @@ export function compileRenderManifest(state: CompileEditorState): RenderManifest
     }
   }
 
+  const sourceId =
+    state.sourceUrl ||
+    (state.sourceFile ? state.sourceFile.name : "") ||
+    "source";
+  const defaultTrackId = (state.tracks && state.tracks[0]?.id) || "v1";
+  const mediaDuration = duration || 0;
+  if (clips.length === 0 && mediaDuration > 0.05) {
+    if (tracks.length === 0) {
+      tracks = [
+        {
+          id: defaultTrackId,
+          type: "video",
+          label: "V1",
+          locked: false,
+          muted: false,
+        },
+      ];
+    }
+    clips.push({
+      id: "source-1",
+      trackId: defaultTrackId,
+      sourceId,
+      startSec: 0,
+      endSec: mediaDuration,
+      timelineStartSec: 0,
+      speed: 1,
+      label: state.videoMetadata?.title || "Source",
+    });
+  }
+
+  const editWindow = resolveEditWindow(state);
+  clips = applyWindowToClips(clips, editWindow);
+  if (clips.length === 0 && editWindow && editWindow.end - editWindow.start > 0.05) {
+    if (tracks.length === 0) {
+      tracks = [
+        {
+          id: defaultTrackId,
+          type: "video",
+          label: "V1",
+          locked: false,
+          muted: false,
+        },
+      ];
+    }
+    clips = [
+      {
+        id: "window-1",
+        trackId: defaultTrackId,
+        sourceId,
+        startSec: editWindow.start,
+        endSec: editWindow.end,
+        timelineStartSec: 0,
+        speed: 1,
+        label: "Edit window",
+      },
+    ];
+  }
+  if (editWindow && clips.length > 0) {
+    timeline.duration = clips.reduce((acc, clip) => {
+      const span = Math.max(0, clip.endSec - clip.startSec) / (clip.speed || 1);
+      return Math.max(acc, clip.timelineStartSec + span);
+    }, 0);
+  }
+
   // 3. Compile Captions
-  const captions: RenderCaption[] = (state.captions || []).map((c) => ({
-    id: c.id,
-    text: c.text,
-    startTime: c.startTime,
-    endTime: c.endTime,
-    style: c.style,
-  }));
+  const captions: RenderCaption[] = remapCaptions(
+    (state.captions || []).map((c) => ({
+      id: c.id,
+      text: c.text,
+      startTime: c.startTime,
+      endTime: c.endTime,
+      style: c.style,
+    })),
+    editWindow,
+    state.captionsEnabled !== false,
+  );
 
   // 4. Compile Overlays (elements)
   const overlays: RenderOverlay[] = (state.elements || []).map((el) => {
@@ -188,7 +334,10 @@ export function compileRenderManifest(state: CompileEditorState): RenderManifest
     effects.push({
       id: "effect-export-settings",
       type: "export_settings",
-      payload: state.exportSettings as unknown as Record<string, unknown>,
+      payload: {
+        ...(state.exportSettings as unknown as Record<string, unknown>),
+        captionsEnabled: state.captionsEnabled !== false,
+      },
     });
   }
 

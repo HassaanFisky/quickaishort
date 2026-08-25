@@ -1,15 +1,18 @@
 # 33 — CostGuard / Gemini entrypoint audit
 
 **Date:** 2026-08-02  
-**DoD:** every live Gemini path either uses DualModelRouter (cache+limits) or is explicitly retired / credit-gated.
+**Addendum:** 2026-08-25 — director/dead-air/restore-opening typed chat is intercepted **before** DualModelRouter and **does not** reserve credits. Unrelated `/command` still DualModelRouter + reserve/refund.
+
+**DoD:** every live Gemini path either uses DualModelRouter (cache+limits) or is explicitly retired / credit-gated. Deterministic Decision Intelligence is not a Gemini path.
 
 | Entrypoint | Path | CostGuard / DualModelRouter | Credits | Notes |
 |------------|------|-----------------------------|---------|-------|
-| AI Editor command | `POST /api/ai-editor/command` | YES via DualModelRouter | reserve/refund | Primary chat |
-| AI Editor stream | `POST /api/ai-editor/command/stream` | YES | reserve/refund | Same router |
+| AI Editor command (director) | `POST /api/ai-editor/command` | Decision Intelligence intercept | **0** | dead-air / shorts-packaging / restore-opening |
+| AI Editor command (other) | `POST /api/ai-editor/command` | YES via DualModelRouter | reserve/refund | Unrelated/creative chat |
+| AI Editor stream | `POST /api/ai-editor/command/stream` | Same split as command | 0 or reserve/refund | Same intercept |
 | AI Editor legacy | `POST /api/ai-edit` | YES | reserve/refund | FE proxy |
-| Studio orchestrator plan | `POST /api/studio/v1/orchestrator/plan` | No Gemini (structured EP-001) | free | Capability ABI only |
-| Studio orchestrator execute | `…/execute` | No Gemini | free | Manifest commit |
+| Studio orchestrator plan | `POST /api/studio/v1/orchestrator/plan` | No Gemini (`decision_gate` or structured EP-001) | free | Capability ABI only |
+| Studio orchestrator execute | `…/execute` | No Gemini | free | Manifest commit + ProjectEvents |
 | Dub translate | dub_service → Gemini | Translation cache + fingerprint | deduct | ADR-014 |
 | PreFlight credited | `POST /api/preflight` | Pipeline + credits | YES | Preferred |
 | Legacy PreFlight predict | `…/predict` | **410 in production** | N/A | Retired unless `ENABLE_LEGACY_V1_PREFLIGHT` |

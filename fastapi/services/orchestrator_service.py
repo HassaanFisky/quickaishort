@@ -380,7 +380,9 @@ class OrchestratorService:
             await asyncio.to_thread(self.store.put, plan)
             return plan
 
-        record = await resolve_objective(user_id, text, body.project_id)
+        record = await resolve_objective(
+            user_id, text, body.project_id, project_context=body.project_context
+        )
         record.plan_id = plan.plan_id
 
         plan.decision_id = record.decision_id

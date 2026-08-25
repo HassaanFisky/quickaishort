@@ -1,6 +1,6 @@
 # 41 — AI-Native Video + Image Editing Platform Research
 
-**Status:** Research only. No production code changed.  
+**Status:** Research only. Dated 2026-08-22. **Addendum 2026-08-25:** typed `/editor` chat for dead-air / shorts-packaging / restore-opening no longer bypasses Decision Intelligence. Unrelated chat still DualModelRouter. Speaker reframe still not wired.  
 **Date:** 2026-08-22  
 **Scope:** GitHub ecosystem + current QuickAI Short / Studio source  
 **Product lock (unchanged):** Next.js + FastAPI + Gemini-only + EP-001 single ABI + GCS + Cloud Tasks ffmpeg. No Adobe/Resolve runtime. No AGPL/GPL vendoring.
@@ -22,7 +22,7 @@ USER CHAT
   → RenderManifest → Cloud Tasks ffmpeg → GCS
 ```
 
-That is closer to OpenChatCut / FableCut / Kinocut than to OpusClip. The product is mid-strangler: Studio contracts exist (EP-001…004, ADR-016), but **chat still bypasses Decision Intelligence**, **timeline truth is split** (`tracks[]` vs viral `suggestions[]`), **canvas is hardcoded 1080×1920**, and **image editing does not exist**.
+That is closer to OpenChatCut / FableCut / Kinocut than to OpusClip. The product is mid-strangler: Studio contracts exist (EP-001…004, ADR-016). **Update 2026-08-25:** director/dead-air/restore-opening chat is Decision Intelligence first; other chat still DualModelRouter. Remaining gaps: timeline truth is still split (`tracks[]` vs viral `suggestions[]`), canvas is hardcoded 1080×1920, and image editing does not exist.
 
 **Architecture we should choose:** evolve the existing Studio Kernel into a **Creative Kernel** with two media runtimes (Video / Image) and one intelligence plane (Decision → Plan → Structured Ops → Execute → Verify). Short Editor is a **mode pack** on VideoRuntime, not a second product.
 
@@ -334,7 +334,7 @@ QuickAI today:
 | Step | Status |
 |------|--------|
 | Read | Partial (`current_state` + transcript slice; MediaGraph not always in chat) |
-| Decide | Backend-only ADR-016; **chat bypasses it** |
+| Decide | Dead-air / shorts-packaging / restore-opening: ADR-016 on typed chat. Other chat: DualModelRouter |
 | Plan | Gemini JSON `actions[]`; Orchestrator refuses free text |
 | Draft | Missing (optimistic client apply is not a draft) |
 | Execute | `dispatchAIActions` + optional Kernel |

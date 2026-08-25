@@ -154,6 +154,7 @@ export interface RemoveSilencesAction {
   type: "REMOVE_SILENCES";
   min_silence_sec: number;
   padding_sec: number;
+  segments?: Array<{ start: number; end: number; type?: string }>;
 }
 
 // ─── Phase 4b: NLE Timeline Tool action interfaces ────────────────────────────

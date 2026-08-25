@@ -1,6 +1,6 @@
 # Architecture — QuickAI Short / QuickAI Studio
 
-**Last updated:** 2026-07-25
+**Last updated:** 2026-08-25
 **Stack (verified):** Next.js 14.2.35 · FastAPI · Gemini 2.5 Flash · Google ADK (Pre-Flight agents) · Cloud Tasks · Redis · ffmpeg-python · GCS primary · NextAuth JWT
 
 Canonical deep docs: [`docs/studio/`](docs/studio/README.md)  
@@ -39,11 +39,15 @@ Realtime: Pusher + WebSocket fallback. Auth: NextAuth HS256 JWT validated in `fa
 ```text
 User message / suggestion chip
         ↓
+Intent class (Decision Intelligence when dead-air / shorts packaging / restore-opening)
+        ↓
 POST AI editor / Studio orchestrator (flagged)
         ↓
-Gemini + Luna orchestration profile → structured actions (Capability Registry ABI — EP-001)
+Deterministic ACT (0 Gemini) **or** Gemini + Luna profile → structured actions (EP-001)
         ↓
 Client applies preview edits (Zustand NLE)
+        ↓
+Kernel Plan + execute (decision_gate on director/dead-air path)
         ↓
 Optional bake: RenderManifest / Kernel snapshot → Cloud Tasks → ffmpeg → GCS
 ```

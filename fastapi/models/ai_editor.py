@@ -286,6 +286,15 @@ class RemoveOverlayAction(BaseModel):
     element_id: str = Field(min_length=1, max_length=128)
 
 
+class SilenceCutSegment(BaseModel):
+    """One silence interval that REMOVE_SILENCES may cut. Missing ≠ empty."""
+
+    model_config = ConfigDict(extra="forbid")
+    start: float = Field(ge=-86400, le=86400)
+    end: float = Field(ge=-86400, le=86400)
+    type: Optional[str] = "silence"
+
+
 class RemoveSilencesAction(BaseModel):
     """Trim silent gaps from the video using transcript timing data."""
 
@@ -293,6 +302,8 @@ class RemoveSilencesAction(BaseModel):
     type: Literal["REMOVE_SILENCES"]
     min_silence_sec: float = Field(default=0.6, ge=0.2, le=5.0)
     padding_sec: float = Field(default=0.08, ge=0.0, le=1.0)
+    # Evidence-backed cut list. Empty means "use client silenceSegments".
+    segments: list[SilenceCutSegment] = Field(default_factory=list, max_length=200)
 
 
 # ─── Phase 4b: NLE Timeline Tool actions ──────────────────────────────────────
@@ -1019,3 +1030,7 @@ class EditorCommandResponse(BaseModel):
     cached: bool = False
     # Honest preview vs Kernel ack — FE may append UX copy
     kernel_ack_required: bool = False
+    # Decision Intelligence receipt (typed chat director/dead-air/revise path).
+    decision_id: Optional[str] = None
+    decision_mode: Optional[str] = None
+    unresolved: List[str] = Field(default_factory=list)

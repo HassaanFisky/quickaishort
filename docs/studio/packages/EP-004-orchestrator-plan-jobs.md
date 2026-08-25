@@ -1,9 +1,11 @@
 # EP-004 — Orchestrator Plan Jobs
 
-**Status:** APPROVED FOR IMPLEMENTATION  
+**Status:** **IMPLEMENTED** (Canonical Project Memory)  
 **Priority:** P0 — Phase 2 Part G step 4  
 **Depends on:** EP-001, EP-002, EP-003  
-**ADR:** ADR-010  
+**ADR:** ADR-010 · **Relates:** ADR-016  
+
+**Current reality (2026-08-25):** `decision_gate=true` plans skip Gemini and use Decision Intelligence. Typed director/dead-air/restore-opening chat now sends that flag after local preview. Free-text ungated planning (Gemini `process_editor_command`) remains for other chat. Execute still writes `ProjectEvent` only via Project Kernel.  
 
 ## Objective
 

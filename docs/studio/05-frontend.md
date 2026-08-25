@@ -33,10 +33,11 @@
 
 ```text
 User prompt / suggestion click
-  → useAiCommander.execute (or AIPanel legacy path)
-  → callAiEditor → POST /api/ai-edit (or /api/ai-editor/command)
+  → AIPanel streamEditorCommand → POST /api/ai-editor/command/stream
+  → director intercept (dead-air / shorts / restore-opening) OR DualModelRouter
   → response.actions
-  → editorStore.applyAiEdits / dispatchAIActions
+  → editorStore.applyAiEdits (preview)
+  → orchestrator plan+execute → ProjectEvent (Kernel) when flagged
   → undo stack (aiUndoStack)
 ```
 

@@ -9,6 +9,9 @@ export type CommandHonestyInput = {
   clamped?: string[];
   dropped?: string[];
   status?: string | null;
+  decisionMode?: string | null;
+  unresolved?: string[];
+  integrityStatus?: string | null;
 };
 
 const FAKE_DONE = /^(done\.?|ok\.?)$/i;
@@ -39,7 +42,25 @@ export function formatCommandFeedback(input: CommandHonestyInput): string {
   }
 
   const base = isFakeDone(raw) ? `Applied ${applied.join(", ")}.` : raw;
-  return notes.length ? `${base} ${notes.join(" ")}` : base;
+  const integrity =
+    input.integrityStatus === "execution_ok"
+      ? "Verified against project events."
+      : input.integrityStatus === "execution_partial"
+        ? "Partially applied — not fully verified."
+        : input.integrityStatus === "execution_failed"
+          ? "Project commit failed."
+          : "";
+  const mode =
+    input.decisionMode === "ASK"
+      ? "Needs more evidence."
+      : input.decisionMode === "RESEARCH"
+        ? "Waiting on analysis."
+        : "";
+  const unresolved =
+    input.unresolved && input.unresolved.length
+      ? `Unresolved: ${input.unresolved.slice(0, 3).join("; ")}.`
+      : "";
+  return [base, notes.join(" "), mode, integrity, unresolved].filter(Boolean).join(" ");
 }
 
 export type TrimMarkerLike = { startTime: number; endTime: number } | null;

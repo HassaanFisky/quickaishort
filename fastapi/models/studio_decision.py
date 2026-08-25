@@ -34,7 +34,13 @@ DecisionMode = Literal[
 
 DecisionStatus = Literal["decided"]
 ActorKind = Literal["system", "user"]
-ObjectiveClass = Literal["empty", "dead_air_pacing", "unrelated"]
+ObjectiveClass = Literal[
+    "empty",
+    "dead_air_pacing",
+    "director_packaging",
+    "revise_opening",
+    "unrelated",
+]
 
 ExecutionIntegrityStatus = Literal[
     "not_executed",

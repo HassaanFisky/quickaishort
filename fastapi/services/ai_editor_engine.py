@@ -34,7 +34,6 @@ from services.native_tools import (
 from services.tool_registry import (
     build_orchestrator_system_prompt,
     build_planner_prompt_section,
-    list_emit_allowed,
     normalize_command_actions,
 )
 
@@ -44,9 +43,12 @@ _HARD_TIMEOUT_S = 30
 _MAX_TRANSCRIPT_WORDS = 300
 
 
-def _legacy_system_prompt() -> str:
-    """Canonical /api/ai-edit prompt — catalogue from registry emit-allowed only."""
-    catalogue = build_planner_prompt_section(list_emit_allowed())
+def _legacy_system_prompt(command: str = "") -> str:
+    """Canonical /api/ai-edit prompt — retrieved emit-allowed catalogue only."""
+    from services.tool_registry import intent_tags_from_command, retrieve_for_intent
+
+    caps = retrieve_for_intent(intent_tags_from_command(command), limit=24)
+    catalogue = build_planner_prompt_section(caps)
     return f"""You are the QuickAI Studio editing kernel.
 Convert natural-language editing commands into a JSON action array.
 Respond ONLY with valid JSON matching this exact shape — no markdown, no prose:
@@ -91,7 +93,7 @@ async def process_editor_command(
     parsed: dict[str, Any]
     try:
         if native_tools_enabled():
-            decls = build_editor_function_declarations()
+            decls = build_editor_function_declarations(command)
             logger.info(
                 "studio_native_tools_canary decls=%d command_len=%d",
                 len(decls),
@@ -329,7 +331,7 @@ async def run_ai_editor(
     """Call Gemini and return a validated, sanitised AIEditorResponse."""
     context = _build_context(state, transcript)
     full_prompt = (
-        _legacy_system_prompt()
+        _legacy_system_prompt(prompt)
         + "\n\n══ CURRENT EDITOR CONTEXT ══\n"
         + context
         + f"\n\nUSER COMMAND: {prompt}"

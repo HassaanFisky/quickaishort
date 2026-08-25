@@ -65,7 +65,11 @@ YouTube URL or local upload
         ↓
 Ingest + transcription (browser Whisper) + optional analysis
         ↓
-Conversational AI editor (Gemini) → structured edit actions
+Conversational AI editor
+  • Deterministic director path (dead-air / shorts packaging / restore opening)
+    → Decision Intelligence → real capabilities → preview + Kernel receipt
+    → 0 Gemini, 0 credits
+  • Other chat → Gemini DualModelRouter → structured edit actions (credits)
         ↓
 Client NLE preview (Zustand timeline) + MediaGraph suggestions
         ↓
