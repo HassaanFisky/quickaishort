@@ -1686,9 +1686,10 @@ export const useEditorStore = create<EditorState>()(
               }
 
               type SilenceLike = { start: number; end: number; type?: string };
-              const raw: SilenceLike[] = Array.isArray(p.segments)
-                ? (p.segments as SilenceLike[])
-                : store.silenceSegments;
+              const raw: SilenceLike[] =
+                Array.isArray(p.segments) && (p.segments as SilenceLike[]).length > 0
+                  ? (p.segments as SilenceLike[])
+                  : store.silenceSegments;
 
               const silences = raw
                 .map((s) => ({

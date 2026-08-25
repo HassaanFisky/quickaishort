@@ -101,6 +101,11 @@ export interface EditorCommandResponse {
   message?: string
   suggestions?: string[]
   status?: string
+  cached?: boolean
+  kernel_ack_required?: boolean
+  decision_id?: string | null
+  decision_mode?: string | null
+  unresolved?: string[]
 }
 
 export interface ChatHistoryTurn {
@@ -146,6 +151,7 @@ export function buildProjectContextForCommand(input: {
   currentTime?: number
   aspectRatio?: string
   runId?: string | null
+  studioProjectId?: string | null
   transcript?: TranscriptLike | { chunks?: TranscriptLike[] } | Array<TranscriptLike>
   captions?: CaptionLike[]
   videoAnalysis?: VideoAnalysis | null
@@ -299,6 +305,8 @@ export function buildProjectContextForCommand(input: {
     viral_top: viralTop,
     captions,
     run_id: input.runId || undefined,
+    studio_project_id: input.studioProjectId || undefined,
+    project_id: input.studioProjectId || undefined,
   }
 }
 

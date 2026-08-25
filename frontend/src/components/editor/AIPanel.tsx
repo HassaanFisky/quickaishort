@@ -57,10 +57,12 @@ type OrchestratorPlanResult = {
   decision_mode?: string;
   message?: string;
   steps?: Array<{ capability_id: EditorAction["type"]; params?: Record<string, unknown> }>;
+  execution_integrity?: { status?: string };
 };
 
 /**
- * Silence chips go through decision_gate (0 Gemini). Typed chat stays DualModelRouter.
+ * Silence chips go through decision_gate (0 Gemini). Typed director/dead-air
+ * chat is intercepted server-side (decision-intelligence) then Kernel-gated.
  * ASK/RESEARCH with chip segments falls back to the existing structured plan.
  */
 async function planGroundedSuggestion(
@@ -874,6 +876,7 @@ export function AIPanel() {
           currentTime,
           aspectRatio: exportSettings.aspectRatio,
           runId,
+          studioProjectId: useEditorStore.getState().studioProjectId,
           transcript,
           captions,
           videoAnalysis,
@@ -933,8 +936,10 @@ export function AIPanel() {
         // EP-004 — Kernel commit from already-planned actions (no second LLM call).
         // NEXT_PUBLIC_* is build-time; capture once so we never half-enter Kernel path.
         let receipt = "";
+        let integrityStatus: string | null = null;
         const kernelEnabled = isStudioProjectKernelEnabled();
-        if (kernelEnabled && dispatchActions.length > 0) {
+        const directorLoop = result.model_used === "decision-intelligence";
+        if (kernelEnabled && (dispatchActions.length > 0 || directorLoop)) {
           try {
             const { ensureStudioProject, fetchStudioHead } = await import(
               "@/lib/studio/projectKernel"
@@ -954,27 +959,42 @@ export function AIPanel() {
                   params: a.payload ?? {},
                 }),
               );
-              const plan = await orchestratorPlan({
-                source: "chat",
-                intent_text: trimmed,
-                project_id: projectId,
-                structured_steps,
-              });
+              const plan = directorLoop
+                ? await orchestratorPlan({
+                    source: "chat",
+                    decision_gate: true,
+                    intent_text: trimmed,
+                    project_id: projectId,
+                    project_context,
+                  })
+                : await orchestratorPlan({
+                    source: "chat",
+                    intent_text: trimmed,
+                    project_id: projectId,
+                    structured_steps,
+                  });
               useEditorStore.getState().rebuildRenderManifest();
               const st = useEditorStore.getState();
+              const executable =
+                !directorLoop || plan?.decision_mode === "ACT";
               if (
+                executable &&
                 plan?.plan_id &&
                 st.compiledManifest &&
                 projectId &&
                 plan.steps?.length
               ) {
-                const executed = await orchestratorExecute({
+                const executed = (await orchestratorExecute({
                   plan_id: plan.plan_id,
                   project_id: projectId,
                   base_revision: st.studioAckedRevision,
                   base_snapshot_hash: st.studioSnapshotHash,
                   proposed_manifest: st.compiledManifest,
-                });
+                })) as OrchestratorPlanResult & { status?: string };
+                integrityStatus =
+                  executed?.execution_integrity?.status ||
+                  executed?.status ||
+                  null;
                 const head = await fetchStudioHead(projectId);
                 useEditorStore.setState({
                   studioAckedRevision: head.revision,
@@ -993,6 +1013,9 @@ export function AIPanel() {
                   receipt = " · Preview only — project steps skipped";
                   setKernelSyncState("preview");
                 }
+              } else if (directorLoop && plan?.decision_mode && plan.decision_mode !== "ACT") {
+                receipt = ` · ${plan.decision_mode} — no project mutation`;
+                setKernelSyncState("preview");
               } else {
                 receipt = " · Preview applied";
                 setKernelSyncState("preview");
@@ -1015,6 +1038,9 @@ export function AIPanel() {
           clamped: result.clamped,
           dropped: result.dropped,
           status: result.status,
+          decisionMode: result.decision_mode,
+          unresolved: result.unresolved,
+          integrityStatus,
         });
         addAIMessage({
           role: "assistant",
