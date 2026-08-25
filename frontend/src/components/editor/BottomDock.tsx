@@ -281,6 +281,7 @@ export default function BottomDock() {
     setExportSetting,
     exportSettings,
     waveformPeaks,
+    audioExtractStatus,
     silenceSegments,
     undoStack,
     redoStack,
@@ -1065,7 +1066,7 @@ export default function BottomDock() {
             Audio
           </span>
           <div className={cn("flex-1 rounded-lg bg-foreground/5 border border-foreground/5 relative overflow-hidden", isMobile ? "h-10" : "h-7")}>
-            {waveformPeaks ? (
+            {waveformPeaks && audioExtractStatus === "ready" ? (
               <canvas
                 ref={waveformCanvasRef}
                 className="absolute inset-0 w-full h-full"
@@ -1074,7 +1075,11 @@ export default function BottomDock() {
             ) : (
               <div className="flex items-center justify-center w-full h-full">
                 <span className="text-[8px] text-muted-foreground/30 uppercase tracking-widest">
-                  No audio data
+                  {audioExtractStatus === "extracting"
+                    ? "Reading audio…"
+                    : audioExtractStatus === "unavailable"
+                      ? "Waveform unavailable"
+                      : "Waiting for audio"}
                 </span>
               </div>
             )}

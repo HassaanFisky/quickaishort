@@ -20,6 +20,14 @@ import type {
   IngestStage,
 } from "@/lib/studio/ingestFsm";
 import { canTransitionIngest } from "@/lib/studio/ingestFsm";
+import { computeWaveformPeaks } from "@/lib/utils/waveformPeaks";
+
+export type AudioExtractStatus = "idle" | "extracting" | "ready" | "unavailable";
+
+const AUDIO_LANE_IDLE = {
+  waveformPeaks: null as number[] | null,
+  audioExtractStatus: "idle" as AudioExtractStatus,
+};
 
 // ─── AI Editor Types ──────────────────────────────────────────────────────────
 
@@ -604,10 +612,12 @@ interface EditorState {
   transcript: Transcript | null;
   suggestions: Clip[];
   silenceSegments: CutSegment[];
-  // 120 normalized amplitude values (0.01–1.0) pre-computed by useMediaPipeline
-  // immediately after audio extraction using O(1)-per-bar stride sampling.
-  // The raw Float32Array is never stored here — peaks are GC-eligible on extraction.
+  // 120 normalized amplitude values (0.01–1.0). Raw PCM is never stored here.
+  // Historical Timeline.tsx read `audioData`; that file is gone (BottomDock lane).
+  // `setAudioData` is the ingest write API those June-2026 callers expected:
+  // Float32Array in → waveformPeaks out.
   waveformPeaks: number[] | null;
+  audioExtractStatus: AudioExtractStatus;
   captionsEnabled: boolean;
   selectedClipId: string | null;
 
@@ -690,6 +700,9 @@ interface EditorState {
   setSuggestions: (suggestions: Clip[]) => void;
   setSilenceSegments: (segments: CutSegment[]) => void;
   setWaveformPeaks: (peaks: number[] | null) => void;
+  /** PCM ingest write — does not persist the Float32Array. */
+  setAudioData: (audioData: Float32Array | null) => void;
+  setAudioExtractStatus: (status: AudioExtractStatus) => void;
   setCaptionsEnabled: (enabled: boolean) => void;
   selectClip: (id: string | null) => void;
   setYtVideoId: (id: string | null) => void;
@@ -841,7 +854,7 @@ export const useEditorStore = create<EditorState>()(
       transcript: null,
       suggestions: [],
       silenceSegments: [],
-      waveformPeaks: null,
+      ...AUDIO_LANE_IDLE,
       captionsEnabled: true,
       selectedClipId: null,
       sfxClips: [],
@@ -954,7 +967,7 @@ export const useEditorStore = create<EditorState>()(
           captions: [],
           transcript: null,
           silenceSegments: [],
-          waveformPeaks: null,
+          ...AUDIO_LANE_IDLE,
           videoAnalysis: null,
           selectedClipId: null,
           canvasElements: [],
@@ -983,7 +996,7 @@ export const useEditorStore = create<EditorState>()(
           captions: [],
           transcript: null,
           silenceSegments: [],
-          waveformPeaks: null,
+          ...AUDIO_LANE_IDLE,
           videoAnalysis: null,
           selectedClipId: null,
           canvasElements: [],
@@ -1081,7 +1094,26 @@ export const useEditorStore = create<EditorState>()(
 
       setSuggestions: (suggestions) => set({ suggestions }),
       setSilenceSegments: (segments) => set({ silenceSegments: segments }),
-      setWaveformPeaks: (peaks) => set({ waveformPeaks: peaks }),
+      setWaveformPeaks: (peaks) =>
+        set({
+          waveformPeaks: peaks,
+          audioExtractStatus:
+            peaks && peaks.length > 0 ? "ready" : "idle",
+        }),
+      setAudioData: (audioData) => {
+        if (!audioData || audioData.length === 0) {
+          set({
+            waveformPeaks: null,
+            audioExtractStatus: "unavailable",
+          });
+          return;
+        }
+        set({
+          waveformPeaks: computeWaveformPeaks(audioData),
+          audioExtractStatus: "ready",
+        });
+      },
+      setAudioExtractStatus: (status) => set({ audioExtractStatus: status }),
       setCaptionsEnabled: (enabled) => set({ captionsEnabled: enabled }),
       selectClip: (id) => set({ selectedClipId: id }),
       setYtVideoId: (id) => set({ ytVideoId: id }),
@@ -2500,7 +2532,7 @@ export const useEditorStore = create<EditorState>()(
           captions: [],
           transcript: null,
           silenceSegments: [],
-          waveformPeaks: null,
+          ...AUDIO_LANE_IDLE,
           videoAnalysis: null,
           selectedClipId: null,
           sfxClips: [],
@@ -2555,7 +2587,7 @@ export const useEditorStore = create<EditorState>()(
           transcript: null,
           suggestions: [],
           silenceSegments: [],
-          waveformPeaks: null,
+          ...AUDIO_LANE_IDLE,
           captionsEnabled: true,
           selectedClipId: null,
           sfxClips: [],

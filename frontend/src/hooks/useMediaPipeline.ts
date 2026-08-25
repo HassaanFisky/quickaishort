@@ -59,28 +59,6 @@ export function enterReadyPreservingMedia(message: string): void {
   void persistArtifactsAndReady({ suggestions: [] });
 }
 
-/**
- * Reduce a Float32Array to 120 amplitude peaks for waveform display.
- * Strides through each bar window (max 50 samples) so complexity is O(1)
- * in audio length regardless of video duration. Safe to call on the main
- * thread for any video length without causing a noticeable UI freeze.
- */
-function computeWaveformPeaks(audioData: Float32Array, barCount = 120): number[] {
-  const step = Math.floor(audioData.length / barCount);
-  return Array.from({ length: barCount }, (_, i) => {
-    const start = i * step;
-    const end = Math.min(start + step, audioData.length);
-    const stride = Math.max(1, Math.floor((end - start) / 50));
-    let sum = 0;
-    let count = 0;
-    for (let j = start; j < end; j += stride) {
-      sum += Math.abs(audioData[j]);
-      count++;
-    }
-    return count > 0 ? Math.max(0.01, Math.min(1, (sum / count) * 10)) : 0.01;
-  });
-}
-
 /** Walk legal forward edges to terminal ready (never skips the FSM table). */
 function advanceIngestToReady(): void {
   const store = useEditorStore.getState();
@@ -144,7 +122,8 @@ export function useMediaPipeline() {
     setTranscript,
     setSuggestions,
     setAgentState,
-    setWaveformPeaks,
+    setAudioData,
+    setAudioExtractStatus,
   } = useEditorStore();
 
   const transcription = useTranscription();
@@ -249,6 +228,7 @@ export function useMediaPipeline() {
     const timeoutId = setTimeout(() => controller.abort(), 120000);
 
     setProcessing(true, "loading");
+    setAudioExtractStatus("extracting");
     setAgentState("ingestion", { status: "working", progress: 10 });
     setProgress(10);
     toast.info("Preparing content for analysis…");
@@ -261,6 +241,9 @@ export function useMediaPipeline() {
       activeRunIdRef.current = null;
       clearWhisperTimeoutRef.current();
       transcriptionRef.current.terminate();
+      if (useEditorStore.getState().audioExtractStatus === "extracting") {
+        useEditorStore.getState().setAudioData(null);
+      }
       enterReadyPreservingMedia(
         "Auto-analysis timed out. Video is ready — retry transcript or export. AI chat waits for captions.",
       );
@@ -273,7 +256,7 @@ export function useMediaPipeline() {
     )
       .then(({ audioData, sampleRate, duration }) => {
         clearTimeout(timeoutId);
-        setWaveformPeaks(computeWaveformPeaks(audioData));
+        setAudioData(audioData);
 
         if (useEditorStore.getState().duration === 0) {
           useEditorStore.setState({ duration });
@@ -324,6 +307,7 @@ export function useMediaPipeline() {
         }
 
         setAgentState("ingestion", { status: "error" });
+        setAudioData(null);
         enterReadyPreservingMedia(infoMsg);
       });
 
@@ -333,7 +317,8 @@ export function useMediaPipeline() {
     setProcessing,
     setProgress,
     setAgentState,
-    setWaveformPeaks,
+    setAudioData,
+    setAudioExtractStatus,
     transcription,
     clearWhisperTimeout,
   ]);
