@@ -39,13 +39,19 @@ def _as_float(value: Any, default: float) -> float:
 
 
 def _escape_drawtext(text: str) -> str:
-    """Escape text for the FFmpeg drawtext filter."""
+    """Escape text for the FFmpeg drawtext filter (caption/watermark)."""
     text = str(text or "")
+    text = text.replace("\r", " ").replace("\n", " ")
     text = text.replace("\\", "\\\\")
     text = text.replace("'", "\u2019")  # single quotes terminate the filter arg
     text = text.replace(":", "\\:")
     text = text.replace("%", "\\%")
-    return text
+    text = text.replace(",", "\\,")
+    text = text.replace(";", "\\;")
+    text = text.replace("[", "\\[")
+    text = text.replace("]", "\\]")
+    text = text.replace("=", "\\=")
+    return text[:240]
 
 
 def compile_manifest_to_ffmpeg(
@@ -276,7 +282,28 @@ def compile_manifest_to_ffmpeg(
     if manifest.muteSourceAudio:
         a_effects.append("volume=0.0")
 
-    # 5. Tier watermark. The manifest branch bypasses the legacy filtergraph, so
+    # 5. Captions from the composition snapshot. Times are timeline seconds
+    #    after compileRenderManifest remaps them through the edit window.
+    captions_enabled = True
+    if export_settings_effect and isinstance(export_settings_effect.payload, dict):
+        captions_enabled = bool(
+            export_settings_effect.payload.get("captionsEnabled", True)
+        )
+    if captions_enabled:
+        for cap in list(manifest.captions or [])[:24]:
+            text = str(getattr(cap, "text", "") or "").strip()
+            if not text:
+                continue
+            start = max(0.0, _as_float(getattr(cap, "startTime", 0.0), 0.0))
+            end = max(start + 0.05, _as_float(getattr(cap, "endTime", start + 2.0), start + 2.0))
+            v_effects.append(
+                f"drawtext=text='{_escape_drawtext(text)}'"
+                f":fontsize=42:fontcolor=white:borderw=2:bordercolor=black"
+                f":x=(w-text_w)/2:y=h-th-140"
+                f":enable='between(t,{start:.3f},{end:.3f})'"
+            )
+
+    # 6. Tier watermark. The manifest branch bypasses the legacy filtergraph, so
     #    the Free-tier watermark has to be burned in here or it is lost.
     if watermark_text:
         v_effects.append(
