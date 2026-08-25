@@ -1,5 +1,7 @@
 # 06 — AI Architecture
 
+**Current reality addendum (2026-08-25):** Typed `/editor` chat for dead-air, shorts-packaging, and restore-opening is Decision Intelligence first (0 Gemini). Unrelated chat remains DualModelRouter. Kernel `ProjectEvent` commit on the director path uses Orchestrator `decision_gate`. This document’s original 2026-07 verdict below is historical except where marked CURRENT.
+
 ## Verdict
 
 | Capability | Supported today? | Evidence |
@@ -22,15 +24,15 @@
 ### 1. AI Editor (conversational NLE bridge)
 
 ```text
-Prompt + AIEditorCurrentState + transcript
+CURRENT (2026-08-25)
+Prompt + project_context (incl. studio_project_id)
         ↓
-ai_editor_engine (system prompt + Gemini JSON)
+classify_objective
+        ├─ dead_air / director_packaging / revise_opening
+        │     → DecisionRecord (0 Gemini, 0 credits) → sanitiser → actions
+        └─ unrelated → DualModelRouter / ai_editor_engine (credits)
         ↓
-sanitiser
-        ↓
-AIEditorResponse { actions, message, suggestions, clamped, dropped }
-        ↓
-FE applyAiEdits
+FE applyAiEdits (preview) + optional Kernel ProjectEvents
 ```
 
 Files:

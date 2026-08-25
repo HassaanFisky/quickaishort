@@ -45,7 +45,9 @@
 **Sanitiser:** `services/ai_editor_sanitiser.py`  
 **Credits:** `deduct_credits(user_id, 1)` — 402 on failure  
 
-**Critical fact:** Engine returns **JSON actions**. It does **not** mutate a server timeline. Execution is client-side via `applyAiEdits`.
+**Critical fact (updated 2026-08-25):** `/command` still returns JSON actions for preview (`applyAiEdits`). It does **not** write the timeline itself. Durable project mutation is Kernel `ProjectEvent` via Orchestrator execute (director/dead-air path uses `decision_gate`; unrelated chat still DualModelRouter then optional ungated `structured_steps`).
+
+Director-class typed chat (dead-air / shorts-packaging / restore-opening) is intercepted **before** DualModelRouter and **before** credit charge (`services/director_loop.py`). Unrelated commands still DualModelRouter + credits.
 
 ---
 

@@ -227,6 +227,22 @@ Legacy ADK `Projects` remain `schema_version: 1` implicitly. Studio OS docs are 
 
 ## 6. Event model
 
+### 6.0 Current reality (2026-08-25) — director loop → ProjectEvent
+
+This section remains the Kernel contract. What changed is **which chat path is allowed to mint events**:
+
+| Chat class | Preview | Kernel / ProjectEvent |
+|------------|---------|------------------------|
+| Dead-air / shorts-packaging / restore-opening | `applyAiEdits` from Decision Intelligence actions | Orchestrator `decision_gate` → ACT-only execute → `ProjectEvent` + `event_ids` (Tier 0 integrity). ASK/RESEARCH/NOTHING mint **no** mutating events. |
+| Unrelated / creative typed chat | DualModelRouter actions | Optional ungated `structured_steps` when Kernel flag is on (Strategy A `proposed_manifest`) |
+| REMOVE_SILENCES suggestion chips | preview | `decision_gate` (unchanged) |
+
+Rules that stay binding:
+
+- Completing a plan, HTTP 200, or a client snapshot is **not** proof the creative objective succeeded (ADR-016).
+- `SEEK`/`PLAY`/… remain E2 non-events.
+- Director intercept never invents capability IDs; only EP-001 `orchestrator_emit=true` rows become candidate actions, then Kernel events.
+
 ### 6.1 `ProjectEvent` (append-only subcollection)
 
 ```text
