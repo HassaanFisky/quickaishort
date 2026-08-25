@@ -10,7 +10,6 @@ import logging
 from typing import Any
 
 from core.flags import is_studio_native_tools
-from services.tool_registry import list_emit_allowed
 
 logger = logging.getLogger(__name__)
 
@@ -22,14 +21,19 @@ def native_tools_enabled() -> bool:
     return is_studio_native_tools()
 
 
-def build_editor_function_declarations() -> list[dict[str, Any]]:
+def build_editor_function_declarations(
+    command: str | None = None,
+) -> list[dict[str, Any]]:
     """Map emit-allowed capabilities to Gemini function declarations.
 
-    Uses a minimal JSON-schema envelope so undeclared params stay open
-    objects — sanitiser remains the trust boundary.
+    Uses intent-tag retrieval so the model does not receive every tool schema.
+    Sanitiser remains the trust boundary.
     """
+    from services.tool_registry import intent_tags_from_command, retrieve_for_intent
+
+    caps = retrieve_for_intent(intent_tags_from_command(command or ""), limit=24)
     decls: list[dict[str, Any]] = []
-    for cap in list_emit_allowed():
+    for cap in caps:
         cid = str(cap.get("id") or "").strip()
         if not cid:
             continue

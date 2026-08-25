@@ -53,7 +53,7 @@ _ID_RE = re.compile(r"^[A-Z][A-Z0-9_]+$")
 _TAG_KEYWORDS: list[tuple[re.Pattern[str], list[str]]] = [
     (re.compile(r"caption|subtitle|text|title|hook", re.I), ["captions", "ai"]),
     (
-        re.compile(r"trim|cut|split|blade|razor|silence|pause|filler", re.I),
+        re.compile(r"trim|cut|split|blade|razor|silence|pause|filler|dead.?air", re.I),
         ["timeline", "clip", "audio"],
     ),
     (re.compile(r"audio|volume|boost|noise|duck|fade|sfx|voice", re.I), ["audio"]),
@@ -68,8 +68,15 @@ _TAG_KEYWORDS: list[tuple[re.Pattern[str], list[str]]] = [
     ),
     (re.compile(r"zoom|pan|scroll|timeline", re.I), ["timeline", "ui_only"]),
     (re.compile(r"mask|keyframe|motion", re.I), ["mask", "motion"]),
-    (re.compile(r"viral|moment|style|suggest", re.I), ["ai"]),
+    (re.compile(r"viral|moment|style|suggest|argument|hook", re.I), ["ai"]),
     (re.compile(r"play|pause|seek|scrub", re.I), ["playback"]),
+    (
+        re.compile(
+            r"short|9:16|youtube|reel|tiktok|duration|seconds|reframe|speaker|vertical",
+            re.I,
+        ),
+        ["clip", "timeline", "captions", "visual"],
+    ),
 ]
 
 
