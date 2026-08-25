@@ -678,13 +678,17 @@ def _decide_director(
                 )
         else:
             missing.append("media duration for a 45s-class trim")
-            rationale_bits.append("Duration target known but media duration is missing.")
+            rationale_bits.append(
+                "Duration target known but media duration is missing."
+            )
 
     if _HOOK.search(n):
         hook = _hook_caption_candidate(graph)
         if hook is not None:
             candidates.append(hook)
-            rationale_bits.append("Opening: ACT ADD_CAPTION from first transcript hook.")
+            rationale_bits.append(
+                "Opening: ACT ADD_CAPTION from first transcript hook."
+            )
         else:
             missing.append("transcript hook text for a stronger opening caption")
             rationale_bits.append(

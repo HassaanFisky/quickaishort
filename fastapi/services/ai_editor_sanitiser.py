@@ -421,9 +421,7 @@ def sanitise(
                 or abs(float(k.end) - float(o.end)) > 1e-9
                 for k, o in zip(kept_segments, orig_segments)
             )
-            changed = (
-                nm != a.min_silence_sec or np_ != a.padding_sec or times_changed
-            )
+            changed = nm != a.min_silence_sec or np_ != a.padding_sec or times_changed
             action = RemoveSilencesAction(
                 type="REMOVE_SILENCES",
                 min_silence_sec=nm,

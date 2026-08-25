@@ -81,9 +81,14 @@ def _suggestions(record: DecisionRecord) -> list[str]:
     out: list[str] = []
     if record.mode == "ACT" and record.missing_information:
         out.append("Analyze the transcript so I can pick the strongest stretch")
-    if any("opening" in m or "transcript hook" in m for m in record.missing_information):
+    if any(
+        "opening" in m or "transcript hook" in m for m in record.missing_information
+    ):
         out.append("Wait for transcription, then strengthen the opening")
-    if any("AUTO_REFRAME" in m or "reframe" in m.lower() for m in record.missing_information):
+    if any(
+        "AUTO_REFRAME" in m or "reframe" in m.lower()
+        for m in record.missing_information
+    ):
         out.append("Export stays 9:16 — speaker reframe is not wired yet")
     if record.mode == "ACT":
         out.append("Keep the original opening")
@@ -130,7 +135,9 @@ async def try_deterministic_director_command(
         except ValidationError as exc:
             dropped.append(f"{item.get('type', 'UNKNOWN')}: {exc.error_count()} schema")
 
-    safe, clamped, sanitiser_dropped = sanitise(parsed, _state_from_context(project_context))
+    safe, clamped, sanitiser_dropped = sanitise(
+        parsed, _state_from_context(project_context)
+    )
     dropped.extend(sanitiser_dropped)
     canonical = [a.model_dump(mode="json") for a in safe]
 

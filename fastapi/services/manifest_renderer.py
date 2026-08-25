@@ -295,7 +295,10 @@ def compile_manifest_to_ffmpeg(
             if not text:
                 continue
             start = max(0.0, _as_float(getattr(cap, "startTime", 0.0), 0.0))
-            end = max(start + 0.05, _as_float(getattr(cap, "endTime", start + 2.0), start + 2.0))
+            end = max(
+                start + 0.05,
+                _as_float(getattr(cap, "endTime", start + 2.0), start + 2.0),
+            )
             v_effects.append(
                 f"drawtext=text='{_escape_drawtext(text)}'"
                 f":fontsize=42:fontcolor=white:borderw=2:bordercolor=black"

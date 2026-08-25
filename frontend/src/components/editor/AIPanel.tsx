@@ -56,7 +56,12 @@ type OrchestratorPlanResult = {
   plan_id?: string;
   decision_mode?: string;
   message?: string;
-  steps?: Array<{ capability_id: EditorAction["type"]; params?: Record<string, unknown> }>;
+  status?: string;
+  steps?: Array<{
+    capability_id: EditorAction["type"];
+    params?: Record<string, unknown>;
+    status?: string;
+  }>;
   execution_integrity?: { status?: string };
 };
 
@@ -990,7 +995,7 @@ export function AIPanel() {
                   base_revision: st.studioAckedRevision,
                   base_snapshot_hash: st.studioSnapshotHash,
                   proposed_manifest: st.compiledManifest,
-                })) as OrchestratorPlanResult & { status?: string };
+                })) as OrchestratorPlanResult;
                 integrityStatus =
                   executed?.execution_integrity?.status ||
                   executed?.status ||
@@ -1001,7 +1006,7 @@ export function AIPanel() {
                   studioSnapshotHash: head.snapshot_hash,
                 });
                 const accepted = (executed?.steps ?? []).filter(
-                  (s: { status?: string }) => s.status === "accepted",
+                  (s) => s.status === "accepted",
                 ).length;
                 if (accepted > 0) {
                   receipt = ` · Saved to project (r${head.revision})`;
