@@ -108,7 +108,7 @@ from services.render_dispatch import (
 )
 from services.realtime import emit_export_event, ws_manager
 from services.auth import get_verified_user_id
-from services.signing import sign, verify
+from services.signing import sign, verify, sign_media_url, verify_media_url
 from services.logging import log_metric
 from services.stats_service import (
     get_user_stats,
@@ -696,6 +696,50 @@ def _require_youtube_url(url: str) -> str:
             detail="A valid YouTube URL is required (supports watch?v=, shorts/, live/, and youtu.be/).",
         )
     return video_id
+
+
+# ---- F-1 media proxy authorization -------------------------------------------
+#
+# The media proxy endpoints stream unbounded third-party bytes through Cloud Run
+# egress. They are called from `<video src>` and from bare `fetch()` in the
+# audio extractor, neither of which can send an Authorization header, so the
+# credential travels in the URL as an HMAC token (same trust boundary and same
+# signing module as /api/download).
+#
+# Staged rollout, mirroring RENDER_MANIFEST_REQUIRED above: enforcement is OFF
+# by default so deploying this code cannot break the currently-deployed frontend
+# (which does not mint tokens yet). Flip MEDIA_PROXY_AUTH_REQUIRED=true once a
+# frontend that calls /api/media-token is live. The flip is instantly
+# revertible.
+MEDIA_PROXY_AUTH_REQUIRED = (
+    os.getenv("MEDIA_PROXY_AUTH_REQUIRED", "false").strip().lower() == "true"
+)
+
+
+def _require_media_authorization(
+    url: str,
+    user_id: Optional[str],
+    token: Optional[str],
+    expires: Optional[int],
+) -> None:
+    """Enforce a signed media token when MEDIA_PROXY_AUTH_REQUIRED is enabled.
+
+    No-op when the flag is off, which preserves today's behaviour exactly.
+    Raises 403 on a missing, malformed, expired, or mismatched token. The token
+    commits to the exact source `url`, so it cannot be replayed for another
+    video or by another user.
+    """
+    if not MEDIA_PROXY_AUTH_REQUIRED:
+        return
+    if not verify_media_url(url, user_id or "", expires or 0, token or ""):
+        logger.warning(
+            "media_proxy_denied user_id=%s reason=invalid_or_missing_token",
+            user_id or "<none>",
+        )
+        raise HTTPException(
+            status_code=403,
+            detail="A valid media token is required. Request one from /api/media-token.",
+        )
 
 
 async def _admit_user_workload(
@@ -1809,10 +1853,40 @@ async def get_video_info(request: Request, url: str):
     }
 
 
+@app.get("/api/media-token")
+@limiter.limit("60/minute")
+async def media_token(
+    request: Request,
+    url: str,
+    verified_user_id: str = Depends(get_verified_user_id),
+):
+    """Mint a short-lived signed token authorizing media proxy access to `url`.
+
+    JWT-authenticated: this is the point where identity is proven. The returned
+    token is then carried in the query string by `<video src>` / `fetch()`,
+    which cannot send an Authorization header.
+    """
+    _require_youtube_url(url)
+    token, expires = sign_media_url(url, verified_user_id)
+    return {
+        "token": token,
+        "expires": expires,
+        "user_id": verified_user_id,
+        "enforced": MEDIA_PROXY_AUTH_REQUIRED,
+    }
+
+
 @app.get("/api/proxy")
 @limiter.limit("20/minute")
-async def proxy_video(request: Request, url: str):
+async def proxy_video(
+    request: Request,
+    url: str,
+    user_id: Optional[str] = None,
+    token: Optional[str] = None,
+    expires: Optional[int] = None,
+):
     _require_youtube_url(url)
+    _require_media_authorization(url, user_id, token, expires)
 
     import httpx
 
@@ -1913,12 +1987,19 @@ async def proxy_video(request: Request, url: str):
 
 @app.head("/api/proxy-video")
 @limiter.limit("40/minute")
-async def proxy_video_stream_head(request: Request, url: str):
+async def proxy_video_stream_head(
+    request: Request,
+    url: str,
+    user_id: Optional[str] = None,
+    token: Optional[str] = None,
+    expires: Optional[int] = None,
+):
     """
     Immediate HEAD response — lets browsers probe the endpoint without triggering
     a full yt-dlp extraction. Returns Accept-Ranges so browsers know seeking works.
     """
     _require_youtube_url(url)
+    _require_media_authorization(url, user_id, token, expires)
     return Response(
         status_code=200,
         headers={
@@ -1935,7 +2016,13 @@ async def proxy_video_stream_head(request: Request, url: str):
 
 @app.get("/api/proxy-video")
 @limiter.limit("40/minute")
-async def proxy_video_stream(url: str, request: Request):
+async def proxy_video_stream(
+    url: str,
+    request: Request,
+    user_id: Optional[str] = None,
+    token: Optional[str] = None,
+    expires: Optional[int] = None,
+):
     """
     Range-aware YouTube video proxy.
 
@@ -1949,6 +2036,7 @@ async def proxy_video_stream(url: str, request: Request):
       Tier 2 — any best MP4 ≤720p if combined formats are unavailable.
     """
     _require_youtube_url(url)
+    _require_media_authorization(url, user_id, token, expires)
 
     video_id_match = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{11})", url)
     v_id = video_id_match.group(1) if video_id_match else None
@@ -2117,13 +2205,20 @@ async def proxy_video_stream(url: str, request: Request):
 
 @app.get("/api/audio")
 @limiter.limit("20/minute")
-async def get_audio(request: Request, url: str = Query(...)):
+async def get_audio(
+    request: Request,
+    url: str = Query(...),
+    user_id: Optional[str] = None,
+    token: Optional[str] = None,
+    expires: Optional[int] = None,
+):
     """Serves the audio stream for a given YouTube URL with 100% reliability fallbacks."""
     from services.cobalt_client import download_audio as cobalt_download
 
     video_id = VideoService.extract_video_id(url)
     if not video_id:
         raise HTTPException(status_code=400, detail="Invalid YouTube URL")
+    _require_media_authorization(url, user_id, token, expires)
 
     # ── Redis audio cache ─────────────────────────────────────────────────────
     cache_key = f"audio_cache:{video_id}"
