@@ -67,10 +67,12 @@ deliberate, documented decision rather than an accident.
   `reversibility: ReversibilityClass` to `DecisionRecord`. Both are already
   derivable; making them first-class is what enables the approval gate for
   destructive operations to be enforced by data rather than convention.
-- **E-2 (LOW)** — `decision_store` swallows persistence failures at
-  `debug`/`warning` level (`decision_store_put_failed`). A decision that was
-  acted on but never persisted breaks the audit trail silently. Should be at
-  least `warning` with a metric.
+- **E-2 (INFO — severity revised down after re-inspection)** —
+  `decision_store.put_latest` already branches on environment: it logs
+  `warning` in production and `debug` otherwise (`decision_store.py:40-47`).
+  The earlier "swallows failures" characterisation was inaccurate. Residual
+  gap is only that there is no *metric* on persistence failure, so a silent
+  Redis outage degrades the audit trail without alerting. Low priority.
 - **E-3 (INFO)** — `DecisionRecord.status` and the kernel's `CommandAck`
   are not cross-linked: given a decision you cannot cheaply find the resulting
   command/events. `plan_id` bridges the orchestrator path only.

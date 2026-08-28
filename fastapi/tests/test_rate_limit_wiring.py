@@ -68,6 +68,15 @@ def _routes_by_path():
     return out
 
 
+# Same defect class in routers, where the decorator is @router.<verb>.
+_BROKEN_ORDER_ROUTER = re.compile(
+    r"^@limiter\.limit\([^\n]*\)\n@router\.(?:get|post|put|delete|patch|head)\(",
+    re.MULTILINE,
+)
+
+ROUTERS_DIR = Path(__file__).resolve().parents[1] / "routers"
+
+
 class TestDecoratorOrderIsNotReintroduced:
     def test_main_py_has_no_limiter_above_route_decorator(self):
         """Static guard — catches the mistake at review time, on any endpoint."""
@@ -75,6 +84,17 @@ class TestDecoratorOrderIsNotReintroduced:
         assert offenders == [], (
             f"{len(offenders)} endpoint(s) declare @limiter.limit ABOVE the route "
             "decorator, which silently disables rate limiting. Put @app.<verb> first."
+        )
+
+    def test_no_router_module_has_limiter_above_route_decorator(self):
+        """Routers are currently correct — keep them that way."""
+        offenders: list[str] = []
+        for path in sorted(ROUTERS_DIR.glob("*.py")):
+            if _BROKEN_ORDER_ROUTER.search(path.read_text()):
+                offenders.append(path.name)
+        assert offenders == [], (
+            f"{offenders} declare @limiter.limit ABOVE @router.<verb>, which "
+            "silently disables rate limiting. Put @router.<verb> first."
         )
 
 
@@ -111,6 +131,21 @@ class TestCostlyEndpointsAreActuallyLimited:
 class TestLimiterInfrastructure:
     def test_limiter_is_installed_on_the_app(self):
         assert getattr(main.app.state, "limiter", None) is not None
+
+    def test_anonymous_analytics_ingest_is_rate_limited(self):
+        """F-4: unauthenticated Firestore write must not rely on the global default."""
+        for r in main.app.routes:
+            if (
+                isinstance(r, APIRoute)
+                and r.path == "/api/analytics"
+                and "POST" in r.methods
+            ):
+                assert r.endpoint.__code__.co_name in _SLOWAPI_WRAPPERS, (
+                    "POST /api/analytics is an anonymous Firestore write and must "
+                    "carry an explicit per-route limit."
+                )
+                return
+        pytest.fail("POST /api/analytics is not registered")
 
     def test_slowapi_middleware_is_registered(self):
         names = [m.cls.__name__ for m in main.app.user_middleware]

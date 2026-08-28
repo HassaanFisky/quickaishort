@@ -93,22 +93,43 @@ to anonymous callers.
 | `GET /api/audio` | yt-dlp audio extract, Redis-cached | 20/min | **F-2 MEDIUM** |
 | `GET /api/info` | YouTube oEmbed / Data API (quota) | 30/min | **F-3 LOW** |
 | `GET /api/stream-info` | manifest resolve, no bytes | 30/min | **F-3 LOW** |
-| `POST /api/analytics` | unauthenticated telemetry write | none | **F-4 MEDIUM** |
-| `GET /debug/tiers` | leaks extractor tier/circuit internals | none | **F-5 LOW** |
+| `POST /api/analytics` | unauthenticated telemetry write | global 200/min | **F-4 LOW** (revised) |
+| `GET /debug/tiers` | — | global 200/min | **F-5 WITHDRAWN** (revised) |
 
-**F-1 (HIGH)** — `/api/proxy` and `/api/proxy-video` stream arbitrary YouTube
-bytes through Cloud Run at the platform's egress expense, keyed only by IP.
-Egress is billed per GB and these are the largest per-request cost in the
-system. Rate limiting is per-IP and trivially defeated by a distributed
-caller. **Recommended follow-up (separate PR): require JWT, or issue a
-short-lived signed proxy token bound to a project the caller owns.**
+**F-1 (HIGH) — FIXED.** `/api/proxy`, `/api/proxy-video` (GET+HEAD) and
+`/api/audio` streamed arbitrary YouTube bytes through Cloud Run at the
+platform's egress expense, keyed only by IP.
 
-**F-4 (MEDIUM)** — `POST /api/analytics` writes to Firestore with no auth.
-Capped at `MAX_EVENTS_PER_BATCH` per batch, but unbounded in batch count.
-Anonymous callers can inflate Firestore write costs and pollute analytics.
+Resolved with short-lived HMAC media tokens minted by the JWT-authenticated
+`/api/media-token`, reusing `services/signing.py` (the same primitive and trust
+boundary as `/api/download`). A bearer JWT was **not** viable: these URLs are
+consumed by `<video src>` and by a bare `fetch()`, neither of which can send an
+Authorization header. See `f1-media-proxy-risk-model.md` for the full call
+trace. Enforcement ships behind `MEDIA_PROXY_AUTH_REQUIRED` (default `false`)
+pending a token-minting frontend.
 
-**F-5 (LOW)** — `/debug/tiers` exposes internal extractor state. Should be
-moved behind the admin gate.
+**F-4 (LOW — severity revised down after verification)** — `POST /api/analytics`
+writes to Firestore with no auth. Two corrections to the earlier assessment,
+both VERIFIED:
+
+1. The global `default_limits=["200/minute"]` **does** apply to routes with no
+   per-route decorator (confirmed empirically: an undecorated route under
+   `default_limits=["5/minute"]` returned `[200,200,200,200,200,429,429,429]`).
+   The earlier "none" was wrong — it generalised the decorator-order bug, which
+   only affected routes that *had* a per-route decorator.
+2. Events are anonymous by design (random per-browser `client_id`, never an
+   account identity) and capped at `MAX_EVENTS_PER_BATCH = 200`.
+
+Residual risk is Firestore write-cost inflation and analytics pollution at up
+to 200 req/min/IP. Authentication is **not** the right fix — the tracker is
+intentionally anonymous and fires pre-login. A tighter per-route limit is the
+proportionate remediation.
+
+**F-5 — WITHDRAWN.** This finding was wrong. `main.py:958-964` already fails
+closed: it requires `X-Internal-Secret` matching `INTERNAL_SECRET`, falling
+back to `ADMIN_SECRET`, and returns 403 when neither is configured. The route
+classifier missed it because the check is inline rather than a dependency or
+`_require_admin` call. No action needed.
 
 ### Admin surface (17)
 
@@ -119,7 +140,7 @@ by this PR and still open.
 
 ## Not addressed here (deliberate scope limit)
 
-F-1 through F-5 are authorization-policy changes that alter who can call
+F-1 (now fixed) and F-4 are authorization/limit changes that alter who can call
 production endpoints. They need a product decision (does the editor call
 `/api/proxy` before login?) and belong in their own reviewable PR. This PR
 fixes only the defect where the system's *existing, intended* protection was
