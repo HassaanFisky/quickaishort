@@ -298,11 +298,14 @@ export default function VideoCanvas() {
   };
 
   useEffect(() => {
+    let cancelled = false;
     if (!sourceUrl) {
       setDisplayUrl(null);
       setVideoError(false);
       setYtVideoId(null);
-      return;
+      return () => {
+        cancelled = true;
+      };
     }
     setVideoError(false);
     setProxyRetry(0);
@@ -311,7 +314,15 @@ export default function VideoCanvas() {
       setYtVideoId(ytId);
       if (duration <= 1800) {
         setLocalYtId(null);
+        // Show the untokenised URL immediately so playback is never delayed by
+        // the token round-trip, then swap in the tokenised URL once minted.
+        // `cancelled` prevents a late token from overwriting a newer source.
         setDisplayUrl(`${API_URL}/api/proxy-video?url=${encodeURIComponent(sourceUrl)}`);
+        void (async () => {
+          const { getAuthedProxyVideoUrl } = await import("@/lib/api");
+          const authed = await getAuthedProxyVideoUrl(sourceUrl);
+          if (!cancelled) setDisplayUrl(authed);
+        })();
       } else {
         setLocalYtId(ytId);
         setDisplayUrl(null);
@@ -321,6 +332,9 @@ export default function VideoCanvas() {
       setYtVideoId(null);
       setDisplayUrl(sourceUrl);
     }
+    return () => {
+      cancelled = true;
+    };
   }, [sourceUrl, duration]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // IFrame fallback timeout

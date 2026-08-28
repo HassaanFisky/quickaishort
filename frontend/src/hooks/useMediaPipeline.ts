@@ -6,7 +6,7 @@ import { useTranscription } from "./useTranscription";
 import { useAnalysis } from "./useAnalysis";
 import { extractAudioData } from "@/lib/utils/audioExtractor";
 import { toast } from "sonner";
-import { API_URL, getAudioUrl } from "@/lib/api";
+import { API_URL } from "@/lib/api";
 import { useSession } from "next-auth/react";
 import type { Clip, Transcript } from "@/types/pipeline";
 import { saveIngestArtifact } from "@/lib/studio/ingestArtifacts";
@@ -240,7 +240,11 @@ export function useMediaPipeline() {
       }
 
       if (isYouTube && !isAlreadyProxied) {
-        source = getAudioUrl(source);
+        // Tokenised when the user is authenticated; falls back to the plain
+        // proxy URL otherwise. extractAudioData() uses a bare fetch() and
+        // cannot send an Authorization header, so the token rides the URL.
+        const { getAuthedAudioUrl } = await import("@/lib/api");
+        source = await getAuthedAudioUrl(source);
       }
     }
 
