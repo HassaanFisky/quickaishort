@@ -154,25 +154,83 @@ _STARTUP_COMPLETE = False
 _AUDIO_CACHE_DIR = Path("/tmp/audio_cache")
 
 
-# Validate required environment variables at startup
-def _validate_env() -> None:
-    required = {
-        "GEMINI_API_KEY": "AI agent pipeline will not function",
-        "GOOGLE_CLOUD_PROJECT": "Firestore/GCS features (stats, credits, exports) will be disabled",
-        "REDIS_URL": "Background render queue will not function",
-        "NEXTAUTH_SECRET": "All protected endpoints will return 503 (AUTH_DISABLED is not implemented)",
-        "EXPORT_SIGNING_SECRET": "Download URL signing will fail — exports unreachable",
-        "PUBLIC_API_URL": "Download links sent to users will be relative paths only",
-    }
-    missing = [
-        f"  {var}: {reason}" for var, reason in required.items() if not os.getenv(var)
+class StartupConfigurationError(RuntimeError):
+    """Raised when production is missing configuration it cannot safely run without."""
+
+
+# Variables whose absence makes the service *unsafe or dishonest*, not merely
+# degraded. Each one gates authentication integrity, request signing, or
+# data-plane access — there is no correct behaviour to fall back to, so in
+# production the process must refuse to start rather than serve traffic that
+# silently 503s or hands out unsigned URLs.
+CRITICAL_ENV_VARS = {
+    # Auth integrity: without it every protected endpoint 503s (AUTH_DISABLED
+    # is deliberately not implemented — see services/auth.py).
+    "NEXTAUTH_SECRET": "JWT verification impossible — all protected endpoints would return 503",
+    # Request signing: services/signing.py raises on use if unset, so exports
+    # fail at the point of use rather than at boot.
+    "EXPORT_SIGNING_SECRET": "Download URL signing would fail — exports unreachable",
+    # Data plane: Firestore + GCS clients are constructed from this.
+    "GOOGLE_CLOUD_PROJECT": "Firestore/GCS unavailable — credits, stats and exports would fail",
+    # Render queue coordination: status, locking, dedup, cancellation.
+    "REDIS_URL": "Render queue, locking and cancellation would not function",
+}
+
+# Absence degrades a capability but leaves the service correct and honest.
+# These are logged once at startup and never block boot.
+OPTIONAL_ENV_VARS = {
+    "GEMINI_API_KEY": "AI analysis/planning disabled — deterministic paths still work",
+    "PUBLIC_API_URL": "Download links will be relative paths only",
+}
+
+
+def _validate_env(*, is_production: bool | None = None) -> None:
+    """Fail fast in production; warn everywhere else.
+
+    Local and development startup behaviour is intentionally unchanged: a
+    developer with a partial `.env` still gets a running server and a warning.
+    Only `ENVIRONMENT=production` turns missing critical configuration into a
+    hard boot failure, because in production a half-configured process looks
+    healthy to the load balancer while failing every real request.
+    """
+    if is_production is None:
+        is_production = os.getenv("ENVIRONMENT", "").strip().lower() == "production"
+
+    missing_critical = [
+        f"  {var}: {reason}"
+        for var, reason in CRITICAL_ENV_VARS.items()
+        if not os.getenv(var)
     ]
-    if missing:
+    missing_optional = [
+        f"  {var}: {reason}"
+        for var, reason in OPTIONAL_ENV_VARS.items()
+        if not os.getenv(var)
+    ]
+
+    if missing_optional:
         logger.warning(
-            "STARTUP WARNING — missing environment variables:\n%s\n"
-            "Copy fastapi/.env.example to fastapi/.env and fill in the values.",
-            "\n".join(missing),
+            "Optional configuration absent — running with reduced capability:\n%s",
+            "\n".join(missing_optional),
         )
+
+    if not missing_critical:
+        return
+
+    if is_production:
+        # Never include the values themselves — only the names.
+        raise StartupConfigurationError(
+            "FATAL — missing critical environment variables in production:\n"
+            + "\n".join(missing_critical)
+            + "\nRefusing to start: the service cannot authenticate, sign, or "
+            "reach its data plane. Set these in the Cloud Run service config."
+        )
+
+    logger.warning(
+        "STARTUP WARNING — missing critical environment variables:\n%s\n"
+        "This WOULD ABORT STARTUP under ENVIRONMENT=production.\n"
+        "Copy fastapi/.env.example to fastapi/.env and fill in the values.",
+        "\n".join(missing_critical),
+    )
 
 
 _validate_env()
@@ -682,14 +740,33 @@ def read_root():
 
 @app.get("/health")
 def health_check():
-    """Service health snapshot.
+    """Service health snapshot. LIVENESS + dependency detail.
 
-    Returns both the legacy boolean fields (`mongo`, `redis`, `adk`) for any
-    existing external monitors and a richer v2 shape (`*_status`,
-    `agent_ready_state`) suitable for dashboards. Top-level `status` remains
-    "ok" for liveness; dependency state is exposed alongside it.
+    Top-level `status` is LIVENESS ONLY and is always "ok" if this handler
+    runs. It is deliberately NOT an aggregate of the dependency fields — do
+    not alert on it alone, and do not use this endpoint for load-balancer
+    routing decisions (use /ready or /health/ready).
+
+    Every dependency field is one of two kinds, declared in `check_semantics`
+    and in a per-field `*_check` key:
+
+      live        — a real round-trip was performed this request (Redis).
+      config_only — configuration/initialization presence only; no network
+                    I/O was performed (Firestore, GCS, ADK, Sentry). A
+                    config_only field reporting healthy does NOT mean the
+                    backend is reachable.
+
+    Returns legacy boolean fields (`mongo`, `redis`, `adk`, `gcs`) for
+    existing external monitors alongside the richer v2 `*_status` shape.
     """
-    firestore_ok = db_is_ready()
+    # CONFIG-ONLY CHECK. db.is_ready() reports whether the Firestore and GCS
+    # *client objects were constructed* at startup. Client construction does not
+    # perform network I/O, so this proves credentials resolved — NOT that either
+    # backend is reachable right now. Do not upgrade this to a live probe without
+    # accounting for Cloud Run's sub-second probe timeouts.
+    clients_constructed = db_is_ready()
+
+    # LIVE CHECK. ping() is a real round-trip to Redis.
     redis_ok = False
     pending_depth = -1
     try:
@@ -701,22 +778,41 @@ def health_check():
     except Exception:
         pass
 
-    storage_probe = "init_ok" if firestore_ok else "init_failed"
+    # CONFIG-ONLY CHECK. Presence of the import, not a working model call.
+    adk_installed = _ADK_AVAILABLE
+
+    client_state = "initialized" if clients_constructed else "init_failed"
     return {
+        # Liveness only: this process is running and can serve HTTP. It is NOT
+        # an aggregate of the dependency fields below. Use /ready for routing.
         "status": "ok",
-        # Legacy boolean field kept for backward compatibility with external monitors.
-        "mongo": firestore_ok,
+        "check_semantics": {
+            "live": ["redis"],
+            "config_only": ["firestore", "storage", "adk", "sentry"],
+        },
+        # ── Legacy boolean fields, kept for existing external monitors ────────
+        # `mongo` is a historical name; MongoDB is not in the render path. It
+        # reports Firestore client construction. Prefer `firestore_status`.
+        "mongo": clients_constructed,
         "redis": redis_ok,
-        "adk": _ADK_AVAILABLE,
-        # GCS init shares db.py with Firestore; this is NOT a live bucket I/O probe.
-        "gcs": firestore_ok,
-        # Detailed v2 fields.
-        "firestore_status": "connected" if firestore_ok else "disconnected",
-        "storage_status": storage_probe,
-        "storage_probe": storage_probe,
-        "pending_renders": pending_depth,
+        "adk": adk_installed,
+        # Previously this returned the Firestore flag under a GCS name, so a
+        # broken bucket could never surface here. It now reports the GCS client
+        # explicitly. Still construction-only — not a bucket I/O probe.
+        "gcs": clients_constructed,
+        # ── v2 fields ─────────────────────────────────────────────────────────
+        # "initialized" deliberately replaces the old "connected", which
+        # implied a live connection this check never made.
+        "firestore_status": client_state,
+        "firestore_check": "config_only",
+        "storage_status": client_state,
+        "storage_probe": client_state,
+        "storage_check": "config_only",
         "redis_status": "ready" if redis_ok else "unreachable",
-        "agent_ready_state": "ready" if _ADK_AVAILABLE else "unavailable",
+        "redis_check": "live",
+        "pending_renders": pending_depth,
+        "agent_ready_state": "installed" if adk_installed else "unavailable",
+        "agent_check": "config_only",
         "build_sha": os.getenv("BUILD_SHA", "dev"),
         "sentry": "configured" if os.getenv("SENTRY_DSN") else "no-op",
     }
@@ -733,6 +829,13 @@ def readiness_check():
 
     Intentionally does NOT trigger lazy initialization — probing must never
     block on Redis or other I/O with sub-second probe timeouts.
+
+    SCOPE: extraction capacity ONLY. This is a LIVE check of in-process
+    circuit-breaker state; it makes no network call. It deliberately does not
+    check Redis — see /health/ready, which is the Redis-backed readiness probe.
+    The two are not interchangeable: this one can return 200 while Redis is
+    down, and /health/ready can return 200 while every extractor circuit is
+    open. Point Cloud Run at whichever failure mode should drain traffic.
     """
     import services.extractor_service as _ext_mod
 
@@ -2615,27 +2718,40 @@ def _parse_script_to_segments(
 
 @app.get("/health/live")
 async def liveness():
-    return {"status": "alive"}
+    """LIVENESS ONLY. Answers "is this process running?" and nothing else.
+
+    Checks no dependency by design: a liveness probe that fails on a
+    dependency outage causes the orchestrator to kill and restart healthy
+    processes, turning a partial outage into a crash loop.
+    """
+    return {"status": "alive", "check": "liveness_only"}
 
 
 @app.get("/health/ready")
 async def readiness():
-    """Cloud Run may probe this path — require Redis so we never false-green."""
+    """READINESS. LIVE check of Redis — a real round-trip, not config presence.
+
+    Redis coordinates render status, locking, deduplication and cancellation,
+    so an instance that cannot reach it must not receive traffic.
+
+    SCOPE: Redis only. It does not check extractor circuits — see /ready.
+    """
     try:
         redis_conn.ping()
     except Exception as exc:
         raise HTTPException(
             status_code=503,
-            detail={"status": "not_ready", "dependency": "redis"},
+            detail={"status": "not_ready", "dependency": "redis", "check": "live"},
         ) from exc
-    return {"status": "ready", "redis": True}
+    return {"status": "ready", "redis": True, "redis_check": "live"}
 
 
 @app.get("/health/startup")
 async def startup_check():
+    """STARTUP. Whether the lifespan startup sequence finished. Not a dependency check."""
     if not _STARTUP_COMPLETE:
         raise HTTPException(status_code=503, detail="STARTING_UP")
-    return {"status": "complete"}
+    return {"status": "complete", "check": "startup_only"}
 
 
 @app.post("/api/adk/upload")
