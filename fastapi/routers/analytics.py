@@ -15,9 +15,10 @@ from collections import Counter
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from core.rate_limit import limiter
 from services.db import get_db, is_ready
 
 logger = logging.getLogger(__name__)
@@ -47,8 +48,16 @@ class AnalyticsBatchIn(BaseModel):
     events: list[AnalyticsEventIn]
 
 
+# F-4: anonymous, unauthenticated Firestore write. The tracker is intentionally
+# anonymous (random per-browser client_id) and fires pre-login, so requiring
+# auth is not appropriate — a proportionate per-IP limit is. Without this the
+# route falls back to the global 200/minute default, which permits substantial
+# Firestore write-cost inflation. NOTE decorator order: @router.post MUST be
+# above @limiter.limit or the limit is silently inert (see
+# tests/test_rate_limit_wiring.py).
 @router.post("")
-async def ingest_events(batch: AnalyticsBatchIn) -> dict:
+@limiter.limit("30/minute")
+async def ingest_events(request: Request, batch: AnalyticsBatchIn) -> dict:
     if not is_ready():
         # Telemetry must never break the app — accept-and-drop when the DB is down.
         return {"status": "db_unavailable", "accepted": 0}

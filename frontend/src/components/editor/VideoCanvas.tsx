@@ -18,7 +18,6 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useEditorStore } from "@/stores/editorStore";
-import { API_URL } from "@/lib/api";
 import { useFaceTracker } from "@/hooks/useFaceTracker";
 import { CaptionOverlay } from "./CaptionOverlay";
 import { CanvasLayer } from "./CanvasLayer";
@@ -298,11 +297,14 @@ export default function VideoCanvas() {
   };
 
   useEffect(() => {
+    let cancelled = false;
     if (!sourceUrl) {
       setDisplayUrl(null);
       setVideoError(false);
       setYtVideoId(null);
-      return;
+      return () => {
+        cancelled = true;
+      };
     }
     setVideoError(false);
     setProxyRetry(0);
@@ -311,7 +313,25 @@ export default function VideoCanvas() {
       setYtVideoId(ytId);
       if (duration <= 1800) {
         setLocalYtId(null);
-        setDisplayUrl(`${API_URL}/api/proxy-video?url=${encodeURIComponent(sourceUrl)}`);
+        // Resolve the media token BEFORE assigning <video src>.
+        //
+        // Do not set an interim untokenised URL here: once
+        // MEDIA_PROXY_AUTH_REQUIRED is enabled the backend answers it with 403,
+        // which fires the <video> onError handler, consumes the single
+        // proxyRetry budget and can force the YouTube-iframe fallback — all
+        // before the real token arrives. One await is cheaper than a guaranteed
+        // failed request, and getMediaToken() caches per source URL so repeat
+        // mounts are instant.
+        //
+        // getAuthedProxyVideoUrl falls back to the untokenised URL when the
+        // user is unauthenticated or the mint fails, so behaviour is unchanged
+        // while the flag is off. `cancelled` prevents a late token from
+        // overwriting a newer source.
+        void (async () => {
+          const { getAuthedProxyVideoUrl } = await import("@/lib/api");
+          const authed = await getAuthedProxyVideoUrl(sourceUrl);
+          if (!cancelled) setDisplayUrl(authed);
+        })();
       } else {
         setLocalYtId(ytId);
         setDisplayUrl(null);
@@ -321,6 +341,9 @@ export default function VideoCanvas() {
       setYtVideoId(null);
       setDisplayUrl(sourceUrl);
     }
+    return () => {
+      cancelled = true;
+    };
   }, [sourceUrl, duration]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // IFrame fallback timeout

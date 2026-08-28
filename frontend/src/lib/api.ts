@@ -142,6 +142,134 @@ export function getAudioUrl(url: string) {
   return `${API_URL}/api/audio?url=${encodeURIComponent(url)}`;
 }
 
+/* ── F-1 media proxy tokens ──────────────────────────────────────────────────
+ *
+ * /api/proxy, /api/proxy-video and /api/audio are consumed by `<video src>` and
+ * by a bare fetch() in the audio extractor. Neither can send an Authorization
+ * header, so the backend accepts a short-lived HMAC token in the query string
+ * instead (see fastapi/services/signing.py::sign_media_url).
+ *
+ * Backend contract — GET /api/media-token?url=<source> (JWT-authenticated)
+ *   -> { token: string, expires: number (unix seconds), user_id: string,
+ *        enforced: boolean }
+ *
+ * The token commits to the EXACT source url + user, so it is cached per source
+ * url and can never be reused for a different video.
+ *
+ * The token is a capability, not a secret we own: it is deliberately kept in
+ * memory only. It is never written to localStorage/sessionStorage/cookies and
+ * never logged, so it cannot outlive the tab or leak via storage inspection.
+ */
+
+export interface MediaTokenResponse {
+  token: string;
+  expires: number;
+  user_id: string;
+  enforced: boolean;
+}
+
+interface CachedMediaToken {
+  token: string;
+  expires: number;
+  userId: string;
+}
+
+// Refresh this many seconds before real expiry so a token cannot lapse
+// mid-request (clock skew + request duration).
+const MEDIA_TOKEN_SKEW_SECONDS = 120;
+
+// In-memory only. Keyed by the exact source URL the token is bound to.
+const mediaTokenCache = new Map<string, CachedMediaToken>();
+// De-dupes concurrent mints for the same URL: VideoCanvas and useMediaPipeline
+// routinely start together, and without this each would mint its own token.
+const mediaTokenInflight = new Map<string, Promise<CachedMediaToken | null>>();
+
+function mediaTokenIsFresh(entry: CachedMediaToken): boolean {
+  return entry.expires - MEDIA_TOKEN_SKEW_SECONDS > Math.floor(Date.now() / 1000);
+}
+
+/** Testing/sign-out seam — drops all cached media tokens. */
+export function clearMediaTokenCache(): void {
+  mediaTokenCache.clear();
+  mediaTokenInflight.clear();
+}
+
+/**
+ * Mint (or reuse) a media token for `sourceUrl`.
+ *
+ * Returns null when the user is unauthenticated or the mint fails. Callers must
+ * treat null as "no token" and fall back to the untokenised URL — while
+ * MEDIA_PROXY_AUTH_REQUIRED is false the backend still serves those, so this
+ * cannot break current playback.
+ */
+export async function getMediaToken(
+  sourceUrl: string,
+): Promise<CachedMediaToken | null> {
+  const cached = mediaTokenCache.get(sourceUrl);
+  if (cached && mediaTokenIsFresh(cached)) return cached;
+
+  const inflight = mediaTokenInflight.get(sourceUrl);
+  if (inflight) return inflight;
+
+  const request = (async (): Promise<CachedMediaToken | null> => {
+    try {
+      // Uses the shared axios instance so the existing request interceptor
+      // attaches the NextAuth bearer token and the 401-refresh/retry response
+      // interceptor applies. No second auth mechanism is introduced.
+      const { data } = await axios.get<MediaTokenResponse>(
+        `${API_URL}/api/media-token`,
+        { params: { url: sourceUrl } },
+      );
+      if (!data?.token || !data?.expires) return null;
+      const entry: CachedMediaToken = {
+        token: data.token,
+        expires: data.expires,
+        userId: data.user_id,
+      };
+      mediaTokenCache.set(sourceUrl, entry);
+      return entry;
+    } catch {
+      // Unauthenticated (401/503) or transient failure — caller falls back to
+      // the untokenised URL. Never log: the response carries a credential.
+      return null;
+    } finally {
+      mediaTokenInflight.delete(sourceUrl);
+    }
+  })();
+
+  mediaTokenInflight.set(sourceUrl, request);
+  return request;
+}
+
+/** Append user_id/token/expires in the exact shape the backend verifies. */
+function withMediaToken(base: string, entry: CachedMediaToken | null): string {
+  if (!entry) return base;
+  const sep = base.includes("?") ? "&" : "?";
+  return (
+    `${base}${sep}user_id=${encodeURIComponent(entry.userId)}` +
+    `&token=${encodeURIComponent(entry.token)}` +
+    `&expires=${entry.expires}`
+  );
+}
+
+/**
+ * Authenticated variants of the proxy URL builders.
+ *
+ * The synchronous builders above are intentionally left unchanged so any caller
+ * not yet migrated keeps working while MEDIA_PROXY_AUTH_REQUIRED is false.
+ */
+export async function getAuthedProxyUrl(url: string): Promise<string> {
+  return withMediaToken(getProxyUrl(url), await getMediaToken(url));
+}
+
+export async function getAuthedProxyVideoUrl(url: string): Promise<string> {
+  return withMediaToken(getProxyVideoUrl(url), await getMediaToken(url));
+}
+
+export async function getAuthedAudioUrl(url: string): Promise<string> {
+  return withMediaToken(getAudioUrl(url), await getMediaToken(url));
+}
+
 export async function runPreflight(
   youtubeUrl: string,
   clipCandidates: ClipCandidatePayload[],

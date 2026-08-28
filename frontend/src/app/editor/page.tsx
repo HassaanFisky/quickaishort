@@ -50,8 +50,8 @@ export default function EditorPage() {
           typeof source === "string" &&
           (/\/\/(?:[a-z]+\.)?youtube\.com\/|:\/\/youtu\.be\//.test(source))
         ) {
-          const { getProxyUrl } = await import("@/lib/api");
-          source = getProxyUrl(source);
+          const { getAuthedProxyUrl } = await import("@/lib/api");
+          source = await getAuthedProxyUrl(source);
         }
         const { audioData, sampleRate } = await extractAudioData(source);
         // Pass directly to the worker — do NOT store in Zustand.

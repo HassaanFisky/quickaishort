@@ -108,7 +108,7 @@ from services.render_dispatch import (
 )
 from services.realtime import emit_export_event, ws_manager
 from services.auth import get_verified_user_id
-from services.signing import sign, verify
+from services.signing import sign, verify, sign_media_url, verify_media_url
 from services.logging import log_metric
 from services.stats_service import (
     get_user_stats,
@@ -154,25 +154,83 @@ _STARTUP_COMPLETE = False
 _AUDIO_CACHE_DIR = Path("/tmp/audio_cache")
 
 
-# Validate required environment variables at startup
-def _validate_env() -> None:
-    required = {
-        "GEMINI_API_KEY": "AI agent pipeline will not function",
-        "GOOGLE_CLOUD_PROJECT": "Firestore/GCS features (stats, credits, exports) will be disabled",
-        "REDIS_URL": "Background render queue will not function",
-        "NEXTAUTH_SECRET": "All protected endpoints will return 503 (AUTH_DISABLED is not implemented)",
-        "EXPORT_SIGNING_SECRET": "Download URL signing will fail — exports unreachable",
-        "PUBLIC_API_URL": "Download links sent to users will be relative paths only",
-    }
-    missing = [
-        f"  {var}: {reason}" for var, reason in required.items() if not os.getenv(var)
+class StartupConfigurationError(RuntimeError):
+    """Raised when production is missing configuration it cannot safely run without."""
+
+
+# Variables whose absence makes the service *unsafe or dishonest*, not merely
+# degraded. Each one gates authentication integrity, request signing, or
+# data-plane access — there is no correct behaviour to fall back to, so in
+# production the process must refuse to start rather than serve traffic that
+# silently 503s or hands out unsigned URLs.
+CRITICAL_ENV_VARS = {
+    # Auth integrity: without it every protected endpoint 503s (AUTH_DISABLED
+    # is deliberately not implemented — see services/auth.py).
+    "NEXTAUTH_SECRET": "JWT verification impossible — all protected endpoints would return 503",
+    # Request signing: services/signing.py raises on use if unset, so exports
+    # fail at the point of use rather than at boot.
+    "EXPORT_SIGNING_SECRET": "Download URL signing would fail — exports unreachable",
+    # Data plane: Firestore + GCS clients are constructed from this.
+    "GOOGLE_CLOUD_PROJECT": "Firestore/GCS unavailable — credits, stats and exports would fail",
+    # Render queue coordination: status, locking, dedup, cancellation.
+    "REDIS_URL": "Render queue, locking and cancellation would not function",
+}
+
+# Absence degrades a capability but leaves the service correct and honest.
+# These are logged once at startup and never block boot.
+OPTIONAL_ENV_VARS = {
+    "GEMINI_API_KEY": "AI analysis/planning disabled — deterministic paths still work",
+    "PUBLIC_API_URL": "Download links will be relative paths only",
+}
+
+
+def _validate_env(*, is_production: bool | None = None) -> None:
+    """Fail fast in production; warn everywhere else.
+
+    Local and development startup behaviour is intentionally unchanged: a
+    developer with a partial `.env` still gets a running server and a warning.
+    Only `ENVIRONMENT=production` turns missing critical configuration into a
+    hard boot failure, because in production a half-configured process looks
+    healthy to the load balancer while failing every real request.
+    """
+    if is_production is None:
+        is_production = os.getenv("ENVIRONMENT", "").strip().lower() == "production"
+
+    missing_critical = [
+        f"  {var}: {reason}"
+        for var, reason in CRITICAL_ENV_VARS.items()
+        if not os.getenv(var)
     ]
-    if missing:
+    missing_optional = [
+        f"  {var}: {reason}"
+        for var, reason in OPTIONAL_ENV_VARS.items()
+        if not os.getenv(var)
+    ]
+
+    if missing_optional:
         logger.warning(
-            "STARTUP WARNING — missing environment variables:\n%s\n"
-            "Copy fastapi/.env.example to fastapi/.env and fill in the values.",
-            "\n".join(missing),
+            "Optional configuration absent — running with reduced capability:\n%s",
+            "\n".join(missing_optional),
         )
+
+    if not missing_critical:
+        return
+
+    if is_production:
+        # Never include the values themselves — only the names.
+        raise StartupConfigurationError(
+            "FATAL — missing critical environment variables in production:\n"
+            + "\n".join(missing_critical)
+            + "\nRefusing to start: the service cannot authenticate, sign, or "
+            "reach its data plane. Set these in the Cloud Run service config."
+        )
+
+    logger.warning(
+        "STARTUP WARNING — missing critical environment variables:\n%s\n"
+        "This WOULD ABORT STARTUP under ENVIRONMENT=production.\n"
+        "Copy fastapi/.env.example to fastapi/.env and fill in the values.",
+        "\n".join(missing_critical),
+    )
 
 
 _validate_env()
@@ -640,6 +698,50 @@ def _require_youtube_url(url: str) -> str:
     return video_id
 
 
+# ---- F-1 media proxy authorization -------------------------------------------
+#
+# The media proxy endpoints stream unbounded third-party bytes through Cloud Run
+# egress. They are called from `<video src>` and from bare `fetch()` in the
+# audio extractor, neither of which can send an Authorization header, so the
+# credential travels in the URL as an HMAC token (same trust boundary and same
+# signing module as /api/download).
+#
+# Staged rollout, mirroring RENDER_MANIFEST_REQUIRED above: enforcement is OFF
+# by default so deploying this code cannot break the currently-deployed frontend
+# (which does not mint tokens yet). Flip MEDIA_PROXY_AUTH_REQUIRED=true once a
+# frontend that calls /api/media-token is live. The flip is instantly
+# revertible.
+MEDIA_PROXY_AUTH_REQUIRED = (
+    os.getenv("MEDIA_PROXY_AUTH_REQUIRED", "false").strip().lower() == "true"
+)
+
+
+def _require_media_authorization(
+    url: str,
+    user_id: Optional[str],
+    token: Optional[str],
+    expires: Optional[int],
+) -> None:
+    """Enforce a signed media token when MEDIA_PROXY_AUTH_REQUIRED is enabled.
+
+    No-op when the flag is off, which preserves today's behaviour exactly.
+    Raises 403 on a missing, malformed, expired, or mismatched token. The token
+    commits to the exact source `url`, so it cannot be replayed for another
+    video or by another user.
+    """
+    if not MEDIA_PROXY_AUTH_REQUIRED:
+        return
+    if not verify_media_url(url, user_id or "", expires or 0, token or ""):
+        logger.warning(
+            "media_proxy_denied user_id=%s reason=invalid_or_missing_token",
+            user_id or "<none>",
+        )
+        raise HTTPException(
+            status_code=403,
+            detail="A valid media token is required. Request one from /api/media-token.",
+        )
+
+
 async def _admit_user_workload(
     *,
     user_id: str,
@@ -682,14 +784,33 @@ def read_root():
 
 @app.get("/health")
 def health_check():
-    """Service health snapshot.
+    """Service health snapshot. LIVENESS + dependency detail.
 
-    Returns both the legacy boolean fields (`mongo`, `redis`, `adk`) for any
-    existing external monitors and a richer v2 shape (`*_status`,
-    `agent_ready_state`) suitable for dashboards. Top-level `status` remains
-    "ok" for liveness; dependency state is exposed alongside it.
+    Top-level `status` is LIVENESS ONLY and is always "ok" if this handler
+    runs. It is deliberately NOT an aggregate of the dependency fields — do
+    not alert on it alone, and do not use this endpoint for load-balancer
+    routing decisions (use /ready or /health/ready).
+
+    Every dependency field is one of two kinds, declared in `check_semantics`
+    and in a per-field `*_check` key:
+
+      live        — a real round-trip was performed this request (Redis).
+      config_only — configuration/initialization presence only; no network
+                    I/O was performed (Firestore, GCS, ADK, Sentry). A
+                    config_only field reporting healthy does NOT mean the
+                    backend is reachable.
+
+    Returns legacy boolean fields (`mongo`, `redis`, `adk`, `gcs`) for
+    existing external monitors alongside the richer v2 `*_status` shape.
     """
-    firestore_ok = db_is_ready()
+    # CONFIG-ONLY CHECK. db.is_ready() reports whether the Firestore and GCS
+    # *client objects were constructed* at startup. Client construction does not
+    # perform network I/O, so this proves credentials resolved — NOT that either
+    # backend is reachable right now. Do not upgrade this to a live probe without
+    # accounting for Cloud Run's sub-second probe timeouts.
+    clients_constructed = db_is_ready()
+
+    # LIVE CHECK. ping() is a real round-trip to Redis.
     redis_ok = False
     pending_depth = -1
     try:
@@ -701,22 +822,41 @@ def health_check():
     except Exception:
         pass
 
-    storage_probe = "init_ok" if firestore_ok else "init_failed"
+    # CONFIG-ONLY CHECK. Presence of the import, not a working model call.
+    adk_installed = _ADK_AVAILABLE
+
+    client_state = "initialized" if clients_constructed else "init_failed"
     return {
+        # Liveness only: this process is running and can serve HTTP. It is NOT
+        # an aggregate of the dependency fields below. Use /ready for routing.
         "status": "ok",
-        # Legacy boolean field kept for backward compatibility with external monitors.
-        "mongo": firestore_ok,
+        "check_semantics": {
+            "live": ["redis"],
+            "config_only": ["firestore", "storage", "adk", "sentry"],
+        },
+        # ── Legacy boolean fields, kept for existing external monitors ────────
+        # `mongo` is a historical name; MongoDB is not in the render path. It
+        # reports Firestore client construction. Prefer `firestore_status`.
+        "mongo": clients_constructed,
         "redis": redis_ok,
-        "adk": _ADK_AVAILABLE,
-        # GCS init shares db.py with Firestore; this is NOT a live bucket I/O probe.
-        "gcs": firestore_ok,
-        # Detailed v2 fields.
-        "firestore_status": "connected" if firestore_ok else "disconnected",
-        "storage_status": storage_probe,
-        "storage_probe": storage_probe,
-        "pending_renders": pending_depth,
+        "adk": adk_installed,
+        # Previously this returned the Firestore flag under a GCS name, so a
+        # broken bucket could never surface here. It now reports the GCS client
+        # explicitly. Still construction-only — not a bucket I/O probe.
+        "gcs": clients_constructed,
+        # ── v2 fields ─────────────────────────────────────────────────────────
+        # "initialized" deliberately replaces the old "connected", which
+        # implied a live connection this check never made.
+        "firestore_status": client_state,
+        "firestore_check": "config_only",
+        "storage_status": client_state,
+        "storage_probe": client_state,
+        "storage_check": "config_only",
         "redis_status": "ready" if redis_ok else "unreachable",
-        "agent_ready_state": "ready" if _ADK_AVAILABLE else "unavailable",
+        "redis_check": "live",
+        "pending_renders": pending_depth,
+        "agent_ready_state": "installed" if adk_installed else "unavailable",
+        "agent_check": "config_only",
         "build_sha": os.getenv("BUILD_SHA", "dev"),
         "sentry": "configured" if os.getenv("SENTRY_DSN") else "no-op",
     }
@@ -733,6 +873,13 @@ def readiness_check():
 
     Intentionally does NOT trigger lazy initialization — probing must never
     block on Redis or other I/O with sub-second probe timeouts.
+
+    SCOPE: extraction capacity ONLY. This is a LIVE check of in-process
+    circuit-breaker state; it makes no network call. It deliberately does not
+    check Redis — see /health/ready, which is the Redis-backed readiness probe.
+    The two are not interchangeable: this one can return 200 while Redis is
+    down, and /health/ready can return 200 while every extractor circuit is
+    open. Point Cloud Run at whichever failure mode should drain traffic.
     """
     import services.extractor_service as _ext_mod
 
@@ -826,8 +973,8 @@ def debug_tiers(request: Request):
 # ---- Stream Info (DASH/HLS manifest — no bytes proxied) ----------------------
 
 
-@limiter.limit("30/minute")
 @app.get("/api/stream-info")
+@limiter.limit("30/minute")
 async def stream_info(
     request: Request,
     url: str,
@@ -859,8 +1006,8 @@ async def stream_info(
 # ---- Analyze ------------------------------------------------------------------
 
 
-@limiter.limit("10/minute")
 @app.post("/api/analyze")
+@limiter.limit("10/minute")
 async def analyze_video(
     request: Request,
     body: AnalyzeRequest,
@@ -1619,8 +1766,8 @@ async def stats_ws(websocket: WebSocket, user_id: str, token: str = Query(defaul
 # ---- yt-dlp passthroughs (unchanged behaviour) -------------------------------
 
 
-@limiter.limit("30/minute")
 @app.get("/api/info")
+@limiter.limit("30/minute")
 async def get_video_info(request: Request, url: str):
     """
     Returns video metadata for a YouTube URL.
@@ -1706,10 +1853,40 @@ async def get_video_info(request: Request, url: str):
     }
 
 
-@limiter.limit("20/minute")
-@app.get("/api/proxy")
-async def proxy_video(request: Request, url: str):
+@app.get("/api/media-token")
+@limiter.limit("60/minute")
+async def media_token(
+    request: Request,
+    url: str,
+    verified_user_id: str = Depends(get_verified_user_id),
+):
+    """Mint a short-lived signed token authorizing media proxy access to `url`.
+
+    JWT-authenticated: this is the point where identity is proven. The returned
+    token is then carried in the query string by `<video src>` / `fetch()`,
+    which cannot send an Authorization header.
+    """
     _require_youtube_url(url)
+    token, expires = sign_media_url(url, verified_user_id)
+    return {
+        "token": token,
+        "expires": expires,
+        "user_id": verified_user_id,
+        "enforced": MEDIA_PROXY_AUTH_REQUIRED,
+    }
+
+
+@app.get("/api/proxy")
+@limiter.limit("20/minute")
+async def proxy_video(
+    request: Request,
+    url: str,
+    user_id: Optional[str] = None,
+    token: Optional[str] = None,
+    expires: Optional[int] = None,
+):
+    _require_youtube_url(url)
+    _require_media_authorization(url, user_id, token, expires)
 
     import httpx
 
@@ -1808,14 +1985,21 @@ async def proxy_video(request: Request, url: str):
         )
 
 
-@limiter.limit("40/minute")
 @app.head("/api/proxy-video")
-async def proxy_video_stream_head(request: Request, url: str):
+@limiter.limit("40/minute")
+async def proxy_video_stream_head(
+    request: Request,
+    url: str,
+    user_id: Optional[str] = None,
+    token: Optional[str] = None,
+    expires: Optional[int] = None,
+):
     """
     Immediate HEAD response — lets browsers probe the endpoint without triggering
     a full yt-dlp extraction. Returns Accept-Ranges so browsers know seeking works.
     """
     _require_youtube_url(url)
+    _require_media_authorization(url, user_id, token, expires)
     return Response(
         status_code=200,
         headers={
@@ -1830,9 +2014,15 @@ async def proxy_video_stream_head(request: Request, url: str):
     )
 
 
-@limiter.limit("40/minute")
 @app.get("/api/proxy-video")
-async def proxy_video_stream(url: str, request: Request):
+@limiter.limit("40/minute")
+async def proxy_video_stream(
+    url: str,
+    request: Request,
+    user_id: Optional[str] = None,
+    token: Optional[str] = None,
+    expires: Optional[int] = None,
+):
     """
     Range-aware YouTube video proxy.
 
@@ -1846,6 +2036,7 @@ async def proxy_video_stream(url: str, request: Request):
       Tier 2 — any best MP4 ≤720p if combined formats are unavailable.
     """
     _require_youtube_url(url)
+    _require_media_authorization(url, user_id, token, expires)
 
     video_id_match = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{11})", url)
     v_id = video_id_match.group(1) if video_id_match else None
@@ -2012,15 +2203,22 @@ async def proxy_video_stream(url: str, request: Request):
         raise HTTPException(status_code=500, detail="Stream error — please try again.")
 
 
-@limiter.limit("20/minute")
 @app.get("/api/audio")
-async def get_audio(request: Request, url: str = Query(...)):
+@limiter.limit("20/minute")
+async def get_audio(
+    request: Request,
+    url: str = Query(...),
+    user_id: Optional[str] = None,
+    token: Optional[str] = None,
+    expires: Optional[int] = None,
+):
     """Serves the audio stream for a given YouTube URL with 100% reliability fallbacks."""
     from services.cobalt_client import download_audio as cobalt_download
 
     video_id = VideoService.extract_video_id(url)
     if not video_id:
         raise HTTPException(status_code=400, detail="Invalid YouTube URL")
+    _require_media_authorization(url, user_id, token, expires)
 
     # ── Redis audio cache ─────────────────────────────────────────────────────
     cache_key = f"audio_cache:{video_id}"
@@ -2222,8 +2420,8 @@ def _viral_to_preflight_result(
     }
 
 
-@limiter.limit("10/minute")
 @app.post("/api/preflight")
+@limiter.limit("10/minute")
 async def run_preflight(
     request: Request,
     body: PreflightRequest,
@@ -2396,8 +2594,8 @@ async def run_preflight(
             )
 
 
-@limiter.limit("10/minute")
 @app.post("/api/direct")
+@limiter.limit("10/minute")
 async def run_director(
     request: Request,
     body: DirectRequest,
@@ -2468,8 +2666,8 @@ async def run_director(
         )
 
 
-@limiter.limit("5/minute")
 @app.post("/api/create-video")
+@limiter.limit("5/minute")
 async def create_video(
     request: Request,
     body: CreateVideoRequest,
@@ -2615,27 +2813,40 @@ def _parse_script_to_segments(
 
 @app.get("/health/live")
 async def liveness():
-    return {"status": "alive"}
+    """LIVENESS ONLY. Answers "is this process running?" and nothing else.
+
+    Checks no dependency by design: a liveness probe that fails on a
+    dependency outage causes the orchestrator to kill and restart healthy
+    processes, turning a partial outage into a crash loop.
+    """
+    return {"status": "alive", "check": "liveness_only"}
 
 
 @app.get("/health/ready")
 async def readiness():
-    """Cloud Run may probe this path — require Redis so we never false-green."""
+    """READINESS. LIVE check of Redis — a real round-trip, not config presence.
+
+    Redis coordinates render status, locking, deduplication and cancellation,
+    so an instance that cannot reach it must not receive traffic.
+
+    SCOPE: Redis only. It does not check extractor circuits — see /ready.
+    """
     try:
         redis_conn.ping()
     except Exception as exc:
         raise HTTPException(
             status_code=503,
-            detail={"status": "not_ready", "dependency": "redis"},
+            detail={"status": "not_ready", "dependency": "redis", "check": "live"},
         ) from exc
-    return {"status": "ready", "redis": True}
+    return {"status": "ready", "redis": True, "redis_check": "live"}
 
 
 @app.get("/health/startup")
 async def startup_check():
+    """STARTUP. Whether the lifespan startup sequence finished. Not a dependency check."""
     if not _STARTUP_COMPLETE:
         raise HTTPException(status_code=503, detail="STARTING_UP")
-    return {"status": "complete"}
+    return {"status": "complete", "check": "startup_only"}
 
 
 @app.post("/api/adk/upload")
@@ -2760,8 +2971,8 @@ async def adk_enhance(
         raise HTTPException(status_code=500, detail="Failed to enhance script")
 
 
-@limiter.limit("5/minute")
 @app.post("/api/adk/generate")
+@limiter.limit("5/minute")
 async def adk_generate(
     request: Request,
     body: ADKGenerateRequest,
