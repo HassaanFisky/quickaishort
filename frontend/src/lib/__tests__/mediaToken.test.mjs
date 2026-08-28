@@ -243,6 +243,46 @@ describe("concurrency — no token storms", () => {
   });
 });
 
+describe("VideoCanvas <video src> assignment order", () => {
+  /**
+   * Regression: VideoCanvas originally set an interim UNTOKENISED proxy-video
+   * URL and swapped in the tokenised one after the mint resolved. Once
+   * MEDIA_PROXY_AUTH_REQUIRED is enabled that first URL is answered with 403,
+   * which fires <video> onError, consumes the single proxyRetry budget and can
+   * force the YouTube-iframe fallback before the real token ever arrives.
+   *
+   * The component must assign exactly ONE src, already carrying the token.
+   */
+  const SRC_FILE = new URL(
+    "../../components/editor/VideoCanvas.tsx",
+    import.meta.url,
+  );
+
+  test("does not assign an interim untokenised proxy-video src", async () => {
+    const { readFile } = await import("node:fs/promises");
+    const src = await readFile(SRC_FILE, "utf8");
+
+    // Any setDisplayUrl(...) built inline from a template literal pointing at
+    // /api/proxy-video is the pre-fix pattern.
+    const interim = /setDisplayUrl\(\s*`[^`]*\/api\/proxy-video[^`]*`\s*\)/.test(src);
+    assert.equal(
+      interim,
+      false,
+      "VideoCanvas must not set an untokenised /api/proxy-video src; " +
+        "await getAuthedProxyVideoUrl() before assigning <video src>.",
+    );
+  });
+
+  test("resolves the token via getAuthedProxyVideoUrl before assigning src", async () => {
+    const { readFile } = await import("node:fs/promises");
+    const src = await readFile(SRC_FILE, "utf8");
+    assert.ok(
+      src.includes("getAuthedProxyVideoUrl"),
+      "VideoCanvas must obtain the tokenised URL from lib/api",
+    );
+  });
+});
+
 describe("unauthenticated behaviour", () => {
   test("null token yields the plain URL so current playback still works", async () => {
     // MEDIA_PROXY_AUTH_REQUIRED is false — the backend still serves these.
