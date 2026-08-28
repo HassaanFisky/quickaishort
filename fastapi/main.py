@@ -929,8 +929,8 @@ def debug_tiers(request: Request):
 # ---- Stream Info (DASH/HLS manifest — no bytes proxied) ----------------------
 
 
-@limiter.limit("30/minute")
 @app.get("/api/stream-info")
+@limiter.limit("30/minute")
 async def stream_info(
     request: Request,
     url: str,
@@ -962,8 +962,8 @@ async def stream_info(
 # ---- Analyze ------------------------------------------------------------------
 
 
-@limiter.limit("10/minute")
 @app.post("/api/analyze")
+@limiter.limit("10/minute")
 async def analyze_video(
     request: Request,
     body: AnalyzeRequest,
@@ -1722,8 +1722,8 @@ async def stats_ws(websocket: WebSocket, user_id: str, token: str = Query(defaul
 # ---- yt-dlp passthroughs (unchanged behaviour) -------------------------------
 
 
-@limiter.limit("30/minute")
 @app.get("/api/info")
+@limiter.limit("30/minute")
 async def get_video_info(request: Request, url: str):
     """
     Returns video metadata for a YouTube URL.
@@ -1809,8 +1809,8 @@ async def get_video_info(request: Request, url: str):
     }
 
 
-@limiter.limit("20/minute")
 @app.get("/api/proxy")
+@limiter.limit("20/minute")
 async def proxy_video(request: Request, url: str):
     _require_youtube_url(url)
 
@@ -1911,8 +1911,8 @@ async def proxy_video(request: Request, url: str):
         )
 
 
-@limiter.limit("40/minute")
 @app.head("/api/proxy-video")
+@limiter.limit("40/minute")
 async def proxy_video_stream_head(request: Request, url: str):
     """
     Immediate HEAD response — lets browsers probe the endpoint without triggering
@@ -1933,8 +1933,8 @@ async def proxy_video_stream_head(request: Request, url: str):
     )
 
 
-@limiter.limit("40/minute")
 @app.get("/api/proxy-video")
+@limiter.limit("40/minute")
 async def proxy_video_stream(url: str, request: Request):
     """
     Range-aware YouTube video proxy.
@@ -2115,8 +2115,8 @@ async def proxy_video_stream(url: str, request: Request):
         raise HTTPException(status_code=500, detail="Stream error — please try again.")
 
 
-@limiter.limit("20/minute")
 @app.get("/api/audio")
+@limiter.limit("20/minute")
 async def get_audio(request: Request, url: str = Query(...)):
     """Serves the audio stream for a given YouTube URL with 100% reliability fallbacks."""
     from services.cobalt_client import download_audio as cobalt_download
@@ -2325,8 +2325,8 @@ def _viral_to_preflight_result(
     }
 
 
-@limiter.limit("10/minute")
 @app.post("/api/preflight")
+@limiter.limit("10/minute")
 async def run_preflight(
     request: Request,
     body: PreflightRequest,
@@ -2499,8 +2499,8 @@ async def run_preflight(
             )
 
 
-@limiter.limit("10/minute")
 @app.post("/api/direct")
+@limiter.limit("10/minute")
 async def run_director(
     request: Request,
     body: DirectRequest,
@@ -2571,8 +2571,8 @@ async def run_director(
         )
 
 
-@limiter.limit("5/minute")
 @app.post("/api/create-video")
+@limiter.limit("5/minute")
 async def create_video(
     request: Request,
     body: CreateVideoRequest,
@@ -2876,8 +2876,8 @@ async def adk_enhance(
         raise HTTPException(status_code=500, detail="Failed to enhance script")
 
 
-@limiter.limit("5/minute")
 @app.post("/api/adk/generate")
+@limiter.limit("5/minute")
 async def adk_generate(
     request: Request,
     body: ADKGenerateRequest,
