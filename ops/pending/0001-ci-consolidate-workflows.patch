@@ -1,0 +1,383 @@
+From 6366f5a99ce7558f9743070e4d3e4d54ee76978d Mon Sep 17 00:00:00 2001
+From: Arena Agent <agent@arena.ai>
+Date: Fri, 28 Aug 2026 03:52:39 +0000
+Subject: [PATCH] ci: consolidate duplicate workflows into one pipeline that
+ runs pytest
+
+Replace linter.yml and deploy-video-pipeline.yml (which overlapped on
+black/flake8/ESLint and neither ran the backend test suite) with a single
+ci.yml exposing four jobs: backend-quality, backend-tests,
+frontend-quality, capability-registry.
+
+- backend-tests is new: 322 tests previously never ran on pull requests.
+- ffmpeg is installed in CI so the two skipif-guarded render-path tests
+  actually execute instead of silently skipping.
+- capability-registry (EP-001) is its own job so drift is not masked by
+  an unrelated lint failure.
+
+No test was modified, skipped, or loosened.
+
+Co-authored-by: arena-agent <297053741+arena-agent@users.noreply.github.com>
+---
+ .github/workflows/ci.yml                    | 170 ++++++++++++++++++++
+ .github/workflows/deploy-video-pipeline.yml |  99 ------------
+ .github/workflows/linter.yml                |  64 --------
+ 3 files changed, 170 insertions(+), 163 deletions(-)
+ create mode 100644 .github/workflows/ci.yml
+ delete mode 100644 .github/workflows/deploy-video-pipeline.yml
+ delete mode 100644 .github/workflows/linter.yml
+
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+new file mode 100644
+index 0000000..5c2f269
+--- /dev/null
++++ b/.github/workflows/ci.yml
+@@ -0,0 +1,170 @@
++name: CI
++
++# Canonical CI pipeline for QuickAI Studio.
++#
++# Replaces the two previously overlapping workflows:
++#   - linter.yml                 (python-lint, frontend-lint)
++#   - deploy-video-pipeline.yml  (python-ci, frontend-ci)
++# Both ran black + flake8 + ESLint against the same commit, duplicating
++# ~4 minutes of runner time per push while neither executed the backend
++# pytest suite. Jobs below are split by concern so a red check names the
++# thing that is actually broken.
++
++on:
++  push:
++    branches: [main]
++  pull_request:
++    branches: [main]
++
++permissions:
++  contents: read
++
++concurrency:
++  group: ci-${{ github.ref }}
++  cancel-in-progress: true
++
++jobs:
++  # ──────────────────────────────────────────────────────────────────────────
++  # Backend quality — formatting and fatal-error linting only.
++  # Deliberately does NOT install requirements.txt: these checks are static
++  # and must stay fast so formatting feedback is not gated on a ~2 min install.
++  # ──────────────────────────────────────────────────────────────────────────
++  backend-quality:
++    name: Backend quality (black + flake8 + syntax)
++    runs-on: ubuntu-latest
++    steps:
++      - uses: actions/checkout@v4
++
++      - name: Set up Python 3.12
++        uses: actions/setup-python@v5
++        with:
++          python-version: "3.12"
++
++      - name: Install linters
++        run: pip install "black==26.5.1" flake8 --quiet
++
++      - name: Black format check
++        run: black --check fastapi/ --extend-exclude="venv/"
++
++      - name: Flake8 syntax & undefined names
++        run: |
++          flake8 fastapi/ \
++            --count \
++            --select=E9,F63,F7,F82 \
++            --show-source \
++            --statistics \
++            --exclude=venv
++
++      - name: Python syntax check (key agent files)
++        run: |
++          python -m py_compile fastapi/main.py
++          python -m py_compile fastapi/agent/viral_agent.py
++          python -m py_compile fastapi/agent/preflight_agent.py
++          python -m py_compile fastapi/agent/director_agent.py
++          echo "All Python files: OK"
++
++  # ──────────────────────────────────────────────────────────────────────────
++  # Backend tests — the gate that did not previously exist on pull requests.
++  #
++  # ffmpeg/ffprobe are installed on purpose. Two tests
++  # (test_cost_architecture.py, test_manifest_renderer.py) are guarded by
++  # `skipif(shutil.which("ffmpeg") is None)` and would otherwise silently
++  # skip, so CI would report green without ever executing the render-path
++  # assertions. Installing the binaries makes the green result truthful.
++  # ──────────────────────────────────────────────────────────────────────────
++  backend-tests:
++    name: Backend tests (pytest)
++    runs-on: ubuntu-latest
++    steps:
++      - uses: actions/checkout@v4
++
++      - name: Set up Python 3.12
++        uses: actions/setup-python@v5
++        with:
++          python-version: "3.12"
++          cache: pip
++          cache-dependency-path: fastapi/requirements.txt
++
++      - name: Install ffmpeg (unskips render-path tests)
++        run: |
++          sudo apt-get update -qq
++          sudo apt-get install -y -qq ffmpeg
++          ffmpeg -version | head -1
++          ffprobe -version | head -1
++
++      - name: Install backend dependencies
++        run: |
++          python -m pip install --upgrade pip --quiet
++          pip install -r fastapi/requirements.txt --quiet
++          pip install pytest pytest-asyncio --quiet
++
++      # rootdir is fastapi/ because tests import first-party packages by
++      # bare name (`from models...`, `from services...`), not `fastapi.models`.
++      - name: Run pytest
++        working-directory: fastapi
++        run: python -m pytest tests/ -v --tb=short -rs
++
++  # ──────────────────────────────────────────────────────────────────────────
++  # Frontend quality — ESLint, tsc, production build.
++  # ──────────────────────────────────────────────────────────────────────────
++  frontend-quality:
++    name: Frontend quality (ESLint + tsc + build)
++    runs-on: ubuntu-latest
++    steps:
++      - uses: actions/checkout@v4
++
++      - name: Install pnpm
++        uses: pnpm/action-setup@v4
++        with:
++          version: 10.28.2
++
++      - name: Set up Node.js 24
++        uses: actions/setup-node@v4
++        with:
++          node-version: "24"
++          cache: pnpm
++          cache-dependency-path: frontend/pnpm-lock.yaml
++
++      - name: Install dependencies
++        working-directory: frontend
++        run: pnpm install --frozen-lockfile
++
++      - name: ESLint
++        working-directory: frontend
++        run: pnpm lint
++
++      - name: TypeScript type check
++        working-directory: frontend
++        run: npx tsc --noEmit
++
++      - name: Next.js production build
++        working-directory: frontend
++        run: pnpm build
++        env:
++          # Dummy values so the build does not fail on missing env vars.
++          # These are non-secret placeholders, not real credentials.
++          NEXTAUTH_URL: "https://www.quickaishort.online"
++          NEXTAUTH_SECRET: "ci-dummy-secret"
++          NEXT_PUBLIC_API_URL: "https://quickai-api-y2cgnbsbxa-uc.a.run.app"
++          NEXT_PUBLIC_PUSHER_KEY: "dummy"
++          NEXT_PUBLIC_PUSHER_CLUSTER: "us2"
++
++  # ──────────────────────────────────────────────────────────────────────────
++  # Capability registry validation — EP-001 freeze.
++  # Own job: registry drift is an architectural violation, not a lint nit,
++  # and previously hid inside the Python lint job where a black failure
++  # would mask it.
++  # ──────────────────────────────────────────────────────────────────────────
++  capability-registry:
++    name: Capability registry validation (EP-001)
++    runs-on: ubuntu-latest
++    steps:
++      - uses: actions/checkout@v4
++
++      - name: Set up Python 3.12
++        uses: actions/setup-python@v5
++        with:
++          python-version: "3.12"
++
++      - name: BE↔FE registry hash sync
++        run: python fastapi/scripts/check_registry_sync.py
+diff --git a/.github/workflows/deploy-video-pipeline.yml b/.github/workflows/deploy-video-pipeline.yml
+deleted file mode 100644
+index 2d68f69..0000000
+--- a/.github/workflows/deploy-video-pipeline.yml
++++ /dev/null
+@@ -1,99 +0,0 @@
+-name: CI — Build & Lint
+-
+-on:
+-  push:
+-    branches: [main]
+-  pull_request:
+-    branches: [main]
+-
+-permissions:
+-  contents: read
+-  checks: write
+-
+-concurrency:
+-  group: ci-${{ github.ref }}
+-  cancel-in-progress: true
+-
+-jobs:
+-  # ──────────────────────────────────────────────────────────────────────────
+-  # Python: black format check + flake8 syntax + py_compile
+-  # ──────────────────────────────────────────────────────────────────────────
+-  python-ci:
+-    name: Python CI (black + flake8 + syntax)
+-    runs-on: ubuntu-latest
+-
+-    steps:
+-      - uses: actions/checkout@v4
+-
+-      - name: Set up Python 3.12
+-        uses: actions/setup-python@v5
+-        with:
+-          python-version: "3.12"
+-
+-      - name: Install linters
+-        run: pip install "black==26.5.1" flake8 --quiet
+-
+-      - name: Black format check
+-        run: black --check fastapi/ --extend-exclude="venv/"
+-
+-      - name: Flake8 syntax & undefined names
+-        run: |
+-          flake8 fastapi/ \
+-            --count \
+-            --select=E9,F63,F7,F82 \
+-            --show-source \
+-            --statistics \
+-            --exclude=venv
+-
+-      - name: Python syntax check (key agent files)
+-        run: |
+-          python -m py_compile fastapi/main.py
+-          python -m py_compile fastapi/agent/viral_agent.py
+-          python -m py_compile fastapi/agent/preflight_agent.py
+-          python -m py_compile fastapi/agent/director_agent.py
+-          echo "All Python files: OK"
+-
+-  # ──────────────────────────────────────────────────────────────────────────
+-  # Frontend: install → lint → build → tsc
+-  # ──────────────────────────────────────────────────────────────────────────
+-  frontend-ci:
+-    name: Frontend CI (ESLint + Next.js build + tsc)
+-    runs-on: ubuntu-latest
+-
+-    steps:
+-      - uses: actions/checkout@v4
+-
+-      - name: Set up Node.js 20
+-        uses: actions/setup-node@v4
+-        with:
+-          node-version: "24"
+-
+-      - name: Install pnpm
+-        run: npm install -g pnpm@10.28.2
+-
+-      - name: Install dependencies
+-        run: |
+-          cd frontend
+-          pnpm install --frozen-lockfile
+-
+-      - name: ESLint
+-        run: |
+-          cd frontend
+-          pnpm lint
+-
+-      - name: TypeScript type check
+-        run: |
+-          cd frontend
+-          npx tsc --noEmit
+-
+-      - name: Next.js production build
+-        run: |
+-          cd frontend
+-          pnpm build
+-        env:
+-          # Dummy values so build doesn't fail on missing env vars
+-          NEXTAUTH_URL: "https://www.quickaishort.online"
+-          NEXTAUTH_SECRET: "ci-dummy-secret"
+-          NEXT_PUBLIC_API_URL: "https://quickai-api-y2cgnbsbxa-uc.a.run.app"
+-          NEXT_PUBLIC_PUSHER_KEY: "dummy"
+-          NEXT_PUBLIC_PUSHER_CLUSTER: "us2"
+diff --git a/.github/workflows/linter.yml b/.github/workflows/linter.yml
+deleted file mode 100644
+index 865d488..0000000
+--- a/.github/workflows/linter.yml
++++ /dev/null
+@@ -1,64 +0,0 @@
+-name: Linting & Formatting
+-
+-on:
+-  push:
+-    branches: [main]
+-  pull_request:
+-    branches: [main]
+-
+-permissions:
+-  contents: read
+-  checks: write
+-
+-jobs:
+-  python-lint:
+-    name: Python Hygiene (Black & Flake8)
+-    runs-on: ubuntu-latest
+-
+-    steps:
+-      - uses: actions/checkout@v4
+-
+-      - name: Set up Python 3.12
+-        uses: actions/setup-python@v5
+-        with:
+-          python-version: "3.12"
+-
+-      - name: Install linters
+-        run: pip install "black==26.5.1" flake8 --quiet
+-
+-      - name: Black format check
+-        run: black --check fastapi/ --extend-exclude="venv/"
+-
+-      - name: Flake8 syntax & undefined names
+-        run: |
+-          flake8 fastapi/ \
+-            --count \
+-            --select=E9,F63,F7,F82 \
+-            --show-source \
+-            --statistics \
+-            --exclude=venv
+-
+-      - name: EP-001 Capability Registry BE↔FE hash sync
+-        run: python fastapi/scripts/check_registry_sync.py
+-
+-  frontend-lint:
+-    name: Frontend ESLint (Next.js 14)
+-    runs-on: ubuntu-latest
+-
+-    steps:
+-      - uses: actions/checkout@v4
+-
+-      - name: Set up Node.js 20
+-        uses: actions/setup-node@v4
+-        with:
+-          node-version: "24"
+-
+-      - name: Install dependencies
+-        run: |
+-          cd frontend
+-          npm install --no-fund --no-audit --legacy-peer-deps
+-
+-      - name: Run ESLint
+-        run: |
+-          cd frontend
+-          npm run lint
+-- 
+2.39.5
+
