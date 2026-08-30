@@ -686,6 +686,42 @@ def _build_cache_descriptor(
     )
 
 
+def _locale_instruction(context: dict[str, JsonValue]) -> str:
+    """Render a language-context instruction from structured locale metadata.
+
+    Language-specific behaviour stays at the model boundary: the canonical
+    action schema is language-independent; only the *presentation* fields
+    (message, suggestions) and generated text are localized.
+    """
+    locale_ctx = context.get("locale_context")
+    if not isinstance(locale_ctx, dict):
+        return ""
+    lines: list[str] = ["LANGUAGE_CONTEXT:"]
+    ui = locale_ctx.get("ui_locale")
+    if isinstance(ui, str) and ui:
+        registry = importlib.import_module("services.locale_registry")
+        entry = registry.get_locale_registry().resolve(ui)
+        lines.append(
+            f"- The product UI is displayed in {entry.display_name} "
+            f'(BCP 47: {entry.id}). Write the "message" and "suggestions" '
+            f"fields in that language."
+        )
+    inputs = locale_ctx.get("input_locales")
+    if isinstance(inputs, list) and inputs:
+        tags = ", ".join(str(t) for t in inputs if isinstance(t, str))
+        if tags:
+            lines.append(
+                f"- The user may write their command in any of: {tags}. "
+                f"Understand the intent regardless of input language."
+            )
+    output = locale_ctx.get("output_locale")
+    if isinstance(output, str) and output:
+        lines.append(f"- Generated caption/hook text must be in BCP 47 {output}.")
+    if len(lines) == 1:
+        return ""
+    return "\n".join(lines) + "\n\n"
+
+
 def _build_primary_contents(
     request: LogicRouteRequest | VisualRouteRequest,
     output_model: type[BaseModel],
@@ -705,6 +741,7 @@ def _build_primary_contents(
     if isinstance(request, LogicRouteRequest):
         tool_registry = importlib.import_module("services.tool_registry")
         registry_prompt = tool_registry.build_orchestrator_system_prompt(request.query)
+        locale_instruction = _locale_instruction(request.context)
         return (
             "ROUTING_PROFILE: luna-orchestration-v1\n"
             "Map every timeline operation into one local multi-track execution "
@@ -713,6 +750,7 @@ def _build_primary_contents(
             "single JSON object. Preserve dependency order, never flatten or "
             "stringify arrays, and emit the smallest valid action sequence.\n\n"
             f"{registry_prompt}\n\n"
+            f"{locale_instruction}"
             "Return only one JSON object matching this schema exactly. "
             "Do not invent capabilities or fields. "
             "If PROJECT_CONTEXT_JSON contains conversation_history, treat it as "

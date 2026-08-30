@@ -18,9 +18,38 @@ from services.dub_service import (
     _update,
 )
 from services.dub_voices import supported_languages
+from services.locale_registry import get_locale_registry, is_valid_bcp47
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/studio/v1/dub", tags=["studio-dub"])
+
+
+def _require_dub_target_lang(tag: str) -> str:
+    """Validate + canonicalize a dub target language against the registry.
+
+    Fail-closed with a machine-readable error code so clients can localize the
+    presentation (stable code, language-neutral backend).
+    """
+    registry = get_locale_registry()
+    if not is_valid_bcp47(tag):
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "INVALID_LOCALE",
+                "message": f"{tag!r} is not a valid BCP 47 language tag.",
+            },
+        )
+    entry = registry.resolve(tag)
+    if entry.language == "en" or not (entry.speech and entry.translation):
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "UNSUPPORTED_LOCALE",
+                "message": f"Language {entry.language!r} is not supported for Dub Video.",
+                "supported": [row["code"] for row in supported_languages()],
+            },
+        )
+    return entry.id
 
 
 @router.get("/languages")
@@ -42,11 +71,15 @@ async def start_dub_job(
     verified_user_id: str = Depends(get_verified_user_id),
 ) -> DubJobStatus:
     _ = request
-    if body.target_lang == "en" and body.mode != "captions_only":
+    body.target_lang = _require_dub_target_lang(body.target_lang)
+    if body.target_lang.split("-")[0].lower() == "en" and body.mode != "captions_only":
         # English → English full dub is a no-op waste; allow captions_only only.
         raise HTTPException(
             status_code=400,
-            detail="Choose a non-English target language for Dub Video.",
+            detail={
+                "code": "UNSUPPORTED_LOCALE",
+                "message": "Choose a non-English target language for Dub Video.",
+            },
         )
 
     # Create/reuse job first so cache hits never burn credits.

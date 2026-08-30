@@ -119,7 +119,19 @@
     "statsUnavailable": "Les statistiques se mettent à jour",
     "statsUnavailableBody": "Nous n'avons pas pu accéder au service de statistiques. Vos projets sont toujours là.",
     "exportsUnavailable": "Impossible de charger les exportations",
-    "exportsUnavailableBody": "Un problème est survenu lors de l'accès au service d'exportation. Veuillez actualiser la page."
+    "exportsUnavailableBody": "Un problème est survenu lors de l'accès au service d'exportation. Veuillez actualiser la page.",
+    "aiEditor": {
+      "hard_quota": "L'IA est temporairement indisponible (limite du fournisseur). Vos modifications de chronologie sont en sécurité — réessayez bientôt.",
+      "transient": "L'IA est temporairement limitée en débit. Vos modifications restent sur la chronologie — réessayez bientôt.",
+      "credits": "Vous n'avez plus de crédits. Passez à Pro pour continuer à éditer avec l'IA.",
+      "credit_service": "La vérification de facturation est momentanément indisponible. Réessayez dans un instant.",
+      "unauthorized": "Connectez-vous pour continuer — votre chronologie est toujours là.",
+      "forbidden": "Cette action n'est pas disponible dans votre formule.",
+      "unavailable": "L'édition par IA n'est pas disponible pour le moment. Réessayez plus tard.",
+      "network": "Connexion perdue — vérifiez votre internet et réessayez.",
+      "invalid_output": "Je n'ai pas compris — essayez de reformuler.",
+      "unknown": "Impossible de terminer — réessayez."
+    }
   },
   "referral": {
     "title": "Programme de Parrainage",
@@ -138,5 +150,21 @@
     "noReferrals": "Pas encore de parrainages. Partagez votre lien pour commencer à gagner !",
     "creditAmount": "100 crédits",
     "mutualBenefit": "Vous et votre ami recevez chacun 100 crédits quand il passe à Pro."
+  },
+  "common": {
+    "loading": "Chargement…",
+    "retry": "Réessayer",
+    "cancel": "Annuler",
+    "save": "Enregistrer",
+    "close": "Fermer",
+    "confirm": "Confirmer",
+    "back": "Retour",
+    "next": "Suivant",
+    "done": "Terminé",
+    "search": "Rechercher",
+    "itemsCount": {
+      "one": "{count} élément",
+      "other": "{count} éléments"
+    }
   }
 }

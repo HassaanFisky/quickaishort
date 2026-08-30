@@ -811,7 +811,9 @@ class DubVideoAction(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
     type: Literal["DUB_VIDEO"]
-    target_lang: Literal["es", "fr", "hi", "pt", "de", "ar", "ur"] = "es"
+    # BCP 47 tag (e.g. "ur", "ur-PK"). Open string so adding a dub language is a
+    # registry data change; the dub router validates against the locale registry.
+    target_lang: str = "es"
     mode: Literal["full_dub", "voiceover_only", "captions_only"] = "full_dub"
     voice_id: Optional[str] = Field(default=None, max_length=128)
 
@@ -821,7 +823,8 @@ class TranslateCaptionsAction(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
     type: Literal["TRANSLATE_CAPTIONS"]
-    target_lang: Literal["es", "fr", "hi", "pt", "de", "ar", "ur"] = "es"
+    # BCP 47 tag; validated against the locale registry at the service boundary.
+    target_lang: str = "es"
 
 
 AiEditorAction = Annotated[
@@ -1006,6 +1009,15 @@ class EditorCommandRequest(BaseModel):
     # Multi-turn chat (last N turns). Bound size in router before Gemini.
     history: Optional[List[dict[str, str]]] = None
     workload_id: Optional[str] = None
+    # ── Globalization (additive, optional) ──────────────────────────────────
+    # UI locale: language the user reads the product in. AI *responses*
+    # (message/feedback/suggestions) should be written in this language.
+    locale: Optional[str] = Field(default=None, max_length=35)
+    # Languages the user may write their command in. Informational for the
+    # model; the canonical action schema is language-independent either way.
+    input_locales: Optional[List[str]] = Field(default=None, max_length=8)
+    # Language for generated text output (captions/hooks), if any.
+    output_locale: Optional[str] = Field(default=None, max_length=35)
 
 
 class EditorCommandResponse(BaseModel):

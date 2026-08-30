@@ -15,6 +15,28 @@ export type AiEditorErrorKind =
   | "network"
   | "unknown";
 
+/** Stable machine-readable code → localized message key (errors.aiEditor.*). */
+export function aiEditorErrorKey(kind: AiEditorErrorKind): string {
+  return `errors.aiEditor.${kind}`;
+}
+
+/**
+ * Localize an already-mapped AI editor error. The `kind` stays the stable
+ * machine-readable code; only the presentation text is localized. Falls back
+ * to the English message when no translation exists.
+ */
+export function localizeAiEditorError(
+  info: AiEditorErrorInfo,
+  t: (key: string) => string,
+): AiEditorErrorInfo {
+  const key = aiEditorErrorKey(info.kind);
+  const message = t(key);
+  if (message && message !== key) {
+    return { ...info, message };
+  }
+  return info;
+}
+
 export interface AiEditorErrorInfo {
   kind: AiEditorErrorKind;
   message: string;

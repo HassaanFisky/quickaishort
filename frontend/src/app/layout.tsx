@@ -13,6 +13,7 @@ import { OfflineNotice } from "@/components/shared/OfflineNotice";
 import { CookieConsent } from "@/components/shared/CookieConsent";
 import { ServiceWorkerRegistrar } from "@/components/shared/ServiceWorkerRegistrar";
 import { RouteAnalytics } from "@/lib/analytics";
+import { resolveLocale, directionFor } from "@/lib/i18n/registry";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -78,10 +79,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   const cookieStore = cookies();
-  const locale = cookieStore.get("NEXT_LOCALE")?.value || "en";
+  const requested = cookieStore.get("NEXT_LOCALE")?.value || "en";
+  // Canonicalize against the locale registry and derive text direction, so
+  // `<html lang>`/`<html dir>` are correct on first paint for RTL locales.
+  const locale = resolveLocale(requested).id;
+  const dir = directionFor(locale);
 
   return (
-    <html lang={locale} suppressHydrationWarning>
+    <html lang={locale} dir={dir} suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${montserrat.variable} antialiased`}
       >

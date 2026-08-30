@@ -108,6 +108,19 @@
     "haveAccount": "Already have an account?",
     "createAccount": "Create account"
   },
+  "common": {
+    "loading": "Loading…",
+    "retry": "Retry",
+    "cancel": "Cancel",
+    "save": "Save",
+    "close": "Close",
+    "confirm": "Confirm",
+    "back": "Back",
+    "next": "Next",
+    "done": "Done",
+    "search": "Search",
+    "itemsCount": { "one": "{count} item", "other": "{count} items" }
+  },
   "errors": {
     "generic": "Something went wrong. Please try again.",
     "notFound": "Page not found.",
@@ -119,7 +132,19 @@
     "statsUnavailable": "Stats are catching up",
     "statsUnavailableBody": "We couldn't reach the stats service. Your projects are still here.",
     "exportsUnavailable": "Couldn't load exports",
-    "exportsUnavailableBody": "There was a problem reaching the exports service. Please refresh."
+    "exportsUnavailableBody": "There was a problem reaching the exports service. Please refresh.",
+    "aiEditor": {
+      "hard_quota": "AI is temporarily unavailable (provider limit). Your timeline edits are safe — try again shortly.",
+      "transient": "AI is briefly rate-limited. Your edits stay on the timeline — try again shortly.",
+      "credits": "You're out of credits. Upgrade to Pro to keep editing with AI.",
+      "credit_service": "Billing check is briefly unavailable. Try again in a moment.",
+      "unauthorized": "Sign in to continue — your timeline is still here.",
+      "forbidden": "This action isn't available on your plan.",
+      "unavailable": "AI editing isn't available right now. Try again later.",
+      "network": "Connection lost — check your internet and retry.",
+      "invalid_output": "Couldn't understand that — try rephrasing.",
+      "unknown": "Couldn't complete that — try again."
+    }
   },
   "referral": {
     "title": "Referral Program",

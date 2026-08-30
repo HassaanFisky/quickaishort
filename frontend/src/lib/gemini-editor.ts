@@ -121,6 +121,15 @@ export interface EditorCommandRequest {
   /** Prior Studio chat turns (bounded server-side). */
   history?: ChatHistoryTurn[]
   workload_id?: string
+  /**
+   * Globalization (additive, optional — mirrors fastapi/models/ai_editor.py):
+   *  - locale:        BCP 47 UI locale; AI responses are written in this language.
+   *  - input_locales: languages the user may type the command in (informational).
+   *  - output_locale: language for generated text output (captions/hooks), if any.
+   */
+  locale?: string
+  input_locales?: string[]
+  output_locale?: string
 }
 
 const MAX_TRANSCRIPT_CHUNKS = 40

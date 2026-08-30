@@ -18,13 +18,24 @@ import Link from "next/link";
 import { LiquidThemeToggle } from "@/components/shared/LiquidThemeToggle";
 import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
-import { useLocale, setLocale, useTranslations } from "@/lib/i18n";
+import {
+  useLocale,
+  setLocale,
+  useTranslations,
+  useDocumentLocale,
+} from "@/lib/i18n";
+import { localeRegistry } from "@/lib/i18n/registry";
+
+// UI locales come from the canonical registry (single source of truth), so
+// adding a language is a data change — never a code change here.
+const UI_LOCALES = localeRegistry.uiLocales();
 
 export default function Navbar() {
   const { data: session, status } = useSession();
   const [isScrolled, setIsScrolled] = useState(false);
   const currentLocale = useLocale();
   const t = useTranslations();
+  useDocumentLocale();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -94,31 +105,19 @@ export default function Navbar() {
                 <Globe className="w-4 h-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent className="nano-glass text-foreground border-white/10 p-1" align="end">
-              <DropdownMenuItem
-                onClick={() => setLocale("en")}
-                className={cn("focus:bg-white/5 cursor-pointer rounded-lg p-2 text-xs", currentLocale === "en" && "font-bold text-primary")}
-              >
-                English
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => setLocale("es")}
-                className={cn("focus:bg-white/5 cursor-pointer rounded-lg p-2 text-xs", currentLocale === "es" && "font-bold text-primary")}
-              >
-                Español
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => setLocale("fr")}
-                className={cn("focus:bg-white/5 cursor-pointer rounded-lg p-2 text-xs", currentLocale === "fr" && "font-bold text-primary")}
-              >
-                Français
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => setLocale("hi")}
-                className={cn("focus:bg-white/5 cursor-pointer rounded-lg p-2 text-xs", currentLocale === "hi" && "font-bold text-primary")}
-              >
-                हिन्दी
-              </DropdownMenuItem>
+            <DropdownMenuContent className="nano-glass text-foreground border-white/10 p-1 max-h-80 overflow-y-auto" align="end">
+              {UI_LOCALES.map((entry) => (
+                <DropdownMenuItem
+                  key={entry.id}
+                  onClick={() => setLocale(entry.id)}
+                  className={cn(
+                    "focus:bg-white/5 cursor-pointer rounded-lg p-2 text-xs",
+                    currentLocale === entry.id && "font-bold text-primary",
+                  )}
+                >
+                  {entry.nativeName}
+                </DropdownMenuItem>
+              ))}
             </DropdownMenuContent>
           </DropdownMenu>
 
@@ -132,7 +131,7 @@ export default function Navbar() {
                   asChild
                 >
                   <Link href="/dashboard">
-                    <LayoutDashboard className="w-4 h-4 mr-2" />
+                    <LayoutDashboard className="w-4 h-4 me-2" />
                     {t("nav.dashboard")}
                   </Link>
                 </Button>
@@ -143,7 +142,7 @@ export default function Navbar() {
                   asChild
                 >
                   <Link href="/editor">
-                    <Plus className="w-4 h-4 mr-2" />
+                    <Plus className="w-4 h-4 me-2" />
                     {t("nav.newProject")}
                   </Link>
                 </GlowButton>
@@ -208,7 +207,7 @@ export default function Navbar() {
                     asChild
                   >
                     <Link href="/dashboard">
-                      <LayoutDashboard className="w-4 h-4 mr-2 text-muted-foreground" />
+                      <LayoutDashboard className="w-4 h-4 me-2 text-muted-foreground" />
                       {t("nav.dashboard")}
                     </Link>
                   </DropdownMenuItem>
@@ -217,7 +216,7 @@ export default function Navbar() {
                     asChild
                   >
                     <Link href="/settings">
-                      <Settings className="w-4 h-4 mr-2 text-muted-foreground" />
+                      <Settings className="w-4 h-4 me-2 text-muted-foreground" />
                       {t("nav.settings")}
                     </Link>
                   </DropdownMenuItem>
@@ -226,7 +225,7 @@ export default function Navbar() {
                     className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer rounded-lg interactive p-2"
                     onClick={() => signOut()}
                   >
-                    <LogOut className="w-4 h-4 mr-2" />
+                    <LogOut className="w-4 h-4 me-2" />
                     {t("nav.logOut")}
                   </DropdownMenuItem>
                 </DropdownMenuContent>

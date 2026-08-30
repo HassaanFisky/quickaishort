@@ -21,7 +21,8 @@ import {
   orchestratorPlan,
   orchestratorExecute,
 } from "@/lib/api";
-import { mapAiEditorError } from "@/lib/aiEditorErrors";
+import { mapAiEditorError, localizeAiEditorError } from "@/lib/aiEditorErrors";
+import { useLocale, useTranslations } from "@/lib/i18n";
 import { useSession } from "next-auth/react";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
 import { SPEECH_COPY } from "@/lib/studio/computePlane";
@@ -185,6 +186,8 @@ function canonicalToDispatchEnvelope(action: CanonicalEditorAction): EditorActio
 
 export function AIPanel() {
   const { data: session } = useSession();
+  const t = useTranslations();
+  const uiLocale = useLocale();
   const [creditBalance, setCreditBalance] = useState<number | null>(null);
   const [kernelSyncState, setKernelSyncState] = useState<
     "idle" | "saved" | "preview" | "sync_failed"
@@ -899,6 +902,9 @@ export function AIPanel() {
             history: historySnapshot.slice(-12),
             project_context,
             workload_id: runId || undefined,
+            // Globalization: AI responses are written in the user's UI locale.
+            // The canonical action schema stays language-independent.
+            locale: uiLocale,
           },
           () => {
             /* SSE payload handled when stream resolves to structured result */
@@ -1105,7 +1111,7 @@ export function AIPanel() {
 
         addAIMessage({
           role: "assistant",
-          content: mapped.message,
+          content: localizeAiEditorError(mapped, t).message,
           actions: [],
         });
         if (mapped.kind === "credits" && session?.user?.id) {
@@ -1125,7 +1131,6 @@ export function AIPanel() {
       stopRecording,
       addAIMessage,
       setAIThinking,
-      dispatchAIActions,
       videoMetadata,
       videoAnalysis,
       editorState,
@@ -1138,6 +1143,8 @@ export function AIPanel() {
       silenceSegments,
       aiSuggestions.viralMoments,
       session,
+      t,
+      uiLocale,
     ],
   );
 

@@ -66,6 +66,28 @@ class TranscriptChunk(BaseModel):
     text: str
     start: float
     end: float
+    # Language of this chunk's text (BCP 47). Optional + additive: older
+    # projects without it remain valid and resolve to the default locale.
+    language: Optional[str] = None
+
+
+class ProjectLocalization(BaseModel):
+    """Project-level globalization metadata (additive, all optional).
+
+    Kept in the Project Document (not UI state) so it travels with the project
+    across clients. Absent fields mean "use the deterministic default".
+    """
+
+    default_locale: Optional[str] = None
+    ui_locale: Optional[str] = None
+    input_locales: Optional[list[str]] = None
+    media_locales: Optional[list[str]] = None
+    output_locale: Optional[str] = None
+    script: Optional[str] = None
+    direction: Optional[str] = None
+    region: Optional[str] = None
+    time_zone: Optional[str] = None
+    unit_system: Optional[str] = None
 
 
 class ProjectCommand(BaseModel):
@@ -133,6 +155,8 @@ class StudioProjectHead(BaseModel):
     revision_snapshots: dict[str, dict[str, Any]] = Field(default_factory=dict)
     # E3
     transcript_chunks: list[TranscriptChunk] = Field(default_factory=list)
+    # Globalization metadata (additive). None on legacy projects → defaults.
+    localization: Optional[ProjectLocalization] = None
 
 
 class MediaAsset(BaseModel):

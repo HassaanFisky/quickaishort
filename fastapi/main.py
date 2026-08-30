@@ -561,6 +561,10 @@ from routers.dub_router import router as dub_router  # noqa: E402
 
 app.include_router(dub_router)
 
+from routers.locales_router import router as locales_router  # noqa: E402
+
+app.include_router(locales_router)
+
 
 from core.rate_limit import get_real_ip, limiter  # noqa: E402
 

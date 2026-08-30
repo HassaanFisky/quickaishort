@@ -291,13 +291,15 @@ export interface AddSfxAction { type: "ADD_SFX"; sfx_id: string; start_sec?: num
 export interface SetTransitionAction { type: "SET_TRANSITION"; clip_id: string; transition?: TransitionName }
 export interface DubVideoAction {
   type: "DUB_VIDEO";
-  target_lang: "es" | "fr" | "hi" | "pt" | "de" | "ar" | "ur";
+  /** BCP 47 tag (e.g. "ur", "ur-PK"); validated against the locale registry. */
+  target_lang: string;
   mode?: "full_dub" | "voiceover_only" | "captions_only";
   voice_id?: string;
 }
 export interface TranslateCaptionsAction {
   type: "TRANSLATE_CAPTIONS";
-  target_lang: "es" | "fr" | "hi" | "pt" | "de" | "ar" | "ur";
+  /** BCP 47 tag; validated against the locale registry. */
+  target_lang: string;
 }
 
 export interface SetClipGainAction { type: "SET_CLIP_GAIN"; clip_id: string; gain_db: number }
@@ -344,6 +346,8 @@ export interface AiEditorTranscriptChunk {
   text: string;
   start: number;
   end: number;
+  /** Language of this chunk's text (BCP 47). Optional + additive. */
+  language?: string;
 }
 
 export interface AiEditorRequest {
@@ -352,6 +356,16 @@ export interface AiEditorRequest {
   transcript: AiEditorTranscriptChunk[];
   video_id?: string | null;
   run_id?: string | null;
+  /**
+   * Globalization (additive, optional — mirrors fastapi/models/ai_editor.py
+   * `EditorCommandRequest`): canonical BCP 47 tags only.
+   *  - locale:        UI locale; AI responses are written in this language.
+   *  - input_locales: languages the user may type the command in (informational).
+   *  - output_locale: language for generated text output (captions/hooks).
+   */
+  locale?: string;
+  input_locales?: string[];
+  output_locale?: string;
 }
 
 export interface AiEditorResponse {
