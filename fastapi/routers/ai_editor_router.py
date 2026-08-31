@@ -230,6 +230,39 @@ def _actions_from_payload(
     return valid, dropped
 
 
+def _locale_context_block(
+    locale: str | None,
+    input_locales: list[str] | None,
+    output_locale: str | None,
+) -> dict[str, Any]:
+    """Validate + canonicalize client locale metadata into a structured block.
+
+    Invalid tags are dropped (never propagated into prompts), unknown-but-valid
+    tags resolve through the canonical fallback chain. Returns {} when no
+    locale metadata was supplied, preserving the existing prompt exactly.
+    """
+    if not locale and not input_locales and not output_locale:
+        return {}
+    from services.locale_registry import get_locale_registry, is_valid_bcp47
+
+    registry = get_locale_registry()
+    block: dict[str, Any] = {}
+    if locale and is_valid_bcp47(locale):
+        block["ui_locale"] = registry.resolve(locale).id
+    if input_locales:
+        cleaned = []
+        for tag in input_locales:
+            if isinstance(tag, str) and is_valid_bcp47(tag):
+                resolved = registry.resolve(tag).id
+                if resolved not in cleaned:
+                    cleaned.append(resolved)
+        if cleaned:
+            block["input_locales"] = cleaned[:4]
+    if output_locale and is_valid_bcp47(output_locale):
+        block["output_locale"] = registry.resolve(output_locale).id
+    return block
+
+
 def compose_command_feedback(
     *,
     canonical: list[Any],
@@ -280,12 +313,18 @@ async def _execute_via_dual_router(
     project_context: Optional[dict[str, Any]] = None,
     editor_state: AIEditorCurrentState | None = None,
     history: Optional[list[dict[str, str]]] = None,
+    locale: Optional[str] = None,
+    input_locales: Optional[list[str]] = None,
+    output_locale: Optional[str] = None,
 ) -> EditorCommandResponse:
     """Call DualModelRouter.execute and map to the FE Action Intent schema."""
 
     _ = user_tier  # trusted tier already resolved by caller; kept for test hooks
     dual = importlib.import_module("agent.router")
     context: dict[str, Any] = dict(project_context or {})
+    locale_block = _locale_context_block(locale, input_locales, output_locale)
+    if locale_block:
+        context["locale_context"] = locale_block
     # Bound conversation history (token / cost control).
     if history:
         trimmed: list[dict[str, str]] = []
@@ -613,6 +652,9 @@ async def handle_editor_command(
             user_tier=tier.value,
             project_context=body.project_context,
             history=body.history,
+            locale=body.locale,
+            input_locales=body.input_locales,
+            output_locale=body.output_locale,
         )
     except HTTPException as exc:
         if charged and exc.status_code >= 400:
@@ -724,6 +766,9 @@ async def handle_editor_command_stream(
                 user_tier=tier.value,
                 project_context=body.project_context,
                 history=body.history,
+                locale=body.locale,
+                input_locales=body.input_locales,
+                output_locale=body.output_locale,
             )
             if charged and _should_refund_editor_command(result):
                 await _refund_ai_editor_credit(

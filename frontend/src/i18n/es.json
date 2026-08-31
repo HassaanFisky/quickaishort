@@ -119,7 +119,19 @@
     "statsUnavailable": "Las estadísticas se están actualizando",
     "statsUnavailableBody": "No pudimos alcanzar el servicio de estadísticas. Tus proyectos siguen aquí.",
     "exportsUnavailable": "No se pudieron cargar las exportaciones",
-    "exportsUnavailableBody": "Hubo un problema al acceder al servicio de exportaciones. Por favor, actualiza la página."
+    "exportsUnavailableBody": "Hubo un problema al acceder al servicio de exportaciones. Por favor, actualiza la página.",
+    "aiEditor": {
+      "hard_quota": "La IA no está disponible temporalmente (límite del proveedor). Tus ediciones en la línea de tiempo están a salvo — inténtalo de nuevo en breve.",
+      "transient": "La IA está limitada temporalmente por tasa. Tus ediciones permanecen en la línea de tiempo — inténtalo de nuevo en breve.",
+      "credits": "Te has quedado sin créditos. Mejora a Pro para seguir editando con IA.",
+      "credit_service": "La comprobación de facturación no está disponible por un momento. Inténtalo de nuevo enseguida.",
+      "unauthorized": "Inicia sesión para continuar — tu línea de tiempo sigue aquí.",
+      "forbidden": "Esta acción no está disponible en tu plan.",
+      "unavailable": "La edición con IA no está disponible ahora mismo. Inténtalo más tarde.",
+      "network": "Conexión perdida — comprueba tu internet y reintenta.",
+      "invalid_output": "No pude entenderlo — intenta reformularlo.",
+      "unknown": "No se pudo completar — inténtalo de nuevo."
+    }
   },
   "referral": {
     "title": "Programa de Referidos",
@@ -138,5 +150,21 @@
     "noReferrals": "Aún no hay referidos. ¡Comparte tu enlace para comenzar a ganar!",
     "creditAmount": "100 créditos",
     "mutualBenefit": "Tú y tu amigo reciben 100 créditos cuando se actualiza a Pro."
+  },
+  "common": {
+    "loading": "Cargando…",
+    "retry": "Reintentar",
+    "cancel": "Cancelar",
+    "save": "Guardar",
+    "close": "Cerrar",
+    "confirm": "Confirmar",
+    "back": "Atrás",
+    "next": "Siguiente",
+    "done": "Listo",
+    "search": "Buscar",
+    "itemsCount": {
+      "one": "{count} elemento",
+      "other": "{count} elementos"
+    }
   }
 }

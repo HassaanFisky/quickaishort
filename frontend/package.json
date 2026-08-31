@@ -9,7 +9,8 @@
     "dev": "next dev",
     "build": "cross-env NODE_OPTIONS=--max-old-space-size=4096 next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:i18n": "node --experimental-strip-types --experimental-loader ./scripts/node-i18n-loader.mjs --test 'src/lib/i18n/__tests__/*.test.ts'"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

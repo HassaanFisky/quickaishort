@@ -18,7 +18,10 @@ DubStage = Literal[
     "failed",
     "cancelled",
 ]
-DubTargetLang = Literal["es", "fr", "hi", "pt", "de", "ar", "ur", "en"]
+# BCP 47 language tag (e.g. "ur", "ur-PK", "ar-SA"). Historically a fixed
+# Literal; now validated against the canonical locale registry at the service
+# boundary (services.dub_service) so new languages are data, not code.
+DubTargetLang = str
 
 DUB_CREDIT_FULL = 40
 DUB_CREDIT_CAPTIONS = 15
@@ -50,6 +53,10 @@ class DubJobCreateRequest(BaseModel):
 
     transcript: list[DubTranscriptChunk] = Field(min_length=1, max_length=500)
     target_lang: DubTargetLang
+    # Source speech language. Defaults to English: the configured ASR
+    # (whisper-tiny.en) is English-only per ADR-014. This field makes the
+    # assumption explicit so a future multilingual ASR is a data change.
+    source_lang: Optional[str] = Field(default="en", max_length=35)
     mode: DubMode = "full_dub"
     voice_id: Optional[str] = Field(default=None, max_length=128)
     project_id: Optional[str] = Field(default=None, max_length=128)
