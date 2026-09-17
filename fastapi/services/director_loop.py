@@ -44,7 +44,9 @@ def _state_from_context(ctx: Optional[dict[str, Any]]) -> AIEditorCurrentState:
     try:
         duration = float(data.get("duration") or data.get("videoDuration") or 60.0)
     except (TypeError, ValueError):
-        duration = 60.0
+        # Missing/unparseable media duration is unknown. Fail closed rather than
+        # inventing a 60s video boundary for deterministic edit sanitisation.
+        duration = 0.0
     aspect = data.get("aspectRatio") or "9:16"
     if aspect not in {"9:16", "1:1", "16:9", "4:5"}:
         aspect = "9:16"
