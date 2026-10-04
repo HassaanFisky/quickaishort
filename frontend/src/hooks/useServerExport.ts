@@ -46,6 +46,7 @@ const POLL_TIMEOUT_MS = 10 * 60 * 1000;
 export function useServerExport({ userId }: UseServerExportArgs) {
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState(0);
+  const [exportStage, setExportStage] = useState("idle");
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [exportDone, setExportDone] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
@@ -85,6 +86,7 @@ export function useServerExport({ userId }: UseServerExportArgs) {
     setExportError(null);
     setLastDownloadUrl(null);
     setExportProgress(0);
+    setExportStage("idle");
   }, []);
 
   const activeJobIdRef = useRef(activeJobId);
@@ -98,6 +100,7 @@ export function useServerExport({ userId }: UseServerExportArgs) {
     cleanup();
     setIsExporting(false);
     setExportProgress(0);
+    setExportStage("idle");
     setActiveJobId(null);
     if (!jobId) {
       toast.info("Export cancelled.");
@@ -180,6 +183,10 @@ export function useServerExport({ userId }: UseServerExportArgs) {
             jobId,
             userId,
           );
+          if (typeof status.progress === "number") {
+            setExportProgress(Math.max(0, Math.min(100, Math.round(status.progress))));
+          }
+          if (status.current_step) setExportStage(status.current_step);
           if (status.status === "finished" && status.download_url) {
             finishSuccess(jobId, status.download_url);
             return;
@@ -209,10 +216,11 @@ export function useServerExport({ userId }: UseServerExportArgs) {
       const channel = pusher.subscribe(`export-${jobId}`);
       channelRef.current = channel;
 
-      channel.bind("progress", (data: { progress?: number }) => {
+      channel.bind("progress", (data: { progress?: number; status?: string }) => {
         if (typeof data?.progress === "number") {
           setExportProgress(Math.max(0, Math.min(99, Math.round(data.progress))));
         }
+        if (typeof data?.status === "string") setExportStage(data.status);
       });
       channel.bind("complete", (data: { download_url?: string }) => {
         if (data?.download_url) {
@@ -418,6 +426,7 @@ export function useServerExport({ userId }: UseServerExportArgs) {
     cancelExport,
     isExporting,
     exportProgress,
+    exportStage,
     activeJobId,
     exportDone,
     exportError,
