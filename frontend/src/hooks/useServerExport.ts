@@ -125,6 +125,7 @@ export function useServerExport({ userId }: UseServerExportArgs) {
     (jobId: string, downloadUrl: string) => {
       setIsExporting(false);
       setExportProgress(100);
+      setExportStage("complete");
       setActiveJobId(null);
       setExportDone(true);
       setExportError(null);
@@ -165,6 +166,7 @@ export function useServerExport({ userId }: UseServerExportArgs) {
     (message: string) => {
       setIsExporting(false);
       setActiveJobId(null);
+      setExportStage("failed");
       setExportDone(false);
       setExportError(message || "Export failed.");
       cleanup();
