@@ -219,10 +219,12 @@ export function useServerExport({ userId }: UseServerExportArgs) {
       channelRef.current = channel;
 
       channel.bind("progress", (data: { progress?: number; status?: string }) => {
-        if (typeof data?.progress === "number") {
-          setExportProgress(Math.max(0, Math.min(99, Math.round(data.progress))));
-        }
-        if (typeof data?.status === "string") setExportStage(data.status);
+        if (typeof data?.progress !== "number") return;
+        const progress = Math.max(0, Math.min(99, Math.round(data.progress)));
+        setExportProgress(progress);
+        if (progress >= 94) setExportStage("verifying");
+        else if (progress >= 10) setExportStage("rendering");
+        else setExportStage("preparing");
       });
       channel.bind("complete", (data: { download_url?: string }) => {
         if (data?.download_url) {
