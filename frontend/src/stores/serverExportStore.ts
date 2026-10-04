@@ -8,6 +8,7 @@ import { create } from "zustand";
 type ServerExportState = {
   isExporting: boolean;
   exportProgress: number;
+  exportStage: string;
   activeJobId: string | null;
   exportError: string | null;
   exportDone: boolean;
@@ -17,6 +18,7 @@ type ServerExportState = {
   setSnapshot: (patch: {
     isExporting: boolean;
     exportProgress: number;
+    exportStage: string;
     activeJobId: string | null;
     exportError: string | null;
     exportDone: boolean;
@@ -31,6 +33,7 @@ type ServerExportState = {
 export const useServerExportStore = create<ServerExportState>((set) => ({
   isExporting: false,
   exportProgress: 0,
+  exportStage: "idle",
   activeJobId: null,
   exportError: null,
   exportDone: false,
