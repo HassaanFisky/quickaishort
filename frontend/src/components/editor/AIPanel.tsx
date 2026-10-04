@@ -728,15 +728,37 @@ export function AIPanel() {
           return;
         }
         const step = plan?.steps?.[0];
-        if (step?.capability_id) {
-          useEditorStore.getState().pushAiSnapshot("AI suggestion");
-          dispatchAIActions([
-            {
-              type: step.capability_id,
-              payload: step.params ?? {},
-            },
-          ]);
+        if (!step?.capability_id) {
+          addAIMessage({
+            role: "assistant",
+            content:
+              plan?.message ||
+              "I couldn't build an executable edit plan from that suggestion.",
+            actions: [],
+          });
+          return;
         }
+
+        const action: CanonicalEditorAction = {
+          type: step.capability_id,
+          ...((step.params ?? {}) as Record<string, unknown>),
+        };
+        setPendingEditPlan({
+          request: s.label,
+          actions: [action],
+          planId: plan?.plan_id,
+          message: plan?.message || actionLabel(action.type),
+          decisionMode: plan?.decision_mode,
+          source: "suggestion",
+        });
+        addAIMessage({
+          role: "assistant",
+          content: plan?.message
+            ? `Plan ready. ${plan.message}`
+            : "Plan ready. Review it below before I change your project.",
+          actions: [{ type: step.capability_id, payload: step.params ?? {} }],
+        });
+        return;
 
       } catch (err: unknown) {
         const { formatApiDetail } = await import("@/lib/authenticatedFetch");
