@@ -19,6 +19,7 @@ export default function ServerExportHost() {
     cancelExport,
     isExporting,
     exportProgress,
+    exportStage,
     exportDone,
     exportError,
     lastDownloadUrl,
@@ -33,6 +34,7 @@ export default function ServerExportHost() {
     setSnapshot({
       isExporting,
       exportProgress,
+      exportStage,
       activeJobId,
       exportError,
       exportDone,
@@ -41,6 +43,7 @@ export default function ServerExportHost() {
   }, [
     isExporting,
     exportProgress,
+    exportStage,
     activeJobId,
     exportError,
     exportDone,
