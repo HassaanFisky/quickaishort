@@ -27,6 +27,7 @@ import { useSession } from "next-auth/react";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
 import { SPEECH_COPY } from "@/lib/studio/computePlane";
 import { cn } from "@/lib/utils";
+import { CAPABILITY_BY_ID } from "@/lib/aiToolCatalog";
 import {
   buildEdgeFacets,
   createMediaGraph,
@@ -65,6 +66,30 @@ type OrchestratorPlanResult = {
   }>;
   execution_integrity?: { status?: string };
 };
+
+type PendingEditPlan = {
+  request: string;
+  actions: CanonicalEditorAction[];
+  planId?: string;
+  message?: string;
+  decisionMode?: string;
+  source: "chat" | "suggestion";
+};
+
+function actionLabel(type: string): string {
+  return (
+    CAPABILITY_BY_ID[type]?.title ||
+    type.replace(/_/g, " ").toLowerCase().replace(/^./, (m) => m.toUpperCase())
+  );
+}
+
+function requiresPlanConfirmation(actions: CanonicalEditorAction[]): boolean {
+  if (actions.length === 0) return false;
+  return actions.some((action) => {
+    const sideEffects = CAPABILITY_BY_ID[action.type]?.side_effects;
+    return !sideEffects || sideEffects.includes("mutate_project");
+  });
+}
 
 /**
  * Silence chips go through decision_gate (0 Gemini). Typed director/dead-air
@@ -229,6 +254,7 @@ export function AIPanel() {
   const [followUpChips, setFollowUpChips] = useState<string[]>([]);
   const [thinkingStage, setThinkingStage] = useState("Got it — shaping your edit…");
   const [showExportFinalChip, setShowExportFinalChip] = useState(false);
+  const [pendingEditPlan, setPendingEditPlan] = useState<PendingEditPlan | null>(null);
   const firstWinAckedRef = useRef(false);
   const activeTool = useUIStore((s) => s.activeTool);
   const setActiveTool = useUIStore((s) => s.setActiveTool);
@@ -246,6 +272,7 @@ export function AIPanel() {
     setSuggestions([]);
     setKernelSyncState("idle");
     setShowExportFinalChip(false);
+    setPendingEditPlan(null);
     firstWinAckedRef.current = false;
   }, [runId]);
 
@@ -711,108 +738,6 @@ export function AIPanel() {
           ]);
         }
 
-        // Apply honesty: DETECT_VIRAL must never look like a silent success.
-        if (step?.capability_id === "DETECT_VIRAL_MOMENTS") {
-          const st = useEditorStore.getState();
-          const moments = st.aiSuggestions.viralMoments;
-          const explain = st.aiSuggestions.lastEditExplanation;
-          if (moments.length > 0) {
-            const pride =
-              !firstWinAckedRef.current
-                ? " Nice — first win locked in."
-                : "";
-            if (!firstWinAckedRef.current) {
-              firstWinAckedRef.current = true;
-              setShowExportFinalChip(true);
-            }
-            addAIMessage({
-              role: "assistant",
-              content: `Found ${moments.length} highlight${moments.length === 1 ? "" : "s"} — preview at the top moment.${pride}`,
-              actions: [{ type: step.capability_id, payload: step.params ?? {} }],
-            });
-            return;
-          }
-          addAIMessage({
-            role: "assistant",
-            content:
-              explain?.explanation ||
-              "No viral moments yet — analysis will retry when the transcript is ready.",
-            actions: [],
-          });
-          return;
-        }
-
-        if (step?.capability_id === "REMOVE_SILENCES") {
-          const st = useEditorStore.getState();
-          const cuts = st.silenceSegments.filter((seg) => seg.type !== "keep");
-          if (cuts.length === 0 && !st.trimMarker) {
-            addAIMessage({
-              role: "assistant",
-              content:
-                "No silence gaps long enough to cut — dead-air markers need to finish analyzing first.",
-              actions: [],
-            });
-            return;
-          }
-        }
-
-        if (
-          isStudioProjectKernelEnabled() &&
-          useEditorStore.getState().studioProjectId &&
-          plan?.plan_id
-        ) {
-          try {
-            useEditorStore.getState().rebuildRenderManifest();
-            const st = useEditorStore.getState();
-            if (st.compiledManifest) {
-              await orchestratorExecute({
-                plan_id: plan.plan_id,
-                project_id: st.studioProjectId,
-                base_revision: st.studioAckedRevision,
-                base_snapshot_hash: st.studioSnapshotHash,
-                proposed_manifest: st.compiledManifest,
-              });
-            }
-          } catch (syncErr: unknown) {
-            const { formatApiDetail } = await import("@/lib/authenticatedFetch");
-            const detail = axios.isAxiosError(syncErr)
-              ? formatApiDetail(
-                syncErr.response?.data?.detail,
-                syncErr.response?.status ?? 500,
-              )
-              : "";
-            addAIMessage({
-              role: "assistant",
-              content:
-                step?.capability_id
-                  ? `Edit applied in the editor. Cloud sync failed${detail ? `: ${detail}` : ""} — timeline stays updated.`
-                  : detail || "Cloud sync failed — try again.",
-              actions: step
-                ? [{ type: step.capability_id, payload: step.params ?? {} }]
-                : [],
-            });
-            return;
-          }
-        }
-
-        // First-win pride + optional Export Final (continuum +2 heuristic path).
-        let pride = "";
-        if (step?.capability_id && !firstWinAckedRef.current) {
-          firstWinAckedRef.current = true;
-          setShowExportFinalChip(true);
-          pride = " Nice — preview looks sharper.";
-        }
-        addAIMessage({
-          role: "assistant",
-          content: `${
-            step
-              ? plan?.message || `Applied ${step.capability_id.replace(/_/g, " ").toLowerCase()}.`
-              : plan?.message || "No edit applied — that suggestion returned no executable action."
-          }${pride}`,
-          actions: step
-            ? [{ type: step.capability_id, payload: step.params ?? {} }]
-            : [],
-        });
       } catch (err: unknown) {
         const { formatApiDetail } = await import("@/lib/authenticatedFetch");
         const msg = axios.isAxiosError(err)
@@ -824,8 +749,116 @@ export function AIPanel() {
         setAIThinking(false);
       }
     },
-    [isAIThinking, addAIMessage, dispatchAIActions],
+    [isAIThinking, addAIMessage],
   );
+
+  const confirmPendingEditPlan = useCallback(async () => {
+    if (!pendingEditPlan || isAIThinking) return;
+    setAIThinking(true);
+    setThinkingStage("Applying your approved plan…");
+
+    try {
+      const actions = pendingEditPlan.actions;
+      const dispatchActions = actions.map(canonicalToDispatchEnvelope);
+      const kernelEnabled = isStudioProjectKernelEnabled();
+      const currentProjectId = useEditorStore.getState().studioProjectId;
+
+      useEditorStore.getState().pushAiSnapshot("AI plan");
+      dispatchAIActions(dispatchActions);
+
+      let receipt = "Preview applied";
+      if (kernelEnabled) {
+        const projectId =
+          currentProjectId ||
+          (await ensureStudioProject({
+            title: videoMetadata?.title ?? "Studio Project",
+            active_run_id: useEditorStore.getState().runId,
+          }));
+
+        if (pendingEditPlan.planId) {
+          useEditorStore.getState().rebuildRenderManifest();
+          const st = useEditorStore.getState();
+          if (!st.compiledManifest) {
+            throw new Error("Render manifest could not be compiled.");
+          }
+
+          const executed = (await orchestratorExecute({
+            plan_id: pendingEditPlan.planId,
+            project_id: projectId,
+            base_revision: st.studioAckedRevision,
+            base_snapshot_hash: st.studioSnapshotHash,
+            proposed_manifest: st.compiledManifest,
+          })) as OrchestratorPlanResult;
+
+          const integrity = executed?.execution_integrity?.status;
+          if (
+            executed?.status === "failed" ||
+            (integrity && !["execution_ok", "execution_partial"].includes(integrity))
+          ) {
+            throw new Error("The project rejected this edit plan.");
+          }
+
+          const { fetchStudioHead } = await import("@/lib/studio/projectKernel");
+          const head = await fetchStudioHead(projectId);
+          useEditorStore.setState({
+            studioProjectId: projectId,
+            studioAckedRevision: head.revision,
+            studioSnapshotHash: head.snapshot_hash,
+          });
+          receipt =
+            integrity === "execution_partial"
+              ? "Applied with a partial project receipt — review the timeline."
+              : `Saved to project (r${head.revision})`;
+          setKernelSyncState(integrity === "execution_partial" ? "preview" : "saved");
+        } else {
+          receipt = "Preview applied — project plan was not persisted.";
+          setKernelSyncState("preview");
+        }
+      } else {
+        setKernelSyncState("preview");
+        receipt = "Preview applied — project save is currently disabled.";
+      }
+
+      setRecentActions((prev) =>
+        [...prev, ...actions.map((x) => x.type)].slice(-8),
+      );
+      setPendingEditPlan(null);
+      addAIMessage({
+        role: "assistant",
+        content: `Done. ${actions.map((x) => actionLabel(x.type)).join(", ")}. ${receipt}.`,
+        actions: dispatchActions,
+      });
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : "Could not apply this edit plan.";
+      addAIMessage({
+        role: "assistant",
+        content: `I didn't apply the plan. ${message}`,
+        actions: [],
+      });
+      setKernelSyncState("sync_failed");
+    } finally {
+      setAIThinking(false);
+    }
+  }, [
+    pendingEditPlan,
+    isAIThinking,
+    setAIThinking,
+    dispatchAIActions,
+    videoMetadata,
+    addAIMessage,
+  ]);
+
+  const dismissPendingEditPlan = useCallback(() => {
+    if (!pendingEditPlan) return;
+    setInputText(pendingEditPlan.request);
+    setPendingEditPlan(null);
+    addAIMessage({
+      role: "assistant",
+      content: "Okay — I kept your request unchanged. Edit it and send again when you're ready.",
+      actions: [],
+    });
+  }, [pendingEditPlan, addAIMessage]);
 
   const sendMessage = useCallback(
     async (text: string) => {
@@ -936,6 +969,62 @@ export function AIPanel() {
           );
         const dispatchActions = rawCanonical
           .map((a) => canonicalToDispatchEnvelope(a));
+
+        const needsConfirmation = requiresPlanConfirmation(rawCanonical);
+        const kernelEnabledForPlan = isStudioProjectKernelEnabled();
+
+        if (needsConfirmation) {
+          if (kernelEnabledForPlan) {
+            const projectId = await ensureStudioProject({
+              title: videoMetadata?.title ?? "Studio Project",
+              active_run_id: useEditorStore.getState().runId,
+            });
+            const structured_steps = dispatchActions.map(
+              (a: { type: string; payload?: Record<string, unknown> }) => ({
+                capability_id: a.type,
+                params: a.payload ?? {},
+              }),
+            );
+            const plan = (await orchestratorPlan({
+              source: "chat",
+              intent_text: trimmed,
+              project_id: projectId,
+              structured_steps,
+            })) as OrchestratorPlanResult;
+
+            if (!plan?.plan_id || plan.status === "failed" || !plan.steps?.length) {
+              throw new Error(
+                plan?.message || "The edit plan could not be created.",
+              );
+            }
+
+            setPendingEditPlan({
+              request: trimmed,
+              actions: rawCanonical,
+              planId: plan.plan_id,
+              message: plan.message,
+              decisionMode: plan.decision_mode,
+              source: "chat",
+            });
+          } else {
+            setPendingEditPlan({
+              request: trimmed,
+              actions: rawCanonical,
+              message: result.feedback || result.message,
+              source: "chat",
+            });
+          }
+
+          addAIMessage({
+            role: "assistant",
+            content:
+              "I’ve understood the request and prepared the edit plan. Review it below before I change the project.",
+            actions: dispatchActions,
+          });
+          setKernelSyncState(kernelEnabledForPlan ? "idle" : "preview");
+          setFollowUpChips([]);
+          return;
+        }
 
         if (rawCanonical.length > 0) {
           applyAiEdits(rawCanonical);
@@ -1339,7 +1428,7 @@ export function AIPanel() {
             title={isVideoLoaded ? "Tell me what to edit" : "Load a video first"}
             body={
               isVideoLoaded
-                ? "I'll apply your edits directly to the timeline."
+                ? "I’ll understand your request, prepare the edit plan, then let you review it before anything changes."
                 : "Upload a video or paste a YouTube URL to get started."
             }
             size="md"
@@ -1389,6 +1478,69 @@ export function AIPanel() {
 
         <div ref={messagesEndRef} />
       </div>
+
+      {pendingEditPlan && (
+        <div
+          className="mx-3 mb-2 rounded-2xl border border-primary/20 bg-primary/[0.06] p-3"
+          role="region"
+          aria-label="Pending edit plan"
+        >
+          <div className="flex items-start gap-2.5">
+            <div className="mt-0.5 h-7 w-7 rounded-xl bg-primary/10 border border-primary/15 flex items-center justify-center shrink-0">
+              <Sparkles size={13} className="text-primary" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-semibold text-foreground">
+                Edit plan ready
+              </p>
+              <p className="text-[10px] text-fg-muted mt-0.5">
+                {pendingEditPlan.request}
+              </p>
+              <div className="mt-2 space-y-1">
+                {pendingEditPlan.actions.slice(0, 5).map((action, index) => (
+                  <div key={`${action.type}-${index}`} className="flex items-center gap-2 text-[11px] text-foreground/90">
+                    <span className="w-1.5 h-1.5 rounded-full bg-primary/70 shrink-0" />
+                    <span>{actionLabel(action.type)}</span>
+                  </div>
+                ))}
+                {pendingEditPlan.actions.length > 5 && (
+                  <p className="text-[10px] text-fg-subtle pl-3.5">
+                    +{pendingEditPlan.actions.length - 5} more step{pendingEditPlan.actions.length - 5 === 1 ? "" : "s"}
+                  </p>
+                )}
+              </div>
+              {pendingEditPlan.message && (
+                <p className="mt-2 text-[10px] text-fg-muted">
+                  {pendingEditPlan.message}
+                </p>
+              )}
+              <div className="flex items-center gap-2 mt-3">
+                <button
+                  type="button"
+                  className="h-8 px-3 rounded-xl bg-primary text-white text-[10px] font-semibold hover:opacity-90 disabled:opacity-50"
+                  onClick={() => void confirmPendingEditPlan()}
+                  disabled={isAIThinking}
+                >
+                  Apply edit
+                </button>
+                <button
+                  type="button"
+                  className="h-8 px-3 rounded-xl border border-border bg-card/60 text-[10px] font-semibold text-fg-muted hover:text-foreground"
+                  onClick={dismissPendingEditPlan}
+                  disabled={isAIThinking}
+                >
+                  Edit request
+                </button>
+                {pendingEditPlan.decisionMode && pendingEditPlan.decisionMode !== "ACT" && (
+                  <span className="text-[9px] uppercase tracking-wider text-amber-300">
+                    {pendingEditPlan.decisionMode}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Suggestion chips (grounded + post-reply follow-ups) ─────────── */}
       {(suggestions.length > 0 ||
