@@ -164,7 +164,7 @@ def verify_rendered_media(
 
     raw_format_duration = (payload.get("format") or {}).get("duration")
     try:
-        duration = float(raw_format_duration) if raw_format_duration is not None else None
+        duration = (\n            float(raw_format_duration)\n            if raw_format_duration is not None\n            else None\n        )
     except (TypeError, ValueError):
         duration = None
 
@@ -177,9 +177,9 @@ def verify_rendered_media(
     checks["duration_positive"] = bool(duration is not None and duration > 0.05)
     checks["dimensions_positive"] = width > 0 and height > 0
 
-    if expected_duration_sec is not None and expected_duration_sec > 0 and duration is not None:
+    if (\n        expected_duration_sec is not None\n        and expected_duration_sec > 0\n        and duration is not None\n    ):
         tolerance = max(0.75, min(2.0, expected_duration_sec * 0.03))
-        checks["duration_matches_expected"] = abs(duration - expected_duration_sec) <= tolerance
+        checks["duration_matches_expected"] = (\n            abs(duration - expected_duration_sec) <= tolerance\n        )
 
     if expected_width and expected_height:
         checks["dimensions_match_expected"] = (
