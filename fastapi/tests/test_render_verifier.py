@@ -16,14 +16,22 @@ def test_render_verifier_accepts_valid_video(tmp_path: Path, monkeypatch) -> Non
             {
                 "format": {"duration": "10.0"},
                 "streams": [
-                    {\n                        "codec_type": "video",\n                        "width": 1080,\n                        "height": 1920,\n                        "duration": "10.0",\n                    },
+                    {
+                        "codec_type": "video",
+                        "width": 1080,
+                        "height": 1920,
+                        "duration": "10.0",
+                    },
                     {"codec_type": "audio", "duration": "10.0"},
                 ],
             }
         )
         stderr = ""
 
-    monkeypatch.setattr(\n        "services.render_verifier.subprocess.run",\n        lambda *args, **kwargs: Result(),\n    )
+    monkeypatch.setattr(
+        "services.render_verifier.subprocess.run",
+        lambda *args, **kwargs: Result(),
+    )
 
     result = verify_rendered_media(
         output,
