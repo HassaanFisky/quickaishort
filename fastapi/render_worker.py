@@ -629,6 +629,7 @@ async def _async_process_render_task(
             current_step="verifying",
             message="Checking the rendered video…",
         )
+        progress("Checking the rendered video…", 94)
         from services.render_verifier import verify_rendered_media
 
         expected_duration = None
