@@ -164,7 +164,9 @@ def verify_rendered_media(
 
     raw_format_duration = (payload.get("format") or {}).get("duration")
     try:
-        duration = float(raw_format_duration) if raw_format_duration is not None else None
+        duration = (
+            float(raw_format_duration) if raw_format_duration is not None else None
+        )
     except (TypeError, ValueError):
         duration = None
 
