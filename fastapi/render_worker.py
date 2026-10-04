@@ -635,9 +635,10 @@ async def _async_process_render_task(
         expected_duration = None
         if render_manifest:
             try:
-                expected_duration = float(
-                    (render_manifest.get("timeline") or {}).get("duration") or 0
-                ) or None
+                expected_duration = (
+                    float((render_manifest.get("timeline") or {}).get("duration") or 0)
+                    or None
+                )
             except (TypeError, ValueError):
                 expected_duration = None
 
