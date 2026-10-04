@@ -48,7 +48,10 @@ from services.observability import (  # noqa: E402
     track_manifest_render,
 )
 from services.job_persistence import persist_failed_job  # noqa: E402
-from services.render_queue import (\n    push_result as _rq_push_result,\n    update_render_progress,\n)  # noqa: E402
+from services.render_queue import (
+    push_result as _rq_push_result,
+    update_render_progress,
+)  # noqa: E402
 
 # Re-export for tests that import from render_worker.
 __all__ = ["apply_tier_render_policy", "process_render_task"]
