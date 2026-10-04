@@ -667,6 +667,9 @@ export default function EditorLayout() {
               <span className="text-[10px] font-bold tabular-nums text-primary min-w-[2.5rem]">
                 {serverExportProgress}%
               </span>
+              <span className="text-[10px] font-medium text-fg-muted max-w-24 truncate capitalize">
+                {serverExportStage === "verifying" ? "Checking" : serverExportStage}
+              </span>
               <button
                 type="button"
                 onClick={() => void cancelServerExport?.()}
