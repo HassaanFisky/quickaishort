@@ -48,6 +48,7 @@ export const useServerExportStore = create<ServerExportState>((set) => ({
       if (
         s.isExporting === patch.isExporting &&
         s.exportProgress === patch.exportProgress &&
+        s.exportStage === patch.exportStage &&
         s.activeJobId === patch.activeJobId &&
         s.exportError === patch.exportError &&
         s.exportDone === patch.exportDone &&
