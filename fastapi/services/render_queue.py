@@ -175,6 +175,32 @@ def push_result(
             )
 
 
+def update_render_progress(
+    job_id: str,
+    *,
+    status: str,
+    progress: int,
+    current_step: str,
+    message: Optional[str] = None,
+    verification: Optional[dict[str, Any]] = None,
+) -> None:
+    """Update non-terminal lifecycle state without creating a result event."""
+    mapping: dict[str, str] = {
+        "status": status,
+        "progress": str(max(0, min(100, int(progress)))),
+        "current_step": current_step,
+    }
+    if message:
+        mapping["message"] = message[:500]
+    if verification is not None:
+        mapping["verification"] = json.dumps(verification, separators=(",", ":"))[:4000]
+    try:
+        redis_conn.hset(_META_KEY.format(job_id), mapping=mapping)
+        redis_conn.expire(_META_KEY.format(job_id), _META_TTL)
+    except Exception as exc:
+        logger.warning("render_progress_update_failed job_id=%s error=%s", job_id, exc)
+
+
 def get_render_status(job_id: str) -> dict[str, Any]:
     """Return current status from the metadata hash."""
     meta_key = _META_KEY.format(job_id)

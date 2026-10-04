@@ -126,6 +126,7 @@ export default function EditorLayout() {
   const exportShortcutLabel = comboToChips(exportBinding, isMacPlatform).join(" ");
   const isServerExporting = useServerExportStore((s) => s.isExporting);
   const serverExportProgress = useServerExportStore((s) => s.exportProgress);
+  const serverExportStage = useServerExportStore((s) => s.exportStage);
   const cancelServerExport = useServerExportStore((s) => s.cancelExport);
   const [isAdvancedMode, setIsAdvancedMode] = useState(false);
   const hasShownShortcutsRef = useRef(false);
@@ -665,6 +666,9 @@ export default function EditorLayout() {
             >
               <span className="text-[10px] font-bold tabular-nums text-primary min-w-[2.5rem]">
                 {serverExportProgress}%
+              </span>
+              <span className="text-[10px] font-medium text-fg-muted max-w-24 truncate capitalize">
+                {serverExportStage === "verifying" ? "Checking" : serverExportStage}
               </span>
               <button
                 type="button"
