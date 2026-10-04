@@ -46,7 +46,9 @@ def test_render_verifier_accepts_valid_video(tmp_path: Path, monkeypatch) -> Non
     assert result.duration_sec == 10.0
 
 
-def test_render_verifier_rejects_missing_video_stream(tmp_path: Path, monkeypatch) -> None:
+def test_render_verifier_rejects_missing_video_stream(
+    tmp_path: Path, monkeypatch
+) -> None:
     output = tmp_path / "audio-only.mp4"
     output.write_bytes(b"not-a-real-container")
 
@@ -60,7 +62,10 @@ def test_render_verifier_rejects_missing_video_stream(tmp_path: Path, monkeypatc
         )
         stderr = ""
 
-    monkeypatch.setattr("services.render_verifier.subprocess.run", lambda *args, **kwargs: Result())
+    monkeypatch.setattr(
+        "services.render_verifier.subprocess.run",
+        lambda *args, **kwargs: Result(),
+    )
 
     result = verify_rendered_media(output)
 
@@ -69,7 +74,9 @@ def test_render_verifier_rejects_missing_video_stream(tmp_path: Path, monkeypatc
     assert result.error == "output_verification_failed:video_stream,dimensions_positive"
 
 
-def test_render_verifier_rejects_duration_drift(tmp_path: Path, monkeypatch) -> None:
+def test_render_verifier_rejects_duration_drift(
+    tmp_path: Path, monkeypatch
+) -> None:
     output = tmp_path / "wrong-duration.mp4"
     output.write_bytes(b"valid")
 
@@ -83,7 +90,10 @@ def test_render_verifier_rejects_duration_drift(tmp_path: Path, monkeypatch) -> 
         )
         stderr = ""
 
-    monkeypatch.setattr("services.render_verifier.subprocess.run", lambda *args, **kwargs: Result())
+    monkeypatch.setattr(
+        "services.render_verifier.subprocess.run",
+        lambda *args, **kwargs: Result(),
+    )
 
     result = verify_rendered_media(output, expected_duration_sec=10.0)
 
