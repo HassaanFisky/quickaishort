@@ -784,9 +784,11 @@ export function AIPanel() {
       const dispatchActions = actions.map(canonicalToDispatchEnvelope);
       const kernelEnabled = isStudioProjectKernelEnabled();
       const currentProjectId = useEditorStore.getState().studioProjectId;
+      let localApplied = false;
 
       useEditorStore.getState().pushAiSnapshot("AI plan");
       dispatchAIActions(dispatchActions);
+      localApplied = true;
 
       let receipt = "Preview applied";
       if (kernelEnabled) {
@@ -851,6 +853,9 @@ export function AIPanel() {
         actions: dispatchActions,
       });
     } catch (err: unknown) {
+      if (localApplied) {
+        useEditorStore.getState().undoAiEdit();
+      }
       const message =
         err instanceof Error ? err.message : "Could not apply this edit plan.";
       addAIMessage({
