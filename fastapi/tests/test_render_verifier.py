@@ -74,9 +74,7 @@ def test_render_verifier_rejects_missing_video_stream(
     assert result.error == "output_verification_failed:video_stream,dimensions_positive"
 
 
-def test_render_verifier_rejects_duration_drift(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_render_verifier_rejects_duration_drift(tmp_path: Path, monkeypatch) -> None:
     output = tmp_path / "wrong-duration.mp4"
     output.write_bytes(b"valid")
 
