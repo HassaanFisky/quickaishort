@@ -778,13 +778,13 @@ export function AIPanel() {
     if (!pendingEditPlan || isAIThinking) return;
     setAIThinking(true);
     setThinkingStage("Applying your approved plan…");
+    let localApplied = false;
 
     try {
       const actions = pendingEditPlan.actions;
       const dispatchActions = actions.map(canonicalToDispatchEnvelope);
       const kernelEnabled = isStudioProjectKernelEnabled();
       const currentProjectId = useEditorStore.getState().studioProjectId;
-      let localApplied = false;
 
       useEditorStore.getState().pushAiSnapshot("AI plan");
       dispatchAIActions(dispatchActions);
