@@ -399,6 +399,7 @@ export function useServerExport({ userId }: UseServerExportArgs) {
       };
 
       setIsExporting(true);
+      setExportStage("queued");
       setExportProgress(0);
       toast.info("Render queued on the server…");
 
