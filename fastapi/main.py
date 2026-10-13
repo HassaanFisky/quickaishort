@@ -1281,7 +1281,12 @@ async def export_status(
     status_map = {
         "queued": "queued",
         "retry_pending": "queued",
-        "processing": "started",
+        "preparing": "preparing",
+        "processing": "rendering",
+        "executing": "executing",
+        "rendering": "rendering",
+        "verifying": "verifying",
+        "complete": "finished",
         "success": "finished",
         "dead": "failed",
         "cancelled": "canceled",
@@ -1291,6 +1296,20 @@ async def export_status(
     }
     status = status_map.get(internal_status, "unknown")
     response: dict = {"status": status, "job_id": job_id}
+    if meta.get("progress") is not None:
+        try:
+            response["progress"] = max(0, min(100, int(float(meta["progress"]))))
+        except (TypeError, ValueError):
+            pass
+    if meta.get("current_step"):
+        response["current_step"] = meta["current_step"]
+    if meta.get("message"):
+        response["message"] = meta["message"]
+    if meta.get("verification"):
+        try:
+            response["verification"] = json.loads(meta["verification"])
+        except (TypeError, ValueError):
+            pass
     if status == "finished":
         response["download_url"] = _build_download_url(job_id, verified_user_id)
     elif status == "failed":

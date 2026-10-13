@@ -58,10 +58,17 @@ export interface ExportEnqueueResponse {
 
 export type ExportJobStatus =
   | "queued"
+  | "preparing"
+  | "analyzing"
+  | "planning"
+  | "executing"
+  | "rendering"
+  | "verifying"
   | "started"
   | "deferred"
   | "scheduled"
   | "finished"
+  | "complete"
   | "failed"
   | "stopped"
   | "canceled"
@@ -72,6 +79,19 @@ export interface ExportStatusResponse {
   job_id: string;
   download_url?: string;
   error?: string;
+  progress?: number;
+  current_step?: string;
+  message?: string;
+  verification?: {
+    passed?: boolean;
+    checks?: Record<string, boolean>;
+    duration_sec?: number | null;
+    width?: number | null;
+    height?: number | null;
+    has_video?: boolean;
+    has_audio?: boolean;
+    error?: string | null;
+  };
   meta?: {
     duration_sec?: number;
     file_size_bytes?: number;

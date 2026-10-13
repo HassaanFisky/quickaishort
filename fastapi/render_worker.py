@@ -48,7 +48,10 @@ from services.observability import (  # noqa: E402
     track_manifest_render,
 )
 from services.job_persistence import persist_failed_job  # noqa: E402
-from services.render_queue import push_result as _rq_push_result  # noqa: E402
+from services.render_queue import (  # noqa: E402
+    push_result as _rq_push_result,
+    update_render_progress,
+)
 
 # Re-export for tests that import from render_worker.
 __all__ = ["apply_tier_render_policy", "process_render_task"]
@@ -509,6 +512,13 @@ async def _async_process_render_task(
                 mapping={"status": "processing", "started_at": str(started_at)},
             )
             redis_conn.expire(_META_KEY.format(job_id), _RECOVERY_TTL)
+            update_render_progress(
+                job_id,
+                status="preparing",
+                progress=1,
+                current_step="preparing",
+                message="Preparing your export…",
+            )
             if run_id:
                 redis_conn.set(_RUNID_KEY.format(job_id), run_id, ex=_RECOVERY_TTL)
         except Exception as exc:
@@ -577,7 +587,14 @@ async def _async_process_render_task(
         if production_plan:
             from services.render_service import render_video
 
-            progress("Starting production render...", 5)
+            update_render_progress(
+                job_id,
+                status="executing",
+                progress=5,
+                current_step="executing",
+                message="Applying the approved edit plan…",
+            )
+            progress("Starting production render...", 10)
             # render_video is sync because it calls ffmpeg.run() which is blocking
             # We wrap it in to_thread so it doesn't starve the async event loop (which could drop Redis async keepalives).
             result_path = Path(await asyncio.to_thread(render_video, production_plan))
@@ -586,6 +603,13 @@ async def _async_process_render_task(
                 for s in production_plan.get("segments", [])
             )
         else:
+            update_render_progress(
+                job_id,
+                status="rendering",
+                progress=10,
+                current_step="rendering",
+                message="Rendering the final video…",
+            )
             # Pillar 2: Duration Limit Guard
             if (end_sec - start_sec) > 180:
                 raise ValueError("Render duration exceeds 180s limit.")
@@ -597,6 +621,53 @@ async def _async_process_render_task(
             )
             result_path = render_result.output_path
             duration_sec = render_result.duration_sec
+
+        update_render_progress(
+            job_id,
+            status="verifying",
+            progress=94,
+            current_step="verifying",
+            message="Checking the rendered video…",
+        )
+        progress("Checking the rendered video…", 94)
+        from services.render_verifier import verify_rendered_media
+
+        expected_duration = None
+        if render_manifest:
+            try:
+                expected_duration = (
+                    float((render_manifest.get("timeline") or {}).get("duration") or 0)
+                    or None
+                )
+            except (TypeError, ValueError):
+                expected_duration = None
+
+        def _int_or_none(value: object) -> Optional[int]:
+            try:
+                return int(value) if value is not None else None
+            except (TypeError, ValueError):
+                return None
+
+        verification = verify_rendered_media(
+            result_path,
+            expected_duration_sec=expected_duration or duration_sec,
+            expected_width=_int_or_none(options.get("output_width")),
+            expected_height=_int_or_none(options.get("output_height")),
+        )
+        update_render_progress(
+            job_id,
+            status="verifying",
+            progress=98,
+            current_step="verifying",
+            message=(
+                "Final media checks complete."
+                if verification.passed
+                else "The rendered file failed media checks."
+            ),
+            verification=verification.as_dict(),
+        )
+        if not verification.passed:
+            raise RuntimeError(verification.error or "output_verification_failed")
 
         # Storage
         progress("Finalizing export...", 90)
@@ -690,6 +761,14 @@ async def _async_process_render_task(
                 time.time() - started_at, quality=options.get("quality", "medium")
             )
 
+        update_render_progress(
+            job_id,
+            status="complete",
+            progress=100,
+            current_step="complete",
+            message="Export verified and ready.",
+            verification=verification.as_dict(),
+        )
         publish(CHANNEL_EXPORT_COMPLETE, payload)
         publish(
             CHANNEL_STATS_INCREMENT,
