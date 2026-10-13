@@ -12,12 +12,14 @@ def test_missing_duration_fails_closed() -> None:
     state = _state_from_context({})
     assert state.videoDuration == 0.0
 
+
 def test_duration_fallback() -> None:
     state = _state_from_context({"videoDuration": 45.0})
     assert state.videoDuration == 45.0
 
     state2 = _state_from_context({"duration": 30.0, "videoDuration": 45.0})
     assert state2.videoDuration == 30.0
+
 
 def test_duration_zero_is_allowed() -> None:
     state = _state_from_context({"duration": 0.0})
