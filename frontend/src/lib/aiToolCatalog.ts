@@ -50,6 +50,7 @@ export interface CapabilityMeta {
   cost_class: string;
   runtime_status: string;
   orchestrator_emit: boolean;
+  side_effects?: string[];
 }
 
 export const CAPABILITY_BY_ID: Record<string, CapabilityMeta> = Object.fromEntries(

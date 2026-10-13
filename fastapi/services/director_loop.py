@@ -41,19 +41,20 @@ def _project_id_from_context(ctx: Optional[dict[str, Any]]) -> Optional[str]:
 
 def _state_from_context(ctx: Optional[dict[str, Any]]) -> AIEditorCurrentState:
     data = ctx or {}
-    try:
-        # We explicitly want float() to fail with TypeError on None so we hit the exception block.
-        # This handles missing duration the same as invalid/unparseable ones.
-        raw_duration = (
-            data.get("duration")
-            if data.get("duration") is not None
-            else data.get("videoDuration")
-        )
-        duration = float(raw_duration)
-    except (TypeError, ValueError):
-        # Missing/unparseable media duration is unknown. Fail closed rather than
-        # inventing a 60s video boundary for deterministic edit sanitisation.
-        duration = 0.0
+    import math
+
+    duration = 0.0
+    for key in ("duration", "videoDuration"):
+        val = data.get(key)
+        if val is None or val == "":
+            continue
+        try:
+            parsed = float(val)
+            if parsed >= 0 and not math.isinf(parsed) and not math.isnan(parsed):
+                duration = parsed
+                break
+        except (TypeError, ValueError):
+            continue
     aspect = data.get("aspectRatio") or "9:16"
     if aspect not in {"9:16", "1:1", "16:9", "4:5"}:
         aspect = "9:16"

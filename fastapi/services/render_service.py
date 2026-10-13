@@ -471,7 +471,9 @@ class RenderService:
             # zoompan: z=zoom, d=duration(frames), s=output_size
             # Note: zoompan happens at 30fps by default
             # H4 Fix: Dynamically set size based on job aspect ratio to prevent double scaling overhead
-            zoompan_size = "1080x1080" if job.aspect_ratio == "1:1" else "1080x1920"
+            zoompan_size = (
+                "1080x1080" if job.aspect_ratio == "1:1" else "{out_w}x{out_h}"
+            )
             video = video.filter("zoompan", z=zoom_expr, d=1, s=zoompan_size, fps=30)
 
         if job.watermark.enabled and job.watermark.image_path is not None:
@@ -511,7 +513,7 @@ class RenderService:
         # Canvas overlays — applied before captions so captions render on top
         for overlay in job.canvas_overlays:
             # Compute pixel position from fractional coords using ffmpeg expressions.
-            # Output size at this point in the filter chain is always 1080x1920 (9:16).
+            # Output size at this point in the filter chain is always {out_w}x{out_h} (9:16).
             out_w, out_h = (1080, 1920) if job.aspect_ratio == "9:16" else (1080, 1080)
             px = int(overlay.x_pct * out_w)
             py = int(overlay.y_pct * out_h)
@@ -636,6 +638,10 @@ def render_video(production_plan: dict) -> str:
         # Falls back to frame-accurate concat when disabled or only one clip exists.
         transition_enabled = bool(production_plan.get("transition_enabled", False))
 
+        # Use tier-enforced dimensions if provided in the plan
+        out_w = int(production_plan.get("output_width") or 1080)
+        out_h = int(production_plan.get("output_height") or 1920)
+
         if not segments:
             raise ValueError("No segments found in production plan")
 
@@ -663,7 +669,9 @@ def render_video(production_plan: dict) -> str:
 
             if not clip_source or clip_source == "BLACK_FRAME":
                 _run_ffmpeg(
-                    ffmpeg.input(f"color=c=black:s=1080x1920:d={duration}", f="lavfi")
+                    ffmpeg.input(
+                        f"color=c=black:s={out_w}x{out_h}:d={duration}", f="lavfi"
+                    )
                     .output(str(target_clip), vcodec="libx264", pix_fmt="yuv420p")
                     .overwrite_output()
                 )
@@ -688,7 +696,7 @@ def render_video(production_plan: dict) -> str:
                     # Fallback to black frame
                     _run_ffmpeg(
                         ffmpeg.input(
-                            f"color=c=black:s=1080x1920:d={duration}", f="lavfi"
+                            f"color=c=black:s={out_w}x{out_h}:d={duration}", f="lavfi"
                         )
                         .output(str(target_clip), vcodec="libx264", pix_fmt="yuv420p")
                         .overwrite_output()
@@ -697,9 +705,12 @@ def render_video(production_plan: dict) -> str:
                     _run_ffmpeg(
                         ffmpeg.input(str(local_source), ss=start, t=duration)
                         .filter(
-                            "scale", 1080, 1920, force_original_aspect_ratio="increase"
+                            "scale",
+                            out_w,
+                            out_h,
+                            force_original_aspect_ratio="increase",
                         )
-                        .filter("crop", 1080, 1920)
+                        .filter("crop", out_w, out_h)
                         .output(
                             str(target_clip),
                             vcodec="libx264",
@@ -722,7 +733,7 @@ def render_video(production_plan: dict) -> str:
                     # Fallback to black frame
                     _run_ffmpeg(
                         ffmpeg.input(
-                            f"color=c=black:s=1080x1920:d={duration}", f="lavfi"
+                            f"color=c=black:s={out_w}x{out_h}:d={duration}", f="lavfi"
                         )
                         .output(str(target_clip), vcodec="libx264", pix_fmt="yuv420p")
                         .overwrite_output()
@@ -731,9 +742,12 @@ def render_video(production_plan: dict) -> str:
                     _run_ffmpeg(
                         ffmpeg.input(str(local_source), ss=start, t=duration)
                         .filter(
-                            "scale", 1080, 1920, force_original_aspect_ratio="increase"
+                            "scale",
+                            out_w,
+                            out_h,
+                            force_original_aspect_ratio="increase",
                         )
-                        .filter("crop", 1080, 1920)
+                        .filter("crop", out_w, out_h)
                         .output(
                             str(target_clip),
                             vcodec="libx264",
@@ -758,9 +772,12 @@ def render_video(production_plan: dict) -> str:
                     _run_ffmpeg(
                         ffmpeg.input(downloaded_file, ss=start, t=duration)
                         .filter(
-                            "scale", 1080, 1920, force_original_aspect_ratio="increase"
+                            "scale",
+                            out_w,
+                            out_h,
+                            force_original_aspect_ratio="increase",
                         )
-                        .filter("crop", 1080, 1920)
+                        .filter("crop", out_w, out_h)
                         .output(
                             str(target_clip),
                             vcodec="libx264",
@@ -778,7 +795,7 @@ def render_video(production_plan: dict) -> str:
                     )
                     _run_ffmpeg(
                         ffmpeg.input(
-                            f"color=c=black:s=1080x1920:d={duration}", f="lavfi"
+                            f"color=c=black:s={out_w}x{out_h}:d={duration}", f="lavfi"
                         )
                         .output(str(target_clip), vcodec="libx264", pix_fmt="yuv420p")
                         .overwrite_output()
@@ -787,8 +804,10 @@ def render_video(production_plan: dict) -> str:
                 # Local file path
                 _run_ffmpeg(
                     ffmpeg.input(clip_source, ss=start, t=duration)
-                    .filter("scale", 1080, 1920, force_original_aspect_ratio="increase")
-                    .filter("crop", 1080, 1920)
+                    .filter(
+                        "scale", out_w, out_h, force_original_aspect_ratio="increase"
+                    )
+                    .filter("crop", out_w, out_h)
                     .output(
                         str(target_clip),
                         vcodec="libx264",
