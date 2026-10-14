@@ -2226,63 +2226,25 @@ async def proxy_video_stream(
         raise HTTPException(status_code=500, detail="Stream error — please try again.")
 
 
-@app.get("/api/audio")
-@limiter.limit("20/minute")
-async def get_audio(
-    request: Request,
-    url: str = Query(...),
-    user_id: Optional[str] = None,
-    token: Optional[str] = None,
-    expires: Optional[int] = None,
-):
-    """Serves the audio stream for a given YouTube URL with 100% reliability fallbacks."""
+async def _get_audio_from_cobalt(url: str, video_id: str, tmpdir: str) -> tuple[bool, Path | None, str]:
     from services.cobalt_client import download_audio as cobalt_download
 
-    video_id = VideoService.extract_video_id(url)
-    if not video_id:
-        raise HTTPException(status_code=400, detail="Invalid YouTube URL")
-    _require_media_authorization(url, user_id, token, expires)
-
-    # ── Redis audio cache ─────────────────────────────────────────────────────
-    cache_key = f"audio_cache:{video_id}"
+    cobalt_path = Path(tmpdir) / f"{video_id}_cobalt.mp3"
     try:
-        cached_bytes = redis_conn.get(cache_key)
-        if cached_bytes:
-            cached_file = Path(
-                cached_bytes.decode()
-                if isinstance(cached_bytes, bytes)
-                else cached_bytes
-            )
-            if cached_file.exists() and cached_file.stat().st_size > 10000:
-                logger.info("audio [cache HIT] vid=%s", video_id)
-                return FileResponse(path=cached_file, media_type="audio/mpeg")
-            redis_conn.delete(cache_key)
-            logger.info("audio [cache STALE] vid=%s — re-extracting", video_id)
-    except Exception as _rc_err:
-        logger.warning("audio [cache] Redis lookup error vid=%s: %s", video_id, _rc_err)
-
-    _AUDIO_CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    tmpdir = tempfile.mkdtemp()
-    output_path = Path(tmpdir) / f"{video_id}.m4a"
-
-    success = False
-    last_error = ""
-
-    # TIER 0 — Cobalt public API (fast, no cookies, no proxy needed).
-    try:
-        cobalt_path = Path(tmpdir) / f"{video_id}_cobalt.mp3"
         if await cobalt_download(url, str(cobalt_path)):
-            output_path = cobalt_path
-            success = True
             logger.info("audio [cobalt] success vid=%s", video_id)
+            return True, cobalt_path, ""
         else:
-            last_error = "cobalt returned no audio"
-            logger.info(
-                "audio [cobalt] failed vid=%s — falling back to yt-dlp", video_id
-            )
+            logger.info("audio [cobalt] failed vid=%s — falling back to yt-dlp", video_id)
+            return False, None, "cobalt returned no audio"
     except Exception as _cobalt_exc:
-        last_error = f"cobalt error: {_cobalt_exc}"
         logger.warning("audio [cobalt] exception vid=%s: %s", video_id, _cobalt_exc)
+        return False, None, f"cobalt error: {_cobalt_exc}"
+
+
+async def _get_audio_from_ytdlp(url: str, video_id: str, tmpdir: str) -> tuple[bool, Path | None, str]:
+    output_path = Path(tmpdir) / f"{video_id}.m4a"
+    last_error = ""
 
     # TIER 1 — yt-dlp with two client-set attempts (no player_skip).
     # Attempt A: tv_embedded + ios — most reliable without PO token on server IPs.
@@ -2294,8 +2256,6 @@ async def get_audio(
     loop = asyncio.get_event_loop()
 
     for _attempt_label, _clients in _YDL_CLIENT_SETS:
-        if success:
-            break
         # Remove stale partial file from a previous attempt.
         if output_path.exists():
             output_path.unlink(missing_ok=True)
@@ -2327,13 +2287,13 @@ async def get_audio(
             await asyncio.wait_for(loop.run_in_executor(None, _run_yt), timeout=60.0)
 
             if output_path.exists() and output_path.stat().st_size > 10000:
-                success = True
                 logger.info(
                     "audio [yt-dlp/%s] success vid=%s size=%d",
                     _attempt_label,
                     video_id,
                     output_path.stat().st_size,
                 )
+                return True, output_path, ""
             else:
                 last_error = f"yt-dlp/{_attempt_label} produced empty file"
                 logger.warning(
@@ -2348,11 +2308,62 @@ async def get_audio(
                 "audio [yt-dlp/%s] error vid=%s: %s", _attempt_label, video_id, e
             )
 
+    return False, None, last_error
+
+
+@app.get("/api/audio")
+@limiter.limit("20/minute")
+async def get_audio(
+    request: Request,
+    url: str = Query(...),
+    user_id: Optional[str] = None,
+    token: Optional[str] = None,
+    expires: Optional[int] = None,
+):
+    """Serves the audio stream for a given YouTube URL with 100% reliability fallbacks."""
+
+    video_id = VideoService.extract_video_id(url)
+    if not video_id:
+        raise HTTPException(status_code=400, detail="Invalid YouTube URL")
+    _require_media_authorization(url, user_id, token, expires)
+
+    # ── Redis audio cache ─────────────────────────────────────────────────────
+    cache_key = f"audio_cache:{video_id}"
+    try:
+        cached_bytes = redis_conn.get(cache_key)
+        if cached_bytes:
+            cached_file = Path(
+                cached_bytes.decode()
+                if isinstance(cached_bytes, bytes)
+                else cached_bytes
+            )
+            if cached_file.exists() and cached_file.stat().st_size > 10000:
+                logger.info("audio [cache HIT] vid=%s", video_id)
+                return FileResponse(path=cached_file, media_type="audio/mpeg")
+            redis_conn.delete(cache_key)
+            logger.info("audio [cache STALE] vid=%s — re-extracting", video_id)
+    except Exception as _rc_err:
+        logger.warning("audio [cache] Redis lookup error vid=%s: %s", video_id, _rc_err)
+
+    _AUDIO_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    tmpdir = tempfile.mkdtemp()
+
+    success = False
+    last_error = ""
+    output_path = None
+
+    # TIER 0 — Cobalt public API (fast, no cookies, no proxy needed).
+    success, output_path, last_error = await _get_audio_from_cobalt(url, video_id, tmpdir)
+
+    # TIER 1 — yt-dlp with two client-set attempts (no player_skip).
+    if not success:
+        success, output_path, last_error = await _get_audio_from_ytdlp(url, video_id, tmpdir)
+
     # NOTE: Cobalt v10 now requires JWT auth (error.api.auth.jwt.missing) and
     # Piped/Invidious instances are down as of 2026-05. All removed to avoid
     # wasting 45+ seconds on guaranteed failures before the final 503.
 
-    if not success:
+    if not success or not output_path:
         shutil.rmtree(tmpdir, ignore_errors=True)
         logger.error(
             "audio all tiers failed vid=%s last_error=%s", video_id, last_error
