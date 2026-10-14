@@ -2223,10 +2223,14 @@ async def proxy_video_stream(
     except Exception as exc:
         await client.aclose()
         logger.exception("proxy-video stream error vid=%s: %s", v_id, exc)
-        raise HTTPException(status_code=500, detail="Stream error — please try again.")
+        raise HTTPException(
+            status_code=500, detail="Stream error — please try again."
+        )
 
 
-async def _get_audio_from_cobalt(url: str, video_id: str, tmpdir: str) -> tuple[bool, Path | None, str]:
+async def _get_audio_from_cobalt(
+    url: str, video_id: str, tmpdir: str
+) -> tuple[bool, Path | None, str]:
     from services.cobalt_client import download_audio as cobalt_download
 
     cobalt_path = Path(tmpdir) / f"{video_id}_cobalt.mp3"
@@ -2235,19 +2239,25 @@ async def _get_audio_from_cobalt(url: str, video_id: str, tmpdir: str) -> tuple[
             logger.info("audio [cobalt] success vid=%s", video_id)
             return True, cobalt_path, ""
         else:
-            logger.info("audio [cobalt] failed vid=%s — falling back to yt-dlp", video_id)
+            logger.info(
+                "audio [cobalt] failed vid=%s — falling back", video_id
+            )
             return False, None, "cobalt returned no audio"
     except Exception as _cobalt_exc:
-        logger.warning("audio [cobalt] exception vid=%s: %s", video_id, _cobalt_exc)
+        logger.warning(
+            "audio [cobalt] exception vid=%s: %s", video_id, _cobalt_exc
+        )
         return False, None, f"cobalt error: {_cobalt_exc}"
 
 
-async def _get_audio_from_ytdlp(url: str, video_id: str, tmpdir: str) -> tuple[bool, Path | None, str]:
+async def _get_audio_from_ytdlp(
+    url: str, video_id: str, tmpdir: str
+) -> tuple[bool, Path | None, str]:
     output_path = Path(tmpdir) / f"{video_id}.m4a"
     last_error = ""
 
     # TIER 1 — yt-dlp with two client-set attempts (no player_skip).
-    # Attempt A: tv_embedded + ios — most reliable without PO token on server IPs.
+    # Attempt A: tv_embedded + ios — most reliable without PO token on servers.
     # Attempt B: android + web + web_creator — different client stack as retry.
     _YDL_CLIENT_SETS = [
         ("A", ["tv_embedded", "ios"]),
@@ -2284,7 +2294,9 @@ async def _get_audio_from_ytdlp(url: str, video_id: str, tmpdir: str) -> tuple[b
                 with yt_dlp.YoutubeDL(opts) as ydl:
                     ydl.download([url])
 
-            await asyncio.wait_for(loop.run_in_executor(None, _run_yt), timeout=60.0)
+            await asyncio.wait_for(
+                loop.run_in_executor(None, _run_yt), timeout=60.0
+            )
 
             if output_path.exists() and output_path.stat().st_size > 10000:
                 logger.info(
@@ -2353,11 +2365,15 @@ async def get_audio(
     output_path = None
 
     # TIER 0 — Cobalt public API (fast, no cookies, no proxy needed).
-    success, output_path, last_error = await _get_audio_from_cobalt(url, video_id, tmpdir)
+    success, output_path, last_error = await _get_audio_from_cobalt(
+        url, video_id, tmpdir
+    )
 
     # TIER 1 — yt-dlp with two client-set attempts (no player_skip).
     if not success:
-        success, output_path, last_error = await _get_audio_from_ytdlp(url, video_id, tmpdir)
+        success, output_path, last_error = await _get_audio_from_ytdlp(
+            url, video_id, tmpdir
+        )
 
     # NOTE: Cobalt v10 now requires JWT auth (error.api.auth.jwt.missing) and
     # Piped/Invidious instances are down as of 2026-05. All removed to avoid
