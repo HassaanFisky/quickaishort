@@ -2223,9 +2223,7 @@ async def proxy_video_stream(
     except Exception as exc:
         await client.aclose()
         logger.exception("proxy-video stream error vid=%s: %s", v_id, exc)
-        raise HTTPException(
-            status_code=500, detail="Stream error — please try again."
-        )
+        raise HTTPException(status_code=500, detail="Stream error — please try again.")
 
 
 async def _get_audio_from_cobalt(
@@ -2239,14 +2237,10 @@ async def _get_audio_from_cobalt(
             logger.info("audio [cobalt] success vid=%s", video_id)
             return True, cobalt_path, ""
         else:
-            logger.info(
-                "audio [cobalt] failed vid=%s — falling back", video_id
-            )
+            logger.info("audio [cobalt] failed vid=%s — falling back", video_id)
             return False, None, "cobalt returned no audio"
     except Exception as _cobalt_exc:
-        logger.warning(
-            "audio [cobalt] exception vid=%s: %s", video_id, _cobalt_exc
-        )
+        logger.warning("audio [cobalt] exception vid=%s: %s", video_id, _cobalt_exc)
         return False, None, f"cobalt error: {_cobalt_exc}"
 
 
@@ -2294,9 +2288,7 @@ async def _get_audio_from_ytdlp(
                 with yt_dlp.YoutubeDL(opts) as ydl:
                     ydl.download([url])
 
-            await asyncio.wait_for(
-                loop.run_in_executor(None, _run_yt), timeout=60.0
-            )
+            await asyncio.wait_for(loop.run_in_executor(None, _run_yt), timeout=60.0)
 
             if output_path.exists() and output_path.stat().st_size > 10000:
                 logger.info(
