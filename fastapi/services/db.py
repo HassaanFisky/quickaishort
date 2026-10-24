@@ -1,16 +1,17 @@
-"""Firestore + GCS client initialization.
+﻿"""Firestore + GCS client initialization with zero-daemon local fallback.
 
-Replaces MongoDB/GridFS. Uses Application Default Credentials on Cloud Run.
+Uses Application Default Credentials on Cloud Run.
+Falls back cleanly to LocalSQLiteDB and LocalGCSBucket when in LOCAL_FIRST_MODE
+or when external GCP credentials/services are uninitialized.
 Call init_db() at FastAPI startup (lifespan) or init_db_sync() in RQ workers.
 """
+
+from __future__ import annotations
 
 import logging
 import os
 from datetime import datetime, timezone
-from typing import Optional
-
-from google.cloud import firestore
-from google.cloud import storage as gcs
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -20,16 +21,34 @@ GCS_BUCKET_NAME = os.environ.get("GCS_BUCKET_NAME", "quickaishort-agent-494304-m
 EXPORTS_BUCKET = "exports"
 UPLOADS_BUCKET = "uploads"
 
-_db: Optional[firestore.Client] = None
-_gcs_client: Optional[gcs.Client] = None
-_gcs_bucket: Optional[gcs.Bucket] = None
+_db: Any = None
+_gcs_client: Any = None
+_gcs_bucket: Any = None
 _ready: bool = False
+_is_local_mode: bool = False
 
 
 def _init() -> None:
-    global _db, _gcs_client, _gcs_bucket, _ready
+    global _db, _gcs_client, _gcs_bucket, _ready, _is_local_mode
+    from services.local_persistence import (
+        get_local_bucket,
+        get_local_db,
+        is_local_first_mode,
+    )
+
+    if is_local_first_mode():
+        _db = get_local_db()
+        _gcs_bucket = get_local_bucket()
+        _is_local_mode = True
+        _ready = True
+        logger.info("Local-first persistence initialized (SQLite + Local Storage)")
+        return
+
     project = os.environ.get("GOOGLE_CLOUD_PROJECT", "quickaishort-agent-494304")
     try:
+        from google.cloud import firestore
+        from google.cloud import storage as gcs
+
         _db = firestore.Client(project=project)
         _gcs_client = gcs.Client(project=project)
         _gcs_bucket = _gcs_client.bucket(GCS_BUCKET_NAME)
@@ -40,8 +59,14 @@ def _init() -> None:
             GCS_BUCKET_NAME,
         )
     except Exception as exc:
-        logger.error("DB init failed: %s", exc)
-        _ready = False
+        logger.warning(
+            "Cloud DB init failed (%s) -- falling back to local SQLite/Storage",
+            exc,
+        )
+        _db = get_local_db()
+        _gcs_bucket = get_local_bucket()
+        _is_local_mode = True
+        _ready = True
 
 
 async def init_db() -> None:
@@ -55,35 +80,42 @@ def init_db_sync() -> None:
 
 
 async def close_db() -> None:
-    global _db, _gcs_client, _gcs_bucket, _ready
+    global _db, _gcs_client, _gcs_bucket, _ready, _is_local_mode
     _db = None
     _gcs_client = None
     _gcs_bucket = None
     _ready = False
+    _is_local_mode = False
 
 
-def get_db() -> firestore.Client:
+def get_db() -> Any:
+
     if _db is None:
-        raise RuntimeError("Firestore is not initialized. Did the lifespan run?")
+        _init()
     return _db
 
 
-def get_gcs_bucket() -> gcs.Bucket:
+def get_gcs_bucket() -> Any:
+
     if _gcs_bucket is None:
-        raise RuntimeError("GCS bucket is not initialized.")
+        _init()
     return _gcs_bucket
 
 
-def get_exports_bucket() -> gcs.Bucket:
+def get_exports_bucket() -> Any:
     return get_gcs_bucket()
 
 
-def get_uploads_bucket() -> gcs.Bucket:
+def get_uploads_bucket() -> Any:
     return get_gcs_bucket()
 
 
 def is_ready() -> bool:
     return _ready
+
+
+def is_local_storage_active() -> bool:
+    return _is_local_mode
 
 
 def utc_now() -> datetime:

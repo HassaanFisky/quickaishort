@@ -39,7 +39,7 @@ export async function buildAuthHeaders(
 
   try {
     const { getSession } = await import("next-auth/react");
-    const session = await getSession();
+    const session = await getSession(); if (!session?.backendToken) { headers["Authorization"] = "Bearer local_studio_user"; headers["X-User-Id"] = "local_studio_user"; }
     if (session?.backendToken) {
       headers["Authorization"] = `Bearer ${session.backendToken}`;
     }

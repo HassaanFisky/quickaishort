@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import warnings
 
@@ -160,18 +160,18 @@ class StartupConfigurationError(RuntimeError):
 
 # Variables whose absence makes the service *unsafe or dishonest*, not merely
 # degraded. Each one gates authentication integrity, request signing, or
-# data-plane access — there is no correct behaviour to fall back to, so in
+# data-plane access â€” there is no correct behaviour to fall back to, so in
 # production the process must refuse to start rather than serve traffic that
 # silently 503s or hands out unsigned URLs.
 CRITICAL_ENV_VARS = {
     # Auth integrity: without it every protected endpoint 503s (AUTH_DISABLED
-    # is deliberately not implemented — see services/auth.py).
-    "NEXTAUTH_SECRET": "JWT verification impossible — all protected endpoints would return 503",
+    # is deliberately not implemented â€” see services/auth.py).
+    "NEXTAUTH_SECRET": "JWT verification impossible â€” all protected endpoints would return 503",
     # Request signing: services/signing.py raises on use if unset, so exports
     # fail at the point of use rather than at boot.
-    "EXPORT_SIGNING_SECRET": "Download URL signing would fail — exports unreachable",
+    "EXPORT_SIGNING_SECRET": "Download URL signing would fail â€” exports unreachable",
     # Data plane: Firestore + GCS clients are constructed from this.
-    "GOOGLE_CLOUD_PROJECT": "Firestore/GCS unavailable — credits, stats and exports would fail",
+    "GOOGLE_CLOUD_PROJECT": "Firestore/GCS unavailable â€” credits, stats and exports would fail",
     # Render queue coordination: status, locking, dedup, cancellation.
     "REDIS_URL": "Render queue, locking and cancellation would not function",
 }
@@ -179,7 +179,7 @@ CRITICAL_ENV_VARS = {
 # Absence degrades a capability but leaves the service correct and honest.
 # These are logged once at startup and never block boot.
 OPTIONAL_ENV_VARS = {
-    "GEMINI_API_KEY": "AI analysis/planning disabled — deterministic paths still work",
+    "GEMINI_API_KEY": "AI analysis/planning disabled â€” deterministic paths still work",
     "PUBLIC_API_URL": "Download links will be relative paths only",
 }
 
@@ -209,7 +209,7 @@ def _validate_env(*, is_production: bool | None = None) -> None:
 
     if missing_optional:
         logger.warning(
-            "Optional configuration absent — running with reduced capability:\n%s",
+            "Optional configuration absent â€” running with reduced capability:\n%s",
             "\n".join(missing_optional),
         )
 
@@ -217,16 +217,16 @@ def _validate_env(*, is_production: bool | None = None) -> None:
         return
 
     if is_production:
-        # Never include the values themselves — only the names.
+        # Never include the values themselves â€” only the names.
         raise StartupConfigurationError(
-            "FATAL — missing critical environment variables in production:\n"
+            "FATAL â€” missing critical environment variables in production:\n"
             + "\n".join(missing_critical)
             + "\nRefusing to start: the service cannot authenticate, sign, or "
             "reach its data plane. Set these in the Cloud Run service config."
         )
 
     logger.warning(
-        "STARTUP WARNING — missing critical environment variables:\n%s\n"
+        "STARTUP WARNING â€” missing critical environment variables:\n%s\n"
         "This WOULD ABORT STARTUP under ENVIRONMENT=production.\n"
         "Copy fastapi/.env.example to fastapi/.env and fill in the values.",
         "\n".join(missing_critical),
@@ -245,7 +245,7 @@ def _load_agent_module(module_name: str):
     if not _ADK_AVAILABLE:
         raise HTTPException(
             status_code=503,
-            detail="AI agent runtime unavailable — google-adk is not installed.",
+            detail="AI agent runtime unavailable â€” google-adk is not installed.",
         )
     try:
         return importlib.import_module(module_name)
@@ -271,7 +271,7 @@ async def _pubsub_listener(stop: asyncio.Event) -> None:
     redis_url = os.getenv("REDIS_URL")
     if is_prod and not redis_url:
         logger.warning(
-            "REDIS_URL not configured in production — pubsub listener disabled."
+            "REDIS_URL not configured in production â€” pubsub listener disabled."
         )
         return
 
@@ -279,7 +279,7 @@ async def _pubsub_listener(stop: asyncio.Event) -> None:
     try:
         pubsub.subscribe(*PUBSUB_CHANNELS)
     except Exception as exc:
-        logger.error("Pubsub subscribe failed: %s — listener disabled.", exc)
+        logger.error("Pubsub subscribe failed: %s â€” listener disabled.", exc)
         return
     logger.info("Pubsub listener active on %s", ",".join(PUBSUB_CHANNELS))
 
@@ -342,7 +342,7 @@ async def _route_pubsub(channel: str, payload: dict) -> None:
             CHANNEL_EXPORT_FAILED: "error",
         }[channel]
 
-        # User cancel is not a hard failure — keep project usable.
+        # User cancel is not a hard failure â€” keep project usable.
         cancel_reason = (
             str(payload.get("reason") or payload.get("error") or "").strip().lower()
         )
@@ -562,8 +562,10 @@ from routers.dub_router import router as dub_router  # noqa: E402
 app.include_router(dub_router)
 
 from routers.locales_router import router as locales_router  # noqa: E402
+from routers.local_media_router import router as local_media_router
 
 app.include_router(locales_router)
+app.include_router(local_media_router)
 
 
 from core.rate_limit import get_real_ip, limiter  # noqa: E402
@@ -574,10 +576,12 @@ try:
     from slowapi.middleware import SlowAPIMiddleware
 
     app.add_middleware(SlowAPIMiddleware)
-except Exception:  # pragma: no cover — package always present in prod image
+except Exception:  # pragma: no cover â€” package always present in prod image
     import logging as _log
 
-    _log.getLogger(__name__).error("SlowAPIMiddleware unavailable — rate limits inert")
+    _log.getLogger(__name__).error(
+        "SlowAPIMiddleware unavailable â€” rate limits inert"
+    )
 
 allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "")
 origins = [
@@ -791,15 +795,15 @@ def health_check():
     """Service health snapshot. LIVENESS + dependency detail.
 
     Top-level `status` is LIVENESS ONLY and is always "ok" if this handler
-    runs. It is deliberately NOT an aggregate of the dependency fields — do
+    runs. It is deliberately NOT an aggregate of the dependency fields â€” do
     not alert on it alone, and do not use this endpoint for load-balancer
     routing decisions (use /ready or /health/ready).
 
     Every dependency field is one of two kinds, declared in `check_semantics`
     and in a per-field `*_check` key:
 
-      live        — a real round-trip was performed this request (Redis).
-      config_only — configuration/initialization presence only; no network
+      live        â€” a real round-trip was performed this request (Redis).
+      config_only â€” configuration/initialization presence only; no network
                     I/O was performed (Firestore, GCS, ADK, Sentry). A
                     config_only field reporting healthy does NOT mean the
                     backend is reachable.
@@ -809,7 +813,7 @@ def health_check():
     """
     # CONFIG-ONLY CHECK. db.is_ready() reports whether the Firestore and GCS
     # *client objects were constructed* at startup. Client construction does not
-    # perform network I/O, so this proves credentials resolved — NOT that either
+    # perform network I/O, so this proves credentials resolved â€” NOT that either
     # backend is reachable right now. Do not upgrade this to a live probe without
     # accounting for Cloud Run's sub-second probe timeouts.
     clients_constructed = db_is_ready()
@@ -838,7 +842,7 @@ def health_check():
             "live": ["redis"],
             "config_only": ["firestore", "storage", "adk", "sentry"],
         },
-        # ── Legacy boolean fields, kept for existing external monitors ────────
+        # â”€â”€ Legacy boolean fields, kept for existing external monitors â”€â”€â”€â”€â”€â”€â”€â”€
         # `mongo` is a historical name; MongoDB is not in the render path. It
         # reports Firestore client construction. Prefer `firestore_status`.
         "mongo": clients_constructed,
@@ -846,9 +850,9 @@ def health_check():
         "adk": adk_installed,
         # Previously this returned the Firestore flag under a GCS name, so a
         # broken bucket could never surface here. It now reports the GCS client
-        # explicitly. Still construction-only — not a bucket I/O probe.
+        # explicitly. Still construction-only â€” not a bucket I/O probe.
         "gcs": clients_constructed,
-        # ── v2 fields ─────────────────────────────────────────────────────────
+        # â”€â”€ v2 fields â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         # "initialized" deliberately replaces the old "connected", which
         # implied a live connection this check never made.
         "firestore_status": client_state,
@@ -875,12 +879,12 @@ def readiness_check():
     requests). The load balancer stops routing traffic to this instance
     until the circuits recover and /ready returns 200 again.
 
-    Intentionally does NOT trigger lazy initialization — probing must never
+    Intentionally does NOT trigger lazy initialization â€” probing must never
     block on Redis or other I/O with sub-second probe timeouts.
 
     SCOPE: extraction capacity ONLY. This is a LIVE check of in-process
     circuit-breaker state; it makes no network call. It deliberately does not
-    check Redis — see /health/ready, which is the Redis-backed readiness probe.
+    check Redis â€” see /health/ready, which is the Redis-backed readiness probe.
     The two are not interchangeable: this one can return 200 while Redis is
     down, and /health/ready can return 200 while every extractor circuit is
     open. Point Cloud Run at whichever failure mode should drain traffic.
@@ -889,12 +893,12 @@ def readiness_check():
 
     instance = _ext_mod._service_instance
     if instance is None:
-        # Not yet initialized — circuits are closed by default, report ready.
+        # Not yet initialized â€” circuits are closed by default, report ready.
         return {"status": "ready"}
     if not instance.is_ready():
         raise HTTPException(
             status_code=503,
-            detail="All extraction tier circuits are open — not ready to serve",
+            detail="All extraction tier circuits are open â€” not ready to serve",
         )
     return {"status": "ready"}
 
@@ -936,7 +940,7 @@ def prometheus_metrics(
     except ImportError:
         raise HTTPException(
             status_code=501,
-            detail="prometheus-client not installed — add it to requirements.txt",
+            detail="prometheus-client not installed â€” add it to requirements.txt",
         )
     except Exception as e:
         logger.error("Failed to generate metrics: %s", e)
@@ -954,7 +958,7 @@ def debug_tiers(request: Request):
     Returns the current state (CLOSED/OPEN/HALF-OPEN), failure count,
     and how long each circuit has been open (if applicable).
 
-    Internal endpoint — restrict to internal traffic in production via
+    Internal endpoint â€” restrict to internal traffic in production via
     Cloud Armor, IAP, or a header check (INTERNAL_SECRET env var).
     """
     from services.extractor_service import get_extractor_service
@@ -974,7 +978,7 @@ def debug_tiers(request: Request):
     }
 
 
-# ---- Stream Info (DASH/HLS manifest — no bytes proxied) ----------------------
+# ---- Stream Info (DASH/HLS manifest â€” no bytes proxied) ----------------------
 
 
 @app.get("/api/stream-info")
@@ -988,7 +992,7 @@ async def stream_info(
 
     The frontend uses these URLs to play the video directly in the browser
     via <video src=...>, completely bypassing Cloud Run bandwidth costs.
-    Falls through T0 (residential proxy if configured) → T1 (no proxy).
+    Falls through T0 (residential proxy if configured) â†’ T1 (no proxy).
     """
     from services.video_acquisition import get_stream_manifests
 
@@ -1017,7 +1021,7 @@ async def analyze_video(
     body: AnalyzeRequest,
     verified_user_id: str = Depends(get_verified_user_id),
 ):
-    # JWT sole tenant authority — body.userId must never bill/cache/spend.
+    # JWT sole tenant authority â€” body.userId must never bill/cache/spend.
     user_id = verified_user_id
     charged = False
     try:
@@ -1090,10 +1094,10 @@ async def analyze_video(
 async def export_video(
     request: ExportRequest, verified_user_id: str = Depends(get_verified_user_id)
 ):
-    # JWT sole tenant authority — request.user_id is ignored for billing/ACL.
+    # JWT sole tenant authority â€” request.user_id is ignored for billing/ACL.
     user_id = verified_user_id
 
-    # EP-006 / ADR-012 — Kernel snapshot is bake authority when project_id set
+    # EP-006 / ADR-012 â€” Kernel snapshot is bake authority when project_id set
     bake_manifest = request.render_manifest
     bake_project_revision = request.project_revision
     if request.project_id:
@@ -1130,10 +1134,10 @@ async def export_video(
     if RENDER_MANIFEST_REQUIRED and not bake_manifest:
         raise HTTPException(
             status_code=422,
-            detail="render_manifest is required – please update your client. Set RENDER_MANIFEST_REQUIRED=false to allow legacy exports temporarily.",
+            detail="render_manifest is required â€“ please update your client. Set RENDER_MANIFEST_REQUIRED=false to allow legacy exports temporarily.",
         )
     if not RENDER_MANIFEST_ENABLED and bake_manifest and not request.project_id:
-        # Strip client manifest if feature is disabled – legacy mode
+        # Strip client manifest if feature is disabled â€“ legacy mode
         bake_manifest = None
 
     # Pillar 1: Overload Guardrail
@@ -1216,7 +1220,7 @@ async def export_video(
         "voiceover_enabled": request.voiceover_enabled,
         "mute_source_audio": request.mute_source_audio,
         "dub_audio_uri": request.dub_audio_uri,
-        # Phase 59 / EP-006: bake IR — Kernel snapshot when project_id present
+        # Phase 59 / EP-006: bake IR â€” Kernel snapshot when project_id present
         "render_manifest": (bake_manifest.model_dump() if bake_manifest else None),
         "project_id": request.project_id,
         "project_revision": bake_project_revision,
@@ -1241,7 +1245,7 @@ async def export_video(
         )
         raise HTTPException(
             status_code=503,
-            detail="Render queue unavailable. Credits were not charged — try again.",
+            detail="Render queue unavailable. Credits were not charged â€” try again.",
         ) from exc
 
     try:
@@ -1291,7 +1295,7 @@ async def export_status(
         "dead": "failed",
         "cancelled": "canceled",
         "superseded": "canceled",
-        # Duplicate means another worker already owns the upload — terminal for FE.
+        # Duplicate means another worker already owns the upload â€” terminal for FE.
         "duplicate": "failed",
     }
     status = status_map.get(internal_status, "unknown")
@@ -1361,11 +1365,11 @@ async def cancel_render(
         job.cancel()
         rq_cancelled = True
     except NoSuchJobError:
-        pass  # already gone — treat as success
+        pass  # already gone â€” treat as success
     except Exception as exc:
         logger.warning("cancel_render_fetch_failed job_id=%s error=%s", job_id, exc)
 
-    # render:meta:{job_id} is a HASH — update status with hset, never JSON.
+    # render:meta:{job_id} is a HASH â€” update status with hset, never JSON.
     try:
         redis_conn.hset(f"render:meta:{job_id}", mapping={"status": "cancelled"})
         # Supersede any in-flight worker run for this job_id (O1 guard).
@@ -1637,7 +1641,7 @@ async def reward_referral_bonus(
 
 
 def _require_admin(secret: Optional[str]) -> None:
-    """Fail closed: missing ADMIN_SECRET or missing/mismatched header → 403."""
+    """Fail closed: missing ADMIN_SECRET or missing/mismatched header â†’ 403."""
     expected = (os.getenv("ADMIN_SECRET") or "").strip()
     provided = (secret or "").strip()
     if not expected or not provided or provided != expected:
@@ -1696,7 +1700,7 @@ async def export_download(job_id: str, user_id: str, token: str, expires: int):
     Serves the rendered video directly from GCS.
     """
 
-    # Enforce HMAC token — verify() uses hmac.compare_digest (timing-safe)
+    # Enforce HMAC token â€” verify() uses hmac.compare_digest (timing-safe)
     if not verify(job_id, user_id, expires, token):
         raise HTTPException(
             status_code=403, detail="Invalid or expired download token."
@@ -1757,7 +1761,7 @@ async def stats_endpoint(
 
 @app.websocket("/ws/stats/{user_id}")
 async def stats_ws(websocket: WebSocket, user_id: str, token: str = Query(default="")):
-    """Authenticated stats stream — JWT via ?token= (browsers cannot set WS headers)."""
+    """Authenticated stats stream â€” JWT via ?token= (browsers cannot set WS headers)."""
     from services.auth import verify_bearer_token
     from fastapi import HTTPException as _HTTPException
 
@@ -1796,9 +1800,9 @@ async def get_video_info(request: Request, url: str):
     Returns video metadata for a YouTube URL.
 
     Priority:
-      1. YouTube oEmbed API  — no key required, always fast, works for all public videos
-      2. YouTube Data API v3 — adds duration when YOUTUBE_API_KEY env var is set
-      3. Static fallback     — returns thumbnail from i.ytimg.com when everything else fails
+      1. YouTube oEmbed API  â€” no key required, always fast, works for all public videos
+      2. YouTube Data API v3 â€” adds duration when YOUTUBE_API_KEY env var is set
+      3. Static fallback     â€” returns thumbnail from i.ytimg.com when everything else fails
 
     yt-dlp is intentionally NOT used here: it is slow, fails on bot-detected videos,
     and the pipeline only needs title + thumbnail + duration at submission time.
@@ -1806,7 +1810,7 @@ async def get_video_info(request: Request, url: str):
     video_id = _require_youtube_url(url)
     thumb_fallback = f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
 
-    # ── Tier 1: YouTube oEmbed (no API key, sub-second, public videos only) ──
+    # â”€â”€ Tier 1: YouTube oEmbed (no API key, sub-second, public videos only) â”€â”€
     oembed_title: str | None = None
     oembed_thumb: str | None = None
     try:
@@ -1824,7 +1828,7 @@ async def get_video_info(request: Request, url: str):
     except Exception as exc:
         logger.debug("oEmbed failed for %s: %s", video_id, exc)
 
-    # ── Tier 2: YouTube Data API v3 (adds precise duration) ──────────────────
+    # â”€â”€ Tier 2: YouTube Data API v3 (adds precise duration) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     api_key = os.environ.get("YOUTUBE_API_KEY")
     if api_key:
         try:
@@ -1863,8 +1867,8 @@ async def get_video_info(request: Request, url: str):
         except Exception as exc:
             logger.warning("YouTube Data API failed for %s: %s", video_id, exc)
 
-    # ── Tier 3: Return oEmbed data (or static fallback) ──────────────────────
-    # Never return YOUTUBE_FETCH_FAILED for public videos — oEmbed always works.
+    # â”€â”€ Tier 3: Return oEmbed data (or static fallback) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # Never return YOUTUBE_FETCH_FAILED for public videos â€” oEmbed always works.
     return {
         "id": video_id,
         "title": oembed_title or "YouTube Video",
@@ -2018,7 +2022,7 @@ async def proxy_video_stream_head(
     expires: Optional[int] = None,
 ):
     """
-    Immediate HEAD response — lets browsers probe the endpoint without triggering
+    Immediate HEAD response â€” lets browsers probe the endpoint without triggering
     a full yt-dlp extraction. Returns Accept-Ranges so browsers know seeking works.
     """
     _require_youtube_url(url)
@@ -2050,13 +2054,13 @@ async def proxy_video_stream(
     Range-aware YouTube video proxy.
 
     YouTube CDN signed URLs are IP-bound to the server that requested them.
-    Redirect-to-CDN is not viable — the browser IP != Cloud Run IP → 403.
+    Redirect-to-CDN is not viable â€” the browser IP != Cloud Run IP â†’ 403.
     Cloud Run resolves the URL with yt-dlp then proxies bytes from the same IP.
     Range headers are forwarded so the browser can seek and detect duration.
 
     Two-tier extraction:
-      Tier 1 — combined formats (18/22) so a single URL serves audio+video.
-      Tier 2 — any best MP4 ≤720p if combined formats are unavailable.
+      Tier 1 â€” combined formats (18/22) so a single URL serves audio+video.
+      Tier 2 â€” any best MP4 â‰¤720p if combined formats are unavailable.
     """
     _require_youtube_url(url)
     _require_media_authorization(url, user_id, token, expires)
@@ -2069,11 +2073,11 @@ async def proxy_video_stream(
     stream_url: str | None = None
     found_format_id: str | None = None
 
-    # ── yt-dlp extraction — two format tiers, 45 s timeout each ──────────
+    # â”€â”€ yt-dlp extraction â€” two format tiers, 45 s timeout each â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     _tiers = [
-        # Tier 1: itag 18 (360p+audio) or 22 (720p+audio) — single muxed file.
+        # Tier 1: itag 18 (360p+audio) or 22 (720p+audio) â€” single muxed file.
         ("18/22/best[ext=mp4][acodec!=none]/best[ext=mp4]/best", "combined"),
-        # Tier 2: anything ≤720p MP4 — last resort if combined not available.
+        # Tier 2: anything â‰¤720p MP4 â€” last resort if combined not available.
         ("best[height<=720][ext=mp4]/best[ext=mp4]/best", "fallback"),
     ]
 
@@ -2117,7 +2121,7 @@ async def proxy_video_stream(
             stream_url = candidate
             found_format_id = info.get("format_id", "?")
             logger.info(
-                "proxy-video [%s] yt-dlp ok — fmt=%s vid=%s",
+                "proxy-video [%s] yt-dlp ok â€” fmt=%s vid=%s",
                 tier_label,
                 found_format_id,
                 v_id,
@@ -2138,11 +2142,11 @@ async def proxy_video_stream(
         logger.error("proxy-video all tiers exhausted for vid=%s", v_id)
         raise HTTPException(
             status_code=503,
-            detail="Video stream unavailable — YouTube may be blocking server access. Try again in a moment.",
+            detail="Video stream unavailable â€” YouTube may be blocking server access. Try again in a moment.",
         )
 
-    # ── Proxy the stream with full Range-request forwarding ──────────────
-    # Using the same Cloud Run IP that obtained the signed URL — YouTube CDN
+    # â”€â”€ Proxy the stream with full Range-request forwarding â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # Using the same Cloud Run IP that obtained the signed URL â€” YouTube CDN
     # accepts it even though the URL contains an embedded server IP.
     range_header = request.headers.get("range")
     upstream_headers: dict[str, str] = {
@@ -2178,7 +2182,7 @@ async def proxy_video_stream(
             )
             raise HTTPException(
                 status_code=502,
-                detail=f"Upstream CDN returned HTTP {upstream.status_code} — please try again.",
+                detail=f"Upstream CDN returned HTTP {upstream.status_code} â€” please try again.",
             )
 
         resp_headers: dict[str, str] = {
@@ -2223,7 +2227,9 @@ async def proxy_video_stream(
     except Exception as exc:
         await client.aclose()
         logger.exception("proxy-video stream error vid=%s: %s", v_id, exc)
-        raise HTTPException(status_code=500, detail="Stream error — please try again.")
+        raise HTTPException(
+            status_code=500, detail="Stream error â€” please try again."
+        )
 
 
 @app.get("/api/audio")
@@ -2243,7 +2249,7 @@ async def get_audio(
         raise HTTPException(status_code=400, detail="Invalid YouTube URL")
     _require_media_authorization(url, user_id, token, expires)
 
-    # ── Redis audio cache ─────────────────────────────────────────────────────
+    # â”€â”€ Redis audio cache â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     cache_key = f"audio_cache:{video_id}"
     try:
         cached_bytes = redis_conn.get(cache_key)
@@ -2257,7 +2263,7 @@ async def get_audio(
                 logger.info("audio [cache HIT] vid=%s", video_id)
                 return FileResponse(path=cached_file, media_type="audio/mpeg")
             redis_conn.delete(cache_key)
-            logger.info("audio [cache STALE] vid=%s — re-extracting", video_id)
+            logger.info("audio [cache STALE] vid=%s â€” re-extracting", video_id)
     except Exception as _rc_err:
         logger.warning("audio [cache] Redis lookup error vid=%s: %s", video_id, _rc_err)
 
@@ -2268,7 +2274,7 @@ async def get_audio(
     success = False
     last_error = ""
 
-    # TIER 0 — Cobalt public API (fast, no cookies, no proxy needed).
+    # TIER 0 â€” Cobalt public API (fast, no cookies, no proxy needed).
     try:
         cobalt_path = Path(tmpdir) / f"{video_id}_cobalt.mp3"
         if await cobalt_download(url, str(cobalt_path)):
@@ -2278,15 +2284,15 @@ async def get_audio(
         else:
             last_error = "cobalt returned no audio"
             logger.info(
-                "audio [cobalt] failed vid=%s — falling back to yt-dlp", video_id
+                "audio [cobalt] failed vid=%s â€” falling back to yt-dlp", video_id
             )
     except Exception as _cobalt_exc:
         last_error = f"cobalt error: {_cobalt_exc}"
         logger.warning("audio [cobalt] exception vid=%s: %s", video_id, _cobalt_exc)
 
-    # TIER 1 — yt-dlp with two client-set attempts (no player_skip).
-    # Attempt A: tv_embedded + ios — most reliable without PO token on server IPs.
-    # Attempt B: android + web + web_creator — different client stack as retry.
+    # TIER 1 â€” yt-dlp with two client-set attempts (no player_skip).
+    # Attempt A: tv_embedded + ios â€” most reliable without PO token on server IPs.
+    # Attempt B: android + web + web_creator â€” different client stack as retry.
     _YDL_CLIENT_SETS = [
         ("A", ["tv_embedded", "ios"]),
         ("B", ["android", "web", "web_creator"]),
@@ -2362,19 +2368,17 @@ async def get_audio(
         if "sign in" in _err_lower or "bot" in _err_lower or "confirm" in _err_lower:
             _detail = (
                 "Bot detection: this video requires browser cookies to access from our servers. "
-                "Try a different video — most videos work without cookies."
+                "Try a different video â€” most videos work without cookies."
             )
         elif "video unavailable" in _err_lower or "unavailable" in _err_lower:
-            _detail = "This video is unavailable — it may be private, deleted, or region-locked."
+            _detail = "This video is unavailable â€” it may be private, deleted, or region-locked."
         elif "timed out" in _err_lower:
-            _detail = (
-                "Audio extraction timed out — video may be too long or slow to access."
-            )
+            _detail = "Audio extraction timed out â€” video may be too long or slow to access."
         else:
-            _detail = "Audio extraction failed — server could not download this video. Try a different video or try again."
+            _detail = "Audio extraction failed â€” server could not download this video. Try a different video or try again."
         raise HTTPException(status_code=503, detail=_detail)
 
-    # ── Persist to cache so next request is instant ───────────────────────────
+    # â”€â”€ Persist to cache so next request is instant â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     cache_path = _AUDIO_CACHE_DIR / f"{video_id}.mp3"
     try:
         shutil.copy2(str(output_path), str(cache_path))
@@ -2401,7 +2405,7 @@ def _viral_to_preflight_result(
     PreflightResult-compatible dict for the degraded fallback response.
 
     Persona votes are empty (viral agent has no persona panel).
-    Scores are normalised from 0–100 → 0–1.
+    Scores are normalised from 0â€“100 â†’ 0â€“1.
     """
     clip_candidates = []
     total_score = 0.0
@@ -2432,7 +2436,7 @@ def _viral_to_preflight_result(
         "clip_candidates": clip_candidates,
         "weighted_consensus_score": weighted,
         "recommendation": (
-            f"[Degraded — viral fallback] Top clip scores {top.get('score', 0):.0%}. "
+            f"[Degraded â€” viral fallback] Top clip scores {top.get('score', 0):.0%}. "
             "Full audience simulation unavailable."
         ),
         "persona_votes": [],
@@ -2451,12 +2455,12 @@ async def run_preflight(
     verified_user_id: str = Depends(get_verified_user_id),
 ):
     ensure_agent_ready("preflight_agent", strict=False)
-    # JWT sole tenant authority — body.user_id ignored for credits/Gemini spend.
+    # JWT sole tenant authority â€” body.user_id ignored for credits/Gemini spend.
     user_id = verified_user_id
     if not _ADK_AVAILABLE:
         raise HTTPException(
             status_code=503,
-            detail="Pre-Flight pipeline unavailable — google-adk not installed on this instance",
+            detail="Pre-Flight pipeline unavailable â€” google-adk not installed on this instance",
         )
 
     if not body.clip_candidates:
@@ -2533,7 +2537,7 @@ async def run_preflight(
             else type(primary_exc).__name__
         )
         logger.warning(
-            "preflight_primary_failed user=%s type=%s error=%s — attempting viral fallback",
+            "preflight_primary_failed user=%s type=%s error=%s â€” attempting viral fallback",
             user_id,
             exc_type,
             str(primary_exc)[:200],
@@ -2590,14 +2594,14 @@ async def run_preflight(
                     "fallback_reason": exc_type,
                 }
 
-            # Fallback ran but returned nothing — fall through to error
+            # Fallback ran but returned nothing â€” fall through to error
             raise ValueError("Viral fallback returned no suggestions")
 
         except Exception as fb_exc:
             logger.error(
                 "preflight_fallback_failed user=%s error=%s", user_id, str(fb_exc)[:200]
             )
-            # Both strategies exhausted — now raise
+            # Both strategies exhausted â€” now raise
             from services.credit_guard import refund_credits_best_effort
 
             await refund_credits_best_effort(
@@ -2613,7 +2617,7 @@ async def run_preflight(
                 )
             raise HTTPException(
                 status_code=500,
-                detail="Pre-Flight analysis failed. Credits were refunded — try again.",
+                detail="Pre-Flight analysis failed. Credits were refunded â€” try again.",
             )
 
 
@@ -2624,12 +2628,12 @@ async def run_director(
     body: DirectRequest,
     verified_user_id: str = Depends(get_verified_user_id),
 ):
-    # JWT sole tenant authority — body.user_id ignored for credits/Gemini spend.
+    # JWT sole tenant authority â€” body.user_id ignored for credits/Gemini spend.
     user_id = verified_user_id
     if not _ADK_AVAILABLE:
         raise HTTPException(
             status_code=503,
-            detail="Director pipeline unavailable — google-adk not installed",
+            detail="Director pipeline unavailable â€” google-adk not installed",
         )
 
     workload_id = hashlib.sha256(body.input_text.encode("utf-8")).hexdigest()
@@ -2697,9 +2701,9 @@ async def create_video(
     verified_user_id: str = Depends(get_verified_user_id),
 ):
     """
-    Runs: ScriptAgent → PreFlight → RenderService (Background)
+    Runs: ScriptAgent â†’ PreFlight â†’ RenderService (Background)
     """
-    # JWT sole tenant authority — body.user_id ignored for credits/render ACL.
+    # JWT sole tenant authority â€” body.user_id ignored for credits/render ACL.
     user_id = verified_user_id
     workload_id = hashlib.sha256(
         json.dumps(
@@ -2847,12 +2851,12 @@ async def liveness():
 
 @app.get("/health/ready")
 async def readiness():
-    """READINESS. LIVE check of Redis — a real round-trip, not config presence.
+    """READINESS. LIVE check of Redis â€” a real round-trip, not config presence.
 
     Redis coordinates render status, locking, deduplication and cancellation,
     so an instance that cannot reach it must not receive traffic.
 
-    SCOPE: Redis only. It does not check extractor circuits — see /ready.
+    SCOPE: Redis only. It does not check extractor circuits â€” see /ready.
     """
     try:
         redis_conn.ping()
@@ -3091,7 +3095,7 @@ async def adk_generate(
         )
         raise HTTPException(
             status_code=503,
-            detail="ADK generate failed. Credits were refunded — try again.",
+            detail="ADK generate failed. Credits were refunded â€” try again.",
         ) from exc
 
     try:
@@ -3195,7 +3199,8 @@ async def agent_trace(
         svc = preflight_runner.session_service
     if svc is None:
         raise HTTPException(
-            status_code=503, detail="Session service unavailable — ADK not initialised"
+            status_code=503,
+            detail="Session service unavailable â€” ADK not initialised",
         )
 
     try:

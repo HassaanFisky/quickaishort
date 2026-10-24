@@ -1330,7 +1330,7 @@ export function AIPanel() {
         <div className="ai-header-left">
           {/* Gem badge */}
           <div className="ai-header-gem">✦</div>
-          <span className="ai-panel-title">Chat</span>
+          <span className="ai-panel-title">QuickAI Studio</span><span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 ml-1.5" title="Operating with zero cloud spend and local persistence">LOCAL_DETERMINISTIC</span>
         </div>
 
         <div className="ai-header-right">

@@ -518,3 +518,74 @@ export async function getVideoTaskStatus(taskId: string): Promise<VideoTaskStatu
 
   return data;
 }
+
+// ---- Local Media Pipeline & Studio API (Run 2 & 3) -------------------------
+
+export interface LocalMediaProbe {
+  duration: number;
+  width: number;
+  height: number;
+  fps: number;
+  has_audio: boolean;
+  codec: string;
+}
+
+export interface LocalMediaUploadResponse {
+  status: string;
+  video_id: string;
+  media_url: string;
+  probe: LocalMediaProbe;
+  uploaded_by: string;
+}
+
+export interface LocalRenderResponse {
+  status: string;
+  job_id: string;
+  poll_url: string;
+}
+
+export interface LocalRenderStatusResponse {
+  job_id: string;
+  video_id?: string;
+  user_id?: string;
+  status: "queued" | "running" | "success" | "dead";
+  progress?: number;
+  output_url?: string;
+  download_url?: string;
+  error?: string;
+}
+
+export async function uploadLocalMediaFile(file: File): Promise<LocalMediaUploadResponse> {
+  const form = new FormData();
+  form.append("file", file);
+  const { data } = await axios.post<LocalMediaUploadResponse>(
+    `${API_URL}/api/local-media/upload`,
+    form,
+    { headers: { "Content-Type": "multipart/form-data" } }
+  );
+  return data;
+}
+
+export function getLocalMediaStreamUrl(bucketPrefix: string, filename: string): string {
+  return `${API_URL}/api/local-media/${bucketPrefix}/${filename}`;
+}
+
+export async function dispatchLocalRenderJob(
+  videoId: string,
+  startSec: number = 0.0,
+  endSec: number = 60.0,
+  options: Record<string, unknown> = {}
+): Promise<LocalRenderResponse> {
+  const { data } = await axios.post<LocalRenderResponse>(
+    `${API_URL}/api/local-media/render`,
+    { video_id: videoId, start_sec: startSec, end_sec: endSec, options }
+  );
+  return data;
+}
+
+export async function getLocalRenderJobStatus(jobId: string): Promise<LocalRenderStatusResponse> {
+  const { data } = await axios.get<LocalRenderStatusResponse>(
+    `${API_URL}/api/local-media/render/status/${jobId}`
+  );
+  return data;
+}

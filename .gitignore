@@ -111,3 +111,9 @@ fastapi/inject_test.py
 
 # graft's local graph cache — regenerable, not committed (run `graft build`).
 graft/
+
+# QuickAI Studio local-first data & runtime storage
+.quickai_studio/
+*.db
+*.sqlite3
+
