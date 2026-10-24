@@ -44,7 +44,11 @@ def _state_from_context(ctx: Optional[dict[str, Any]]) -> AIEditorCurrentState:
     try:
         # We explicitly want float() to fail with TypeError on None so we hit the exception block.
         # This handles missing duration the same as invalid/unparseable ones.
-        raw_duration = data.get("duration") if data.get("duration") is not None else data.get("videoDuration")
+        raw_duration = (
+            data.get("duration")
+            if data.get("duration") is not None
+            else data.get("videoDuration")
+        )
         duration = float(raw_duration)
     except (TypeError, ValueError):
         # Missing/unparseable media duration is unknown. Fail closed rather than
