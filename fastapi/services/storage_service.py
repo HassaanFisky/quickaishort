@@ -144,6 +144,11 @@ class StorageService:
         bucket = get_gcs_bucket()
         blob = bucket.blob(remote_path)
 
+        from services.local_persistence import LocalGCSBlob
+
+        if isinstance(blob, LocalGCSBlob):
+            return blob.generate_signed_url(method="PUT", content_type=content_type)
+
         credentials, _ = google.auth.default(
             scopes=["https://www.googleapis.com/auth/cloud-platform"]
         )

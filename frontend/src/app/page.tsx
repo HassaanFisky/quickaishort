@@ -175,7 +175,7 @@ export default function LandingPage() {
                   variants={itemVariants}
                   className="text-[11px] md:text-xs font-black uppercase tracking-[0.22em] text-muted-foreground mb-5"
                 >
-                  QuickAI Short
+                  QuickAI Studio
                 </motion.p>
 
                 <motion.h1 variants={itemVariants} className="text-5xl md:text-7xl lg:text-[5.5rem] font-black leading-[1.05] tracking-tighter mb-6 text-center">

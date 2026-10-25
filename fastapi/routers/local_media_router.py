@@ -1,17 +1,18 @@
-﻿"""FastAPI router for local media upload, preview streaming, and render job endpoints.
+"""FastAPI router for local media upload, preview streaming, and render job endpoints.
 
 Provides zero-daemon media endpoints:
-- POST /api/local-media/upload: Upload local video/audio directly to LocalGCSBucket.
-- GET  /api/local-media/{bucket_prefix}/{filename}: Stream media with HTTP Range support.
+- POST /api/local-media/upload: Upload local video/audio directly to LocalGCSBucket, probe & detect silence.
+- PUT  /api/local-media/put/{remote_path:path}: Local presigned PUT upload receiver.
+- GET  /api/local-media/{bucket_prefix}/{filename:path}: Stream media with HTTP Range support.
 - POST /api/local-media/render: Dispatch a render job to the local in-process pipeline.
 - GET  /api/local-media/render/status/{job_id}: Poll render job progress.
 """
 
 from __future__ import annotations
 
-import os
+import asyncio
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 from uuid import uuid4
 
 from fastapi import (
@@ -24,7 +25,7 @@ from fastapi import (
     Response,
     UploadFile,
 )
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from services.auth import get_verified_user_id
@@ -50,59 +51,53 @@ async def upload_local_media(
     file: UploadFile = File(...),
     user_id: str = Depends(get_verified_user_id),
 ):
-    """Upload media file into the local studio storage (uploads directory)."""
+    """Upload media file into the local studio storage (uploads directory), probe it, and detect silence."""
     clean_filename = Path(file.filename or f"upload_{uuid4().hex[:8]}.mp4").name
     dest_path = STUDIO_STORAGE_DIR / "uploads" / clean_filename
     dest_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with open(dest_path, "wb") as f:
-        content = await file.read()
-        f.write(content)
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty")
+    dest_path.write_bytes(content)
 
     pipeline = get_local_media_pipeline()
-    probe = pipeline.probe_media(dest_path)
+    try:
+        probe = await asyncio.to_thread(pipeline.probe_media, dest_path)
+    except Exception as exc:
+        dest_path.unlink(missing_ok=True)
+        raise HTTPException(
+            status_code=422, detail=f"Invalid or unreadable media file: {exc}"
+        ) from exc
+
+    silences = await asyncio.to_thread(pipeline.detect_silence, dest_path)
 
     return {
         "status": "success",
         "video_id": clean_filename,
         "media_url": f"/api/local-media/uploads/{clean_filename}",
         "probe": probe.to_dict(),
+        "silences": [{"start": s, "end": e} for s, e in silences],
         "uploaded_by": user_id,
     }
 
 
-@router.get("/{bucket_prefix}/{filename}")
-async def stream_local_media(
-    bucket_prefix: str,
-    filename: str,
+@router.put("/put/{remote_path:path}")
+async def put_local_presigned_blob(
+    remote_path: str,
     request: Request,
 ):
-    """Stream media file with Range header support for video players."""
-    # Strict path traversal protection
-    clean_prefix = Path(bucket_prefix).name
-    clean_name = Path(filename).name
-    full_path = (STUDIO_STORAGE_DIR / clean_prefix / clean_name).resolve()
+    """Accept direct PUT upload for local-first presigned upload URLs."""
+    try:
+        blob = get_local_bucket().blob(remote_path)
+    except ValueError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
 
-    if not full_path.exists() or not full_path.is_file():
-        raise HTTPException(status_code=404, detail="Media file not found")
-
-    # Verify path stays within STUDIO_STORAGE_DIR
-    if STUDIO_STORAGE_DIR.resolve() not in full_path.parents:
-        raise HTTPException(status_code=403, detail="Forbidden access")
-
-    media_type = "video/mp4"
-    if clean_name.endswith(".srt"):
-        media_type = "text/plain"
-    elif clean_name.endswith(".vtt"):
-        media_type = "text/vtt"
-    elif clean_name.endswith(".mp3"):
-        media_type = "audio/mpeg"
-
-    return FileResponse(
-        path=full_path,
-        media_type=media_type,
-        filename=clean_name,
-    )
+    body = await request.body()
+    if not body:
+        raise HTTPException(status_code=400, detail="Empty upload body")
+    await asyncio.to_thread(blob.upload_from_string, body)
+    return Response(status_code=200)
 
 
 @router.post("/render")
@@ -153,10 +148,45 @@ async def get_local_render_status(
     user_id: str = Depends(get_verified_user_id),
 ):
     """Poll render status from LocalSQLiteDB."""
+    _ = user_id
     db = get_local_db()
     doc = db.collection("render_jobs").document(job_id).get()
     if not doc.exists or not doc.to_dict():
         raise HTTPException(status_code=404, detail="Render job not found")
 
-    data = doc.to_dict()
-    return data
+    return doc.to_dict()
+
+
+@router.get("/{bucket_prefix}/{filename:path}")
+async def stream_local_media(
+    bucket_prefix: str,
+    filename: str,
+    request: Request,
+):
+    """Stream media file with Range header support for video players."""
+    _ = request
+    clean_prefix = Path(bucket_prefix).name
+    if ".." in Path(filename).parts or ".." in Path(bucket_prefix).parts:
+        raise HTTPException(status_code=403, detail="Forbidden access")
+
+    full_path = (STUDIO_STORAGE_DIR / clean_prefix / filename.lstrip("/\\")).resolve()
+    if STUDIO_STORAGE_DIR.resolve() not in full_path.parents:
+        raise HTTPException(status_code=403, detail="Forbidden access")
+
+    if not full_path.exists() or not full_path.is_file():
+        raise HTTPException(status_code=404, detail="Media file not found")
+
+    clean_name = full_path.name
+    media_type = "video/mp4"
+    if clean_name.endswith(".srt"):
+        media_type = "text/plain"
+    elif clean_name.endswith(".vtt"):
+        media_type = "text/vtt"
+    elif clean_name.endswith(".mp3"):
+        media_type = "audio/mpeg"
+
+    return FileResponse(
+        path=full_path,
+        media_type=media_type,
+        filename=clean_name,
+    )

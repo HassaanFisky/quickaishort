@@ -54,6 +54,23 @@ def _escape_drawtext(text: str) -> str:
     return text[:240]
 
 
+def _default_drawtext_fontfile_arg() -> str:
+    """Return ':fontfile=...' for drawtext when a known system font exists."""
+    candidates = (
+        Path("C:/Windows/Fonts/arial.ttf"),
+        Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
+        Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
+    )
+    for candidate in candidates:
+        try:
+            if candidate.is_file():
+                escaped = candidate.as_posix().replace(":", "\\\\:")
+                return f":fontfile={escaped}"
+        except OSError:
+            continue
+    return ""
+
+
 def compile_manifest_to_ffmpeg(
     manifest_dict: Dict[str, Any],
     workdir: Path,
@@ -289,6 +306,7 @@ def compile_manifest_to_ffmpeg(
         captions_enabled = bool(
             export_settings_effect.payload.get("captionsEnabled", True)
         )
+    fontfile_arg = _default_drawtext_fontfile_arg()
     if captions_enabled:
         for cap in list(manifest.captions or [])[:24]:
             text = str(getattr(cap, "text", "") or "").strip()
@@ -304,6 +322,7 @@ def compile_manifest_to_ffmpeg(
                 f":fontsize=42:fontcolor=white:borderw=2:bordercolor=black"
                 f":x=(w-text_w)/2:y=h-th-140"
                 f":enable='between(t,{start:.3f},{end:.3f})'"
+                f"{fontfile_arg}"
             )
 
     # 6. Tier watermark. The manifest branch bypasses the legacy filtergraph, so
@@ -312,6 +331,7 @@ def compile_manifest_to_ffmpeg(
         v_effects.append(
             f"drawtext=text='{_escape_drawtext(watermark_text)}'"
             f":fontsize=48:fontcolor=white@0.8:x=w-tw-40:y=h-th-40"
+            f"{fontfile_arg}"
         )
 
     filter_parts.append(

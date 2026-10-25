@@ -5,9 +5,9 @@ import Footer from "@/components/layout/Footer";
 import { CONTACT_EMAIL, mailto } from "@/lib/email-addresses";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy — QuickAI Short",
+  title: "Privacy Policy — QuickAI Studio",
   description:
-    "How QuickAI Short (quickaishort.online) collects, uses, protects, and shares your data — including Paddle payments and AI processing.",
+    "How QuickAI Studio (quickaishort.online) collects, uses, protects, and shares your data — including Paddle payments and AI processing.",
 };
 
 export default function PrivacyPage() {
@@ -26,7 +26,7 @@ export default function PrivacyPage() {
           <span className="text-foreground/80">quickaishort.online</span>
         </p>
         <p className="mt-6 text-muted-foreground leading-relaxed">
-          QuickAI Short (&quot;QuickAI,&quot; &quot;we,&quot; &quot;us,&quot; or
+          QuickAI Studio (&quot;QuickAI,&quot; &quot;we,&quot; &quot;us,&quot; or
           &quot;our&quot;) operates the website and product at{" "}
           <strong className="text-foreground font-medium">quickaishort.online</strong>{" "}
           (the &quot;Service&quot;). This Privacy Policy explains what information
@@ -267,7 +267,7 @@ export default function PrivacyPage() {
               12. Contact
             </h2>
             <p>
-              Privacy questions for QuickAI Short / quickaishort.online:{" "}
+              Privacy questions for QuickAI Studio / quickaishort.online:{" "}
               <a href={mailto(CONTACT_EMAIL)} className="text-foreground underline underline-offset-4 hover:text-primary">
                 {CONTACT_EMAIL}
               </a>

@@ -1,0 +1,51 @@
+appId: com.creativityefficient.quickaistudio
+productName: QuickAI Studio
+copyright: Copyright © 2026 QuickAI Studio
+asar: true
+directories:
+  output: ../dist/desktop
+  buildResources: ../frontend/public
+files:
+  - main.js
+  - preload.js
+  - package.json
+extraResources:
+  - from: ../fastapi
+    to: fastapi
+    filter:
+      - "**/*"
+      - "!venv/**"
+      - "!__pycache__/**"
+      - "!.pytest_cache/**"
+  - from: ../frontend/.next
+    to: frontend/.next
+  - from: ../frontend/public
+    to: frontend/public
+  - from: ../frontend/package.json
+    to: frontend/package.json
+mac:
+  category: public.app-category.video
+  darkModeSupport: true
+  target:
+    - target: dmg
+      arch: [x64, arm64]
+    - target: zip
+      arch: [x64, arm64]
+dmg:
+  title: "${productName} ${version}"
+  window:
+    width: 600
+    height: 420
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: QuickAI Studio

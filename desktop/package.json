@@ -1,0 +1,21 @@
+{
+  "name": "quickai-studio-desktop",
+  "productName": "QuickAI Studio",
+  "version": "1.0.0",
+  "description": "QuickAI Studio — Local-First AI Creative Video OS (Desktop Edition)",
+  "main": "main.js",
+  "author": "QuickAI Studio Engineering",
+  "license": "Proprietary",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
+    "dist:win": "electron-builder --win nsis portable",
+    "dist:mac": "electron-builder --mac dmg zip"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  }
+}

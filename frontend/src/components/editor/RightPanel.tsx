@@ -1377,7 +1377,7 @@ export default function RightPanel() {
                             if (lastDownloadUrl) {
                               const a = document.createElement("a");
                               a.href = lastDownloadUrl;
-                              a.download = "quickai-short.mp4";
+                              a.download = "quickai-studio.mp4";
                               a.target = "_blank";
                               a.rel = "noopener";
                               document.body.appendChild(a);

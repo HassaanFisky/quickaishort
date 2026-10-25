@@ -48,7 +48,7 @@ export default function HistoryPage() {
     }
     const a = document.createElement("a");
     a.href = url;
-    a.download = exp.output?.filename ?? `quickai-short-${exp._id}.mp4`;
+    a.download = exp.output?.filename ?? `quickai-studio-${exp._id}.mp4`;
     a.target = "_blank";
     a.rel = "noopener";
     document.body.appendChild(a);

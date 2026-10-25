@@ -14,7 +14,7 @@ import {
   User,
   CreditCard,
 } from "lucide-react";
-import Image from "next/image";
+import QSLogo from "@/components/shared/QSLogo";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Tooltip,
@@ -132,19 +132,11 @@ export default function Sidebar() {
           )}
           aria-label={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
-          <Image
-            src="/qs-logo.png"
-            alt=""
-            width={28}
-            height={28}
-            className="rounded-md shrink-0 qs-logo-mark"
-            priority
+          <QSLogo
+            variant={isSidebarCollapsed ? "mark" : "full"}
+            size="sm"
+            animated
           />
-          {!isSidebarCollapsed && (
-            <span className="text-[13px] font-semibold text-[hsl(var(--fg))] whitespace-nowrap">
-              QuickAI
-            </span>
-          )}
         </button>
       </div>
 

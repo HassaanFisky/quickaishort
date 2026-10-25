@@ -202,12 +202,32 @@ def update_render_progress(
 
 
 def get_render_status(job_id: str) -> dict[str, Any]:
-    """Return current status from the metadata hash."""
+    """Return current status from the metadata hash (with local-first fallback)."""
     meta_key = _META_KEY.format(job_id)
-    raw = redis_conn.hgetall(meta_key)
-    if not raw:
-        return {"job_id": job_id, "status": "unknown"}
-    return {k.decode(): v.decode() for k, v in raw.items()}
+    raw = {}
+    try:
+        raw = redis_conn.hgetall(meta_key)
+    except Exception:
+        raw = {}
+    if raw:
+        return {k.decode(): v.decode() for k, v in raw.items()}
+
+    try:
+        from services.local_persistence import get_local_db, get_local_redis
+
+        local_raw = get_local_redis().hgetall(meta_key)
+        if local_raw:
+            return {k.decode(): v.decode() for k, v in local_raw.items()}
+        snap = get_local_db().collection("render_jobs").document(job_id).get()
+        if snap.exists and snap.to_dict():
+            d = snap.to_dict() or {}
+            return {
+                str(k): str(v) if not isinstance(v, (dict, list)) else json.dumps(v)
+                for k, v in d.items()
+            }
+    except Exception:
+        pass
+    return {"job_id": job_id, "status": "unknown"}
 
 
 def get_dead_jobs(max_count: int = 100) -> list[dict[str, Any]]:

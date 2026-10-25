@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import os
 import re
 from datetime import datetime, timedelta, timezone
 from enum import Enum
@@ -251,6 +252,26 @@ class RedisDailyUsageStore:
                 ),
             )
         except Exception as exc:
+            if os.getenv(
+                "ENVIRONMENT", ""
+            ).strip().lower() != "production" and os.getenv(
+                "LOCAL_FIRST_MODE", ""
+            ).strip().lower() in {
+                "1",
+                "true",
+                "yes",
+                "on",
+            }:
+                from services.local_persistence import get_local_async_redis
+
+                local_r = get_local_async_redis()
+                if self._redis is not local_r:
+                    self._redis = local_r
+                    return await self.reserve_unique_workload(
+                        user_id=user_id,
+                        workload_id=workload_id,
+                        limit=limit,
+                    )
             raise LimitServiceUnavailable(
                 "Daily usage state unavailable; admission blocked."
             ) from exc

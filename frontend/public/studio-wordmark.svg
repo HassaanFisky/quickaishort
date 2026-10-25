@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 96" fill="none">
+  <defs>
+    <linearGradient id="qai-wm-grad" x1="8" y1="8" x2="88" y2="88" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#3B82F6"/>
+      <stop offset="52%" stop-color="#A855F7"/>
+      <stop offset="100%" stop-color="#EC4899"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="80" height="80" rx="22" fill="#07070C" stroke="url(#qai-wm-grad)" stroke-width="3.5"/>
+  <path d="M36 30.5C36 28.1 38.6 26.6 40.7 27.8L66.4 42.3C68.5 43.5 68.5 46.5 66.4 47.7L40.7 62.2C38.6 63.4 36 61.9 36 59.5V30.5Z" fill="url(#qai-wm-grad)"/>
+  <path d="M28 70H68" stroke="url(#qai-wm-grad)" stroke-width="3.5" stroke-linecap="round"/>
+  <text x="106" y="58" fill="#F8FAFC" font-family="Inter, system-ui, -apple-system, sans-serif" font-size="34" font-weight="800" letter-spacing="-1">Quick<tspan fill="url(#qai-wm-grad)">AI</tspan> Studio</text>
+</svg>

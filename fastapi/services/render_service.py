@@ -35,6 +35,23 @@ _FFMPEG_SEGMENT_TIMEOUT: int = int(os.environ.get("FFMPEG_SEGMENT_TIMEOUT_S", "1
 _FFMPEG_FINAL_TIMEOUT: int = int(os.environ.get("FFMPEG_FINAL_TIMEOUT_S", "300"))
 
 
+def _resolve_default_fontfile() -> str:
+    """Resolve an existing TrueType font file across Windows and Linux."""
+    candidates = (
+        Path("C:/Windows/Fonts/arialbd.ttf"),
+        Path("C:/Windows/Fonts/arial.ttf"),
+        Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
+        Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
+    )
+    for candidate in candidates:
+        try:
+            if candidate.is_file():
+                return candidate.as_posix()
+        except OSError:
+            continue
+    return "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+
+
 def _run_ffmpeg(stream, *, timeout: int = _FFMPEG_SEGMENT_TIMEOUT) -> None:
     """
     Execute an ffmpeg-python stream graph with a hard wall-clock timeout.
@@ -486,6 +503,7 @@ class RenderService:
             wm_text = (job.watermark.text or "Made with QuickAI").replace(":", "\\:")
             video = video.drawtext(
                 text=wm_text,
+                fontfile=_resolve_default_fontfile(),
                 fontsize=48,
                 fontcolor="white@0.8",
                 x="w-tw-40",
@@ -497,7 +515,7 @@ class RenderService:
             # Style: Big, yellow, centered with box
             video = video.drawtext(
                 text=job.hook_overlay.upper(),
-                fontfile="/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+                fontfile=_resolve_default_fontfile(),
                 fontsize=72,
                 fontcolor="yellow",
                 box=1,
@@ -527,7 +545,7 @@ class RenderService:
             try:
                 video = video.drawtext(
                     text=safe_text,
-                    fontfile="/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+                    fontfile=_resolve_default_fontfile(),
                     fontsize=font_size,
                     fontcolor="white",
                     box=1,

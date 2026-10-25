@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" fill="none">
+  <defs>
+    <linearGradient id="qai-studio-grad" x1="12" y1="12" x2="108" y2="108" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#3B82F6"/>
+      <stop offset="52%" stop-color="#A855F7"/>
+      <stop offset="100%" stop-color="#EC4899"/>
+    </linearGradient>
+    <linearGradient id="qai-studio-inner" x1="30" y1="24" x2="92" y2="96" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#60A5FA"/>
+      <stop offset="50%" stop-color="#C084FC"/>
+      <stop offset="100%" stop-color="#F472B6"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="104" height="104" rx="28" fill="#07070C" stroke="url(#qai-studio-grad)" stroke-width="4"/>
+  <rect x="16" y="16" width="88" height="88" rx="22" fill="url(#qai-studio-grad)" fill-opacity="0.1"/>
+  <path d="M44 36.5C44 33.4624 47.2725 31.5504 49.9182 33.0419L82.5849 51.4581C85.2768 52.9756 85.2768 56.8511 82.5849 58.3686L49.9182 76.7848C47.2725 78.2763 44 76.3643 44 73.3267V36.5Z" fill="url(#qai-studio-inner)"/>
+  <path d="M34 84L86 84" stroke="url(#qai-studio-grad)" stroke-width="4.5" stroke-linecap="round"/>
+  <circle cx="66" cy="84" r="5" fill="#F8FAFC" stroke="#A855F7" stroke-width="2.5"/>
+  <path d="M88 26L91 33L98 36L91 39L88 46L85 39L78 36L85 33L88 26Z" fill="#60A5FA"/>
+</svg>

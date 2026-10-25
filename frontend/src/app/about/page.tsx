@@ -3,7 +3,7 @@ import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 
 export const metadata: Metadata = {
-  title: "About — QuickAI Short",
+  title: "About — QuickAI Studio",
   description:
     "Conversational AI video editing: ingest a clip, chat to edit, preview live, and export a short.",
 };
@@ -21,7 +21,7 @@ export default function AboutPage() {
         </h1>
         <div className="mt-8 space-y-6 text-muted-foreground leading-relaxed">
           <p>
-            QuickAI Short is a conversational AI video editor. Paste a YouTube URL or
+            QuickAI Studio is a conversational AI video editor. Paste a YouTube URL or
             upload a file, tell the AI what to cut, caption, or reframe, preview every
             change live, then export a short when it feels right.
           </p>

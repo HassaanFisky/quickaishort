@@ -1,4 +1,4 @@
-﻿"""FastAPI auth dependency -- verifies NextAuth JWT tokens.
+"""FastAPI auth dependency -- verifies NextAuth JWT tokens.
 
 Reads Authorization: Bearer <nextauth_jwt> from incoming requests.
 Decodes using NEXTAUTH_SECRET (same secret Next.js uses to sign JWTs).
@@ -27,9 +27,18 @@ def _is_local_studio_auth_allowed() -> bool:
     env = os.getenv("ENVIRONMENT", "").strip().lower()
     if env == "production":
         return False
-    from services.local_persistence import is_local_first_mode
-
-    return is_local_first_mode() or bool(os.getenv("LOCAL_STUDIO_AUTH"))
+    auth_disabled = os.getenv("AUTH_DISABLED", "").strip().lower()
+    if auth_disabled in {"1", "true", "yes", "on"}:
+        # AUTH_DISABLED must never silently bypass JWT verification.
+        return False
+    explicit_local = os.getenv("LOCAL_FIRST_MODE", "").strip().lower()
+    local_studio_auth = os.getenv("LOCAL_STUDIO_AUTH", "").strip().lower()
+    return explicit_local in {"1", "true", "yes", "on"} or local_studio_auth in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
 
 
 def verify_bearer_token(token: str) -> str:

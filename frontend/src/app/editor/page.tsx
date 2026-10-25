@@ -222,7 +222,7 @@ export default function EditorPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("welcome") !== "1") return;
-    toast.success("Welcome to QuickAI Short", {
+    toast.success("Welcome to QuickAI Studio", {
       description: "Pro unlocked — Deep Analysis, 4K export, unlimited clip suggestions, and priority processing are now active.",
       duration: 6000,
     });

@@ -5,6 +5,8 @@ import axios from "axios";
 import type { Channel } from "pusher-js";
 import { toast } from "sonner";
 
+import { resolveExportRange } from "@/lib/aiCommandHonesty";
+
 import { LOOP_COPY } from "@/lib/studio/computePlane";
 import { uploadLocalFileToGcs } from "@/lib/studio/localCloudUpload";
 import { generateSRT } from "@/lib/utils/srtGenerator";
@@ -132,7 +134,7 @@ export function useServerExport({ userId }: UseServerExportArgs) {
       cleanup();
       const absolute = buildExportDownloadUrl(downloadUrl);
       setLastDownloadUrl(absolute);
-      triggerDownload(absolute, `quickai-short-${jobId}.mp4`);
+      triggerDownload(absolute, `quickai-studio-${jobId}.mp4`);
       toast.success("Export ready — downloading.");
 
       // Persist record so history page has a working download link.
@@ -152,7 +154,7 @@ export function useServerExport({ userId }: UseServerExportArgs) {
               quality: exportSettings.quality,
               captionsEnabled,
             },
-            output: { filename: `quickai-short-${jobId}.mp4` },
+            output: { filename: `quickai-studio-${jobId}.mp4` },
           })
           .catch(() => {
             // Non-critical — history entry is a nice-to-have, not blocking
@@ -281,9 +283,36 @@ export function useServerExport({ userId }: UseServerExportArgs) {
         manifest = useEditorStore.getState().compiledManifest;
       }
 
-      const clip = selectedClipId
+      const stateSnap = useEditorStore.getState();
+      const fallbackDuration =
+        stateSnap.videoMetadata?.duration ||
+        stateSnap.duration ||
+        manifest?.timeline?.duration ||
+        0;
+      const resolvedRange = resolveExportRange({
+        markIn: stateSnap.markIn,
+        markOut: stateSnap.markOut,
+        trimMarker:
+          stateSnap.trimMarker ? { startTime: stateSnap.trimMarker.startTime, endTime: stateSnap.trimMarker.endTime } : null,
+        selectedClip: null,
+        duration: fallbackDuration > 0 ? fallbackDuration : 30,
+      });
+      const selectedOrFirst = selectedClipId
         ? suggestions.find((c) => c.id === selectedClipId)
         : suggestions[0];
+      const clip =
+        selectedOrFirst ??
+        (sourceFile || sourceUrl || sourceGcsPath
+          ? {
+              id: "full-timeline",
+              title: stateSnap.videoMetadata?.title || "Timeline Cut",
+              start: resolvedRange.start,
+              end: resolvedRange.end,
+              duration: Math.max(0.5, resolvedRange.end - resolvedRange.start),
+              aspectRatio: stateSnap.exportSettings.aspectRatio ?? "9:16",
+              reframing: undefined,
+            }
+          : undefined);
 
       if (!clip) {
         toast.error("Select a clip to export first.");

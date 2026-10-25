@@ -324,6 +324,7 @@ export async function getStats(userId: string): Promise<UserStats> {
 export async function getAiEditorHealth(): Promise<{
   status: string;
   mock_ai_mode?: boolean;
+  active_engine?: string;
   gemini_circuit?: {
     blocked?: boolean | null;
     kind?: string | null;
@@ -447,8 +448,9 @@ export async function uploadFileToGcs(
   signal?: AbortSignal,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
+    const resolvedUrl = presignedUrl.startsWith("/") ? `${API_URL}${presignedUrl}` : presignedUrl;
     const xhr = new XMLHttpRequest();
-    xhr.open("PUT", presignedUrl, true);
+    xhr.open("PUT", resolvedUrl, true);
     xhr.setRequestHeader("Content-Type", contentType);
     if (onProgress) {
       xhr.upload.onprogress = (e) => {
@@ -535,6 +537,7 @@ export interface LocalMediaUploadResponse {
   video_id: string;
   media_url: string;
   probe: LocalMediaProbe;
+  silences?: Array<{ start: number; end: number; duration?: number }>;
   uploaded_by: string;
 }
 

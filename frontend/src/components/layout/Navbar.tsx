@@ -60,7 +60,7 @@ export default function Navbar() {
         <div className="flex items-center gap-8">
           <Link
             href="/"
-            aria-label="QuickAI Short – Home"
+            aria-label="QuickAI Studio – Home"
             className="flex items-center flex-shrink-0 group"
           >
             <QSLogo variant="full" size="md" animated />

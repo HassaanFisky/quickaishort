@@ -8,7 +8,7 @@
 
 import { useCallback, useRef } from "react";
 import { toast } from "sonner";
-import { getVideoInfo } from "@/lib/api";
+import { getVideoInfo, uploadLocalMediaFile } from "@/lib/api";
 import { parseYouTubeId } from "@/lib/youtube-utils";
 import { trackEvent } from "@/lib/analytics";
 import {
@@ -421,10 +421,38 @@ export function useIngestLifecycle(opts: {
       });
       trackEvent({ name: "video_loaded", props: { source: "upload", durationSec: 0 } });
 
-      // Local-first: skip GCS PUT on ingest (FinOps). Cloud upload waits for Export final.
+      // Local-first: register uploaded file with local media pipeline for ffprobe + silence intervals.
       if (!isCurrent(gen)) return;
       const fingerprint = fingerprintFile(file);
       setIngestMeta({ fingerprint, uploadProgress: null });
+      void uploadLocalMediaFile(file)
+        .then((res) => {
+          if (!isCurrent(gen)) return;
+          const st = useEditorStore.getState();
+          if (res.video_id) {
+            st.setSourceGcsPath(`uploads/${res.video_id}`);
+          }
+          if (res.probe && res.probe.duration > 0) {
+            st.setDuration(res.probe.duration);
+            st.setVideoMetadata({
+              id: res.video_id || fingerprint,
+              url: blobUrl,
+              title: file.name || "Upload",
+              duration: res.probe.duration,
+              nativeWidth: res.probe.width || 1280,
+              nativeHeight: res.probe.height || 720,
+              fps: res.probe.fps || 30,
+            });
+          }
+          if (Array.isArray(res.silences) && res.silences.length > 0) {
+            st.setSilenceSegments(
+              res.silences.map((s) => ({ start: s.start, end: s.end, type: "silence" as const })),
+            );
+          }
+        })
+        .catch(() => {
+          /* non-fatal: browser pipeline continues */
+        });
       await projectizeAfterMeta(file.name || "Upload");
       if (!isCurrent(gen)) return;
 

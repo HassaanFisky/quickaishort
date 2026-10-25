@@ -25,16 +25,17 @@ redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379")
 # socket_keepalive=True sends TCP-level keepalive probes so the OS detects the
 # drop and reconnects instead of letting the worker silently quit.
 # Retry(ExponentialBackoff) retries up to 6 times (cap=60s) on transient errors.
+_is_prod_env = os.environ.get("ENVIRONMENT", "").strip().lower() == "production"
 _retry_policy = Retry(
     ExponentialBackoff(cap=60, base=1),
-    retries=6,
+    retries=6 if _is_prod_env else 0,
 )
-_retry_errors = [RedisTimeoutError, RedisConnectionError]
+_retry_errors = [RedisTimeoutError, RedisConnectionError] if _is_prod_env else []
 
 redis_conn = redis.Redis.from_url(
     redis_url,
-    socket_timeout=30.0,
-    socket_connect_timeout=10.0,
+    socket_timeout=30.0 if _is_prod_env else 1.0,
+    socket_connect_timeout=10.0 if _is_prod_env else 0.25,
     socket_keepalive=True,
     retry_on_timeout=True,
     retry=_retry_policy,
@@ -47,8 +48,8 @@ import redis.asyncio as async_redis
 
 async_redis_conn = async_redis.from_url(
     redis_url,
-    socket_timeout=30.0,
-    socket_connect_timeout=10.0,
+    socket_timeout=30.0 if _is_prod_env else 1.0,
+    socket_connect_timeout=10.0 if _is_prod_env else 0.25,
     socket_keepalive=True,
     retry_on_timeout=True,
     health_check_interval=30,
@@ -82,6 +83,18 @@ def is_overloaded() -> bool:
     if SAFE_MODE:
         logger.warning("safe_mode_active_rejecting_tasks")
         return True
+
+    if os.environ.get(
+        "ENVIRONMENT", ""
+    ).strip().lower() != "production" and os.environ.get(
+        "LOCAL_FIRST_MODE", ""
+    ).strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
+        return False
 
     try:
         pending = pending_render_depth()

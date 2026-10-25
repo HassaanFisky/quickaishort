@@ -12,6 +12,15 @@ DEFAULT_TTL_SECONDS = 4 * 60 * 60
 def _secret() -> bytes:
     secret = os.environ.get("EXPORT_SIGNING_SECRET")
     if not secret:
+        env = os.environ.get("ENVIRONMENT", "").strip().lower()
+        local_mode = os.environ.get("LOCAL_FIRST_MODE", "").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+        if env != "production" and local_mode:
+            return b"local-studio-export-signing-secret-dev-only"
         raise RuntimeError(
             "EXPORT_SIGNING_SECRET is not set. Generate one with `openssl rand -hex 32`."
         )

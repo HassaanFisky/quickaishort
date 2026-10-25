@@ -33,43 +33,43 @@ const montserrat = Montserrat({
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://quickaishort.online"),
-  title: "QuickAI Short | Conversational AI Video Editing",
+  title: "QuickAI Studio | Conversational AI Video Editing",
   description:
     "Turn long-form video into finished shorts with conversational AI. Paste a URL or upload, chat your edits, preview, and export with Gemini.",
   keywords: ["AI video editor", "conversational video editing", "youtube to shorts", "gemini", "video export", "content creator tools"],
   authors: [{ name: "QuickAI Team" }],
   manifest: "/manifest.json",
   icons: {
-    icon: "/qs-logo.png",
-    shortcut: "/qs-logo.png",
-    apple: "/qs-logo.png",
+    icon: "/studio-logo.svg",
+    shortcut: "/studio-logo.svg",
+    apple: "/studio-logo.svg",
   },
   appleWebApp: {
     capable: true,
-    title: "QuickAI Short",
+    title: "QuickAI Studio",
     statusBarStyle: "black-translucent",
   },
   openGraph: {
     type: "website",
     url: "https://quickaishort.online",
-    title: "QuickAI Short | Conversational AI Editor",
+    title: "QuickAI Studio | Conversational AI Editor",
     description: "Chat-driven video editing — ingest, preview, and export.",
-    siteName: "QuickAI Short",
+    siteName: "QuickAI Studio",
     images: [
       {
-        url: "/qs-logo.png",
+        url: "/studio-logo.svg",
         width: 1024,
         height: 1024,
-        alt: "QuickAI Short Logo",
+        alt: "QuickAI Studio Logo",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "QuickAI Short | AI Video Editor",
+    title: "QuickAI Studio | AI Video Editor",
     description: "Conversational AI editing for long-form to short-form video.",
-    images: ["/qs-logo.png"],
-    creator: "@quickaishort",
+    images: ["/studio-logo.svg"],
+    creator: "@quickaistudio",
   },
 };
 

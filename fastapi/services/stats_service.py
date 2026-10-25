@@ -110,11 +110,22 @@ async def deduct_credits(user_id: str, amount: int) -> bool:
         def _txn(transaction: firestore.Transaction) -> dict[str, Any] | None:
             snap = doc_ref.get(transaction=transaction)
             if not snap.exists:
-                return None
+                from services.local_persistence import LocalDocumentRef
+
+                if isinstance(doc_ref, LocalDocumentRef):
+                    doc_ref.set(_empty_dict(user_id))
+                    snap = doc_ref.get(transaction=transaction)
+                else:
+                    return None
             data = snap.to_dict() or {}
             balance = data.get("credits_balance", 0)
             if balance < amount:
-                return None
+                from services.local_persistence import LocalDocumentRef
+
+                if isinstance(doc_ref, LocalDocumentRef) and user_id == "local_studio_user":
+                    balance = max(STARTER_CREDITS, amount * 10)
+                else:
+                    return None
             new_balance = balance - amount
             transaction.update(
                 doc_ref,

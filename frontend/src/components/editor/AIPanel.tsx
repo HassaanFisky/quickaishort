@@ -358,6 +358,7 @@ export function AIPanel() {
   // Honest Gemini circuit — poll lightly while chat is open (no fake success).
   const [circuitBanner, setCircuitBanner] = useState<string | null>(null);
   const [mockAiMode, setMockAiMode] = useState(false);
+  const [activeEngine, setActiveEngine] = useState<string>("LOCAL_DETERMINISTIC");
   useEffect(() => {
     if (!aiPanelOpen) return;
     let cancelled = false;
@@ -366,6 +367,8 @@ export function AIPanel() {
         const health = await getAiEditorHealth();
         if (cancelled) return;
         setMockAiMode(Boolean(health.mock_ai_mode));
+        const engineTier = health.active_engine || (health.status === "missing_api_key" ? "LOCAL_DETERMINISTIC" : "REMOTE_CLOUD_OPTIONAL");
+        setActiveEngine(engineTier);
         const circuit = health.gemini_circuit;
         if (health.status === "deferred" || circuit?.blocked === true) {
           const ra = circuit?.retry_after_seconds;
@@ -374,7 +377,7 @@ export function AIPanel() {
               ? `AI briefly unavailable — retry in ~${ra}s. Timeline edits are safe.`
               : "AI temporarily unavailable (provider limit). Timeline edits are safe — try again later.",
           );
-        } else if (health.status === "missing_api_key") {
+        } else if (health.status === "missing_api_key" && engineTier !== "LOCAL_DETERMINISTIC") {
           setCircuitBanner("AI is not configured on the server.");
         } else {
           setCircuitBanner(null);
@@ -892,7 +895,9 @@ export function AIPanel() {
       const trimmed = text.trim();
       if (!trimmed || isAIThinking) return;
 
-      const transcriptReady = (transcript?.chunks?.length ?? 0) > 0;
+      const transcriptReady =
+        (transcript?.chunks?.length ?? 0) > 0 ||
+        Boolean(videoMetadata && (videoMetadata.duration > 0 || sourceFile));
       if (!transcriptReady) {
         addAIMessage({
           role: "assistant",
@@ -983,6 +988,11 @@ export function AIPanel() {
 
         if (!result) {
           throw new Error("Empty AI response");
+        }
+        if (result.model_used) {
+          if (result.model_used.includes("gemini")) setActiveEngine("REMOTE_CLOUD_OPTIONAL");
+          else if (result.model_used.includes("ollama") || result.model_used.includes("llama")) setActiveEngine("LOCAL_OSS_MODEL");
+          else setActiveEngine("LOCAL_DETERMINISTIC");
         }
 
         // Server normalizes legacy {tool,params} → canonical {type} (EP-001).
@@ -1302,7 +1312,9 @@ export function AIPanel() {
   };
 
   const isVideoLoaded = !!videoMetadata;
-  const transcriptReady = (transcript?.chunks?.length ?? 0) > 0;
+  const transcriptReady =
+    (transcript?.chunks?.length ?? 0) > 0 ||
+    Boolean(videoMetadata && (videoMetadata.duration > 0 || sourceFile));
   const creditsExhausted =
     !shouldSkipCreditGate(mockAiMode) && creditBalance !== null && creditBalance <= 0;
   const canSendChat =
@@ -1330,7 +1342,7 @@ export function AIPanel() {
         <div className="ai-header-left">
           {/* Gem badge */}
           <div className="ai-header-gem">✦</div>
-          <span className="ai-panel-title">QuickAI Studio</span><span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 ml-1.5" title="Operating with zero cloud spend and local persistence">LOCAL_DETERMINISTIC</span>
+          <span className="ai-panel-title">QuickAI Studio</span><span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 ml-1.5" title="Active execution engine">{activeEngine}</span>
         </div>
 
         <div className="ai-header-right">

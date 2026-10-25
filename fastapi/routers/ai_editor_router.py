@@ -920,9 +920,20 @@ async def health_check_ai():
 
     from middleware.cost_guard import ai_cache_stats
 
+    active_engine = (
+        "REMOTE_CLOUD_OPTIONAL"
+        if (
+            api_key
+            and not mock
+            and os.getenv("LOCAL_FIRST_MODE", "").strip().lower()
+            not in {"1", "true", "yes", "on"}
+        )
+        else "LOCAL_DETERMINISTIC"
+    )
     return {
         "status": status,
         "mock_ai_mode": mock,
+        "active_engine": active_engine,
         "primary_model": os.getenv("GEMINI_PRIMARY_MODEL", "gemini-2.5-flash"),
         "free_model": os.getenv("GEMINI_FREE_MODEL", "gemini-2.5-flash-lite"),
         "gemini_circuit": circuit,

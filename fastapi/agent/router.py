@@ -631,6 +631,11 @@ class DualModelRouter:
 
 
 def _default_cache() -> SimilarQueryCache:
+    if os.getenv("ENVIRONMENT", "").strip().lower() != "production" and os.getenv(
+        "LOCAL_FIRST_MODE", ""
+    ).strip().lower() in {"1", "true", "yes", "on"}:
+        lp = importlib.import_module("services.local_persistence")
+        return SimilarQueryCache(lp.get_local_async_redis())
     queue_service = importlib.import_module("services.queue_service")
     return SimilarQueryCache(queue_service.async_redis_conn)
 
@@ -856,6 +861,29 @@ def _deterministic_plan(
         return None
 
     if plan is None or not plan.matched or not plan.actions:
+        if (
+            os.getenv("ENVIRONMENT", "").strip().lower() != "production"
+            and os.getenv("LOCAL_FIRST_MODE", "").strip().lower()
+            in {"1", "true", "yes", "on"}
+            and not os.getenv("GEMINI_API_KEY")
+        ):
+            try:
+                ai_prov = importlib.import_module("services.ai_intelligence_provider")
+                det = ai_prov.DeterministicEngine.plan_command(query, dict(context))
+                adapter_det: TypeAdapter[Any] = TypeAdapter(AiEditorAction)
+                det_actions = [
+                    adapter_det.validate_python(a) for a in (det.get("actions") or [])
+                ]
+                return TimelinePlanOutput(
+                    actions=det_actions,
+                    message=str(
+                        det.get("message") or "Deterministic local edit applied."
+                    ),
+                    suggestions=list(det.get("suggestions") or [])[:3],
+                    status="ok",
+                )
+            except Exception as det_exc:
+                logger.warning("local_deterministic_fallback_failed error=%s", det_exc)
         return None
 
     adapter: TypeAdapter[Any] = TypeAdapter(AiEditorAction)

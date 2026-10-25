@@ -5,9 +5,9 @@ import Footer from "@/components/layout/Footer";
 import { CONTACT_EMAIL, mailto } from "@/lib/email-addresses";
 
 export const metadata: Metadata = {
-  title: "Terms of Service — QuickAI Short",
+  title: "Terms of Service — QuickAI Studio",
   description:
-    "Terms governing use of QuickAI Short at quickaishort.online — accounts, content, Paddle billing, AI features, and liability.",
+    "Terms governing use of QuickAI Studio at quickaishort.online — accounts, content, Paddle billing, AI features, and liability.",
 };
 
 export default function TermsPage() {
@@ -27,9 +27,9 @@ export default function TermsPage() {
         </p>
         <p className="mt-6 text-muted-foreground leading-relaxed">
           These Terms of Service (&quot;Terms&quot;) govern your access to and
-          use of QuickAI Short at{" "}
+          use of QuickAI Studio at{" "}
           <strong className="text-foreground font-medium">quickaishort.online</strong>{" "}
-          (the &quot;Service&quot;), operated by QuickAI Short (&quot;QuickAI,&quot;
+          (the &quot;Service&quot;), operated by QuickAI Studio (&quot;QuickAI,&quot;
           &quot;we,&quot; &quot;us,&quot; or &quot;our&quot;). By creating an
           account or using the Service, you agree to these Terms and our{" "}
           <Link href="/privacy" className="text-foreground underline underline-offset-4 hover:text-primary">
@@ -44,7 +44,7 @@ export default function TermsPage() {
               1. The Service
             </h2>
             <p>
-              QuickAI Short is a cloud-native platform for conversational AI video
+              QuickAI Studio is a cloud-native platform for conversational AI video
               editing and short-form creation — including browser and server-side
               media workflows, Pre-Flight / multi-agent analysis, captions,
               dubbing, and export. Features, limits, and credit costs may vary by

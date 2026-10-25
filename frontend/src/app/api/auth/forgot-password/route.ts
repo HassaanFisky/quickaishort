@@ -61,20 +61,20 @@ export async function POST(req: Request) {
 
     const sendResult = await sendTransactionalEmail({
       to: normalizedEmail,
-      subject: "Reset your QuickAI Short password",
-      text: `Reset your QuickAI Short password\n\nClick this link to reset your password (expires in 1 hour):\n${resetUrl}\n\nIf you didn't request this, ignore this email.`,
+      subject: "Reset your QuickAI Studio password",
+      text: `Reset your QuickAI Studio password\n\nClick this link to reset your password (expires in 1 hour):\n${resetUrl}\n\nIf you didn't request this, ignore this email.`,
       html: `
         <div style="font-family:'Inter',Arial,sans-serif;max-width:480px;margin:0 auto;background:#08080a;color:#f4f4f5;padding:40px 32px;border-radius:20px;border:1px solid rgba(255,255,255,0.08)">
           <div style="text-align:center;margin-bottom:32px">
             <div style="display:inline-block;background:linear-gradient(135deg,#3b82f6,#a855f7,#ec4899);padding:2px;border-radius:14px">
               <div style="background:#08080a;border-radius:12px;padding:12px 20px">
-                <span style="font-size:18px;font-weight:900;letter-spacing:-0.5px;color:#f4f4f5">QuickAI Short</span>
+                <span style="font-size:18px;font-weight:900;letter-spacing:-0.5px;color:#f4f4f5">QuickAI Studio</span>
               </div>
             </div>
           </div>
           <h1 style="font-size:24px;font-weight:900;margin:0 0 8px;color:#f4f4f5">Reset your password</h1>
           <p style="color:#a1a1aa;font-size:14px;line-height:1.6;margin:0 0 28px">
-            We received a request to reset your QuickAI Short password. Click the button below — this link expires in <strong style="color:#f4f4f5">1 hour</strong>.
+            We received a request to reset your QuickAI Studio password. Click the button below — this link expires in <strong style="color:#f4f4f5">1 hour</strong>.
           </p>
           <a href="${resetUrl}" style="display:block;text-align:center;background:linear-gradient(135deg,#3b82f6,#a855f7,#ec4899);color:#fff;font-weight:800;font-size:15px;padding:14px 28px;border-radius:14px;text-decoration:none;margin-bottom:24px">
             Reset Password →

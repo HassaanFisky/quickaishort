@@ -281,6 +281,58 @@ async def dispatch_render_task(
     # Production defaults to Cloud Tasks so a missing env cannot silently enqueue
     # into RQ with no listener (worker is request-bound / min=0).
     explicit = os.environ.get("RENDER_DISPATCH_MODE", "").strip().lower()
+    is_local_first = os.environ.get(
+        "ENVIRONMENT", ""
+    ).strip().lower() != "production" and os.environ.get(
+        "LOCAL_FIRST_MODE", ""
+    ).strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    if not explicit and is_local_first:
+        from services.local_media_pipeline import get_local_media_pipeline
+        from services.local_persistence import get_local_db, get_local_redis
+
+        local_redis = get_local_redis()
+        local_redis.hset(
+            _META_KEY.format(payload.job_id),
+            mapping={
+                "job_id": payload.job_id,
+                "video_id": payload.video_id,
+                "user_id": payload.user_id,
+                "status": "queued",
+                "progress": "0",
+                "quality": str(payload.options.get("quality", "medium")),
+                "dispatch_mode": "rq",
+                "submitted_at": str(time.time()),
+            },
+        )
+        get_local_db().collection("render_jobs").document(payload.job_id).set(
+            {
+                "job_id": payload.job_id,
+                "video_id": payload.video_id,
+                "user_id": payload.user_id,
+                "status": "queued",
+                "progress": 0,
+                "start_sec": payload.start_sec,
+                "end_sec": payload.end_sec,
+            }
+        )
+        pipeline = get_local_media_pipeline()
+        asyncio.create_task(
+            pipeline.execute_render_job(
+                job_id=payload.job_id,
+                video_id=payload.video_id,
+                start_sec=payload.start_sec,
+                end_sec=payload.end_sec,
+                options=dict(payload.options),
+                user_id=payload.user_id,
+            )
+        )
+        return RenderDispatchReceipt(mode="rq", task_name=payload.job_id)
+
     if explicit:
         mode = explicit
     elif os.environ.get("ENVIRONMENT", "").strip().lower() == "production":

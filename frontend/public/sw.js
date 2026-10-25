@@ -1,4 +1,4 @@
-// QuickAI Short — service worker (network-first, offline fallback for shell)
+// QuickAI Studio — service worker (network-first, offline fallback for shell)
 const CACHE = "qas-v1";
 const SHELL = ["/", "/editor", "/dashboard", "/manifest.json", "/qs-logo.png"];
 

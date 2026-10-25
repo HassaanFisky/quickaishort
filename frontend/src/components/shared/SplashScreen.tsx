@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import Image from "next/image";
+import QSLogo from "@/components/shared/QSLogo";
 
 const SESSION_FLAG = "qas_splash_shown";
 const HOLD_MS = 1400;
@@ -45,8 +45,7 @@ export default function SplashScreen() {
             }}
           />
 
-          {/* Real brand logo — the PNG already includes the "QUICK AI SHORTS"
-              wordmark, so we render it full without any crop here. */}
+          {/* QuickAI Studio vector emblem + wordmark */}
           <motion.div
             initial={{ opacity: 0, scale: 0.82, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -54,18 +53,9 @@ export default function SplashScreen() {
               duration: 0.7,
               ease: [0.22, 1, 0.36, 1],
             }}
-            className="relative z-10"
+            className="relative z-10 flex flex-col items-center gap-4"
           >
-            <Image
-              src="/qs-logo.png"
-              alt="QuickAI Short"
-              width={220}
-              height={220}
-              priority
-              className="select-none"
-              style={{ imageRendering: "auto" }}
-              draggable={false}
-            />
+            <QSLogo variant="full" size="xl" animated />
           </motion.div>
 
           {/* Progress bar */}
