@@ -20,14 +20,19 @@ if (Test-Path $UserBin) {
 # Set local zero-spend environment variables (honest LOCAL_DETERMINISTIC mode, not mock mode)
 $env:LOCAL_FIRST_MODE = "1"
 $env:MOCK_AI_MODE = "0"
+$env:NEXT_PUBLIC_LOCAL_FIRST_MODE = "1"
 $env:NEXT_PUBLIC_STUDIO_PROJECT_KERNEL = "1"
+$env:NEXT_PUBLIC_API_URL = "http://127.0.0.1:8000"
+$env:NEXT_PUBLIC_BACKEND_URL = "http://127.0.0.1:8000"
 $env:EXPORT_SIGNING_SECRET = "local-studio-export-signing-secret-dev-only"
-$env:PORT = "8000"
+$env:NEXTAUTH_SECRET = "quickai-studio-local-dev-secret-key-32chars"
+$env:NEXTAUTH_URL = "http://localhost:3000"
+$env:PORT = "3000"
 
 # Determine Python path
 $PythonExe = Join-Path $FastApiDir "venv\Scripts\python.exe"
 if (-not (Test-Path $PythonExe)) {
-    $PythonExe = Join-Path "C:\Users\DELL\.gemini\antigravity\scratch\quickaishort\fastapi\venv\Scripts\python.exe"
+    $PythonExe = "C:\Users\DELL\.gemini\antigravity\scratch\quickaishort\fastapi\venv\Scripts\python.exe"
 }
 if (-not (Test-Path $PythonExe)) {
     $PythonExe = "python.exe"
@@ -45,4 +50,4 @@ Write-Host ">>> OPEN YOUR BROWSER AT: http://localhost:3000" -ForegroundColor Ye
 Write-Host ""
 
 Set-Location $FrontendDir
-pnpm dev
+pnpm dev -- -p 3000

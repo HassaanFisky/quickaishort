@@ -57,9 +57,14 @@ $WinLauncher = @'
 title QuickAI Studio - Local-First Standalone Launcher
 set LOCAL_FIRST_MODE=1
 set MOCK_AI_MODE=0
+set NEXT_PUBLIC_LOCAL_FIRST_MODE=1
 set NEXT_PUBLIC_STUDIO_PROJECT_KERNEL=1
 set NEXT_PUBLIC_API_URL=http://127.0.0.1:8000
 set NEXT_PUBLIC_BACKEND_URL=http://127.0.0.1:8000
+set EXPORT_SIGNING_SECRET=local-studio-export-signing-secret-dev-only
+set NEXTAUTH_SECRET=quickai-studio-local-dev-secret-key-32chars
+set NEXTAUTH_URL=http://localhost:3000
+set PORT=3000
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0..\..\start-studio.ps1"
 '@
 Set-Content -Path (Join-Path $ReleaseDir "launch-QuickAI-Studio.bat") -Value $WinLauncher -Encoding ASCII
@@ -71,9 +76,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 export LOCAL_FIRST_MODE=1
 export MOCK_AI_MODE=0
+export NEXT_PUBLIC_LOCAL_FIRST_MODE=1
 export NEXT_PUBLIC_STUDIO_PROJECT_KERNEL=1
 export NEXT_PUBLIC_API_URL="http://127.0.0.1:8000"
 export NEXT_PUBLIC_BACKEND_URL="http://127.0.0.1:8000"
+export EXPORT_SIGNING_SECRET="local-studio-export-signing-secret-dev-only"
+export NEXTAUTH_SECRET="quickai-studio-local-dev-secret-key-32chars"
+export NEXTAUTH_URL="http://localhost:3000"
+export PORT="3000"
 
 echo "Starting QuickAI Studio FastAPI Backend on http://127.0.0.1:8000 ..."
 (cd "$REPO_ROOT/fastapi" && python3 -m uvicorn main:app --host 127.0.0.1 --port 8000) &

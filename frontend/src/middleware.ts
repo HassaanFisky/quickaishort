@@ -6,6 +6,23 @@ const AUTH_REDIRECT_FROM = ["/signin"];
 
 export async function middleware(req: NextRequest) {
   const { pathname, search } = req.nextUrl;
+
+  // In local-first / standalone Studio mode, allow direct access without cloud authentication
+  const isLocalFirst =
+    process.env.LOCAL_FIRST_MODE === "1" ||
+    process.env.NEXT_PUBLIC_LOCAL_FIRST_MODE === "1" ||
+    process.env.NEXT_PUBLIC_STUDIO_PROJECT_KERNEL === "1";
+
+  if (isLocalFirst) {
+    if (AUTH_REDIRECT_FROM.includes(pathname)) {
+      const url = req.nextUrl.clone();
+      url.pathname = "/editor";
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
+    return NextResponse.next();
+  }
+
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
 
   const isProtected = PROTECTED_PREFIXES.some(
