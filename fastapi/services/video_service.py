@@ -8,6 +8,7 @@ import re
 import yt_dlp
 from typing import Optional, List, Dict, Any
 from pathlib import Path
+from urllib.parse import urlparse, parse_qs
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from starlette.background import BackgroundTask
 from app.utils.youtube_auth import inject_ydl_bypass, get_cookie_file
@@ -16,6 +17,23 @@ logger = logging.getLogger(__name__)
 
 
 class VideoService:
+    ALLOWED_DOMAINS = {
+        "youtube.com",
+        "youtu.be",
+        "tiktok.com",
+    }
+
+    @classmethod
+    def is_allowed_domain(cls, hostname: Optional[str]) -> bool:
+        """Check if hostname belongs to an allowed video platform."""
+        if not hostname:
+            return False
+        hostname = hostname.lower()
+        for allowed in cls.ALLOWED_DOMAINS:
+            if hostname == allowed or hostname.endswith("." + allowed):
+                return True
+        return False
+
     # UPDATED: Reliable Piped instances as of May 2026
     PIPED_INSTANCES = [
         "https://pipedapi.kavin.rocks",
@@ -31,20 +49,69 @@ class VideoService:
         "https://vid.puffyan.us",
     ]
 
-    @staticmethod
-    def extract_video_id(url: str) -> Optional[str]:
-        patterns = [
-            r"(?:v=|\/)([0-9A-Za-z_-]{11}).*",
-            r"shorts\/([0-9A-Za-z_-]{11})",
-            r"live\/([0-9A-Za-z_-]{11})",
-            r"embed\/([0-9A-Za-z_-]{11})",
-            r"v\/([0-9A-Za-z_-]{11})",
-            r"youtu\.be\/([0-9A-Za-z_-]{11})",
-        ]
-        for pattern in patterns:
-            match = re.search(pattern, url)
+    @classmethod
+    def extract_video_id(cls, url: str) -> Optional[str]:
+        """Extract video ID strictly from allowed domains, rejecting SSRF attempts."""
+        if not url or not isinstance(url, str):
+            return None
+
+        clean_url = url.strip()
+        if clean_url.startswith("//"):
+            clean_url = "https:" + clean_url
+        elif not clean_url.startswith(("http://", "https://")):
+            clean_url = "https://" + clean_url
+
+        try:
+            parsed = urlparse(clean_url)
+        except Exception:
+            return None
+
+        if parsed.scheme not in ("http", "https"):
+            return None
+
+        hostname = (parsed.hostname or "").lower()
+        if not cls.is_allowed_domain(hostname):
+            return None
+
+        # 1. youtu.be short URLs: https://youtu.be/<id>
+        if hostname == "youtu.be" or hostname.endswith(".youtu.be"):
+            match = re.match(r"^/([0-9A-Za-z_-]{11})(?:[/?#]|$)", parsed.path)
             if match:
                 return match.group(1)
+            return None
+
+        # 2. youtube.com URLs
+        if hostname == "youtube.com" or hostname.endswith(".youtube.com"):
+            query_params = parse_qs(parsed.query)
+            if "v" in query_params:
+                v_candidates = query_params["v"]
+                if v_candidates and re.match(r"^[0-9A-Za-z_-]{11}$", v_candidates[0]):
+                    return v_candidates[0]
+
+            path_match = re.match(
+                r"^/(?:shorts|live|embed|v|watch)/([0-9A-Za-z_-]{11})(?:[/?#]|$)",
+                parsed.path,
+            )
+            if path_match:
+                return path_match.group(1)
+            return None
+
+        # 3. tiktok.com URLs
+        if hostname == "tiktok.com" or hostname.endswith(".tiktok.com"):
+            video_match = re.search(r"/video/(\d+)", parsed.path)
+            if video_match:
+                return video_match.group(1)
+
+            if hostname in ("vm.tiktok.com", "vt.tiktok.com"):
+                vm_match = re.match(r"^/([0-9A-Za-z_-]+)(?:[/?#]|$)", parsed.path)
+                if vm_match:
+                    return vm_match.group(1)
+
+            short_match = re.match(r"^/t/([0-9A-Za-z_-]+)(?:[/?#]|$)", parsed.path)
+            if short_match:
+                return short_match.group(1)
+            return None
+
         return None
 
     @classmethod
@@ -89,8 +156,13 @@ class VideoService:
         """Download a specific segment of a video for background rendering."""
         if video_id.startswith(("http://", "https://")):
             url = video_id
-            video_id = cls.extract_video_id(url) or "unknown"
+            extracted = cls.extract_video_id(url)
+            if not extracted:
+                raise ValueError(f"Invalid or untrusted video URL: {url}")
+            video_id = extracted
         else:
+            if not re.match(r"^[0-9A-Za-z_-]{11}$", video_id):
+                raise ValueError(f"Invalid video ID format: {video_id}")
             url = f"https://www.youtube.com/watch?v={video_id}"
 
         output_path = Path(workdir) / f"{video_id}_{start}_{end}.mp4"
@@ -167,8 +239,13 @@ class VideoService:
         """
         if video_id.startswith(("http://", "https://")):
             url = video_id
-            video_id = cls.extract_video_id(url) or "unknown"
+            extracted = cls.extract_video_id(url)
+            if not extracted:
+                raise ValueError(f"Invalid or untrusted video URL: {url}")
+            video_id = extracted
         else:
+            if not re.match(r"^[0-9A-Za-z_-]{11}$", video_id):
+                raise ValueError(f"Invalid video ID format: {video_id}")
             url = f"https://www.youtube.com/watch?v={video_id}"
 
         output_path = Path(workdir) / f"{video_id}_{int(start)}_{int(end)}.mp4"

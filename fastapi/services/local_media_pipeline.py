@@ -85,12 +85,32 @@ class LocalMediaPipeline:
         self.exports_dir.mkdir(parents=True, exist_ok=True)
 
     @staticmethod
-    def is_ffmpeg_available() -> bool:
-        return shutil.which("ffmpeg") is not None
+    def get_ffmpeg_bin() -> Optional[str]:
+        found = shutil.which("ffmpeg")
+        if found:
+            return found
+        user_bin = Path(r"C:\Users\DELL\bin\ffmpeg.exe")
+        if user_bin.exists():
+            return str(user_bin)
+        return None
+
+    @classmethod
+    def is_ffmpeg_available(cls) -> bool:
+        return cls.get_ffmpeg_bin() is not None
 
     @staticmethod
-    def is_ffprobe_available() -> bool:
-        return shutil.which("ffprobe") is not None
+    def get_ffprobe_bin() -> Optional[str]:
+        found = shutil.which("ffprobe")
+        if found:
+            return found
+        user_bin = Path(r"C:\Users\DELL\bin\ffprobe.exe")
+        if user_bin.exists():
+            return str(user_bin)
+        return None
+
+    @classmethod
+    def is_ffprobe_available(cls) -> bool:
+        return cls.get_ffprobe_bin() is not None
 
     def resolve_source_media(
         self, video_id: str, options: Optional[Dict[str, Any]] = None
@@ -161,19 +181,15 @@ class LocalMediaPipeline:
         if media_path.stat().st_size == 0:
             raise ValueError(f"Media file is empty (0 bytes): {media_path}")
 
-        if not self.is_ffprobe_available():
-            logger.info("ffprobe not on PATH; using fallback metadata probe")
-            return MediaProbeResult(
-                duration=60.0,
-                width=1080,
-                height=1920,
-                fps=30.0,
-                has_audio=True,
-                codec="h264",
+        ffprobe_bin = self.get_ffprobe_bin()
+        if not ffprobe_bin:
+            logger.error("ffprobe binary is not available on PATH or DELL bin")
+            raise RuntimeError(
+                "ffprobe is not available on PATH. Install FFmpeg/FFprobe to probe media."
             )
 
         cmd = [
-            "ffprobe",
+            ffprobe_bin,
             "-v",
             "error",
             "-show_entries",
@@ -247,8 +263,9 @@ class LocalMediaPipeline:
         if not self.is_ffmpeg_available():
             return [(5.0, 7.5)]
 
+        ffmpeg_bin = self.get_ffmpeg_bin() or "ffmpeg"
         cmd = [
-            "ffmpeg",
+            ffmpeg_bin,
             "-hide_banner",
             "-nostats",
             "-i",
@@ -378,8 +395,9 @@ class LocalMediaPipeline:
             )
 
         if self.is_ffmpeg_available():
+            ffmpeg_bin = self.get_ffmpeg_bin() or "ffmpeg"
             decode_cmd = [
-                "ffmpeg",
+                ffmpeg_bin,
                 "-hide_banner",
                 "-v",
                 "error",
@@ -570,6 +588,8 @@ class LocalMediaPipeline:
             if not self.is_ffmpeg_available():
                 raise RuntimeError("FFmpeg binary is not available on PATH")
 
+            ffmpeg_bin = self.get_ffmpeg_bin() or "ffmpeg"
+
             # Build FFmpeg command from the real source video
             scale_pad = (
                 f"scale={tw}:{th}:force_original_aspect_ratio=decrease,"
@@ -588,7 +608,7 @@ class LocalMediaPipeline:
                 seg_start, seg_end = segments[0]
                 seg_dur = max(0.1, seg_end - seg_start)
                 cmd = [
-                    "ffmpeg",
+                    ffmpeg_bin,
                     "-hide_banner",
                     "-loglevel",
                     "error",
@@ -643,7 +663,7 @@ class LocalMediaPipeline:
                     )
 
                 cmd = [
-                    "ffmpeg",
+                    ffmpeg_bin,
                     "-hide_banner",
                     "-loglevel",
                     "error",

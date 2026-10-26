@@ -53,7 +53,7 @@ async def upload_local_media(
 ):
     """Upload media file into the local studio storage (uploads directory), probe it, and detect silence."""
     clean_filename = Path(file.filename or f"upload_{uuid4().hex[:8]}.mp4").name
-    dest_path = STUDIO_STORAGE_DIR / "uploads" / clean_filename
+    dest_path = STUDIO_STORAGE_DIR / "uploads" / user_id / clean_filename
     dest_path.parent.mkdir(parents=True, exist_ok=True)
 
     content = await file.read()
@@ -72,10 +72,11 @@ async def upload_local_media(
 
     silences = await asyncio.to_thread(pipeline.detect_silence, dest_path)
 
+    video_ref = f"{user_id}/{clean_filename}"
     return {
         "status": "success",
-        "video_id": clean_filename,
-        "media_url": f"/api/local-media/uploads/{clean_filename}",
+        "video_id": video_ref,
+        "media_url": f"/api/local-media/uploads/{video_ref}",
         "probe": probe.to_dict(),
         "silences": [{"start": s, "end": e} for s, e in silences],
         "uploaded_by": user_id,
@@ -86,12 +87,27 @@ async def upload_local_media(
 async def put_local_presigned_blob(
     remote_path: str,
     request: Request,
+    user_id: str = Depends(get_verified_user_id),
 ):
-    """Accept direct PUT upload for local-first presigned upload URLs."""
+    """Accept direct PUT upload for local-first presigned upload URLs.
+
+    SEC-05: Authenticated via get_verified_user_id. Enforces tenant scoping
+    for uploads/<owner_user_id>/... paths to prevent cross-tenant overwrites.
+    """
     try:
         blob = get_local_bucket().blob(remote_path)
     except ValueError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
+
+    # Enforce tenant isolation if the path is in uploads/<tenant_user_id>/...
+    clean_parts = Path(remote_path.lstrip("/\\")).parts
+    if len(clean_parts) >= 2 and clean_parts[0] == "uploads":
+        path_owner = clean_parts[1]
+        if path_owner != user_id and user_id != "local_studio_user":
+            raise HTTPException(
+                status_code=403,
+                detail="Forbidden: Cannot write to another tenant's upload path",
+            )
 
     body = await request.body()
     if not body:
@@ -147,14 +163,24 @@ async def get_local_render_status(
     job_id: str,
     user_id: str = Depends(get_verified_user_id),
 ):
-    """Poll render status from LocalSQLiteDB."""
-    _ = user_id
+    """Poll render status from LocalSQLiteDB.
+
+    SEC-07: Enforces strict tenant ownership check against authenticated user_id.
+    """
     db = get_local_db()
     doc = db.collection("render_jobs").document(job_id).get()
     if not doc.exists or not doc.to_dict():
         raise HTTPException(status_code=404, detail="Render job not found")
 
-    return doc.to_dict()
+    job_data = doc.to_dict()
+    job_owner = job_data.get("user_id")
+    if job_owner != user_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Forbidden: Render job does not belong to authenticated user",
+        )
+
+    return job_data
 
 
 @router.get("/{bucket_prefix}/{filename:path}")

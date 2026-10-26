@@ -721,7 +721,7 @@ def _require_youtube_url(url: str) -> str:
 # frontend that calls /api/media-token is live. The flip is instantly
 # revertible.
 MEDIA_PROXY_AUTH_REQUIRED = (
-    os.getenv("MEDIA_PROXY_AUTH_REQUIRED", "false").strip().lower() == "true"
+    os.getenv("MEDIA_PROXY_AUTH_REQUIRED", "true").strip().lower() != "false"
 )
 
 
