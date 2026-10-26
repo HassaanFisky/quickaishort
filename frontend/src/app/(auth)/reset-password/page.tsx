@@ -91,7 +91,7 @@ function ResetPasswordForm() {
                 {done ? "Password updated" : "Set new password"}
               </CardTitle>
               <CardDescription className="text-[13px] text-muted-foreground">
-                {done ? "Redirecting you to sign inâ€¦" : "Choose a strong password for your account."}
+                {done ? "Redirecting you to sign in…" : "Choose a strong password for your account."}
               </CardDescription>
             </div>
           </CardHeader>

@@ -56,6 +56,7 @@ $WinLauncher = @'
 @echo off
 title QuickAI Studio - Local-First Standalone Launcher
 set LOCAL_FIRST_MODE=1
+set LOCAL_FIRST_DEV_NO_AUTH=1
 set MOCK_AI_MODE=0
 set NEXT_PUBLIC_LOCAL_FIRST_MODE=1
 set NEXT_PUBLIC_STUDIO_PROJECT_KERNEL=1
@@ -75,6 +76,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 export LOCAL_FIRST_MODE=1
+export LOCAL_FIRST_DEV_NO_AUTH=1
 export MOCK_AI_MODE=0
 export NEXT_PUBLIC_LOCAL_FIRST_MODE=1
 export NEXT_PUBLIC_STUDIO_PROJECT_KERNEL=1

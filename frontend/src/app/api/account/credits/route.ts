@@ -4,7 +4,18 @@ import { authOptions } from "@/lib/auth/options";
 import connectDB from "@/lib/db/mongodb";
 import User from "@/lib/db/models/user";
 
+const isLocalFirst = () =>
+  process.env.LOCAL_FIRST_MODE === "1" ||
+  process.env.NEXT_PUBLIC_LOCAL_FIRST_MODE === "1";
+
 export async function GET() {
+  if (isLocalFirst()) {
+    return NextResponse.json({
+      credits: 100,
+      referrals: 0,
+      referralCode: "qs-studio-local",
+    });
+  }
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.email) {

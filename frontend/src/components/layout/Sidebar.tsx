@@ -6,9 +6,11 @@ import { usePathname, useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { motion, AnimatePresence, type Variants } from "framer-motion";
 import {
+  LayoutGrid,
   Plus,
   FolderOpen,
   Clock,
+  Sliders,
   LogOut,
   ChevronUp,
   User,
@@ -25,9 +27,11 @@ import { cn } from "@/lib/utils";
 import { useUIStore } from "@/stores/uiStore";
 
 const NAV_ITEMS = [
+  { href: "/dashboard", label: "Workspace", icon: LayoutGrid },
   { href: "/editor", label: "New edit", icon: Plus },
   { href: "/projects", label: "Projects", icon: FolderOpen },
   { href: "/history", label: "Recent", icon: Clock },
+  { href: "/settings", label: "Settings", icon: Sliders },
 ];
 
 const menuVariants: Variants = {

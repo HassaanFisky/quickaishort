@@ -4,8 +4,15 @@ import { authOptions } from "@/lib/auth/options";
 import connectDB from "@/lib/db/mongodb";
 import Project from "@/lib/db/models/project";
 
+const isLocalFirst = () =>
+  process.env.LOCAL_FIRST_MODE === "1" ||
+  process.env.NEXT_PUBLIC_LOCAL_FIRST_MODE === "1";
+
 // GET /api/projects - Get all projects for current user
 export async function GET() {
+  if (isLocalFirst()) {
+    return NextResponse.json([]);
+  }
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {

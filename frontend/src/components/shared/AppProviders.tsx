@@ -7,7 +7,6 @@ import { MotionConfig } from "framer-motion";
 import { ThemeProvider } from "@/components/shared/ThemeProvider";
 import { Toaster } from "@/components/ui/sonner";
 import { PusherProvider } from "@/components/providers/PusherProvider";
-import SplashScreen from "@/components/shared/SplashScreen";
 import PageTransition from "@/components/shared/PageTransition";
 import { SessionExpiryModal } from "@/components/shared/SessionExpiryModal";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
@@ -36,7 +35,6 @@ export function AppProviders({ children }: { children: ReactNode }) {
     }
   }, []);
 
-
   return (
     <MotionConfig reducedMotion="user">
       <SessionProvider refetchInterval={5 * 60} refetchOnWindowFocus>
@@ -50,7 +48,6 @@ export function AppProviders({ children }: { children: ReactNode }) {
               themes={["dark", "oled", "light"]}
             >
               <TooltipProvider delayDuration={200}>
-                <SplashScreen />
                 <ErrorBoundary>
                   <PageTransition>{children}</PageTransition>
                 </ErrorBoundary>

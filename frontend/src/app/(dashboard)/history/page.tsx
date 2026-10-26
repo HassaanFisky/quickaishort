@@ -19,8 +19,11 @@ import { InlineError } from "@/components/shared/InlineError";
 export default function HistoryPage() {
   const queryClient = useQueryClient();
 
+  const isLocalFirst = process.env.NEXT_PUBLIC_LOCAL_FIRST_MODE === "1";
+
   const { data: exports, isLoading, isError } = useQuery<ExportRecord[]>({
     queryKey: ["exports"],
+    initialData: isLocalFirst ? [] : undefined,
     queryFn: async () => {
       const res = await axios.get("/api/exports");
       return res.data;
@@ -56,21 +59,20 @@ export default function HistoryPage() {
     a.remove();
   };
 
-  if (isLoading)
-    return (
-      <div className="h-[50vh] flex items-center justify-center">
-        <LoadingSpinner size={40} />
-      </div>
-    );
-
   return (
     <div className="space-y-8">
       <header className="space-y-1">
-        <h1 className="text-xl sm:text-2xl font-semibold text-[hsl(var(--fg))]">Recent exports</h1>
-        <p className="text-[13px] text-[hsl(var(--fg-subtle))]">
+        <h1 className="text-xl sm:text-2xl font-semibold text-foreground">Recent exports</h1>
+        <p className="text-[13px] text-muted-foreground">
           Download finished shorts or remove old exports.
         </p>
       </header>
+
+      {isLoading && !exports && (
+        <div className="h-[40vh] flex items-center justify-center">
+          <LoadingSpinner size={36} />
+        </div>
+      )}
 
       {isError && (
         <InlineError
@@ -79,7 +81,7 @@ export default function HistoryPage() {
         />
       )}
 
-      {!isError && exports && exports.length === 0 && (
+      {!isLoading && !isError && (!exports || exports.length === 0) && (
         <EmptyState
           icon={History}
           title="No exports yet"

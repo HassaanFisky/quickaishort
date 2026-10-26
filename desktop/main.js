@@ -42,6 +42,7 @@ function buildStudioEnvironment(repoRoot) {
     PATH: pathEnv,
     Path: pathEnv,
     LOCAL_FIRST_MODE: "1",
+    LOCAL_FIRST_DEV_NO_AUTH: "1",
     MOCK_AI_MODE: "0",
     NEXT_PUBLIC_LOCAL_FIRST_MODE: "1",
     NEXT_PUBLIC_STUDIO_PROJECT_KERNEL: "1",
@@ -52,7 +53,6 @@ function buildStudioEnvironment(repoRoot) {
     PORT: String(FRONTEND_PORT),
     EXPORT_SIGNING_SECRET:
       process.env.EXPORT_SIGNING_SECRET || "local-studio-export-signing-secret-dev-only",
-    PORT: String(BACKEND_PORT),
   };
 }
 

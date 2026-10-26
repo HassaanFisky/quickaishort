@@ -5,7 +5,8 @@ import { CONTACT_EMAIL, mailto } from "@/lib/email-addresses";
 const NAV_LINKS = [
   { href: "/editor", label: "Editor" },
   { href: "/#features", label: "Features" },
-  { href: "/#pricing", label: "Pricing" },
+  { href: "/pricing", label: "Pricing" },
+  { href: "/about", label: "About" },
   { href: "/privacy", label: "Privacy" },
   { href: "/terms", label: "Terms" },
   { href: "/refund-policy", label: "Refunds" },
@@ -25,8 +26,8 @@ export default function Footer() {
         <div className="flex flex-col md:flex-row items-start justify-between gap-10">
           <div className="flex flex-col gap-3">
             <QSLogo variant="wordmark" size="md" className="text-muted-foreground" />
-            <p className="text-[13px] text-muted-foreground max-w-[220px] leading-relaxed">
-              AI-powered clip validation for creators who ship with confidence.
+            <p className="text-[13px] text-muted-foreground max-w-[240px] leading-relaxed">
+              Conversational AI video editing — ingest, steer by chat, preview live, and ship.
             </p>
           </div>
 

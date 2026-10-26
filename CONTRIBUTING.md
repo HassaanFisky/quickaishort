@@ -1,19 +1,19 @@
-# Contributing to QuickAI Short
+# Contributing to QuickAI Studio
 
-Thank you for contributing. This repository powers **QuickAI Short** (production) and its evolution into **QuickAI Studio** (AI-native editing OS on the same codebase).
+Thank you for contributing to **QuickAI Studio** (formerly QuickAI Short). This repository powers both the cloud deployment at [quickaishort.online](https://www.quickaishort.online) and the local-first desktop/developer execution mode.
 
-Architecture decisions in [`docs/studio/`](docs/studio/README.md) are binding. EP-001 Capability Registry is **frozen** — do not bypass it.
+Architecture decisions in [`docs/studio/`](docs/studio/README.md) are binding. The **EP-001 Capability Registry** is **frozen** — do not bypass or alter its ABI without an approved RFC.
 
 ---
 
 ## Rules
 
 1. Prefer focused, atomic pull requests — one logical change per PR.
-2. Pass local lint/typecheck/build before opening a PR.
-3. Match existing architecture and design tokens (Hydro-Glass — see `CLAUDE.md`).
-4. Never commit secrets or `.env` files.
+2. Pass local lint, typecheck, build, and backend tests before opening a PR.
+3. Match existing architecture and design system tokens (see `CLAUDE.md` and `AGENTS.md`).
+4. Never commit secrets, credentials, or `.env` files.
 5. Do not reopen frozen ADRs/EPs without a verified defect and explicit approval.
-6. Separate **production** claims from **roadmap** (especially ADK UI — Coming Soon).
+6. Separate **shipped** capabilities from **roadmap** surfaces (especially `/adk` UI — Coming Soon per ADR-013).
 
 ---
 
@@ -37,24 +37,25 @@ uvicorn main:app --reload --port 8000
 
 Render worker (optional, needs Redis): `python render_worker.py`
 
-Env templates: `frontend/.env.example`, `fastapi/.env.example`.  
-Full guide: [`QUICKSTART.md`](QUICKSTART.md).
+For zero-daemon local execution on Windows (`LOCAL_FIRST_MODE=1` with SQLite + native FFmpeg), run `.\start-studio.ps1` or see [`QUICKSTART.md`](QUICKSTART.md).
+
+Env templates: `frontend/.env.example`, `fastapi/.env.example`.
 
 ### Verification
 
 ```bash
-cd frontend && npx tsc --noEmit && pnpm build && pnpm lint
-cd ../fastapi && python -m py_compile main.py
+cd frontend && pnpm lint && npx tsc --noEmit && pnpm build
+cd ../fastapi && python -m pytest
 ```
 
 ---
 
 ## Priority areas
 
-- Bug fixes with reproducible steps  
+- Bug fixes with reproducible steps and regression tests  
 - Conversational editor reliability and Capability Registry correctness  
-- Export / RQ / GCS path hardening  
-- Accessibility and security  
+- Export / Cloud Tasks / RQ / Local FFmpeg pipeline hardening  
+- Accessibility (WCAG 2.1 AA) and tenant security boundaries  
 - Documentation that reduces agent/doc drift  
 
 ### Discuss first (RFC)
@@ -80,7 +81,7 @@ cd ../fastapi && python -m py_compile main.py
 
 1. Branch from `main` (`feat/…`, `fix/…`, `docs/…`)  
 2. Fill [`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md)  
-3. CI must pass (lint + `tsc` + `next build`)  
+3. CI must pass (lint + `tsc` + `next build` + backend tests)  
 4. Link relevant ADR/EP when touching Studio Kernel surfaces  
 
 ---

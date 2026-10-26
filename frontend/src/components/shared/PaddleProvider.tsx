@@ -56,9 +56,12 @@ function initializePaddle() {
 
 export function PaddleProvider() {
   useEffect(() => {
+    if (!PADDLE_CLIENT_TOKEN) return;
     // Re-initialize if Paddle was already loaded (e.g. hot reload in dev).
     initializePaddle();
   }, []);
+
+  if (!PADDLE_CLIENT_TOKEN) return null;
 
   return (
     <Script

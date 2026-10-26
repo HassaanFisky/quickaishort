@@ -43,10 +43,10 @@ export function CookieConsent() {
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: 80, opacity: 0 }}
           transition={{ type: 'spring', stiffness: 240, damping: 28 }}
-          className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[9999]
-                     w-[min(540px,calc(100vw-32px))]
-                     rounded-2xl border border-border p-4 sm:p-5
-                     bg-card text-foreground shadow-2xl"
+          className="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-5 sm:bottom-5 z-[9999]
+                     sm:w-[380px]
+                     rounded-2xl border border-border p-4
+                     bg-card/95 backdrop-blur-md text-foreground shadow-2xl"
           role="dialog"
           aria-modal="true"
           aria-label="Cookie consent"

@@ -11,7 +11,11 @@ export function useFaceTracker() {
   // Video dimensions captured from detect() calls — needed for normalization
   const videoDims = useRef<{ width: number; height: number } | null>(null);
 
-  useEffect(() => {
+  const initRef = useRef(false);
+
+  const ensureWorker = useCallback(() => {
+    if (workerRef.current || initRef.current) return;
+    initRef.current = true;
     workerRef.current = new Worker(
       new URL("../workers/face.worker.ts", import.meta.url),
     );
@@ -71,16 +75,24 @@ export function useFaceTracker() {
     };
 
     workerRef.current.postMessage({ type: "init" });
+  }, []);
 
+  useEffect(() => {
     return () => {
       workerRef.current?.terminate();
       workerRef.current = null;
+      initRef.current = false;
     };
   }, []);
 
   const detect = useCallback(
     (video: HTMLVideoElement) => {
-      if (!workerRef.current || !isReady || video.paused || video.ended) return;
+      if (video.paused || video.ended) return;
+      if (!workerRef.current) {
+        ensureWorker();
+        return;
+      }
+      if (!isReady) return;
 
       // Capture video dimensions once they are available
       if (video.videoWidth > 0 && video.videoHeight > 0) {

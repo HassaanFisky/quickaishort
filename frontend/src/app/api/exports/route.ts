@@ -5,7 +5,14 @@ import connectDB from "@/lib/db/mongodb";
 import Export from "@/lib/db/models/export";
 import User from "@/lib/db/models/user";
 
+const isLocalFirst = () =>
+  process.env.LOCAL_FIRST_MODE === "1" ||
+  process.env.NEXT_PUBLIC_LOCAL_FIRST_MODE === "1";
+
 export async function GET() {
+  if (isLocalFirst()) {
+    return NextResponse.json([]);
+  }
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user)

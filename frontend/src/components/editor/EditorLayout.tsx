@@ -547,10 +547,10 @@ export default function EditorLayout() {
       <header className="flex items-center justify-between shrink-0">
         {/* Live status module */}
         <div className="flex items-center gap-2.5 min-w-0">
-          <Link href="/dashboard" className="shrink-0 mr-1" aria-label="Back to Dashboard">
+          <Link href="/dashboard" className="shrink-0 mr-1 md:hidden" aria-label="Back to Dashboard">
             <QSLogo variant="mark" size="sm" animated />
           </Link>
-          <span className="h-4 w-px bg-foreground/8 shrink-0" />
+          <span className="h-4 w-px bg-foreground/8 shrink-0 md:hidden" />
           <div
             className={cn(
               "flex items-center gap-2 pl-2.5 pr-3 py-1.5 rounded-full border transition-colors duration-300",
@@ -828,11 +828,8 @@ export default function EditorLayout() {
                     )}
                   </motion.div>
                 ) : !sourceUrl && !sourceFile && !isAnalysing ? (
-                  <motion.div
+                  <div
                     key="stage-empty"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
                     className="w-full h-full flex flex-col items-center justify-center px-4 py-8 overflow-y-auto"
                   >
                     <WorkspaceComposer
@@ -875,7 +872,7 @@ export default function EditorLayout() {
                         </ul>
                       </div>
                     )}
-                  </motion.div>
+                  </div>
                 ) : (
                   <motion.div
                     key="stage-canvas"

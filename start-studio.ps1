@@ -19,6 +19,7 @@ if (Test-Path $UserBin) {
 
 # Set local zero-spend environment variables (honest LOCAL_DETERMINISTIC mode, not mock mode)
 $env:LOCAL_FIRST_MODE = "1"
+$env:LOCAL_FIRST_DEV_NO_AUTH = "1"
 $env:MOCK_AI_MODE = "0"
 $env:NEXT_PUBLIC_LOCAL_FIRST_MODE = "1"
 $env:NEXT_PUBLIC_STUDIO_PROJECT_KERNEL = "1"
@@ -39,7 +40,7 @@ if (-not (Test-Path $PythonExe)) {
 }
 
 Write-Host "[1/2] Starting FastAPI Backend on http://127.0.0.1:8000..." -ForegroundColor Green
-$BackendCmd = "Set-Location '$FastApiDir'; if (Test-Path '$UserBin') { `$env:Path = '$UserBin;' + `$env:Path }; `$env:LOCAL_FIRST_MODE='1'; `$env:MOCK_AI_MODE='0'; `$env:NEXT_PUBLIC_STUDIO_PROJECT_KERNEL='1'; `$env:EXPORT_SIGNING_SECRET='local-studio-export-signing-secret-dev-only'; & '$PythonExe' -m uvicorn main:app --host 127.0.0.1 --port 8000 --reload"
+$BackendCmd = "Set-Location '$FastApiDir'; if (Test-Path '$UserBin') { `$env:Path = '$UserBin;' + `$env:Path }; `$env:LOCAL_FIRST_MODE='1'; `$env:MOCK_AI_MODE='0'; `$env:NEXT_PUBLIC_STUDIO_PROJECT_KERNEL='1'; `$env:EXPORT_SIGNING_SECRET='local-studio-export-signing-secret-dev-only'; `$env:NEXTAUTH_SECRET='quickai-studio-local-dev-secret-key-32chars'; & '$PythonExe' -m uvicorn main:app --host 127.0.0.1 --port 8000 --reload"
 Start-Process powershell -ArgumentList "-NoExit", "-Command", $BackendCmd
 
 Start-Sleep -Seconds 2

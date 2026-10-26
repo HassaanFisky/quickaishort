@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { FolderOpen, MoreHorizontal, Pencil, Trash2, Copy, ChevronRight } from "lucide-react";
+import { FolderOpen, MoreHorizontal, Trash2, ChevronRight, Plus } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import axios from "axios";
 import { toast } from "sonner";
@@ -54,7 +54,7 @@ function ProjectRow({
   onDelete?: () => void;
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-border bg-[hsl(var(--bg-subtle))] px-3 py-3 sm:px-4">
+    <div className="flex items-center gap-3 rounded-xl border border-border bg-[hsl(var(--bg-subtle))] px-3 py-3 sm:px-4 hover:border-[hsl(var(--accent-indigo))]/30 transition-colors">
       <div className="w-10 h-10 rounded-lg bg-[hsl(var(--bg-muted))] flex items-center justify-center shrink-0">
         <FolderOpen className="w-4 h-4 text-[hsl(var(--fg-subtle))]" aria-hidden />
       </div>
@@ -77,13 +77,7 @@ function ProjectRow({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuItem onClick={onOpen}>
-            <ChevronRight className="w-4 h-4 mr-2" /> Open
-          </DropdownMenuItem>
-          <DropdownMenuItem disabled>
-            <Pencil className="w-4 h-4 mr-2" /> Rename
-          </DropdownMenuItem>
-          <DropdownMenuItem disabled>
-            <Copy className="w-4 h-4 mr-2" /> Duplicate
+            <ChevronRight className="w-4 h-4 mr-2" /> Open in editor
           </DropdownMenuItem>
           {onDelete && (
             <DropdownMenuItem className="text-red-400" onClick={onDelete}>
@@ -99,12 +93,15 @@ function ProjectRow({
 export default function ProjectsPage() {
   const queryClient = useQueryClient();
 
+  const isLocalFirst = process.env.NEXT_PUBLIC_LOCAL_FIRST_MODE === "1";
+
   const {
     data: projects,
     isLoading: projectsLoading,
     isError: projectsError,
   } = useQuery<MongoProject[]>({
     queryKey: ["projects"],
+    initialData: isLocalFirst ? [] : undefined,
     queryFn: async () => {
       const res = await axios.get("/api/projects");
       return res.data;
@@ -113,9 +110,23 @@ export default function ProjectsPage() {
 
   const { data: exports } = useQuery<ExportRecord[]>({
     queryKey: ["exports"],
+    initialData: isLocalFirst ? [] : undefined,
     queryFn: async () => {
       const res = await axios.get("/api/exports");
       return res.data;
+    },
+  });
+
+  const deleteProject = useMutation({
+    mutationFn: async (id: string) => {
+      await axios.delete(`/api/projects/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+      toast.success("Project removed.");
+    },
+    onError: () => {
+      toast.error("Couldn't delete this project. Try again in a moment.");
     },
   });
 
@@ -132,25 +143,30 @@ export default function ProjectsPage() {
     },
   });
 
-  if (projectsLoading) {
-    return (
-      <div className="h-[50vh] flex items-center justify-center">
-        <LoadingSpinner size={40} />
-      </div>
-    );
-  }
-
   const hasProjects = (projects?.length ?? 0) > 0;
   const hasExports = (exports?.length ?? 0) > 0;
 
   return (
     <div className="space-y-8">
-      <header className="space-y-1">
-        <h1 className="text-xl sm:text-2xl font-semibold text-[hsl(var(--fg))]">Projects</h1>
-        <p className="text-[13px] text-[hsl(var(--fg-subtle))]">
-          Your edits and exported shorts in one place.
-        </p>
+      <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="space-y-1">
+          <h1 className="text-xl sm:text-2xl font-semibold text-foreground">Projects</h1>
+          <p className="text-[13px] text-muted-foreground">
+            Your saved edits and exported shorts in one place.
+          </p>
+        </div>
+        <Button size="sm" className="h-9 rounded-xl text-[12px] font-medium self-start sm:self-auto" asChild>
+          <Link href="/editor">
+            <Plus className="w-3.5 h-3.5 mr-1.5" /> New edit
+          </Link>
+        </Button>
       </header>
+
+      {projectsLoading && !hasProjects && !hasExports && (
+        <div className="h-[40vh] flex items-center justify-center">
+          <LoadingSpinner size={36} />
+        </div>
+      )}
 
       {projectsError && (
         <InlineError
@@ -159,7 +175,7 @@ export default function ProjectsPage() {
         />
       )}
 
-      {!projectsError && !hasProjects && !hasExports && (
+      {!projectsLoading && !projectsError && !hasProjects && !hasExports && (
         <EmptyState
           icon={FolderOpen}
           title="No projects yet"
@@ -200,6 +216,11 @@ export default function ProjectsPage() {
                         }
                       }
                       window.location.href = "/editor";
+                    }}
+                    onDelete={() => {
+                      if (confirm("Delete this saved project? This can't be undone.")) {
+                        deleteProject.mutate(p._id);
+                      }
                     }}
                   />
                 </li>
