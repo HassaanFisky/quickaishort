@@ -1,15 +1,15 @@
-# Terms of Service — QuickAI Short
+# Terms of Service — QuickAI Studio
 
 **Last updated:** July 30, 2026  
 **Applies to:** [quickaishort.online](https://quickaishort.online)
 
-These Terms of Service (“Terms”) govern your access to and use of QuickAI Short at **quickaishort.online** (the “Service”), operated by QuickAI Short (“QuickAI,” “we,” “us,” or “our”). By creating an account or using the Service, you agree to these Terms and our [Privacy Policy](/privacy).
+These Terms of Service (“Terms”) govern your access to and use of QuickAI Studio at **quickaishort.online** (the “Service”), operated by QuickAI Studio (“QuickAI,” “we,” “us,” or “our”). By creating an account or using the Service, you agree to these Terms and our [Privacy Policy](/privacy).
 
 ---
 
 ## 1. The Service
 
-QuickAI Short is a cloud-native platform for conversational AI video editing and short-form creation — including browser and server-side media workflows, Pre-Flight / multi-agent analysis, captions, dubbing, and export. Features and limits vary by plan and are described on [Pricing](/pricing). We may modify, suspend, or discontinue features with reasonable notice when practical.
+QuickAI Studio is a cloud-native platform for conversational AI video editing and short-form creation — including browser and server-side media workflows, Pre-Flight / multi-agent analysis, captions, dubbing, and export. Features and limits vary by plan and are described on [Pricing](/pricing). We may modify, suspend, or discontinue features with reasonable notice when practical.
 
 ---
 

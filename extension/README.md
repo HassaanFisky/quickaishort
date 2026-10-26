@@ -1,6 +1,6 @@
-# QuickAI Short — Chrome Extension Guide
+# QuickAI Studio — Chrome Extension Guide
 
-This extension adds a **✦ QuickAI Short** action button directly into the YouTube player metadata area. Clicking the button opens the **QuickAI Short** editor at `https://www.quickaishort.online/editor` with the current video pre-loaded for conversational AI editing (Gemini).
+This extension adds a **✦ QuickAI Studio** action button directly into the YouTube player metadata area. Clicking the button opens the **QuickAI Studio** editor at `https://www.quickaishort.online/editor` with the current video pre-loaded for conversational AI editing (Gemini).
 
 ---
 
@@ -31,7 +31,7 @@ Before uploading to the Chrome Web Store, verify the extension behaves correctly
 4. In the top-left corner, click **Load unpacked**.
 5. Select the **`extension`** folder from this project directory.
 6. Open any YouTube watch video (e.g., `https://www.youtube.com/watch?v=dQw4w9WgXcQ`).
-7. You should see a purple **✦ QuickAI Short** button appear on the metadata line (next to the Share/Download/Clip actions).
+7. You should see a purple **✦ QuickAI Studio** button appear on the metadata line (next to the Share/Download/Clip actions).
 8. Click it to verify it correctly opens `https://www.quickaishort.online/editor?v=dQw4w9WgXcQ` in a new tab and automatically loads the video stream for analysis.
 
 ---
@@ -65,7 +65,7 @@ Here is the pre-composed, high-converting copy optimized for search (SEO) and us
 
 *   **Item Title (Max 45 chars):**
     ```text
-    QuickAI Short — Conversational AI Video Editor
+    QuickAI Studio — Conversational AI Video Editor
     ```
 
 *   **Summary / Short Description (Max 150 chars):**
@@ -77,10 +77,10 @@ Here is the pre-composed, high-converting copy optimized for search (SEO) and us
     ```text
     Turn any YouTube video into high-engagement, viral vertical shorts in a single click.
 
-    The QuickAI Short Chrome Extension integrates directly into YouTube, placing a quick-access "✦ QuickAI Short" button right next to the video actions bar.
+    The QuickAI Studio Chrome Extension integrates directly into YouTube, placing a quick-access "✦ QuickAI Studio" button right next to the video actions bar.
 
     FEATURES:
-    ✦ One-Click Launch: Bypass manual URL copying. Click the button to instantly send the video to the QuickAI Editor.
+    ✦ One-Click Launch: Bypass manual URL copying. Click the button to instantly send the video to the QuickAI Studio Editor.
     ✦ Intelligent Clip Selection: Leverage Google Gemini AI to analyze speech density, energy, and trends to select the most viral segments.
     ✦ "Pre-Flight" Audience Simulation: Simulate how GenZ, Millennial, Tech, Sports, and News audiences will react to your clip before publishing.
     ✦ Subtitles & Captions: Automatically transcribe and style beautiful, animated, high-retention subtitles.
@@ -89,10 +89,10 @@ Here is the pre-composed, high-converting copy optimized for search (SEO) and us
     HOW IT WORKS:
     1. Install this extension.
     2. Go to any YouTube watch page.
-    3. Click the purple "✦ QuickAI Short" button.
+    3. Click the purple "✦ QuickAI Studio" button.
     4. The editor will open in a new tab and begin processing the video automatically.
 
-    QuickAI Short: OpusClip shows you which clip. Pre-Flight shows you if it will work.
+    QuickAI Studio: OpusClip shows you which clip. Pre-Flight shows you if it will work.
     ```
 
 *   **Category:** `Productivity` or `Social & Communication`
@@ -104,14 +104,14 @@ Here is the pre-composed, high-converting copy optimized for search (SEO) and us
 Because the extension requests `host_permissions` on `*://*.youtube.com/*`, Google reviewers will ask why:
 *   **Justification:**
     ```text
-    The extension injects a launching button ('✦ QuickAI Short') into the DOM of the YouTube watch metadata container, allowing users to send the video URL of the current watch page directly to the editor for automated clip generation.
+    The extension injects a launching button ('✦ QuickAI Studio') into the DOM of the YouTube watch metadata container, allowing users to send the video URL of the current watch page directly to the editor for automated clip generation.
     ```
 
 ### 5. Upload Assets
 - **Icons:** You can upload your high-resolution logo, or use `assets/icon128.png` included in this folder.
 - **Screenshots:** Take 1-2 screenshots of:
   1. The purple button appearing on a YouTube video.
-  2. The QuickAI Short editor loaded with the video.
+  2. The QuickAI Studio editor loaded with the video.
   - *Dimensions:* 1280x800 or 640x400 pixels (PNG or JPEG).
 
 ### 6. Publish

@@ -1,4 +1,4 @@
-﻿@import "tailwindcss";
+@import "tailwindcss";
 @import "tw-animate-css";
 
 /* OLED shares dark: utilities — true-black identity, same contrast family as Studio Dark */
@@ -457,9 +457,12 @@ html.liquid-transition::view-transition-new(root) {
   }
 
   :focus-visible {
-    outline: 2px solid hsl(var(--accent-indigo));
+    outline: 2px solid hsl(var(--accent-indigo, 270 91% 65%));
     outline-offset: 2px;
-    border-radius: 4px;
+  }
+
+  :focus:not(:focus-visible) {
+    outline: none;
   }
 }
 

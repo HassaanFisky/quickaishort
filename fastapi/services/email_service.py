@@ -58,7 +58,7 @@ def _brand_wrapper(title: str, body_html: str) -> str:
 <tr><td align="center">
 <table width="480" cellpadding="0" cellspacing="0" style="background:#111113;border:1px solid #26262b;border-radius:16px;overflow:hidden;">
 <tr><td style="padding:32px;">
-<p style="margin:0 0 24px;font-weight:900;font-size:14px;letter-spacing:0.1em;color:#a855f7;text-transform:uppercase;">QuickAI Short</p>
+<p style="margin:0 0 24px;font-weight:900;font-size:14px;letter-spacing:0.1em;color:#a855f7;text-transform:uppercase;">QuickAI Studio</p>
 <h1 style="margin:0 0 16px;font-size:22px;color:#f4f4f5;">{title}</h1>
 <div style="color:#a1a1aa;font-size:14px;line-height:1.6;">{body_html}</div>
 <p style="margin:32px 0 0;font-size:11px;color:#52525b;">
@@ -206,7 +206,7 @@ async def send_welcome_email(user_email: str, user_name: str) -> bool:
         '<br><br><a href="https://quickaishort.online/editor" style="color:#a855f7;font-weight:700;">'
         "Open the editor →</a>",
     )
-    return await _send("welcome", user_email, "Welcome to QuickAI Short", html)
+    return await _send("welcome", user_email, "Welcome to QuickAI Studio", html)
 
 
 async def send_pro_activation_email(user_email: str, user_name: str) -> bool:
@@ -218,16 +218,16 @@ async def send_pro_activation_email(user_email: str, user_name: str) -> bool:
         "Start editing →</a>",
     )
     return await _send(
-        "pro_activation", user_email, "Welcome to QuickAI Short Pro", html
+        "pro_activation", user_email, "Welcome to QuickAI Studio Pro", html
     )
 
 
 async def send_weekly_digest(user_email: str, stats: dict) -> bool:
     """Not triggered by any scheduled job yet — template ready for Phase 47/48."""
     html = _brand_wrapper(
-        "Your week on QuickAI Short",
+        "Your week on QuickAI Studio",
         f"Exports: {stats.get('export_count', 0)} &middot; "
         f"AI runs: {stats.get('ai_runs', 0)} &middot; "
         f"Credits remaining: {stats.get('credits_balance', 0)}",
     )
-    return await _send("weekly_digest", user_email, "Your week on QuickAI Short", html)
+    return await _send("weekly_digest", user_email, "Your week on QuickAI Studio", html)

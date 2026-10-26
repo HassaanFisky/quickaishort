@@ -1,6 +1,6 @@
 // QuickAI Studio — service worker (network-first, offline fallback for shell)
 const CACHE = "qas-v1";
-const SHELL = ["/", "/editor", "/dashboard", "/manifest.json", "/qs-logo.png"];
+const SHELL = ["/", "/editor", "/dashboard", "/manifest.json", "/studio-logo.svg"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)));

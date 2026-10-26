@@ -1,9 +1,9 @@
-# Privacy Policy — QuickAI Short
+# Privacy Policy — QuickAI Studio
 
 **Last updated:** July 30, 2026  
 **Applies to:** [quickaishort.online](https://quickaishort.online)
 
-QuickAI Short (“QuickAI,” “we,” “us,” or “our”) operates the website and product at **quickaishort.online** (the “Service”). This Privacy Policy explains what information we collect, how we use it, how we protect it, and your choices. By using the Service, you agree to this Policy.
+QuickAI Studio (“QuickAI,” “we,” “us,” or “our”) operates the website and product at **quickaishort.online** (the “Service”). This Privacy Policy explains what information we collect, how we use it, how we protect it, and your choices. By using the Service, you agree to this Policy.
 
 ---
 

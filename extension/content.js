@@ -1,8 +1,8 @@
-// QuickAI Shorts Chrome Extension Content Script
-// Injects a premium quick-action button into the YouTube UI to launch the QuickAI Shorts Editor.
+// QuickAI Studio Chrome Extension Content Script
+// Injects a premium quick-action button into the YouTube UI to launch the QuickAI Studio Editor.
 
 (function () {
-  console.log("[QuickAI Shorts] Content script loaded.");
+  console.log("[QuickAI Studio] Content script loaded.");
 
   function injectButton() {
     const existingButton = document.getElementById("quickai-shorts-btn");
@@ -27,7 +27,7 @@
           // If we attach to the owner container, let's insert it right after the container for clean alignment
           injectionMethod = "after";
         }
-        console.log(`[QuickAI Shorts] Target container found using selector: "${selector}" (Method: ${injectionMethod})`);
+        console.log(`[QuickAI Studio] Target container found using selector: "${selector}" (Method: ${injectionMethod})`);
         break;
       }
     }
@@ -55,7 +55,7 @@
     btn.style.border = "none";
     btn.style.boxShadow = "0 0 10px rgba(168,85,247,0.4)";
     btn.style.transition = "transform 0.1s ease, filter 0.2s ease";
-    btn.innerText = "✦ QuickAI Short";
+    btn.innerText = "✦ QuickAI Studio";
 
     // Adding hover and active micro-animations
     btn.onmouseenter = () => {
@@ -77,13 +77,13 @@
       
       const videoId = new URLSearchParams(window.location.search).get("v");
       if (videoId) {
-        console.log(`[QuickAI Shorts] Launching editor for video ID: ${videoId}`);
+        console.log(`[QuickAI Studio] Launching editor for video ID: ${videoId}`);
         window.open(
           `https://www.quickaishort.online/editor?v=${videoId}`,
           "_blank"
         );
       } else {
-        console.warn("[QuickAI Shorts] No video ID found in current URL query parameters.");
+        console.warn("[QuickAI Studio] No video ID found in current URL query parameters.");
       }
     };
 
@@ -93,9 +93,9 @@
       } else {
         targetContainer.appendChild(btn);
       }
-      console.log("[QuickAI Shorts] Button successfully injected into YouTube page.");
+      console.log("[QuickAI Studio] Button successfully injected into YouTube page.");
     } catch (err) {
-      console.error("[QuickAI Shorts] Failed to inject button:", err);
+      console.error("[QuickAI Studio] Failed to inject button:", err);
     }
   }
 

@@ -46,24 +46,25 @@ export default function Navbar() {
   }, []);
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 flex justify-center p-4">
+    <header className="fixed top-0 left-0 right-0 z-50 flex justify-center p-2.5 sm:p-4 max-w-full overflow-x-hidden">
       <nav
         aria-label="Primary"
         className={cn(
-          "w-full max-w-6xl h-14 px-5 flex items-center justify-between rounded-2xl",
+          "w-full max-w-6xl h-14 px-3 sm:px-5 flex items-center justify-between rounded-2xl max-w-full overflow-hidden",
           "transition-[background-color,border-color,box-shadow,transform] duration-[280ms] ease-[cubic-bezier(0.22,1,0.36,1)]",
           isScrolled
             ? "bg-[hsl(var(--bg-base))]/80 backdrop-blur-2xl border border-white/[0.07] shadow-[0_8px_32px_-8px_rgba(0,0,0,0.5)] scale-[0.99]"
             : "bg-transparent border border-transparent",
         )}
       >
-        <div className="flex items-center gap-8">
+        <div className="flex items-center gap-3 sm:gap-8 flex-shrink-0">
           <Link
             href="/"
             aria-label="QuickAI Studio – Home"
             className="flex items-center flex-shrink-0 group"
           >
-            <QSLogo variant="full" size="md" animated />
+            <QSLogo variant="mark" size="md" animated className="sm:hidden" />
+            <QSLogo variant="full" size="md" animated className="hidden sm:inline-flex" />
           </Link>
           <div className="hidden md:flex items-center gap-0.5">
             <Link
@@ -91,35 +92,37 @@ export default function Navbar() {
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-1.5 sm:gap-4 flex-shrink-0">
           <LiquidThemeToggle />
           
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-9 w-9 rounded-xl text-muted-foreground hover:text-foreground hover:bg-white/[0.04] p-0"
-                aria-label="Select Language"
-              >
-                <Globe className="w-4 h-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent className="nano-glass text-foreground border-white/10 p-1 max-h-80 overflow-y-auto" align="end">
-              {UI_LOCALES.map((entry) => (
-                <DropdownMenuItem
-                  key={entry.id}
-                  onClick={() => setLocale(entry.id)}
-                  className={cn(
-                    "focus:bg-white/5 cursor-pointer rounded-lg p-2 text-xs",
-                    currentLocale === entry.id && "font-bold text-primary",
-                  )}
+          <div className="hidden sm:block">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-9 rounded-xl text-muted-foreground hover:text-foreground hover:bg-white/[0.04] p-0"
+                  aria-label="Select Language"
                 >
-                  {entry.nativeName}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+                  <Globe className="w-4 h-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="nano-glass text-foreground border-white/10 p-1 max-h-80 overflow-y-auto" align="end">
+                {UI_LOCALES.map((entry) => (
+                  <DropdownMenuItem
+                    key={entry.id}
+                    onClick={() => setLocale(entry.id)}
+                    className={cn(
+                      "focus:bg-white/5 cursor-pointer rounded-lg p-2 text-xs",
+                      currentLocale === entry.id && "font-bold text-primary",
+                    )}
+                  >
+                    {entry.nativeName}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
 
           {status === "authenticated" ? (
             <>
@@ -232,16 +235,19 @@ export default function Navbar() {
               </DropdownMenu>
             </>
           ) : (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
               <Button
                 variant="ghost"
                 asChild
-                className="text-[13px] font-semibold text-muted-foreground hover:text-foreground hover:bg-white/[0.04] rounded-xl h-9 px-4"
+                className="text-xs sm:text-[13px] font-semibold text-muted-foreground hover:text-foreground hover:bg-white/[0.04] rounded-xl h-8 sm:h-9 px-2 sm:px-4 flex-shrink-0 whitespace-nowrap"
               >
                 <Link href="/signin">{t("nav.signIn")}</Link>
               </Button>
-              <GlowButton asChild size="sm" variant="gradient" className="h-9 px-5 rounded-xl text-[13px]">
-                <Link href="/signup">{t("nav.getStarted")}</Link>
+              <GlowButton asChild size="sm" variant="gradient" className="h-8 sm:h-9 px-2.5 sm:px-5 rounded-xl text-xs sm:text-[13px] flex-shrink-0 whitespace-nowrap">
+                <Link href="/signup">
+                  <span className="sm:hidden">Start</span>
+                  <span className="hidden sm:inline">{t("nav.getStarted")}</span>
+                </Link>
               </GlowButton>
             </div>
           )}

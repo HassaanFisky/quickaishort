@@ -2,7 +2,7 @@
 // Handles installation and potential OAuth flows
 
 chrome.runtime.onInstalled.addListener(() => {
-  console.log("QuickAI Shorts Extension Installed");
+  console.log("QuickAI Studio Extension Installed");
 });
 
 // Listen for messages from content script if needed

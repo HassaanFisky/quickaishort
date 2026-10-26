@@ -1,9 +1,9 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import Image from "next/image";
+import QSLogo from "@/components/shared/QSLogo";
 import { motion, AnimatePresence } from "framer-motion";
 import { Lock, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -78,9 +78,13 @@ function ResetPasswordForm() {
 
           <CardHeader className="text-center space-y-5 pt-10 pb-2">
             <div className="flex justify-center">
-              <div className="relative w-12 h-12">
-                <Image src="/qs-logo.png" alt="" fill aria-hidden className="object-contain invert dark:invert-0 drop-shadow-[0_0_16px_rgba(168,85,247,0.55)]" />
-              </div>
+              <Link
+                href="/"
+                aria-label="QuickAI Studio home"
+                className="inline-flex rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              >
+                <QSLogo variant="mark" size="lg" animated />
+              </Link>
             </div>
             <div className="space-y-1.5">
               <CardTitle className="text-2xl font-black tracking-tight text-foreground">

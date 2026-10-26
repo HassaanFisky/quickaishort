@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import Image from "next/image";
+import QSLogo from "@/components/shared/QSLogo";
 import { signIn, useSession } from "next-auth/react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Lock, Loader2, Mail, ShieldCheck } from "lucide-react";
@@ -126,15 +126,7 @@ export function SessionExpiryModal() {
 
             <div className="px-7 pb-8 pt-10">
               <div className="mb-6 flex flex-col items-center gap-4 text-center">
-                <div className="relative h-12 w-12">
-                  <Image
-                    src="/qs-logo.png"
-                    alt=""
-                    fill
-                    aria-hidden
-                    className="object-contain invert drop-shadow-[0_0_16px_rgba(168,85,247,0.55)] dark:invert-0"
-                  />
-                </div>
+                <QSLogo variant="mark" size="lg" />
                 <div className="space-y-1.5">
                   <h2
                     id="session-reauth-title"
