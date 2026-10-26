@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import warnings
 
@@ -586,6 +586,7 @@ except Exception:  # pragma: no cover â€” package always present in prod im
 allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "")
 origins = [
     "http://localhost:3000",
+    "http://127.0.0.1:3000",
     "https://quickaishort.online",
     "https://www.quickaishort.online",
     "https://quickaishort-ls7d.vercel.app",
