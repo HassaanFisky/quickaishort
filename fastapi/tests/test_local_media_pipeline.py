@@ -14,8 +14,9 @@ from services.local_persistence import get_local_db
 def _generate_real_test_video(dest: Path, duration: float = 3.0) -> Path:
     """Generate a real H.264 + AAC MP4 with a silent window between 1.0s and 2.0s."""
     dest.parent.mkdir(parents=True, exist_ok=True)
+    ffmpeg_bin = LocalMediaPipeline.get_ffmpeg_bin() or "ffmpeg"
     cmd = [
-        "ffmpeg",
+        ffmpeg_bin,
         "-hide_banner",
         "-loglevel",
         "error",

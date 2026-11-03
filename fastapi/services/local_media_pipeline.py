@@ -55,6 +55,8 @@ class MediaProbeResult:
         fps: float,
         has_audio: bool = True,
         codec: str = "h264",
+        video_codec: Optional[str] = None,
+        audio_codec: Optional[str] = None,
     ) -> None:
         self.duration = duration
         self.width = width
@@ -62,6 +64,8 @@ class MediaProbeResult:
         self.fps = fps
         self.has_audio = has_audio
         self.codec = codec
+        self.video_codec = video_codec or codec
+        self.audio_codec = audio_codec or ("aac" if has_audio else None)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -71,6 +75,8 @@ class MediaProbeResult:
             "fps": self.fps,
             "has_audio": self.has_audio,
             "codec": self.codec,
+            "video_codec": self.video_codec,
+            "audio_codec": self.audio_codec,
         }
 
 
@@ -113,11 +119,15 @@ class LocalMediaPipeline:
         return cls.get_ffprobe_bin() is not None
 
     def resolve_source_media(
-        self, video_id: str, options: Optional[Dict[str, Any]] = None
+        self,
+        video_id: str,
+        options: Optional[Dict[str, Any]] = None,
+        user_id: Optional[str] = None,
     ) -> Path:
-        """Resolve a video_id or gs:// URI to an existing local file path inside storage_root."""
+        """Resolve a video_id or gs:// URI to an existing local file path strictly inside storage_root."""
         opts = options or {}
         candidates: List[Path] = []
+        storage_root_resolved = self.storage_root.resolve()
 
         raw_id = str(video_id or "").strip()
         if raw_id.startswith("gs://"):
@@ -125,14 +135,20 @@ class LocalMediaPipeline:
             without_scheme = raw_id[5:]
             parts = without_scheme.split("/", 1)
             rel = parts[1] if len(parts) == 2 else parts[0]
-            candidates.append(self.storage_root / rel.lstrip("/\\"))
-            candidates.append(self.uploads_dir / Path(rel).name)
+            clean_rel = rel.lstrip("/\\")
+            if ".." not in Path(clean_rel).parts:
+                candidates.append(self.storage_root / clean_rel)
+                candidates.append(self.uploads_dir / Path(clean_rel).name)
+                if user_id:
+                    candidates.append(self.uploads_dir / user_id / Path(clean_rel).name)
         elif raw_id:
             clean_rel = raw_id.lstrip("/\\")
             if ".." not in Path(clean_rel).parts:
                 candidates.append(self.storage_root / clean_rel)
                 candidates.append(self.uploads_dir / clean_rel)
-            candidates.append(self.uploads_dir / Path(raw_id).name)
+                if user_id:
+                    candidates.append(self.uploads_dir / user_id / Path(clean_rel).name)
+                candidates.append(self.uploads_dir / Path(clean_rel).name)
 
         for key in ("source_path", "media_path", "gcs_path"):
             val = opts.get(key)
@@ -141,33 +157,51 @@ class LocalMediaPipeline:
                 if v.startswith("gs://"):
                     parts = v[5:].split("/", 1)
                     rel = parts[1] if len(parts) == 2 else parts[0]
-                    candidates.append(self.storage_root / rel.lstrip("/\\"))
+                    clean_rel = rel.lstrip("/\\")
+                    if ".." not in Path(clean_rel).parts:
+                        candidates.append(self.storage_root / clean_rel)
+                        if user_id:
+                            candidates.append(self.uploads_dir / user_id / Path(clean_rel).name)
                 else:
-                    p = Path(v)
-                    if p.is_absolute() and p.exists():
-                        candidates.append(p)
-                    elif ".." not in Path(v.lstrip("/\\")).parts:
-                        candidates.append(self.storage_root / v.lstrip("/\\"))
-                        candidates.append(self.uploads_dir / v.lstrip("/\\"))
+                    clean_rel = v.lstrip("/\\")
+                    if ".." not in Path(clean_rel).parts:
+                        candidates.append(self.storage_root / clean_rel)
+                        candidates.append(self.uploads_dir / clean_rel)
+                        if user_id:
+                            candidates.append(self.uploads_dir / user_id / Path(clean_rel).name)
 
         for cand in candidates:
             try:
                 resolved = cand.resolve()
+                # Strict containment: candidate must reside inside storage_root
+                if not resolved.is_relative_to(storage_root_resolved):
+                    continue
                 if (
                     resolved.exists()
                     and resolved.is_file()
                     and resolved.stat().st_size > 0
                 ):
                     return resolved
-            except OSError:
+            except (OSError, ValueError):
                 continue
 
-        # Also search recursively under uploads_dir by basename if a nested user/uuid dir was used
+        # Also search under uploads_dir by basename if a nested user/uuid dir was used
         target_name = Path(raw_id).name if raw_id else ""
         if target_name and self.uploads_dir.exists():
-            for match in self.uploads_dir.rglob(target_name):
-                if match.is_file() and match.stat().st_size > 0:
-                    return match.resolve()
+            search_dir = (
+                (self.uploads_dir / user_id)
+                if (user_id and user_id != "local_studio_user" and (self.uploads_dir / user_id).exists())
+                else self.uploads_dir
+            )
+            for match in search_dir.rglob(target_name):
+                try:
+                    resolved_match = match.resolve()
+                    if not resolved_match.is_relative_to(storage_root_resolved):
+                        continue
+                    if resolved_match.is_file() and resolved_match.stat().st_size > 0:
+                        return resolved_match
+                except (OSError, ValueError):
+                    continue
 
         raise FileNotFoundError(
             f"Source media file not found or empty for video_id={video_id!r}"
@@ -198,7 +232,9 @@ class LocalMediaPipeline:
             "json",
             str(media_path),
         ]
-        res = subprocess.run(cmd, capture_output=True, text=True, shell=False)
+        res = subprocess.run(
+            cmd, capture_output=True, text=True, shell=False, timeout=120
+        )
         if res.returncode != 0:
             raise ValueError(
                 f"ffprobe failed on {media_path.name}: {res.stderr.strip()[:300]}"
@@ -217,6 +253,7 @@ class LocalMediaPipeline:
         has_audio = False
         has_video = False
         codec = "h264"
+        audio_codec = None
 
         for s in streams:
             ctype = s.get("codec_type")
@@ -237,6 +274,8 @@ class LocalMediaPipeline:
                     fps = _safe_float(r_fps, 30.0)
             elif ctype == "audio":
                 has_audio = True
+                if not audio_codec:
+                    audio_codec = str(s.get("codec_name") or "aac")
                 if duration <= 0.0:
                     duration = _safe_float(s.get("duration"), 0.0)
 
@@ -250,6 +289,8 @@ class LocalMediaPipeline:
             fps=fps or 30.0,
             has_audio=has_audio,
             codec=codec,
+            video_codec=codec,
+            audio_codec=audio_codec,
         )
 
     def detect_silence(
@@ -261,7 +302,9 @@ class LocalMediaPipeline:
             raise FileNotFoundError(f"Media file not found: {media_path}")
 
         if not self.is_ffmpeg_available():
-            return [(5.0, 7.5)]
+            raise RuntimeError(
+                "ffmpeg is not available on PATH; cannot perform silence detection."
+            )
 
         ffmpeg_bin = self.get_ffmpeg_bin() or "ffmpeg"
         cmd = [
@@ -277,7 +320,20 @@ class LocalMediaPipeline:
             "-",
         ]
         try:
-            res = subprocess.run(cmd, capture_output=True, text=True, shell=False)
+            res = subprocess.run(
+                cmd, capture_output=True, text=True, shell=False, timeout=120
+            )
+            if res.returncode != 0:
+                err_lower = res.stderr.lower()
+                if (
+                    "matches no streams" in err_lower
+                    or "does not contain any stream" in err_lower
+                    or "no audio stream" in err_lower
+                ):
+                    return []
+                raise RuntimeError(
+                    f"FFmpeg silence detection failed (exit {res.returncode}): {res.stderr.strip()[:300]}"
+                )
             silences: List[Tuple[float, float]] = []
             curr_start: Optional[float] = None
             for line in res.stderr.splitlines():
@@ -293,6 +349,8 @@ class LocalMediaPipeline:
                         silences.append((round(curr_start, 3), round(end, 3)))
                     curr_start = None
             return silences
+        except subprocess.TimeoutExpired as exc:
+            raise RuntimeError("FFmpeg silence detection timed out") from exc
         except Exception as exc:
             logger.warning(
                 "Silence detection failed: %s; returning empty intervals", exc
@@ -408,7 +466,7 @@ class LocalMediaPipeline:
                 "-",
             ]
             proc = subprocess.run(
-                decode_cmd, capture_output=True, text=True, shell=False
+                decode_cmd, capture_output=True, text=True, shell=False, timeout=120
             )
             if proc.returncode != 0:
                 raise RuntimeError(
@@ -462,7 +520,7 @@ class LocalMediaPipeline:
             await asyncio.sleep(0.02)
             doc_ref.update({"progress": 25, "stage": "probing"})
             source_path = await asyncio.to_thread(
-                self.resolve_source_media, video_id, options
+                self.resolve_source_media, video_id, options, user_id
             )
             source_probe = await asyncio.to_thread(self.probe_media, source_path)
 
@@ -692,7 +750,9 @@ class LocalMediaPipeline:
                 )
 
             def _run_and_verify() -> MediaProbeResult:
-                proc = subprocess.run(cmd, capture_output=True, text=True, shell=False)
+                proc = subprocess.run(
+                    cmd, capture_output=True, text=True, shell=False, timeout=180
+                )
                 if proc.returncode != 0:
                     raise RuntimeError(
                         f"FFmpeg render failed (exit {proc.returncode}): {proc.stderr.strip()[:400]}"

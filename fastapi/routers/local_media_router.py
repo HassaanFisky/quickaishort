@@ -46,20 +46,43 @@ class LocalRenderRequest(BaseModel):
     options: Dict[str, Any] = Field(default_factory=dict)
 
 
+ALLOWED_STREAM_PREFIXES = {"uploads", "exports"}
+
+
 @router.post("/upload")
 async def upload_local_media(
     file: UploadFile = File(...),
     user_id: str = Depends(get_verified_user_id),
 ):
     """Upload media file into the local studio storage (uploads directory), probe it, and detect silence."""
-    clean_filename = Path(file.filename or f"upload_{uuid4().hex[:8]}.mp4").name
-    dest_path = STUDIO_STORAGE_DIR / "uploads" / user_id / clean_filename
+    safe_user_id = "".join(c for c in user_id if c.isalnum() or c in ("-", "_")).strip() or "local_user"
+    raw_filename = Path(file.filename or f"upload_{uuid4().hex[:8]}.mp4").name
+    clean_filename = "".join(c for c in raw_filename if c.isalnum() or c in (".", "-", "_")).strip()
+    if not clean_filename or clean_filename.startswith("."):
+        clean_filename = f"upload_{uuid4().hex[:8]}.mp4"
+
+    dest_path = STUDIO_STORAGE_DIR / "uploads" / safe_user_id / clean_filename
     dest_path.parent.mkdir(parents=True, exist_ok=True)
 
-    content = await file.read()
-    if not content:
+    bytes_written = 0
+    max_upload_size = 500 * 1024 * 1024  # 500MB safety ceiling
+    try:
+        with open(dest_path, "wb") as f_out:
+            while chunk := await file.read(1024 * 1024):  # 1MB buffer
+                bytes_written += len(chunk)
+                if bytes_written > max_upload_size:
+                    raise HTTPException(
+                        status_code=413,
+                        detail="Upload file exceeds maximum limit of 500MB",
+                    )
+                f_out.write(chunk)
+    except Exception:
+        dest_path.unlink(missing_ok=True)
+        raise
+
+    if bytes_written == 0:
+        dest_path.unlink(missing_ok=True)
         raise HTTPException(status_code=400, detail="Uploaded file is empty")
-    dest_path.write_bytes(content)
 
     pipeline = get_local_media_pipeline()
     try:
@@ -72,14 +95,14 @@ async def upload_local_media(
 
     silences = await asyncio.to_thread(pipeline.detect_silence, dest_path)
 
-    video_ref = f"{user_id}/{clean_filename}"
+    video_ref = f"{safe_user_id}/{clean_filename}"
     return {
         "status": "success",
         "video_id": video_ref,
         "media_url": f"/api/local-media/uploads/{video_ref}",
         "probe": probe.to_dict(),
         "silences": [{"start": s, "end": e} for s, e in silences],
-        "uploaded_by": user_id,
+        "uploaded_by": safe_user_id,
     }
 
 
@@ -99,14 +122,27 @@ async def put_local_presigned_blob(
     except ValueError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
 
-    # Enforce tenant isolation if the path is in uploads/<tenant_user_id>/...
     clean_parts = Path(remote_path.lstrip("/\\")).parts
+    if not clean_parts:
+        raise HTTPException(status_code=400, detail="Invalid path")
+
+    if clean_parts[0] not in ALLOWED_STREAM_PREFIXES:
+        raise HTTPException(status_code=403, detail="Forbidden prefix")
+
+    # Enforce tenant isolation if the path is in uploads/<tenant_user_id>/...
     if len(clean_parts) >= 2 and clean_parts[0] == "uploads":
         path_owner = clean_parts[1]
         if path_owner != user_id and user_id != "local_studio_user":
             raise HTTPException(
                 status_code=403,
                 detail="Forbidden: Cannot write to another tenant's upload path",
+            )
+    elif len(clean_parts) >= 2 and clean_parts[0] == "exports":
+        path_owner = clean_parts[1]
+        if path_owner != user_id and user_id != "local_studio_user":
+            raise HTTPException(
+                status_code=403,
+                detail="Forbidden: Cannot write to another tenant's export path",
             )
 
     body = await request.body()
@@ -192,11 +228,15 @@ async def stream_local_media(
     """Stream media file with Range header support for video players."""
     _ = request
     clean_prefix = Path(bucket_prefix).name
+    if clean_prefix not in ALLOWED_STREAM_PREFIXES:
+        raise HTTPException(status_code=403, detail="Forbidden prefix")
+
     if ".." in Path(filename).parts or ".." in Path(bucket_prefix).parts:
         raise HTTPException(status_code=403, detail="Forbidden access")
 
     full_path = (STUDIO_STORAGE_DIR / clean_prefix / filename.lstrip("/\\")).resolve()
-    if STUDIO_STORAGE_DIR.resolve() not in full_path.parents:
+    target_prefix_dir = (STUDIO_STORAGE_DIR / clean_prefix).resolve()
+    if not full_path.is_relative_to(target_prefix_dir):
         raise HTTPException(status_code=403, detail="Forbidden access")
 
     if not full_path.exists() or not full_path.is_file():
@@ -214,5 +254,5 @@ async def stream_local_media(
     return FileResponse(
         path=full_path,
         media_type=media_type,
-        filename=clean_name,
+        content_disposition_type="inline",
     )
