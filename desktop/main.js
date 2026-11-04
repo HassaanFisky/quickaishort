@@ -23,8 +23,22 @@ function resolveRepoRoot() {
 }
 
 function buildStudioEnvironment(repoRoot) {
+  const userDataPath = app.getPath("userData");
+  const dataDir = path.join(userDataPath, "data");
+  const storageDir = path.join(userDataPath, "storage");
+  const logsDir = path.join(userDataPath, "logs");
+
+  try {
+    fs.mkdirSync(dataDir, { recursive: true });
+    fs.mkdirSync(storageDir, { recursive: true });
+    fs.mkdirSync(logsDir, { recursive: true });
+  } catch (err) {
+    console.error("Failed to create userData directory:", err);
+  }
+
   const extraPaths = [
     path.join(repoRoot, "bin"),
+    path.join(process.resourcesPath || "", "bin"),
     "C:\\Users\\DELL\\bin",
   ].filter((p) => {
     try {
@@ -44,6 +58,9 @@ function buildStudioEnvironment(repoRoot) {
     LOCAL_FIRST_MODE: "1",
     LOCAL_FIRST_DEV_NO_AUTH: "1",
     MOCK_AI_MODE: "0",
+    LOCAL_STUDIO_DATA_DIR: dataDir,
+    LOCAL_STUDIO_STORAGE_DIR: storageDir,
+    STUDIO_LOG_DIR: logsDir,
     NEXT_PUBLIC_LOCAL_FIRST_MODE: "1",
     NEXT_PUBLIC_STUDIO_PROJECT_KERNEL: "1",
     NEXT_PUBLIC_API_URL: `http://${BACKEND_HOST}:${BACKEND_PORT}`,
@@ -57,21 +74,28 @@ function buildStudioEnvironment(repoRoot) {
 }
 
 function resolvePythonExecutable(repoRoot) {
+  const packagedPython =
+    process.platform === "win32"
+      ? path.join(process.resourcesPath || "", "python", "python.exe")
+      : path.join(process.resourcesPath || "", "python", "bin", "python3");
+
   const candidates =
     process.platform === "win32"
       ? [
+          packagedPython,
           path.join(repoRoot, "fastapi", "venv", "Scripts", "python.exe"),
           "C:\\Users\\DELL\\.gemini\\antigravity\\scratch\\quickaishort\\fastapi\\venv\\Scripts\\python.exe",
           "python.exe",
         ]
       : [
+          packagedPython,
           path.join(repoRoot, "fastapi", "venv", "bin", "python"),
           "python3",
           "python",
         ];
 
   for (const candidate of candidates) {
-    if (!candidate.includes(path.sep) || fs.existsSync(candidate)) {
+    if (candidate && (!candidate.includes(path.sep) || fs.existsSync(candidate))) {
       return candidate;
     }
   }
