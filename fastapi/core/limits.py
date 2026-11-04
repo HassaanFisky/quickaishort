@@ -340,6 +340,10 @@ def get_render_policy(
 
 async def check_user_tier(user_id: str) -> UserTier:
     """Resolve billing state fail-closed: unknown/outage users remain Free."""
+    from services.local_persistence import is_local_first_mode
+
+    if is_local_first_mode():
+        return UserTier.PRO
 
     if not user_id or user_id == "anonymous":
         return UserTier.FREE

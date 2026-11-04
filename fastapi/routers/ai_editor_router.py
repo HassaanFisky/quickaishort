@@ -619,14 +619,6 @@ async def handle_editor_command(
     if not body.command.strip():
         raise HTTPException(status_code=400, detail="Command cannot be empty")
 
-    tier, evaluation = await _admit_editor_command(
-        user_id=user_id,
-        command=body.command,
-        workload_id=body.workload_id,
-    )
-    if not evaluation.decision.allowed:
-        return _blocked_command_response(evaluation)
-
     from services.director_loop import try_deterministic_director_command
 
     director = await try_deterministic_director_command(
@@ -636,6 +628,14 @@ async def handle_editor_command(
     )
     if director is not None:
         return director
+
+    tier, evaluation = await _admit_editor_command(
+        user_id=user_id,
+        command=body.command,
+        workload_id=body.workload_id,
+    )
+    if not evaluation.decision.allowed:
+        return _blocked_command_response(evaluation)
 
     charged = False
     if not is_mock_ai_mode():
@@ -725,14 +725,6 @@ async def handle_editor_command_stream(
     if not body.command.strip():
         raise HTTPException(status_code=400, detail="Command cannot be empty")
 
-    tier, evaluation = await _admit_editor_command(
-        user_id=user_id,
-        command=body.command,
-        workload_id=body.workload_id,
-    )
-    if not evaluation.decision.allowed:
-        raise_resource_ceiling(evaluation.decision)
-
     from services.director_loop import try_deterministic_director_command
 
     director = await try_deterministic_director_command(
@@ -748,6 +740,14 @@ async def handle_editor_command_stream(
             yield f"data: {director.model_dump_json()}\n\n"
 
         return StreamingResponse(director_stream(), media_type="text/event-stream")
+
+    tier, evaluation = await _admit_editor_command(
+        user_id=user_id,
+        command=body.command,
+        workload_id=body.workload_id,
+    )
+    if not evaluation.decision.allowed:
+        raise_resource_ceiling(evaluation.decision)
 
     charged = False
     if not is_mock_ai_mode():
