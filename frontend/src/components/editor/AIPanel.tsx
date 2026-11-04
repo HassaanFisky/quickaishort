@@ -909,7 +909,10 @@ export function AIPanel() {
 
       // Fail-closed before network: zero credits must never burn Gemini prepaid.
       // MOCK_AI_MODE skips the client gate — backend already skips the charge.
-      if (!shouldSkipCreditGate(mockAiMode) && creditBalance !== null && creditBalance <= 0) {
+      const isLocalFirst =
+        activeEngine === "LOCAL_DETERMINISTIC" ||
+        process.env.NEXT_PUBLIC_LOCAL_FIRST_MODE === "1";
+      if (!shouldSkipCreditGate(mockAiMode, isLocalFirst) && creditBalance !== null && creditBalance <= 0) {
         addAIMessage({
           role: "assistant",
           content:
@@ -1315,8 +1318,11 @@ export function AIPanel() {
   const transcriptReady =
     (transcript?.chunks?.length ?? 0) > 0 ||
     Boolean(videoMetadata && (videoMetadata.duration > 0 || sourceFile));
+  const isLocalFirst =
+    activeEngine === "LOCAL_DETERMINISTIC" ||
+    process.env.NEXT_PUBLIC_LOCAL_FIRST_MODE === "1";
   const creditsExhausted =
-    !shouldSkipCreditGate(mockAiMode) && creditBalance !== null && creditBalance <= 0;
+    !shouldSkipCreditGate(mockAiMode, isLocalFirst) && creditBalance !== null && creditBalance <= 0;
   const canSendChat =
     isVideoLoaded &&
     transcriptReady &&

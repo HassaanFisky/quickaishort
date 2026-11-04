@@ -116,8 +116,15 @@ export function resolveExportRange(input: ExportRangeInput): ExportRange {
   return { start: 0, end: duration, source: "full" };
 }
 
-export function shouldSkipCreditGate(mockAiMode: boolean): boolean {
-  return mockAiMode === true;
+export function shouldSkipCreditGate(
+  mockAiMode: boolean,
+  localFirstMode?: boolean,
+): boolean {
+  return (
+    mockAiMode === true ||
+    localFirstMode === true ||
+    process.env.NEXT_PUBLIC_LOCAL_FIRST_MODE === "1"
+  );
 }
 
 /** Loaded local/URL media must survive optional transcript / analysis failure. */
