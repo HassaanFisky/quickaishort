@@ -562,11 +562,14 @@ export function AIPanel() {
           score: c.score ?? 0,
         }));
 
+        // Read latest evidence at upsert time (closure values may predate the local
+        // upload response that supplies duration + silence segments).
+        const live = useEditorStore.getState();
         const facets = buildEdgeFacets({
-          duration: videoMetadata.duration || duration || 0,
-          transcriptChunks: transcript?.chunks ?? null,
-          silenceSegments: silenceSegments ?? null,
-          captionsEnabled,
+          duration: live.videoMetadata?.duration || live.duration || videoMetadata.duration || duration || 0,
+          transcriptChunks: live.transcript?.chunks ?? transcript?.chunks ?? null,
+          silenceSegments: live.silenceSegments ?? silenceSegments ?? null,
+          captionsEnabled: live.captionsEnabled ?? captionsEnabled,
           viralMoments: moments.length > 0 ? moments : null,
         });
         const upserted = await upsertMediaGraphFacets(graph.graph_id, facets);
@@ -619,8 +622,12 @@ export function AIPanel() {
       }
     })();
 
+    // Do NOT cancel on dep change: this effect is guarded by suggestionsLoaded and
+    // will not re-run, so cancelling here (e.g. when the local upload updates
+    // videoMetadata/silenceSegments mid-flight) would orphan the MediaGraph bind.
+    // Staleness is handled by the boundRunIdRef checks above.
     return () => {
-      cancelled = true;
+      /* intentionally no-op */
     };
   }, [
     videoMetadata,
