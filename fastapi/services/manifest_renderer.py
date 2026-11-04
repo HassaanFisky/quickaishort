@@ -370,7 +370,15 @@ def build_ffmpeg_manifest_cmd(
     Build a full ffmpeg command line for a RenderManifest.
     Returns argv list suitable for subprocess.run
     """
-    filter_complex, meta = compile_manifest_to_ffmpeg(manifest_dict, workdir)
+    def _resolver(sid: str) -> Path:
+        p = workdir / sid
+        if not p.exists() and input_files:
+            return input_files[0]
+        return p
+
+    filter_complex, meta = compile_manifest_to_ffmpeg(
+        manifest_dict, workdir, input_resolver=_resolver
+    )
 
     # Map quality → crf
     crf_map = {"low": "28", "medium": "23", "high": "18"}
