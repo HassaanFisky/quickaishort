@@ -383,7 +383,14 @@ def build_ffmpeg_manifest_cmd(
         if c.sourceId not in seen:
             seen.append(c.sourceId)
 
-    cmd = ["ffmpeg", "-y"]
+    ffmpeg_bin = "ffmpeg"
+    try:
+        from services.local_media_pipeline import LocalMediaPipeline
+        ffmpeg_bin = LocalMediaPipeline.get_ffmpeg_bin() or "ffmpeg"
+    except Exception:
+        pass
+
+    cmd = [ffmpeg_bin, "-y"]
     for src_id in seen:
         src_path = workdir / src_id
         if not src_path.exists() and input_files:

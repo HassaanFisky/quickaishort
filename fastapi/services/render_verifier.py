@@ -92,10 +92,17 @@ def verify_rendered_media(
             error="render_output_empty",
         )
 
+    ffprobe_bin = "ffprobe"
+    try:
+        from services.local_media_pipeline import LocalMediaPipeline
+        ffprobe_bin = LocalMediaPipeline.get_ffprobe_bin() or "ffprobe"
+    except Exception:
+        pass
+
     try:
         proc = subprocess.run(
             [
-                "ffprobe",
+                ffprobe_bin,
                 "-v",
                 "error",
                 "-show_entries",
