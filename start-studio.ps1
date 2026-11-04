@@ -29,6 +29,7 @@ $env:EXPORT_SIGNING_SECRET = "local-studio-export-signing-secret-dev-only"
 $env:NEXTAUTH_SECRET = "quickai-studio-local-dev-secret-key-32chars"
 $env:NEXTAUTH_URL = "http://localhost:3000"
 $env:PORT = "3000"
+$env:NODE_OPTIONS = "--max-old-space-size=4096"
 
 # Determine Python path
 $PythonExe = Join-Path $FastApiDir "venv\Scripts\python.exe"
