@@ -240,6 +240,8 @@ def derive_suggestions(graph: MediaGraph) -> list[SuggestionIntent]:
     viral = graph.facets.get("viral_moments")
     duration_f = graph.facets.get("duration")
     audio_energy = graph.facets.get("audio_energy")
+    scene_cuts = graph.facets.get("scene_cuts")
+    hook_energy = graph.facets.get("hook_energy")
 
     captions_on = bool(
         captions and captions.status == "ready" and captions.data.get("enabled")
@@ -661,6 +663,75 @@ def derive_suggestions(graph: MediaGraph) -> list[SuggestionIntent]:
                         summary=f"Low energy facet level={level:.2f}",
                     ),
                     confidence=0.62,
+                    interactive=True,
+                )
+            )
+
+    # ── Scene-cuts & Hook Energy (Phase 2 MediaGraph facets) ───────────────
+    cuts_list: list[float] = []
+    if scene_cuts and scene_cuts.status == "ready":
+        raw_cuts = scene_cuts.data.get("cuts") or []
+        for c in raw_cuts:
+            try:
+                cuts_list.append(float(c))
+            except (TypeError, ValueError):
+                continue
+        cuts_list.sort()
+        if cuts_list:
+            out.append(
+                SuggestionIntent(
+                    suggestion_id="sug-scene-cut-split",
+                    label=f"Split at scene cuts ({len(cuts_list)} cuts)",
+                    capability_id="BLADE_SPLIT",
+                    intent_kind="capability",
+                    params={"time_sec": cuts_list[0], "cuts": cuts_list[:10]},
+                    evidence=SuggestionEvidence(
+                        facet_keys=["scene_cuts"],
+                        summary=f"{len(cuts_list)} visual scene boundaries detected",
+                    ),
+                    confidence=0.84,
+                    interactive=True,
+                )
+            )
+
+    if hook_energy and hook_energy.status == "ready":
+        best = hook_energy.data.get("best_hook")
+        peaks = hook_energy.data.get("peaks") or []
+        if not isinstance(best, dict) and peaks:
+            valid_p = [p for p in peaks if isinstance(p, dict)]
+            if valid_p:
+                best = max(valid_p, key=lambda p: float(p.get("energy", 0) or p.get("score", 0) or 0))
+        if isinstance(best, dict):
+            try:
+                h_start = max(0.0, float(best.get("start", 0) or 0))
+                h_end = float(best.get("end", h_start + 6.0) or (h_start + 6.0))
+                h_score = float(best.get("energy", 0) or best.get("score", 0) or 0)
+            except (TypeError, ValueError):
+                h_start, h_end, h_score = 0.0, 6.0, 0.0
+
+            # Snap to nearest scene cut if within 0.75s
+            if cuts_list:
+                for c in cuts_list:
+                    if abs(c - h_start) <= 0.75:
+                        h_start = c
+                        break
+
+            pct_str = f" ({int(h_score * 100 if h_score <= 1.0 else h_score)}% energy)" if h_score > 0 else ""
+            out.append(
+                SuggestionIntent(
+                    suggestion_id="sug-hook-energy-trim",
+                    label=f"Trim to best hook{pct_str}",
+                    capability_id="TRIM",
+                    intent_kind="capability",
+                    params={"start": round(h_start, 2), "end": round(h_end, 2)},
+                    evidence=SuggestionEvidence(
+                        facet_keys=["hook_energy"] + (["scene_cuts"] if cuts_list else []),
+                        summary=(
+                            f"Hook energy peak @ {_fmt_time(h_start)}–{_fmt_time(h_end)}"
+                            + (f" (energy={h_score:.2f})" if h_score > 0 else "")
+                        ),
+                    ),
+                    confidence=0.92,
                     interactive=True,
                 )
             )

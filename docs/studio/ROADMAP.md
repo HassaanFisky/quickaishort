@@ -15,6 +15,9 @@
 | **Typed-chat director loop** | ✅ Dead-air / shorts-packaging / restore-opening intercept **before** DualModelRouter + credits; Redis latest DecisionRecord; unresolved clauses stay ASK |
 | **ModePack aspect-aware sanitiser** | ✅ Dynamic canvas bounds (`9:16`, `16:9`, `1:1`, `4:5`) + deterministic CPU Fast Engine test suite |
 | **ModePack Selector & Safe Zones OS** | ✅ 1-click pack switcher (`shorts_reels`, `youtube_long`, `podcast_clip`, `ad_ugc`, `tutorial`) in `editorStore`, `VideoCanvas` safe zone guides, caption presets, and LUFS target |
+| **MediaGraph Scene-Cut & Hook Energy Facets** | ✅ Scene-cut boundaries & hook energy peaks in `MediaGraph` + zero-LLM `ACT` on "find the best hook" in `DecisionService` |
+| **ADR-006 Native Function Calling Harness** | ✅ Bounded FunctionDeclaration schemas + zero-spend validity benchmark (`benchmark_native_tools.py`) |
+| **Stripe & LemonSqueezy Webhooks** | ✅ Signature-verified webhook endpoints (`/api/billing/stripe/webhook`, `/api/billing/lemonsqueezy/webhook`) with idempotent Firestore tier/credit grants |
 | CI BE↔FE registry hash | ✅ |
 | Auto-ensure Studio project (chat + export + ingest projectize) | ✅ |
 | Heuristic invent suggestions → 410 | ✅ |

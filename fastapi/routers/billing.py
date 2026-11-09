@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hashlib
+import hmac
 import json
 import logging
 import os
@@ -368,5 +370,208 @@ async def paddle_webhook(request: Request):
     except Exception as exc:
         # Document already exists = race condition double-delivery. Safe to ignore.
         logger.debug("paddle_webhook: mark_processed error (likely duplicate): %s", exc)
+
+    return {"status": "ok"}
+
+
+# ---------------------------------------------------------------------------
+# Stripe Webhook Endpoint (Phase 3 Monetization)
+# ---------------------------------------------------------------------------
+
+
+def _verify_stripe_signature(
+    raw_body: bytes, signature_header: str, secret: str
+) -> bool:
+    """Verify Stripe HMAC-SHA256 signature from stripe-signature header."""
+    try:
+        parts: dict[str, str] = {}
+        for item in signature_header.split(","):
+            if "=" in item:
+                k, v = item.split("=", 1)
+                parts[k.strip()] = v.strip()
+        timestamp = parts.get("t")
+        expected_sig = parts.get("v1")
+        if not timestamp or not expected_sig:
+            return False
+
+        payload_to_sign = f"{timestamp}.".encode("utf-8") + raw_body
+        computed_sig = hmac.new(
+            secret.encode("utf-8"),
+            payload_to_sign,
+            hashlib.sha256,
+        ).hexdigest()
+        return hmac.compare_digest(computed_sig, expected_sig)
+    except Exception as exc:
+        logger.error("stripe_sig: verification error: %s", exc)
+        return False
+
+
+@router.post("/stripe/webhook")
+async def stripe_webhook(request: Request):
+    """
+    Handle Stripe checkout & subscription webhooks.
+    Grants user Pro tier and replenishes credits in Firestore UserStats.
+    """
+    secret = os.getenv("STRIPE_WEBHOOK_SECRET")
+    if not secret:
+        logger.error("stripe_webhook: STRIPE_WEBHOOK_SECRET not configured")
+        raise HTTPException(
+            status_code=503,
+            detail="Stripe webhook endpoint is not configured",
+        )
+
+    sig_header = request.headers.get("stripe-signature")
+    if not sig_header:
+        raise HTTPException(status_code=400, detail="Missing stripe-signature header")
+
+    raw_body = await request.body()
+    if not _verify_stripe_signature(raw_body, sig_header, secret):
+        raise HTTPException(status_code=401, detail="Invalid Stripe signature")
+
+    try:
+        payload = json.loads(raw_body.decode("utf-8"))
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON payload")
+
+    event_id = payload.get("id") or ""
+    event_type = payload.get("type") or ""
+    data_obj = (payload.get("data") or {}).get("object") or {}
+
+    if not event_id:
+        raise HTTPException(status_code=400, detail="Missing event ID")
+
+    idempotency_key = f"stripe:{event_id}"
+    if await _is_event_processed(idempotency_key):
+        return {"status": "ok", "message": "already_processed"}
+
+    try:
+        if event_type == "checkout.session.completed":
+            user_id = (
+                data_obj.get("client_reference_id")
+                or (data_obj.get("metadata") or {}).get("user_id")
+                or (data_obj.get("metadata") or {}).get("userId")
+            )
+            sub_id = data_obj.get("subscription") or data_obj.get("id") or ""
+            if user_id:
+                await _grant_pro(str(user_id), str(sub_id))
+            else:
+                logger.warning("stripe_webhook: checkout.session.completed without user_id")
+
+        elif event_type in ("customer.subscription.created", "customer.subscription.updated"):
+            user_id = (data_obj.get("metadata") or {}).get("user_id") or (data_obj.get("metadata") or {}).get("userId")
+            sub_id = data_obj.get("id") or ""
+            status = data_obj.get("status")
+            if user_id:
+                if status in ("active", "trialing"):
+                    await _grant_pro(str(user_id), str(sub_id))
+                elif status in ("canceled", "unpaid", "past_due"):
+                    await _revoke_pro(str(user_id), str(sub_id))
+
+        elif event_type == "customer.subscription.deleted":
+            user_id = (data_obj.get("metadata") or {}).get("user_id") or (data_obj.get("metadata") or {}).get("userId")
+            sub_id = data_obj.get("id") or ""
+            if user_id:
+                await _revoke_pro(str(user_id), str(sub_id))
+
+        elif event_type == "invoice.payment_succeeded":
+            user_id = (data_obj.get("subscription_details") or {}).get("metadata", {}).get("user_id") or (data_obj.get("metadata") or {}).get("user_id")
+            sub_id = data_obj.get("subscription") or ""
+            if user_id and sub_id:
+                await _grant_pro(str(user_id), str(sub_id))
+
+        await _mark_event_processed(idempotency_key, event_type)
+    except Exception as exc:
+        logger.error("stripe_webhook handler error event=%s: %s", event_id, exc)
+        return {"status": "handler_error", "detail": str(exc)}
+
+    return {"status": "ok"}
+
+
+# ---------------------------------------------------------------------------
+# LemonSqueezy Webhook Endpoint (Phase 3 Monetization)
+# ---------------------------------------------------------------------------
+
+
+def _verify_lemonsqueezy_signature(
+    raw_body: bytes, signature_header: str, secret: str
+) -> bool:
+    """Verify LemonSqueezy HMAC-SHA256 signature from x-signature header."""
+    try:
+        computed_sig = hmac.new(
+            secret.encode("utf-8"),
+            raw_body,
+            hashlib.sha256,
+        ).hexdigest()
+        return hmac.compare_digest(computed_sig, signature_header.strip())
+    except Exception as exc:
+        logger.error("lemonsqueezy_sig: verification error: %s", exc)
+        return False
+
+
+@router.post("/lemonsqueezy/webhook")
+async def lemonsqueezy_webhook(request: Request):
+    """
+    Handle LemonSqueezy order & subscription webhooks.
+    Grants user Pro tier and replenishes credits in Firestore UserStats.
+    """
+    secret = os.getenv("LEMONSQUEEZY_WEBHOOK_SECRET")
+    if not secret:
+        logger.error("lemonsqueezy_webhook: LEMONSQUEEZY_WEBHOOK_SECRET not configured")
+        raise HTTPException(
+            status_code=503,
+            detail="LemonSqueezy webhook endpoint is not configured",
+        )
+
+    sig_header = request.headers.get("x-signature")
+    if not sig_header:
+        raise HTTPException(status_code=400, detail="Missing x-signature header")
+
+    raw_body = await request.body()
+    if not _verify_lemonsqueezy_signature(raw_body, sig_header, secret):
+        raise HTTPException(status_code=401, detail="Invalid LemonSqueezy signature")
+
+    try:
+        payload = json.loads(raw_body.decode("utf-8"))
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON payload")
+
+    meta = payload.get("meta") or {}
+    event_name = meta.get("event_name") or ""
+    custom_data = meta.get("custom_data") or {}
+    user_id = custom_data.get("user_id") or custom_data.get("userId")
+
+    data = payload.get("data") or {}
+    event_id = str(data.get("id") or "")
+    if not event_id:
+        raise HTTPException(status_code=400, detail="Missing event ID")
+
+    idempotency_key = f"ls:{event_id}:{event_name}"
+    if await _is_event_processed(idempotency_key):
+        return {"status": "ok", "message": "already_processed"}
+
+    try:
+        sub_id = str(data.get("id") or "")
+        attrs = data.get("attributes") or {}
+
+        if event_name in ("order_created", "subscription_created"):
+            if user_id:
+                await _grant_pro(str(user_id), sub_id)
+
+        elif event_name == "subscription_updated":
+            status = attrs.get("status")
+            if user_id:
+                if status == "active":
+                    await _grant_pro(str(user_id), sub_id)
+                elif status in ("cancelled", "expired", "past_due", "unpaid"):
+                    await _revoke_pro(str(user_id), sub_id)
+
+        elif event_name in ("subscription_cancelled", "subscription_expired"):
+            if user_id:
+                await _revoke_pro(str(user_id), sub_id)
+
+        await _mark_event_processed(idempotency_key, event_name)
+    except Exception as exc:
+        logger.error("lemonsqueezy_webhook handler error event=%s: %s", event_id, exc)
+        return {"status": "handler_error", "detail": str(exc)}
 
     return {"status": "ok"}

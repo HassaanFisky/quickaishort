@@ -63,7 +63,7 @@ _ARGUMENT = re.compile(
     re.I,
 )
 _HOOK = re.compile(
-    r"\b(?:first few seconds|opening hook|stronger (?:open(?:ing)?|hook|start))\b",
+    r"\b(?:first few seconds|opening hook|stronger (?:open(?:ing)?|hook|start)|(?:find|get|cut to|trim to|detect|extract)(?: the)? (?:best )?hook|best hook|top hook|hook energy)\b",
     re.I,
 )
 _TEMPLATE = re.compile(
@@ -563,6 +563,98 @@ def _densest_speech_window(
     )
 
 
+def _scene_cut_timestamps(graph: Optional[MediaGraph]) -> list[float]:
+    if graph is None:
+        return []
+    blob = graph.facets.get("scene_cuts")
+    if blob is None or blob.status != "ready":
+        return []
+    raw = blob.data.get("cuts") or []
+    cuts = []
+    for c in raw:
+        try:
+            cuts.append(float(c))
+        except (TypeError, ValueError):
+            continue
+    return sorted(cuts)
+
+
+def _snap_to_scene_cut(time_sec: float, scene_cuts: list[float], max_delta: float = 0.75) -> float:
+    for c in scene_cuts:
+        if abs(c - time_sec) <= max_delta:
+            return c
+    return time_sec
+
+
+def _hook_energy_candidate(
+    graph: Optional[MediaGraph],
+    duration_sec: float = 0.0,
+) -> Optional[CandidateAction]:
+    if not is_emit_allowed(TRIM_CAPABILITY):
+        return None
+    if graph is None:
+        return None
+
+    # 1. Check hook_energy facet
+    blob = graph.facets.get("hook_energy")
+    best_hook: Optional[dict[str, Any]] = None
+    if blob is not None and blob.status == "ready":
+        raw_best = blob.data.get("best_hook")
+        if isinstance(raw_best, dict) and "start" in raw_best:
+            best_hook = raw_best
+        elif isinstance(blob.data.get("peaks"), list) and blob.data["peaks"]:
+            peaks = [p for p in blob.data["peaks"] if isinstance(p, dict)]
+            if peaks:
+                best_hook = max(
+                    peaks,
+                    key=lambda p: float(p.get("energy", 0) or p.get("score", 0) or 0),
+                )
+
+    # 2. Check viral_moments if hook_energy is not available
+    if best_hook is None:
+        viral_blob = graph.facets.get("viral_moments")
+        if viral_blob is not None and viral_blob.status == "ready":
+            moments = viral_blob.data.get("moments") or []
+            if isinstance(moments, list) and moments:
+                valid_m = [m for m in moments if isinstance(m, dict)]
+                if valid_m:
+                    best_hook = max(
+                        valid_m, key=lambda m: float(m.get("score", 0) or 0)
+                    )
+
+    if best_hook is None:
+        return None
+
+    try:
+        start = max(0.0, float(best_hook.get("start", 0) or 0))
+        end = float(best_hook.get("end", start + 6.0) or (start + 6.0))
+        score = float(best_hook.get("energy", 0) or best_hook.get("score", 0) or 0)
+    except (TypeError, ValueError):
+        return None
+
+    # Snap start to nearest scene cut
+    scene_cuts = _scene_cut_timestamps(graph)
+    if scene_cuts:
+        start = _snap_to_scene_cut(start, scene_cuts)
+
+    if end <= start:
+        end = start + 6.0
+    if duration_sec > 0:
+        end = min(duration_sec, end)
+
+    score_pct = int(score * 100 if score <= 1.0 else score)
+    label = (
+        f"Trim to best hook ({score_pct}% energy, scene-aligned)"
+        if score > 0
+        else "Trim to best hook"
+    )
+    return CandidateAction(
+        capability_id=TRIM_CAPABILITY,
+        params={"start": round(start, 2), "end": round(end, 2)},
+        label=label,
+    )
+
+
 def _hook_caption_candidate(graph: Optional[MediaGraph]) -> Optional[CandidateAction]:
     if not is_emit_allowed(ADD_CAPTION_CAPABILITY):
         return None
@@ -719,16 +811,22 @@ def _decide_director(
             )
 
     if _HOOK.search(n):
-        hook = _hook_caption_candidate(graph)
-        if hook is not None:
-            candidates.append(hook)
+        hook_trim = _hook_energy_candidate(graph, duration_sec)
+        hook_caption = _hook_caption_candidate(graph)
+        if hook_trim is not None:
+            candidates.append(hook_trim)
             rationale_bits.append(
-                "Opening: ACT ADD_CAPTION from first transcript hook."
+                f"Hook: ACT TRIM {hook_trim.params['start']}–{hook_trim.params['end']}s from MediaGraph hook energy / scene-cut facets."
             )
-        else:
-            missing.append("transcript hook text for a stronger opening caption")
+        if hook_caption is not None:
+            candidates.append(hook_caption)
             rationale_bits.append(
-                "Cannot strengthen the first seconds without transcript evidence."
+                "Hook: ACT ADD_CAPTION from opening transcript hook."
+            )
+        if hook_trim is None and hook_caption is None:
+            missing.append("MediaGraph hook_energy or transcript facet for best hook extraction")
+            rationale_bits.append(
+                "Cannot strengthen or detect the opening hook without hook_energy or transcript evidence."
             )
 
     if _REFRAME.search(n):
