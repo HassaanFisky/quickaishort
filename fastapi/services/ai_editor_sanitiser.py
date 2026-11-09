@@ -73,9 +73,21 @@ from core.flags import is_mock_ai_editor
 
 MOCK_ENABLED = is_mock_ai_editor()
 
-# Reference canvas dimensions (1080p portrait)
+# Reference canvas dimensions by aspect ratio (ModePack foundation — 9:16 default)
 _CANVAS_W = 1080.0
 _CANVAS_H = 1920.0
+
+_ASPECT_CANVAS: dict[str, tuple[float, float]] = {
+    "9:16": (1080.0, 1920.0),
+    "16:9": (1920.0, 1080.0),
+    "1:1": (1080.0, 1080.0),
+    "4:5": (1080.0, 1350.0),
+}
+
+
+def _canvas_bounds_for_aspect(aspect_ratio: str | None) -> tuple[float, float]:
+    """Resolve reference canvas (width, height) from aspect ratio mode."""
+    return _ASPECT_CANVAS.get(str(aspect_ratio or "9:16"), (_CANVAS_W, _CANVAS_H))
 
 
 def _clamp(v: float, lo: float, hi: float) -> float:
@@ -86,12 +98,12 @@ def _clamp_time(t: float, duration: float) -> float:
     return _clamp(t, 0.0, max(duration, 0.0))
 
 
-def _clamp_x(x: float) -> float:
-    return _clamp(x, 0.0, _CANVAS_W)
+def _clamp_x(x: float, max_w: float = _CANVAS_W) -> float:
+    return _clamp(x, 0.0, max_w)
 
 
-def _clamp_y(y: float) -> float:
-    return _clamp(y, 0.0, _CANVAS_H)
+def _clamp_y(y: float, max_h: float = _CANVAS_H) -> float:
+    return _clamp(y, 0.0, max_h)
 
 
 def sanitise(
@@ -114,6 +126,9 @@ def sanitise(
     clamped: list[str] = []
     dropped: list[str] = []
     dur = state.videoDuration
+    canvas_w, canvas_h = _canvas_bounds_for_aspect(
+        getattr(state, "aspectRatio", "9:16")
+    )
 
     for action in actions:
         t = action.type
@@ -231,8 +246,8 @@ def sanitise(
             a = action  # type: AddElementAction
             el = a.element
             el_dict = el.model_dump()
-            nx = _clamp_x(el_dict.get("x", 540.0))
-            ny = _clamp_y(el_dict.get("y", 960.0))
+            nx = _clamp_x(el_dict.get("x", canvas_w / 2.0), canvas_w)
+            ny = _clamp_y(el_dict.get("y", canvas_h / 2.0), canvas_h)
             pos_changed = nx != el_dict.get("x") or ny != el_dict.get("y")
             if pos_changed:
                 clamped.append(
@@ -259,12 +274,12 @@ def sanitise(
             patch: dict[str, Any] = dict(a.patch)
             patched = False
             if "x" in patch:
-                nx = _clamp_x(float(patch["x"]))
+                nx = _clamp_x(float(patch["x"]), canvas_w)
                 if nx != patch["x"]:
                     patch["x"] = nx
                     patched = True
             if "y" in patch:
-                ny = _clamp_y(float(patch["y"]))
+                ny = _clamp_y(float(patch["y"]), canvas_h)
                 if ny != patch["y"]:
                     patch["y"] = ny
                     patched = True

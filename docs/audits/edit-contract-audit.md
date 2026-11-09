@@ -61,25 +61,22 @@ record requirement is about *AI-driven* actions. Provenance and reversibility
 are still captured via the kernel. Flagging only so the asymmetry is a
 deliberate, documented decision rather than an accident.
 
-## Findings (no code change in this PR)
+## Findings (Resolved)
 
-- **E-1 (MEDIUM)** — Add explicit `risk: RiskClass` and
-  `reversibility: ReversibilityClass` to `DecisionRecord`. Both are already
-  derivable; making them first-class is what enables the approval gate for
-  destructive operations to be enforced by data rather than convention.
-- **E-2 (INFO — severity revised down after re-inspection)** —
-  `decision_store.put_latest` already branches on environment: it logs
-  `warning` in production and `debug` otherwise (`decision_store.py:40-47`).
-  The earlier "swallows failures" characterisation was inaccurate. Residual
-  gap is only that there is no *metric* on persistence failure, so a silent
-  Redis outage degrades the audit trail without alerting. Low priority.
-- **E-3 (INFO)** — `DecisionRecord.status` and the kernel's `CommandAck`
-  are not cross-linked: given a decision you cannot cheaply find the resulting
-  command/events. `plan_id` bridges the orchestrator path only.
+- **E-1 (MEDIUM — RESOLVED)** — Added explicit `risk: RiskClass` and
+  `reversibility: ReversibilityClass` to `DecisionRecord` (`models/studio_decision.py`),
+  derived deterministically from `DecisionMode` and capability registry `side_effects`
+  / `compensating_hint` (`services/decision_service.py`).
+- **E-2 (INFO — RESOLVED)** — `decision_store.put_latest` now emits a structured
+  `decision_store_put_failure` metric via `services.logging.log_metric` on production
+  persistence failures in addition to structured warning logs (`services/decision_store.py`).
+- **E-3 (INFO — RESOLVED)** — `DecisionRecord` now carries `plan_id` and
+  `command_ids: list[str]`, cross-linked automatically by `OrchestratorService`
+  during gated plan creation and execution (`services/orchestrator_service.py`).
 
 ## Conclusion
 
 This subsystem does **not** need rebuilding. The contract is real, enforced at
 a single chokepoint, and the reasoning/execution separation is genuinely
-implemented rather than aspirational. The gaps are additive schema work
-(E-1) and observability (E-2), both safely deferrable to their own PR.
+implemented rather than aspirational. E-1, E-2, and E-3 are now closed.
+

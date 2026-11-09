@@ -23,8 +23,7 @@ def test_admin_analytics_latency_success(mock_get: AsyncMock, client: TestClient
     mock_get.return_value = {"latency": [{"_id": "test_agent", "avg_duration_ms": 100}]}
 
     resp = client.get(
-        "/api/admin/analytics/latency",
-        headers={"X-Admin-Secret": "test-secret"}
+        "/api/admin/analytics/latency", headers={"X-Admin-Secret": "test-secret"}
     )
 
     assert resp.status_code == 200
@@ -39,7 +38,7 @@ def test_admin_analytics_latency_with_params(mock_get: AsyncMock, client: TestCl
 
     resp = client.get(
         "/api/admin/analytics/latency?agent=myagent&hours=12",
-        headers={"X-Admin-Secret": "test-secret"}
+        headers={"X-Admin-Secret": "test-secret"},
     )
 
     assert resp.status_code == 200
@@ -58,8 +57,7 @@ def test_admin_analytics_latency_missing_secret(client: TestClient):
 def test_admin_analytics_latency_wrong_secret(client: TestClient):
     """Test that retrieving analytics latency fails if the admin secret is wrong."""
     resp = client.get(
-        "/api/admin/analytics/latency",
-        headers={"X-Admin-Secret": "wrong-secret"}
+        "/api/admin/analytics/latency", headers={"X-Admin-Secret": "wrong-secret"}
     )
 
     assert resp.status_code == 403

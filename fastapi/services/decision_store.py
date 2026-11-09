@@ -43,6 +43,12 @@ def put_latest(user_id: str, project_id: str, record: DecisionRecord) -> None:
             logger.warning(
                 "decision_store_put_failed project_id=%s err=%s", project_id, exc
             )
+            try:
+                from services.logging import log_metric
+
+                log_metric("decision_store_put_failure", 1, project_id=project_id)
+            except Exception:  # noqa: BLE001
+                pass
             return
         logger.debug("decision_store_put_skipped err=%s", exc)
 

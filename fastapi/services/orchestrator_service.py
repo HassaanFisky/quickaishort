@@ -384,6 +384,13 @@ class OrchestratorService:
             user_id, text, body.project_id, project_context=body.project_context
         )
         record.plan_id = plan.plan_id
+        if body.project_id and user_id:
+            try:
+                from services.decision_store import put_latest
+
+                put_latest(user_id, body.project_id, record)
+            except Exception:  # noqa: BLE001
+                pass
 
         plan.decision_id = record.decision_id
         plan.decision_mode = record.mode
@@ -690,6 +697,20 @@ class OrchestratorService:
             plan.execution_integrity = await self._verify_gated_kernel_events(
                 user_id, plan
             )
+            if (plan.project_id or body.project_id) and user_id:
+                try:
+                    from services.decision_store import get_latest, put_latest
+
+                    pid = plan.project_id or body.project_id
+                    latest = get_latest(user_id, pid)
+                    if latest is not None and latest.decision_id == plan.decision_id:
+                        latest.plan_id = plan.plan_id
+                        latest.command_ids = [
+                            s.command_id for s in plan.steps if s.command_id
+                        ]
+                        put_latest(user_id, pid, latest)
+                except Exception:  # noqa: BLE001
+                    pass
         await asyncio.to_thread(self.store.put, plan)
         logger.info(
             "orchestrator_execute plan_id=%s status=%s accepted=%s rejected=%s",

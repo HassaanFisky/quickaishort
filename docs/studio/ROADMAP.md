@@ -1,6 +1,6 @@
 # Studio Roadmap (Execution)
 
-**Last updated:** 2026-08-25 (typed-chat director loop + manifest trim/caption fidelity)
+**Last updated:** 2026-11-08 (Edit-contract E-1/E-2/E-3 closure + ModePack aspect-aware sanitiser + CPU fast engine suite)
 
 ## Complete — current cycle
 
@@ -11,7 +11,9 @@
 | M3 ingest FSM (`useIngestLifecycle`) | ✅ Live — FE Vercel + API `00109+` |
 | Chat → Kernel via structured_steps | ✅ |
 | **Decision-Gated Edit M0→G (ADR-016)** | ✅ Main — contracts + gated Orchestrator + Tier 0 Kernel-event verify |
+| **Edit-Contract Audit E-1/E-2/E-3** | ✅ First-class `risk` & `reversibility` on `DecisionRecord`, `command_ids` cross-linking, `decision_store` failure metrics |
 | **Typed-chat director loop** | ✅ Dead-air / shorts-packaging / restore-opening intercept **before** DualModelRouter + credits; Redis latest DecisionRecord; unresolved clauses stay ASK |
+| **ModePack aspect-aware sanitiser** | ✅ Dynamic canvas bounds (`9:16`, `16:9`, `1:1`, `4:5`) + deterministic CPU Fast Engine test suite |
 | CI BE↔FE registry hash | ✅ |
 | Auto-ensure Studio project (chat + export + ingest projectize) | ✅ |
 | Heuristic invent suggestions → 410 | ✅ |
@@ -23,7 +25,7 @@
 ## Production render plane (SoT)
 
 | Layer | Truth |
-|-------|--------|
+|-------|-------|
 | Dispatch | `RENDER_DISPATCH_MODE=cloud_tasks` (prod); RQ = **local/dev fallback only** |
 | Worker | `quickai-worker` private OIDC, **min-instances=0**, request CPU, concurrency 1 |
 | Wake path | Cloud Tasks queue `quickai-render` |
@@ -40,7 +42,7 @@
 - [x] Worker Cloud Tasks cutover (`min=0`)
 - [ ] **Gemini prepayment top-up** at https://ai.studio/projects — unblock analyze + AI chat
 - [ ] **Rotate `ADMIN_SECRET`** — value previously recorded in docs; set new secret on Cloud Run only (never commit)
-- [ ] Approve auth-gate / rate-limit for public `/api/proxy*`, `/api/audio`, `/api/info` (FinOps)
+- [ ] **Enable `MEDIA_PROXY_AUTH_REQUIRED=true`** on Cloud Run after Vercel FE with `getAuthedProxyVideoUrl` is deployed (FinOps)
 - [ ] Approve Legacy `Projects` / GridFS `/api/v1/video` cutover delete
 
 ## Code hardening backlog (engineering — no product redesign)
@@ -48,8 +50,9 @@
 | Priority | Item | Gate |
 |----------|------|------|
 | Critical | ~~Commit `render_service_app.py`~~ ✅ `39be105` | Done |
-| High | Auth WIP (`mintBackendToken` / `authenticatedFetch`) — ship atomic or revert dirty tree | Engineering |
-| High | Rate-limit or auth public bandwidth endpoints | **Founder** |
+| High | ~~Auth WIP (`mintBackendToken` / `authenticatedFetch`)~~ ✅ Shipped | Done |
+| High | ~~Rate-limit or auth public bandwidth endpoints~~ ✅ Rate limits + HMAC media token (`3a522ca`) | Done (flip `MEDIA_PROXY_AUTH_REQUIRED=true` in ops) |
+| Medium | ~~Edit-contract E-1/E-2/E-3 + ModePack sanitiser canvas bounds~~ ✅ | Done |
 | Medium | Align FE/BE Kernel flag defaults documentation | Engineering |
 | Medium | Dual export path docs (server primary; MediaRecorder/FFmpeg.wasm fallback) | Engineering |
 | Low | Remove `_archive` ADK wizard + orphan `uploadVideo` client | Engineering |

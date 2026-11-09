@@ -38,15 +38,22 @@ def build_editor_function_declarations(
         if not cid:
             continue
         desc = str(cap.get("description") or cap.get("summary") or cid)[:200]
+        raw_schema = cap.get("param_schema")
+        if isinstance(raw_schema, dict) and raw_schema.get("type") == "object":
+            params_schema: dict[str, Any] = dict(raw_schema)
+            params_schema.setdefault("properties", {})
+            params_schema.setdefault("additionalProperties", True)
+        else:
+            params_schema = {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": True,
+            }
         decls.append(
             {
                 "name": cid,
                 "description": desc,
-                "parameters": {
-                    "type": "object",
-                    "properties": {},
-                    "additionalProperties": True,
-                },
+                "parameters": params_schema,
             }
         )
     return decls[:80]  # bound payload size

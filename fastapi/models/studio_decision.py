@@ -49,6 +49,9 @@ ExecutionIntegrityStatus = Literal[
     "execution_failed",
 ]
 
+RiskClass = Literal["none", "low", "medium", "high"]
+ReversibilityClass = Literal["reversible", "irreversible", "not_applicable"]
+
 
 class Objective(BaseModel):
     objective_id: str
@@ -99,6 +102,8 @@ class DecisionRecord(BaseModel):
     project_id: Optional[str] = None
     objective: Objective
     mode: DecisionMode
+    risk: RiskClass = "none"
+    reversibility: ReversibilityClass = "not_applicable"
     evidence: list[EvidenceItem] = Field(default_factory=list)
     missing_information: list[str] = Field(default_factory=list)
     rationale: str
@@ -108,6 +113,7 @@ class DecisionRecord(BaseModel):
     prediction: Optional[str] = None
     status: DecisionStatus = "decided"
     plan_id: Optional[str] = None
+    command_ids: list[str] = Field(default_factory=list)
     actor: ActorKind = "system"
     created_at: datetime
     gemini_called: bool = False

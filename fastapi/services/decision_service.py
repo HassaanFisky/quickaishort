@@ -19,10 +19,12 @@ from models.studio_decision import (
     EvidenceItem,
     Objective,
     ObjectiveClass,
+    ReversibilityClass,
+    RiskClass,
 )
 from models.studio_project import StudioProjectHead
 from services.media_graph_service import SILENCE_SUGGEST_MIN_SEC, _silence_gaps
-from services.tool_registry import is_emit_allowed
+from services.tool_registry import get_capability, is_emit_allowed
 
 logger = logging.getLogger(__name__)
 
@@ -307,6 +309,37 @@ def _build_objective(text: str, project_id: Optional[str]) -> Objective:
     )
 
 
+def _derive_risk_and_reversibility(
+    mode: Any,
+    candidates: Optional[list[CandidateAction]],
+) -> tuple[RiskClass, ReversibilityClass]:
+    """Derive first-class risk and reversibility from DecisionMode and Registry metadata."""
+    actions = candidates or []
+    if mode != "ACT" or not actions:
+        return "none", "not_applicable"
+
+    risk_rank: dict[str, int] = {"none": 0, "low": 1, "medium": 2, "high": 3}
+    max_risk: RiskClass = "low"
+    reversibility: ReversibilityClass = "reversible"
+
+    for item in actions:
+        cap = get_capability(item.capability_id) or {}
+        effects = set(cap.get("side_effects") or [])
+        hint = cap.get("compensating_hint")
+        if hint == "none" or "bake" in effects or "billing" in effects:
+            reversibility = "irreversible"
+        if "billing" in effects or "bake" in effects:
+            cand_risk: RiskClass = "high"
+        elif "mutate_project" in effects:
+            cand_risk = "medium"
+        else:
+            cand_risk = "low"
+        if risk_rank[cand_risk] > risk_rank[max_risk]:
+            max_risk = cand_risk
+
+    return max_risk, reversibility
+
+
 def _record(
     *,
     objective: Objective,
@@ -318,11 +351,14 @@ def _record(
     verification_plan: Optional[str] = None,
 ) -> DecisionRecord:
     _assert_no_inference_as_fact(evidence)
+    risk, reversibility = _derive_risk_and_reversibility(mode, candidates)
     return DecisionRecord(
         decision_id=_eid(),
         project_id=objective.project_id,
         objective=objective,
         mode=mode,
+        risk=risk,
+        reversibility=reversibility,
         evidence=evidence,
         missing_information=missing,
         rationale=rationale,
