@@ -921,15 +921,15 @@ SuggestStylePresetAction.model_rebuild()
 
 class AIEditorCurrentState(BaseModel):
     videoDuration: float = Field(ge=0)
-    currentTime: float = Field(ge=0)
+    currentTime: float = Field(default=0.0, ge=0)
     selectedClipId: Optional[str] = None
-    elementCount: int = Field(ge=0)
-    captionCount: int = Field(ge=0)
-    captionsEnabled: bool
-    aspectRatio: Literal["9:16", "1:1", "16:9", "4:5"]
-    visualFilter: Literal["None", "Urban", "Retro", "Cinematic"]
-    audioBoost: int = Field(ge=0, le=200)
-    playbackSpeed: int = Field(ge=50, le=200)
+    elementCount: int = Field(default=0, ge=0)
+    captionCount: int = Field(default=0, ge=0)
+    captionsEnabled: bool = False
+    aspectRatio: Literal["9:16", "1:1", "16:9", "4:5"] = "9:16"
+    visualFilter: Literal["None", "Urban", "Retro", "Cinematic"] = "None"
+    audioBoost: int = Field(default=100, ge=0, le=200)
+    playbackSpeed: int = Field(default=100, ge=50, le=200)
 
 
 class TranscriptChunk(BaseModel):

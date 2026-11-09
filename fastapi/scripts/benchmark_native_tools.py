@@ -27,12 +27,14 @@ for p in (str(REPO_ROOT), str(FASTAPI_DIR)):
 
 os.environ["STUDIO_NATIVE_TOOLS"] = "1"
 
+from pydantic import TypeAdapter  # noqa: E402
+from models.ai_editor import AIEditorCurrentState, AiEditorAction  # noqa: E402
+from services.ai_editor_sanitiser import sanitise  # noqa: E402
 from services.native_tools import (  # noqa: E402
     build_editor_function_declarations,
     function_calls_to_actions,
     native_tools_enabled,
 )
-from services.ai_editor_sanitiser import AIEditorSanitiser  # noqa: E402
 
 _VALID_NAME = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
 
@@ -72,8 +74,8 @@ def benchmark_native_tool_schemas() -> dict[str, any]:
         {"name": "SET_AUDIO_BOOST", "args": {"value": 110}},
         {"name": "SET_NOISE_REDUCTION", "args": {"value": 40}},
         {"name": "REMOVE_SILENCES", "args": {"min_silence_sec": 0.8, "padding_sec": 0.1}},
-        {"name": "ADD_ELEMENT", "args": {"type": "text", "content": "Subscribe", "x": 540, "y": 960, "scale": 1.0}},
-        {"name": "UPDATE_ELEMENT", "args": {"id": "el-1", "x": 200, "y": 300}},
+        {"name": "ADD_ELEMENT", "args": {"element": {"type": "TEXT", "text": "Subscribe", "x": 540, "y": 960, "scale": 1.0}}},
+        {"name": "UPDATE_ELEMENT", "args": {"id": "el-1", "patch": {"x": 200, "y": 300}}},
         {"name": "REMOVE_ELEMENT", "args": {"id": "el-1"}},
         {"name": "SEEK", "args": {"time": 10.0}},
         {"name": "POINTER_SELECT", "args": {"clip_id": "clip-1"}},
@@ -81,24 +83,36 @@ def benchmark_native_tool_schemas() -> dict[str, any]:
         {"name": "SET_VISUAL_FILTER", "args": {"filter": "Cinematic"}},
         {"name": "TOGGLE_CAPTIONS", "args": {"enabled": True}},
         {"name": "ADD_SFX", "args": {"sfx_id": "impact-thud", "start_sec": 1.0, "volume": 0.8}},
-        {"name": "SET_ASPECT_RATIO", "args": {"aspect_ratio": "16:9"}},
     ]
 
-    actions = function_calls_to_actions(synthetic_calls)
-    assert len(actions) == len(synthetic_calls), "Actions length mismatch"
+    action_dicts = function_calls_to_actions(synthetic_calls)
+    assert len(action_dicts) == len(synthetic_calls), "Actions length mismatch"
 
-    sanitiser = AIEditorSanitiser()
+    ta = TypeAdapter(AiEditorAction)
+    parsed_actions = [ta.validate_python(a) for a in action_dicts]
+
     ratios = ["9:16", "16:9", "1:1", "4:5"]
     valid_count = 0
     total_evals = 0
 
     for ratio in ratios:
-        clean_actions, dropped, warnings = sanitiser.sanitise_actions(
-            actions=actions,
-            aspect_ratio=ratio,
-            video_duration=60.0,
+        state = AIEditorCurrentState(
+            videoDuration=60.0,
+            currentTime=0.0,
+            elementCount=1,
+            captionCount=0,
+            captionsEnabled=False,
+            aspectRatio=ratio,
+            visualFilter="None",
+            audioBoost=100,
+            playbackSpeed=100,
         )
-        total_evals += len(actions)
+        clean_actions, clamped, dropped = sanitise(
+            actions=parsed_actions,
+            state=state,
+            enforce_emit_policy=False,
+        )
+        total_evals += len(parsed_actions)
         valid_count += len(clean_actions)
 
     validity_rate = (valid_count / total_evals) * 100.0
