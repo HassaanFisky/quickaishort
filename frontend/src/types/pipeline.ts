@@ -63,7 +63,7 @@ export interface Clip {
   viralReasoning?: string;
   viralAnalysis?: ViralAnalysis;
   suggestedCaptions?: string[];
-  aspectRatio: "9:16" | "1:1";
+  aspectRatio: "9:16" | "1:1" | "16:9" | "4:5";
   captionsEnabled: boolean;
   status: "pending" | "ready" | "exporting" | "exported";
   automation_status?: "Ready" | "Pending";

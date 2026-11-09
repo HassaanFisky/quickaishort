@@ -39,7 +39,7 @@ class ExportRequest(BaseModel):
     end_sec: float
     user_id: str
     runId: Optional[str] = None
-    aspect_ratio: Literal["9:16", "1:1"] = "9:16"
+    aspect_ratio: Literal["9:16", "1:1", "16:9", "4:5"] = "9:16"
     quality: Literal["low", "medium", "high"] = "medium"
     captions: CaptionsPayload = Field(default_factory=CaptionsPayload)
     watermark_enabled: bool = False

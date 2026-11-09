@@ -6,6 +6,7 @@ import { useEditorStore } from "@/stores/editorStore";
 export default function LoudnessMeter() {
   const videoElementRef = useEditorStore((s) => s.videoElementRef);
   const isPlaying = useEditorStore((s) => s.isPlaying);
+  const lufsTarget = useEditorStore((s) => s.lufsTarget ?? -14);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animRef = useRef<number>(0);
   const analyserRef = useRef<AnalyserNode | null>(null);
@@ -85,11 +86,19 @@ export default function LoudnessMeter() {
         ctx2d.moveTo(0, y); ctx2d.lineTo(W, y);
         ctx2d.stroke();
       });
+
+      // Target LUFS highlight marker
+      const targetY = H - ((lufsTarget + 60) / 60) * H;
+      ctx2d.strokeStyle = "#a855f7";
+      ctx2d.lineWidth = 1.5;
+      ctx2d.beginPath();
+      ctx2d.moveTo(0, targetY); ctx2d.lineTo(W, targetY);
+      ctx2d.stroke();
     };
 
     tick();
     return () => cancelAnimationFrame(animRef.current);
-  }, [isPlaying]);
+  }, [isPlaying, lufsTarget]);
 
   return (
     <div className="flex flex-col items-center gap-1.5">
@@ -112,12 +121,17 @@ export default function LoudnessMeter() {
           aria-hidden
         />
       </div>
-      <span
-        className="text-[8px] tabular-nums font-mono"
-        style={{ color: dbfs > -6 ? "#ef4444" : dbfs > -18 ? "#f59e0b" : "#22c55e" }}
-      >
-        {dbfs.toFixed(1)} dBFS
-      </span>
+      <div className="flex flex-col items-center leading-tight">
+        <span
+          className="text-[8px] tabular-nums font-mono"
+          style={{ color: dbfs > -6 ? "#ef4444" : dbfs > -18 ? "#f59e0b" : "#22c55e" }}
+        >
+          {dbfs.toFixed(1)} dBFS
+        </span>
+        <span className="text-[7px] font-mono text-primary font-bold">
+          {lufsTarget} LUFS
+        </span>
+      </div>
     </div>
   );
 }

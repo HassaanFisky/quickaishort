@@ -470,8 +470,14 @@ class RenderService:
 
             # zoompan: z=zoom, d=duration(frames), s=output_size
             # Note: zoompan happens at 30fps by default
-            # H4 Fix: Dynamically set size based on job aspect ratio to prevent double scaling overhead
-            zoompan_size = "1080x1080" if job.aspect_ratio == "1:1" else "1080x1920"
+            if job.aspect_ratio == "16:9":
+                zoompan_size = "1920x1080"
+            elif job.aspect_ratio == "4:5":
+                zoompan_size = "1080x1350"
+            elif job.aspect_ratio == "1:1":
+                zoompan_size = "1080x1080"
+            else:
+                zoompan_size = "1080x1920"
             video = video.filter("zoompan", z=zoom_expr, d=1, s=zoompan_size, fps=30)
 
         if job.watermark.enabled and job.watermark.image_path is not None:
@@ -511,8 +517,14 @@ class RenderService:
         # Canvas overlays — applied before captions so captions render on top
         for overlay in job.canvas_overlays:
             # Compute pixel position from fractional coords using ffmpeg expressions.
-            # Output size at this point in the filter chain is always 1080x1920 (9:16).
-            out_w, out_h = (1080, 1920) if job.aspect_ratio == "9:16" else (1080, 1080)
+            if job.aspect_ratio == "16:9":
+                out_w, out_h = (1920, 1080)
+            elif job.aspect_ratio == "4:5":
+                out_w, out_h = (1080, 1350)
+            elif job.aspect_ratio == "1:1":
+                out_w, out_h = (1080, 1080)
+            else:
+                out_w, out_h = (1080, 1920)
             px = int(overlay.x_pct * out_w)
             py = int(overlay.y_pct * out_h)
             font_size = max(24, int(48 * overlay.scale))
@@ -613,6 +625,24 @@ class RenderService:
             return video.filter(
                 "scale", side, side, force_original_aspect_ratio="increase"
             ).filter("crop", side, side)
+
+        if job.aspect_ratio == "16:9":
+            tw = out_w or 1920
+            th = out_h or 1080
+            return (
+                video.filter("scale", tw, th, force_original_aspect_ratio="increase")
+                .filter("crop", tw, th)
+                .filter("scale", tw, th)
+            )
+
+        if job.aspect_ratio == "4:5":
+            tw = out_w or 1080
+            th = out_h or 1350
+            return (
+                video.filter("scale", tw, th, force_original_aspect_ratio="increase")
+                .filter("crop", tw, th)
+                .filter("scale", tw, th)
+            )
 
         if out_w and out_h:
             return video.filter(

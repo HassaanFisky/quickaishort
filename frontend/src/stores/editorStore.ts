@@ -21,6 +21,12 @@ import type {
 } from "@/lib/studio/ingestFsm";
 import { canTransitionIngest } from "@/lib/studio/ingestFsm";
 import { computeWaveformPeaks } from "@/lib/utils/waveformPeaks";
+import {
+  type ModePackId,
+  type SupportedAspectRatio,
+  getModePack,
+  DEFAULT_MODE_PACK_ID,
+} from "@/lib/modepacks/modePacks";
 
 export type AudioExtractStatus = "idle" | "extracting" | "ready" | "unavailable";
 
@@ -103,6 +109,8 @@ export interface EditorAction {
   | "SET_AUDIO_BOOST"     // { value: 0-200 }
   | "SET_NOISE_REDUCTION" // { value: 0-100 }
   | "SET_PLAYBACK_SPEED"  // { value: 50-200 }
+  | "SET_MODE_PACK"       // { mode_pack_id: ModePackId }
+  | "SET_ASPECT_RATIO"    // { aspect_ratio: SupportedAspectRatio }
   // ─── Feature toggles ────────────────────────────────────────────────────
   | "TOGGLE_CAPTIONS"     // { enabled: boolean }
   | "TOGGLE_TRANSITIONS"  // { enabled: boolean }
@@ -409,7 +417,7 @@ export interface AgentState {
 
 export interface ExportSettings {
   quality: "low" | "medium" | "high";
-  aspectRatio: "9:16" | "1:1";
+  aspectRatio: SupportedAspectRatio;
   filter: "None" | "Urban" | "Retro" | "Cinematic";
   audioBoost: number;
   playbackSpeed: number;
@@ -678,6 +686,14 @@ interface EditorState {
   maskEnabled: boolean;
   setMaskEnabled: (enabled: boolean) => void;
 
+  // ─── ModePack OS (Pillar-3 / Phase 2) ──────────────────────────────────────
+  activeModePack: ModePackId;
+  safeZonesEnabled: boolean;
+  lufsTarget: number;
+  setModePack: (modePackId: ModePackId) => void;
+  setSafeZonesEnabled: (enabled: boolean) => void;
+  setLufsTarget: (target: number) => void;
+
   // Actions
   setCurrentTime: (time: number) => void;
   setIsPlaying: (playing: boolean) => void;
@@ -909,6 +925,11 @@ export const useEditorStore = create<EditorState>()(
 
       // Phase 6 masking
       maskEnabled: false,
+
+      // ModePack OS (Pillar-3 / Phase 2)
+      activeModePack: DEFAULT_MODE_PACK_ID,
+      safeZonesEnabled: true,
+      lufsTarget: -14,
 
       // Phase 23
       audioMuted: false,
@@ -1304,6 +1325,36 @@ export const useEditorStore = create<EditorState>()(
           exportSettings: { ...state.exportSettings, [key]: value },
         })),
 
+      setModePack: (modePackId) => {
+        const pack = getModePack(modePackId);
+        set((state) => {
+          const updatedCaptions = state.captions.map((c) => ({
+            ...c,
+            style: {
+              ...c.style,
+              fontSize: pack.captionPreset.fontSize,
+              color: pack.captionPreset.color,
+              background: pack.captionPreset.background,
+              position: pack.captionPreset.position,
+              bold: pack.captionPreset.bold,
+            },
+          }));
+          return {
+            activeModePack: modePackId,
+            lufsTarget: pack.lufsTarget,
+            captions: updatedCaptions,
+            safeZonesEnabled: true,
+            exportSettings: {
+              ...state.exportSettings,
+              aspectRatio: pack.aspectRatio,
+            },
+          };
+        });
+      },
+
+      setSafeZonesEnabled: (enabled) => set({ safeZonesEnabled: enabled }),
+      setLufsTarget: (target) => set({ lufsTarget: target }),
+
       addCanvasElement: (element) =>
         set((state) => ({
           canvasElements: [
@@ -1504,6 +1555,16 @@ export const useEditorStore = create<EditorState>()(
               const v = Math.max(50, Math.min(200, action.payload.value as number));
               store.setExportSetting("playbackSpeed", v);
               if (videoEl) videoEl.playbackRate = v / 100;
+              break;
+            }
+            case "SET_MODE_PACK": {
+              const packId = action.payload?.mode_pack_id as ModePackId;
+              if (packId) store.setModePack(packId);
+              break;
+            }
+            case "SET_ASPECT_RATIO": {
+              const ratio = action.payload?.aspect_ratio as SupportedAspectRatio;
+              if (ratio) store.setExportSetting("aspectRatio", ratio);
               break;
             }
 

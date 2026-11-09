@@ -2829,7 +2829,7 @@ class ADKGenerateRequest(BaseModel):
     stock_query: Optional[str] = None
     uploaded_file_ids: List[str] = Field(default_factory=list)
     user_id: str
-    aspect_ratio: Literal["9:16", "1:1"] = "9:16"
+    aspect_ratio: Literal["9:16", "1:1", "16:9", "4:5"] = "9:16"
     quality: Literal["low", "medium", "high"] = "medium"
 
 

@@ -1,7 +1,7 @@
 import type { RenderManifest } from "@/lib/render/renderManifest";
 
 export type ExportQuality = "low" | "medium" | "high";
-export type ExportAspect = "9:16" | "1:1";
+export type ExportAspect = "9:16" | "1:1" | "16:9" | "4:5";
 
 /** A text or sticker overlay composited by FFmpeg drawtext/overlay. */
 export interface CanvasOverlay {

@@ -14,6 +14,7 @@
 | **Edit-Contract Audit E-1/E-2/E-3** | ✅ First-class `risk` & `reversibility` on `DecisionRecord`, `command_ids` cross-linking, `decision_store` failure metrics |
 | **Typed-chat director loop** | ✅ Dead-air / shorts-packaging / restore-opening intercept **before** DualModelRouter + credits; Redis latest DecisionRecord; unresolved clauses stay ASK |
 | **ModePack aspect-aware sanitiser** | ✅ Dynamic canvas bounds (`9:16`, `16:9`, `1:1`, `4:5`) + deterministic CPU Fast Engine test suite |
+| **ModePack Selector & Safe Zones OS** | ✅ 1-click pack switcher (`shorts_reels`, `youtube_long`, `podcast_clip`, `ad_ugc`, `tutorial`) in `editorStore`, `VideoCanvas` safe zone guides, caption presets, and LUFS target |
 | CI BE↔FE registry hash | ✅ |
 | Auto-ensure Studio project (chat + export + ingest projectize) | ✅ |
 | Heuristic invent suggestions → 410 | ✅ |

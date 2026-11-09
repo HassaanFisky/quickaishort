@@ -6,7 +6,7 @@ export interface ExportRecord {
   jobId?: string;
   downloadUrl?: string;
   settings: {
-    aspectRatio: "9:16" | "1:1";
+    aspectRatio: "9:16" | "1:1" | "16:9" | "4:5";
     quality: "low" | "medium" | "high";
     captionsEnabled?: boolean;
     captionPreset?: string;

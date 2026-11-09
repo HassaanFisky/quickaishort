@@ -15,6 +15,8 @@ import {
   Volume2,
   VolumeX,
   Sparkles,
+  Shield,
+  ShieldCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useEditorStore } from "@/stores/editorStore";
@@ -22,6 +24,7 @@ import { useFaceTracker } from "@/hooks/useFaceTracker";
 import { CaptionOverlay } from "./CaptionOverlay";
 import { CanvasLayer } from "./CanvasLayer";
 import { InteractiveCanvas } from "./InteractiveCanvas";
+import { SafeZoneOverlay } from "./SafeZoneOverlay";
 import { useAIPanel } from "@/stores/aiPanelStore";
 import { cn } from "@/lib/utils";
 import { formatTime } from "@/lib/utils/formatTime";
@@ -101,6 +104,8 @@ export default function VideoCanvas() {
     dubJob,
     frameFilters,
     clipColorState,
+    safeZonesEnabled,
+    setSafeZonesEnabled,
   } = useEditorStore();
 
   const dubPreviewUrl =
@@ -569,7 +574,9 @@ export default function VideoCanvas() {
 
   const aspectContainerClass: Record<string, string> = {
     "9:16": "aspect-[9/16] h-full max-h-[75vh] w-auto",
+    "16:9": "aspect-[16/9] w-full max-w-[85vw] max-h-[65vh] h-auto",
     "1:1": "aspect-square max-h-[65vh] w-auto",
+    "4:5": "aspect-[4/5] h-full max-h-[72vh] w-auto",
   };
   const aspectClass =
     aspectContainerClass[exportSettings.aspectRatio] ?? aspectContainerClass["9:16"];
@@ -595,6 +602,20 @@ export default function VideoCanvas() {
               Noise reduction: applied on export
             </div>
           )}
+          <button
+            type="button"
+            onClick={() => setSafeZonesEnabled(!safeZonesEnabled)}
+            title={safeZonesEnabled ? "Hide Safe Zones" : "Show Safe Zones"}
+            className={cn(
+              "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-bold uppercase tracking-wider transition-all",
+              safeZonesEnabled
+                ? "bg-primary/20 text-primary border border-primary/40 backdrop-blur-md shadow-sm"
+                : "bg-black/60 text-white/60 border border-white/10 hover:text-white"
+            )}
+          >
+            {safeZonesEnabled ? <ShieldCheck className="w-3 h-3" /> : <Shield className="w-3 h-3" />}
+            <span>Safe Zones</span>
+          </button>
         </div>
 
         {sourceUrl ? (
@@ -767,6 +788,7 @@ export default function VideoCanvas() {
           manifestActiveOverlays={activeManifestOverlaysRef.current}
         />
         <InteractiveCanvas />
+        <SafeZoneOverlay />
 
         {/* AI execution overlay — pointer-events:none so cancel button above stays clickable */}
         {executionOverlay && (
@@ -818,7 +840,17 @@ export default function VideoCanvas() {
 
       {/* Persistent custom controls bar — shown when proxy video is active */}
       {sourceUrl && !localYtId && !videoError && (
-        <div className="video-controls w-full" style={{ maxWidth: aspectContainerClass[exportSettings.aspectRatio] ? "420px" : "560px" }}>
+        <div
+          className="video-controls w-full transition-all duration-300"
+          style={{
+            maxWidth:
+              exportSettings.aspectRatio === "16:9"
+                ? "720px"
+                : exportSettings.aspectRatio === "1:1"
+                ? "480px"
+                : "420px",
+          }}
+        >
           {/* Play / Pause */}
           <button
             className="ctrl-btn"

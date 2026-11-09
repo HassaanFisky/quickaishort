@@ -1332,13 +1332,13 @@ export default function RightPanel() {
                     <div className="flex flex-col gap-2">
                       <span className="text-[11px] font-semibold text-muted-foreground">Format</span>
                       <div className="flex gap-1 p-1 bg-secondary/50 rounded-xl border border-border">
-                        {(["9:16", "1:1"] as const).map((ratio) => (
+                        {(["9:16", "16:9", "1:1", "4:5"] as const).map((ratio) => (
                           <button
                             key={ratio}
                             onClick={() => setExportSetting("aspectRatio", ratio)}
                             aria-pressed={exportSettings.aspectRatio === ratio}
                             className={cn(
-                              "flex-1 h-8 rounded-lg text-[11px] font-semibold tabular-nums transition-colors",
+                              "flex-1 h-8 rounded-lg text-[10px] font-semibold tabular-nums transition-colors",
                               exportSettings.aspectRatio === ratio
                                 ? "bg-primary text-primary-foreground shadow-sm"
                                 : "text-muted-foreground hover:text-foreground"

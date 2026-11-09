@@ -54,6 +54,7 @@ import IngestSurface from "./IngestSurface";
 import { WorkspaceComposer, type WorkspaceComposerSubmit } from "@/components/workspace/WorkspaceComposer";
 import ExportDialog from "./ExportDialog";
 import ServerExportHost from "./ServerExportHost";
+import ModePackSelector from "./ModePackSelector";
 import { useServerExportStore } from "@/stores/serverExportStore";
 import { comboToChips, useShortcutsStore } from "@/stores/shortcutsStore";
 
@@ -623,6 +624,8 @@ export default function EditorLayout() {
         </div>
 
         <div className="flex items-center gap-3">
+          <ModePackSelector />
+
           {/* Panel toggles. Advanced mode pins the desktop columns, so there the
               buttons only drive the small-screen drawers; in default mode they
               are the desktop entry point to the clip list and inspector. */}
