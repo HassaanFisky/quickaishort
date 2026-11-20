@@ -78,3 +78,34 @@
 ## Deferred UI
 
 Coming Soon placeholders for intentionally deferred features (incl. planned ADK workspace). Non-interactive; must not imply live functionality.
+
+
+---
+
+## Founder north-star roadmap — strategic target (added 2026-11-20)
+
+This is a target sequence, not an implementation-status claim. Promote work into an active cycle only after source audit, accepted ADR where required, acceptance tests, cost estimates and rollback planning.
+
+| Order | Workstream | Required outcome | Gate |
+|---|---|---|---|
+| 0 | Fresh integrity audit | Reconcile source/docs; audit billing, webhook delivery, tenant authZ, storage IAM, logs, spend guardrails and deploy state | Evidence-backed P0/P1 list; no destructive cleanup |
+| 1 | Finance integrity | Reconcile plan catalog, provider events, credit lifecycle and separate double-entry cash ledger | Idempotency, replay recovery, settlement reconciliation, contribution margin |
+| 2 | Decision → plan → execute → verify | One conversational lifecycle using DecisionRecord, EP-001, Project Document, MediaGraph, Orchestrator and RenderManifest | No parallel ABI/state/queue; objective-level verification |
+| 3 | Multimodal project intelligence | Supported image/audio/document/video inputs with evidence provenance | Format matrix, file safety, prompt-injection defense, cost and privacy budgets |
+| 4 | Editing capability expansion | Prioritized media, audio, image, translation and dubbing capabilities | Registry contracts, sanitization, undo/recovery and quality corpus |
+| 5 | Independent output QA | Verify actual edits and rendered outcomes, not just job acknowledgments | False-pass, sync, captions, render integrity and human review |
+| 6 | Global and cross-device usability | Responsive, accessible, device-aware experience and measured localization/rollout | Browser/device matrix, accessibility, region/legal/payment readiness |
+| 7 | Behavioral Intelligence | Learn user-controlled editing preferences and find UX friction | Transparency, consent, reset/delete, no sensitive-trait profiling |
+| 8 | Business ops and growth | Contract-backed vendor/brand/affiliate tracking, campaign drafts and cost dashboard | Owner approval, attribution evidence and unit economics |
+| 9 | Advanced dubbing/workflows | Multi-speaker/long-form dubbing and reusable workflows | Rights, consent, quality, latency and cost validation |
+
+### First implementation cycle recommendation
+
+1. Audit money and security paths before enabling autonomous side effects.
+2. Verify webhook durability/retry/idempotency and subscription/credit lifecycle.
+3. Design and test a separate double-entry cash ledger; credits remain separate.
+4. Close high-risk tenant, storage, log-redaction, upload and worker-isolation findings.
+5. Complete post-execution objective verification for high-value edit tasks.
+6. Expand multimodal support only against a measured format/device QA corpus.
+
+No payment provider, revenue percentage, model or cloud region is permanently mandated here. Decide only from current evidence, business eligibility, unit economics and accepted ADRs.

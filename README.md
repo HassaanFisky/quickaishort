@@ -177,7 +177,8 @@ python render_worker.py                           # requires Redis
 
 Env templates: `frontend/.env.example`, `fastapi/.env.example`.  
 Contributor guide: [`CONTRIBUTING.md`](CONTRIBUTING.md).  
-Detailed quickstart: [`QUICKSTART.md`](QUICKSTART.md).
+Detailed quickstart: [`QUICKSTART.md`](QUICKSTART.md).  
+Maintainer / coding-agent context: [AI_CONTEXT.md](AI_CONTEXT.md) · [Studio engineering docs](docs/studio/README.md).
 
 ---
 

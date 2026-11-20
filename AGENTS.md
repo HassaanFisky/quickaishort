@@ -5,6 +5,11 @@ QuickAI Short — Next.js 14 frontend (`frontend/`) + FastAPI backend (`fastapi/
 and the canonical lint/test/build/run commands. This file only adds durable, non-obvious
 operating notes for automated agents.
 
+## Mandatory cross-session context
+Read repository-root AI_CONTEXT.md before every non-trivial task. It links canonical project memory, binding Phase 2 architecture, roadmap, product/finance/security charters (docs 42–45), and local integrity rules. Verify shipped claims against source, tests and deployment evidence. Target docs are not proof that features are live. Avoid competing prompt memories.
+
+
+
 ## Cursor Cloud specific instructions
 
 ### Testing policy on Cloud Agents (founder directive, 2026-08-24)

@@ -1,3 +1,7 @@
+<!-- Canonical project context -->
+Read repository-root AI_CONTEXT.md before any non-trivial task. Follow its authority order and local-integrity rules. Use docs/studio/42–45 for product, finance, security and repository-governance targets. Verify shipped claims against code/tests and never treat future architecture as implemented. Never commit secrets, customer data, private financial instructions or the local Graft graph.
+<!-- End canonical project context -->
+
 <!-- graft:start -->
 ## Graft — repo context graph
 
