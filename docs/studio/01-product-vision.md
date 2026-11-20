@@ -130,3 +130,12 @@ Root [`VISION.md`](../../VISION.md) mirrors this document for public/product fra
 3. Suggestions update from MediaGraph after analysis/edits.  
 4. Export uses validated RenderManifest / Kernel bake when required.  
 5. Docs match code: shipped vs roadmap always explicit.  
+
+
+---
+
+## Expanded founder direction (2026-11-20)
+
+The full long-range product and autonomy requirements are maintained in [42 — Global Product & Autonomy Charter](./42-global-product-and-autonomy-charter.md). Financial controls, security/privacy and cross-session engineering governance are maintained separately in documents [43](./43-commerce-and-financial-control-plane.md), [44](./44-security-privacy-and-abuse-control-model.md), and [45](./45-repository-memory-and-agent-governance.md).
+
+These extend the target vision without changing current shipped-status claims or frozen Registry / Project Kernel / MediaGraph / Orchestrator contracts.

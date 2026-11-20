@@ -1,6 +1,6 @@
 # QuickAI Studio — Documentation Platform
 
-**Status:** Synchronized with production product identity (2026-07-21)  
+**Status:** Core documentation index; strategic governance additions reviewed 2026-11-20  
 **Product today:** QuickAI Short  
 **Platform evolution:** QuickAI Studio (same codebase — AI-native editing OS direction)  
 **Audience:** Engineers, agents, founder  
@@ -108,3 +108,15 @@ Research docs do not change production contracts. Implementation still requires 
 ## Legacy root docs
 
 Root `README.md`, `ARCHITECTURE.md`, and `VISION.md` were realigned 2026-07-21 to this identity. Older ops snapshots under `docs/` remain historical unless noted. Prefer this tree for architecture decisions.
+
+
+## Founder operating documents (2026-11-20)
+
+| Document | Purpose | Status |
+|---|---|---|
+| [42 — Global Product & Autonomy Charter](./42-global-product-and-autonomy-charter.md) | Chat-first multimodal UX, agent responsibility domains, bounded autonomy, Behavioral Intelligence and global usability | Strategic target |
+| [43 — Commerce & Finance Control Plane](./43-commerce-and-financial-control-plane.md) | Provider webhooks, double-entry ledger, subscription economics, partner payables and payout approval | Target / audit checklist |
+| [44 — Security, Privacy & Abuse Control](./44-security-privacy-and-abuse-control-model.md) | Tenant isolation, agent permissions, privacy, abuse resistance and incident response | Target / audit checklist |
+| [45 — Repository Memory & Engineering Governance](./45-repository-memory-and-agent-governance.md) | Cross-session context, authority order, local integrity, verification and PR workflow | Binding workflow |
+
+Read root AI_CONTEXT.md at the start of each new coding session. These documents do not override frozen EP/ADR contracts or prove their target features are implemented.
