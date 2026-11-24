@@ -1,6 +1,6 @@
 # Vision — QuickAI Short → QuickAI Studio
 
-**Last updated:** 2026-07-24  
+**Last updated:** 2026-11-20  
 **Authority:** Aligns with [`docs/studio/01-product-vision.md`](docs/studio/01-product-vision.md) and [`docs/studio/PHASE2_ARCHITECTURAL_TRUTH_REVIEW.md`](docs/studio/PHASE2_ARCHITECTURAL_TRUTH_REVIEW.md).
 
 ---
@@ -82,3 +82,10 @@ Studio is not a second product. It is the operating-system direction of QuickAI 
 - [`docs/studio/ROADMAP.md`](docs/studio/ROADMAP.md) — execution status  
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — system map  
 - [`README.md`](README.md) — public product overview  
+
+
+## Extended global direction (target, not a shipped-status claim)
+
+The long-term direction is a chat-first multimodal creative workspace: users provide supported video, image, audio and document assets; the system builds an evidence-grounded plan; the user applies it conversationally; registered tools execute; and independent quality checks verify delivery. Longer-term capabilities include dubbing, user-controlled editing preferences, product-friction intelligence and accountable subscription operations.
+
+This is a staged target, not a claim of universal file support, nine deployed agents, guaranteed output quality, global regulatory readiness or a finished payout engine. See [42 — Product & Autonomy](docs/studio/42-global-product-and-autonomy-charter.md), [43 — Finance](docs/studio/43-commerce-and-financial-control-plane.md), [44 — Security](docs/studio/44-security-privacy-and-abuse-control-model.md), and [45 — Repository Governance](docs/studio/45-repository-memory-and-agent-governance.md).

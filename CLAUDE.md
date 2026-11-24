@@ -1,3 +1,9 @@
+# Current Cross-Session Context (2026-11-20)
+
+Before any non-trivial work, read repository-root AI_CONTEXT.md. It is the shared memory index for Claude, Antigravity, Copilot and future coding agents. Then consult docs/studio/CANONICAL_PROJECT_MEMORY.md, PHASE2_ARCHITECTURAL_TRUTH_REVIEW.md, ROADMAP.md and relevant source/ADR/EP. Existing operating protocol and historical changelog below are retained. Where old fixed version, provider, storage, feature-status or deployment notes conflict with current source/manifests, verify and follow the authority order in AI_CONTEXT.md. Never claim a target capability is shipped without implementation and test/deployment evidence. Preserve local changes; no paid/live tests or production/destructive actions without required explicit approval.
+
+---
+
 
 You must strictly execute within the boundaries of the following verified workspace rules and capabilities:
 

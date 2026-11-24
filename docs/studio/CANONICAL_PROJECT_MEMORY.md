@@ -53,3 +53,24 @@ Editor is the product surface. AI performs edits via tools. Chat-primary UX dire
 Never bypass EP-001. Never second source of truth for capabilities. Never hidden state. Never weaken deterministic replay / audit / observability. Suggestions = MediaGraph only. Never document Coming Soon ADK UI as shipped.
 
 Typed chat for dead-air / shorts packaging / restore-opening is Decision Intelligence first (0 Gemini). DualModelRouter remains the path for unrelated/creative commands.
+
+
+## Cross-session product and business direction (reviewed 2026-11-20)
+
+Read root AI_CONTEXT.md at the start of every non-trivial session. Detailed founder requirements are now maintained in documents 42–45:
+- 42: global product, chat-first multimodal editing, logical agent domains, bounded autonomy and privacy-respecting Behavioral Intelligence.
+- 43: finance control plane, provider-event durability, separate product credits and cash ledger, reconciliation, unit economics and owner-approved payouts.
+- 44: security, data privacy, tenant isolation, prompt-injection defenses, abuse controls and incident response.
+- 45: common memory, source-of-truth order, local worktree integrity, verification and change governance.
+
+### GitHub snapshot verified 2026-11-20 (not a live production audit)
+
+- Repository HassaanFisky/quickaishort, default branch main, visibility PUBLIC.
+- Inspected HEAD bb6aa32d31482c7010ec8574220abf1089d9a226; visible latest commit date 2026-11-09.
+- The nine domains in document 42 are a target role map. Current agent scaffold documentation records five principal technical roles.
+- fastapi/routers/billing.py has Paddle, Stripe and LemonSqueezy webhook routes; frontend/src/lib/billing-plans.ts is Paddle-oriented. These facts do not prove all provider onboarding or checkout configurations are live, or that a double-entry finance ledger, settlement reconciler or payout system exists.
+- Short-form dubbing path is documented; movie-length dubbing remains deferred by ADR-015.
+- docs/studio/11-security.md last records a code-grounded review dated 2026-08-01 and still contains watch-list items. This update does not close them.
+- No cloud IAM, live provider dashboard, live checkout, live AI call, deployment, or penetration test was verified.
+
+Do not commit secrets, customer files, private financial instructions, bank/payee details or confidential partner terms. This repository was public during inspection.

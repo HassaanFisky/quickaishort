@@ -1,3 +1,7 @@
+> **Current source-of-truth override (2026-11-20):** Read repository-root AI_CONTEXT.md before using this older Antigravity protocol. Then read CANONICAL_PROJECT_MEMORY.md, PHASE2_ARCHITECTURAL_TRUTH_REVIEW.md, ROADMAP.md and applicable ADR/EP. This file contains historical environment notes and older fixed stack/model/provider/deployment assumptions; verify each against current manifests, code, tests and runtime before use. Documents 42–45 contain current product, finance, security and repository-governance targets. They are targets, not claims of shipped behavior. Preserve the local worktree, never commit secrets or Graft, and respect explicit spend/deploy/destructive-action approval gates.
+
+---
+
 # QUICKAISHORT MASTER AGENT PROTOCOL
 
 Location: Antigravity → Settings → Custom Instructions
